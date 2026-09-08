@@ -3,22 +3,25 @@ from typing import List, Optional
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from backend.db.models import Subject
 
-def get_schedule_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="⚡ Сегодня", callback_data="sched_today"),
-                InlineKeyboardButton(text="➡️ Завтра", callback_data="sched_tomorrow")
-            ],
-            [
-                InlineKeyboardButton(text="📅 Вся неделя", callback_data="sched_week"),
-                InlineKeyboardButton(text="🔔 Звонки", callback_data="sched_bells")
-            ],
-            [
-                InlineKeyboardButton(text="🗓 Выбрать дату (Календарь)", callback_data="sched_calendar")
-            ]
+def get_schedule_keyboard(is_admin: bool = False) -> InlineKeyboardMarkup:
+    rows = [
+        [
+            InlineKeyboardButton(text="⚡ Сегодня", callback_data="sched_today"),
+            InlineKeyboardButton(text="➡️ Завтра", callback_data="sched_tomorrow")
+        ],
+        [
+            InlineKeyboardButton(text="📅 Вся неделя", callback_data="sched_week"),
+            InlineKeyboardButton(text="🔔 Звонки", callback_data="sched_bells")
+        ],
+        [
+            InlineKeyboardButton(text="🗓 Выбрать дату (Календарь)", callback_data="sched_calendar")
         ]
-    )
+    ]
+    if is_admin:
+        rows.append([
+            InlineKeyboardButton(text="📢 Скинуть расписание", callback_data="admin_broadcast_schedule")
+        ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def get_day_picker_keyboard() -> InlineKeyboardMarkup:

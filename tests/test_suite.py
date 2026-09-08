@@ -654,8 +654,28 @@ def test_keyboards_and_fastapi():
     assert "admin_edit_date_schedule" in adm_cb
     assert "admin_edit_schedule" in adm_cb
     assert "admin_manage_duty" in adm_cb
-    assert "admin_duty_broadcast" in adm_cb, "admin_duty_broadcast must be present in admin panel"
-    print("[OK] Admin panel with HW delete, user delete, urgent broadcast, duty announcement, date schedule, permanent schedule & duty roster verified.")
+    assert "admin_broadcast_schedule" in adm_cb, "admin_broadcast_schedule must be present in admin panel"
+    print("[OK] Admin panel with HW delete, user delete, urgent broadcast, schedule broadcast, duty announcement, date schedule, permanent schedule & duty roster verified.")
+
+    # Test Schedule Broadcast Keyboards
+    from backend.bot.keyboards.admin_kb import get_schedule_broadcast_day_keyboard, get_schedule_broadcast_destination_keyboard
+    day_kb = get_schedule_broadcast_day_keyboard()
+    day_cbs = [b.callback_data for row in day_kb.inline_keyboard for b in row]
+    assert "bcast_sched_day_today" in day_cbs
+    assert "bcast_sched_day_tomorrow" in day_cbs
+    assert "bcast_sched_day_cal" in day_cbs
+
+    sched_dest_kb = get_schedule_broadcast_destination_keyboard()
+    sched_dest_cbs = [b.callback_data for row in sched_dest_kb.inline_keyboard for b in row]
+    assert "bcast_sched_dest_groups" in sched_dest_cbs
+    assert "bcast_sched_dest_pm" in sched_dest_cbs
+    assert "bcast_sched_dest_all" in sched_dest_cbs
+
+    from backend.bot.keyboards.inline import get_schedule_keyboard
+    admin_sched_kb = get_schedule_keyboard(is_admin=True)
+    admin_sched_cbs = [b.callback_data for row in admin_sched_kb.inline_keyboard for b in row]
+    assert "admin_broadcast_schedule" in admin_sched_cbs
+    print("[OK] On-demand schedule broadcast keyboards (day picker, destinations, admin schedule kb) verified.")
 
     # Test Broadcast destination keyboard
     from backend.bot.keyboards.admin_kb import get_broadcast_destination_keyboard, get_duty_broadcast_destination_keyboard

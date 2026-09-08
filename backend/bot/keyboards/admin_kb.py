@@ -16,6 +16,9 @@ def get_admin_panel_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="🗓 Постоянное расписание", callback_data="admin_edit_schedule")
             ],
             [
+                InlineKeyboardButton(text="📢 Скинуть расписание", callback_data="admin_broadcast_schedule")
+            ],
+            [
                 InlineKeyboardButton(text="📚 Список предметов", callback_data="admin_manage_subjects"),
                 InlineKeyboardButton(text="🔔 Звонки и перемены", callback_data="admin_edit_bells")
             ],
@@ -122,6 +125,32 @@ def get_duty_broadcast_destination_keyboard() -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(text="❌ Отмена", callback_data="admin_cancel")
             ]
+        ]
+    )
+
+def get_schedule_broadcast_day_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="⚡ На сегодня", callback_data="bcast_sched_day_today"),
+                InlineKeyboardButton(text="➡️ На завтра", callback_data="bcast_sched_day_tomorrow")
+            ],
+            [
+                InlineKeyboardButton(text="🗓 Выбрать дату (календарь)", callback_data="bcast_sched_day_cal")
+            ],
+            [
+                InlineKeyboardButton(text="❌ Отмена", callback_data="admin_cancel")
+            ]
+        ]
+    )
+
+def get_schedule_broadcast_destination_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="👥 Скинуть в чат", callback_data="bcast_sched_dest_groups")],
+            [InlineKeyboardButton(text="👤 Всем в ЛС", callback_data="bcast_sched_dest_pm")],
+            [InlineKeyboardButton(text="📢 В чат + ЛС", callback_data="bcast_sched_dest_all")],
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_cancel")]
         ]
     )
 

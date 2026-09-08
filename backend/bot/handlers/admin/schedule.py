@@ -1,9 +1,10 @@
-from datetime import date
+from datetime import date, timedelta
 from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.config import get_today
 from backend.db.models import User
 from backend.db.crud import (
     get_all_subjects, get_subject_by_id,
@@ -15,14 +16,16 @@ from backend.db.crud import (
 )
 from backend.bot.keyboards.admin_kb import (
     get_admin_panel_keyboard, get_cancel_keyboard, get_notify_confirm_keyboard,
-    get_date_schedule_notify_keyboard
+    get_date_schedule_notify_keyboard, get_schedule_broadcast_day_keyboard,
+    get_schedule_broadcast_destination_keyboard
 )
 from backend.bot.keyboards.calendar import get_inline_calendar
 from backend.bot.services.notifier import send_schedule_change_alert
-from backend.bot.handlers.schedule import DAYS_RU
+from backend.bot.handlers.schedule import DAYS_RU, format_day_schedule
 from backend.bot.handlers.admin.helpers import is_admin, parse_schedule_text
 from backend.bot.handlers.admin.states import (
-    EditScheduleStates, EditDateScheduleStates, AddSubstitutionStates, ScheduleWizardStates
+    EditScheduleStates, EditDateScheduleStates, AddSubstitutionStates,
+    ScheduleWizardStates, ScheduleBroadcastStates
 )
 
 router = Router(name="admin_schedule_router")
@@ -1033,5 +1036,170 @@ async def cb_sub_no_broadcast(callback: CallbackQuery, state: FSMContext):
     )
     try:
         await callback.answer()
+    except Exception:
+        pass
+
+
+# ==================== SCHEDULE ON-DEMAND BROADCAST ====================
+
+@router.callback_query(F.data == "admin_broadcast_schedule")
+async def cb_admin_broadcast_schedule_start(callback: CallbackQuery, state: FSMContext, current_user: User):
+    if not is_admin(current_user, callback.from_user.id):
+        return
+    await state.set_state(ScheduleBroadcastStates.choosing_date)
+    await callback.message.edit_text(
+        "📢 **Рассылка расписания:**\n\n"
+        "Какое расписание вы хотите скинуть?",
+        reply_markup=get_schedule_broadcast_day_keyboard(),
+        parse_mode="Markdown"
+    )
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+
+
+@router.callback_query(ScheduleBroadcastStates.choosing_date, F.data == "bcast_sched_day_today")
+async def cb_bcast_sched_day_today(callback: CallbackQuery, state: FSMContext, db_session: AsyncSession, current_user: User):
+    if not is_admin(current_user, callback.from_user.id):
+        return
+    await _show_broadcast_schedule_preview(callback, state, db_session, get_today())
+
+
+@router.callback_query(ScheduleBroadcastStates.choosing_date, F.data == "bcast_sched_day_tomorrow")
+async def cb_bcast_sched_day_tomorrow(callback: CallbackQuery, state: FSMContext, db_session: AsyncSession, current_user: User):
+    if not is_admin(current_user, callback.from_user.id):
+        return
+    await _show_broadcast_schedule_preview(callback, state, db_session, get_today() + timedelta(days=1))
+
+
+@router.callback_query(ScheduleBroadcastStates.choosing_date, F.data == "bcast_sched_day_cal")
+async def cb_bcast_sched_day_cal(callback: CallbackQuery, current_user: User):
+    if not is_admin(current_user, callback.from_user.id):
+        return
+    today = get_today()
+    kb = get_inline_calendar("adm_bsc_cal", year=today.year, month=today.month, back_callback="admin_broadcast_schedule")
+    await callback.message.edit_text(
+        "📅 **Выберите дату расписания на календаре:**",
+        reply_markup=kb,
+        parse_mode="Markdown"
+    )
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("cal_nav_adm_bsc_cal_"))
+async def cb_cal_nav_adm_bsc_cal(callback: CallbackQuery):
+    parts = callback.data.split("_")
+    year = int(parts[5])
+    month = int(parts[6])
+    kb = get_inline_calendar("adm_bsc_cal", year=year, month=month, back_callback="admin_broadcast_schedule")
+    await callback.message.edit_text(
+        "📅 **Выберите дату расписания на календаре:**",
+        reply_markup=kb,
+        parse_mode="Markdown"
+    )
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("cal_act_adm_bsc_cal_"))
+async def cb_cal_act_adm_bsc_cal(callback: CallbackQuery, state: FSMContext, db_session: AsyncSession, current_user: User):
+    if not is_admin(current_user, callback.from_user.id):
+        return
+    parts = callback.data.split("_")
+    year = int(parts[5])
+    month = int(parts[6])
+    day = int(parts[7])
+    target_d = date(year, month, day)
+    await _show_broadcast_schedule_preview(callback, state, db_session, target_d)
+
+
+async def _show_broadcast_schedule_preview(callback: CallbackQuery, state: FSMContext, db_session: AsyncSession, target_d: date):
+    day_name = DAYS_RU.get(target_d.isoweekday(), "")
+    date_str = target_d.strftime('%d.%m.%Y')
+    sched_text = await format_day_schedule(db_session, target_d)
+
+    await state.update_data(
+        bcast_target_date=target_d.isoformat(),
+        bcast_sched_text=sched_text,
+        bcast_day_name=day_name,
+        bcast_date_str=date_str
+    )
+    await state.set_state(ScheduleBroadcastStates.confirm_destination)
+
+    preview = (
+        f"📋 **Предпросмотр расписания для отправки:**\n\n"
+        f"{sched_text}\n\n"
+        f"📢 **Куда скинуть расписание?**"
+    )
+    await callback.message.edit_text(
+        preview,
+        reply_markup=get_schedule_broadcast_destination_keyboard(),
+        parse_mode="Markdown"
+    )
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+
+
+@router.callback_query(ScheduleBroadcastStates.confirm_destination, F.data.startswith("bcast_sched_dest_"))
+async def cb_admin_broadcast_schedule_send(callback: CallbackQuery, state: FSMContext, db_session: AsyncSession, bot: Bot, current_user: User):
+    if not is_admin(current_user, callback.from_user.id):
+        return
+
+    dest = callback.data.replace("bcast_sched_dest_", "")
+    data = await state.get_data()
+    sched_text = data.get("bcast_sched_text")
+    day_name = data.get("bcast_day_name", "")
+    date_str = data.get("bcast_date_str", "")
+
+    if not sched_text:
+        await callback.answer("Ошибка: расписание не найдено", show_alert=True)
+        await state.clear()
+        return
+
+    sent_pm = 0
+    sent_groups = 0
+
+    if dest in ["pm", "all"]:
+        students = await get_notifiable_users(db_session)
+        for s in students:
+            try:
+                await bot.send_message(chat_id=s.tg_id, text=sched_text, parse_mode="Markdown")
+                sent_pm += 1
+            except Exception:
+                pass
+
+    if dest in ["groups", "all"]:
+        groups = await get_approved_group_chats(db_session)
+        for g in groups:
+            try:
+                await bot.send_message(
+                    chat_id=g.chat_id,
+                    message_thread_id=g.topic_schedule_id,
+                    text=sched_text,
+                    parse_mode="Markdown"
+                )
+                sent_groups += 1
+            except Exception:
+                pass
+
+    await state.clear()
+    dest_text = "в чат и в ЛС" if dest == "all" else ("в чат" if dest == "groups" else "в ЛС")
+    await callback.message.edit_text(
+        f"✅ **Расписание на {day_name} ({date_str}) успешно отправлено ({dest_text})!**\n\n"
+        f"👥 В беседы: {sent_groups}\n"
+        f"👤 В ЛС: {sent_pm}",
+        reply_markup=get_admin_panel_keyboard(),
+        parse_mode="Markdown"
+    )
+    try:
+        await callback.answer("Расписание отправлено!")
     except Exception:
         pass

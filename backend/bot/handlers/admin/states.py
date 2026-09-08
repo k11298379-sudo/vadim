@@ -90,3 +90,8 @@ class DutyBroadcastStates(StatesGroup):
     entering_message = State()
     confirm_destination = State()
 
+
+class ScheduleBroadcastStates(StatesGroup):
+    choosing_date = State()
+    confirm_destination = State()
+
