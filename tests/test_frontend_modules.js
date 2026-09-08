@@ -1,0 +1,154 @@
+const fs = require('fs');
+const path = require('path');
+const assert = require('assert');
+
+console.log('=== [1/4] Testing ege_data.js data integrity ===');
+const egeData = require('../frontend/js/ege_data.js');
+
+assert(egeData.subjects && Array.isArray(egeData.subjects), 'subjects must be an array');
+assert(egeData.subjects.length === 4, `Must have exactly 4 subjects, got ${egeData.subjects.length}`);
+
+const rus = egeData.subjects.find(s => s.id === 'russian');
+assert(rus && rus.available === true, 'Russian subject must be available');
+
+const task4 = rus.tasks.find(t => t.number === 4);
+assert(task4 && task4.available === true, 'Task 4 must be available');
+
+const math = egeData.subjects.find(s => s.id === 'math');
+assert(math && math.available === true, 'Math subject must be available');
+const task18 = math.tasks.find(t => t.number === 18);
+assert(task18 && task18.available === true, 'Task 18 must be available');
+
+const RUSSIAN_VOWELS = new Set("аеёиоуыэюяАЕЁИОУЫЭЮЯ".split(""));
+const validPos = new Set(["noun", "adjective", "verb", "participle", "gerund", "adverb"]);
+
+const words = egeData.task4_words;
+console.log(`Found ${words.length} words in task4_words`);
+assert(words.length === 230, `Expected 230 words, got ${words.length}`);
+
+const seen = new Set();
+words.forEach((w, idx) => {
+  assert(w.word, `Word at index ${idx} missing word string`);
+  const key = `${w.word}_${w.pos}`;
+  assert(!seen.has(key), `Duplicate word found: ${key}`);
+  seen.add(key);
+
+  // Find stressed vowel(s) in word: characters that are uppercase
+  const uppercaseChars = w.word.split("").filter(ch => ch === ch.toUpperCase() && ch !== ch.toLowerCase());
+  assert(uppercaseChars.length >= 1, `Word ${w.word} has no uppercase stress marker`);
+
+  uppercaseChars.forEach(ch => {
+    assert(RUSSIAN_VOWELS.has(ch), `Word ${w.word}: uppercase marker '${ch}' is not a Russian vowel`);
+  });
+
+  assert(validPos.has(w.pos), `Word ${w.word} has invalid POS: ${w.pos}`);
+});
+
+console.log(`All ${words.length} words passed uppercase vowel stress and POS validation!`);
+
+assert(Array.isArray(egeData.excluded_words), 'excluded_words must be an array');
+console.log(`Excluded words array is present (length: ${egeData.excluded_words.length}).`);
+
+console.log('=== [2/4] Testing HTML markup & elements ===');
+const html = fs.readFileSync(path.join(__dirname, '../frontend/index.html'), 'utf-8');
+assert(html.includes('id="pane-ege"'), 'index.html must have pane-ege');
+assert(html.includes('id="pane-games"'), 'index.html must have pane-games');
+assert(html.includes('data-tab="ege"'), 'index.html must have ege tab button');
+assert(html.includes('data-tab="games"'), 'index.html must have games tab button');
+assert(html.includes('/static/js/ege_data.js'), 'index.html must import ege_data.js');
+assert(html.includes('/static/js/ege_math18_data.js'), 'index.html must import ege_math18_data.js');
+assert(html.includes('/static/js/ege.js'), 'index.html must import ege.js');
+assert(html.includes('/static/js/games.js'), 'index.html must import games.js');
+assert(html.indexOf('id="daily-fact-widget"') > html.indexOf('id="pane-schedule"'), 'daily-fact-widget must be placed inside pane-schedule');
+assert(html.indexOf('id="daily-fact-widget"') < html.indexOf('id="pane-homework"'), 'daily-fact-widget must be before pane-homework');
+console.log('HTML structure, daily-fact-widget placement in pane-schedule and script tags verified!');
+
+console.log('=== [3/4] Testing app.js tab logic ===');
+const appJs = fs.readFileSync(path.join(__dirname, '../frontend/js/app.js'), 'utf-8');
+assert(appJs.includes('tab === "ege"'), 'app.js must handle ege tab');
+assert(appJs.includes('tab === "games"'), 'app.js must handle games tab');
+assert(appJs.includes('window.EGE.init'), 'app.js must call window.EGE.init');
+assert(appJs.includes('window.GAMES.init'), 'app.js must call window.GAMES.init');
+assert(appJs.includes('typeof photo === "string"'), 'app.js must support raw string URLs in showGalleryImage');
+assert(appJs.includes('window.openPhotoGallery = openPhotoGallery'), 'app.js must expose openPhotoGallery on window');
+console.log('app.js tab integration and photo gallery verified!');
+
+console.log('=== [4/4] Testing ege.js and games.js execution in mock DOM environment ===');
+// Create a basic window mock
+const mockWindow = {
+  EGE_DATA: egeData,
+  Telegram: {
+    WebApp: {
+      HapticFeedback: {
+        impactOccurred: () => {},
+        notificationOccurred: () => {},
+        selectionChanged: () => {}
+      }
+    }
+  }
+};
+global.window = mockWindow;
+const sharedElements = {};
+global.document = {
+  getElementById: (id) => {
+    if (!sharedElements[id]) {
+      sharedElements[id] = {
+        innerHTML: '',
+        classList: { add: () => {}, remove: () => {} },
+        appendChild: () => {}
+      };
+    }
+    return sharedElements[id];
+  },
+  querySelectorAll: () => []
+};
+
+// Evaluate ege_math18_data.js
+const math18Script = fs.readFileSync(path.join(__dirname, '../frontend/js/ege_math18_data.js'), 'utf-8');
+eval(math18Script);
+assert(mockWindow.EGE_MATH18_TASKS && Array.isArray(mockWindow.EGE_MATH18_TASKS), 'EGE_MATH18_TASKS must be an array');
+assert(mockWindow.EGE_MATH18_TASKS.length === 153, `Expected 153 tasks, got ${mockWindow.EGE_MATH18_TASKS.length}`);
+console.log(`Loaded ${mockWindow.EGE_MATH18_TASKS.length} math tasks successfully!`);
+
+// Evaluate ege.js
+const egeScript = fs.readFileSync(path.join(__dirname, '../frontend/js/ege.js'), 'utf-8');
+eval(egeScript);
+assert(mockWindow.EGE && typeof mockWindow.EGE.init === 'function', 'window.EGE.init must be defined');
+assert(typeof mockWindow.EGE.startQuiz === 'function', 'window.EGE.startQuiz must be defined');
+assert(typeof mockWindow.EGE.answerQuestion === 'function', 'window.EGE.answerQuestion must be defined');
+assert(typeof mockWindow.EGE.selectMath18Task === 'function', 'window.EGE.selectMath18Task must be defined');
+assert(typeof mockWindow.EGE.nextMath18Task === 'function', 'window.EGE.nextMath18Task must be defined');
+assert(typeof mockWindow.EGE.toggleMath18Solution === 'function', 'window.EGE.toggleMath18Solution must be defined');
+
+// Test Math 18 default hidden solution behavior
+mockWindow.EGE.selectSubject('math');
+const mathHtmlInitial = sharedElements['pane-ege'] ? sharedElements['pane-ege'].innerHTML : '';
+assert(mathHtmlInitial.includes('Открыть полное пошаговое решение'), 'Solution must be hidden by default');
+assert(!mathHtmlInitial.includes('Ход решения'), 'Solution stream must NOT be visible by default');
+
+// Toggle to show solution
+mockWindow.EGE.toggleMath18Solution();
+const mathHtmlOpen = sharedElements['pane-ege'] ? sharedElements['pane-ege'].innerHTML : '';
+assert(mathHtmlOpen.includes('Скрыть решение'), 'Button should say "Скрыть решение"');
+assert(mathHtmlOpen.includes('Ход решения'), 'Solution stream should be visible after toggle');
+
+// Navigate to next task -> should be hidden by default again
+mockWindow.EGE.nextMath18Task();
+const mathHtmlNext = sharedElements['pane-ege'] ? sharedElements['pane-ege'].innerHTML : '';
+assert(mathHtmlNext.includes('Открыть полное пошаговое решение'), 'Solution must be hidden again upon navigating to next task');
+assert(!mathHtmlNext.includes('Ход решения'), 'Solution stream must NOT be visible upon navigating to next task');
+
+console.log('window.EGE module loaded, math 18 default hidden solution verified!');
+
+// Evaluate games.js
+const gamesScript = fs.readFileSync(path.join(__dirname, '../frontend/js/games.js'), 'utf-8');
+eval(gamesScript);
+assert(mockWindow.GAMES && typeof mockWindow.GAMES.init === 'function', 'window.GAMES.init must be defined');
+assert(typeof mockWindow.GAMES.switchGame === 'function', 'window.GAMES.switchGame must be defined');
+assert(typeof mockWindow.GAMES.reset2048 === 'function', 'window.GAMES.reset2048 must be defined');
+assert(typeof mockWindow.GAMES.cellClickTTT === 'function', 'window.GAMES.cellClickTTT must be defined');
+assert(typeof mockWindow.GAMES.startSnakeGame === 'function', 'window.GAMES.startSnakeGame must be defined');
+assert(typeof mockWindow.GAMES.setChessColor === 'function', 'window.GAMES.setChessColor must be defined');
+console.log('window.GAMES module loaded and exports verified!');
+
+console.log('\n🎉 ALL FRONTEND AND EGE TESTS PASSED SUCCESSFULLY! 🚀');

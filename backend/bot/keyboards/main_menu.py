@@ -1,0 +1,39 @@
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
+from backend.config import settings
+
+def get_main_keyboard(is_admin: bool = False, user_id: int | None = None) -> ReplyKeyboardMarkup:
+    # Button to open Telegram Mini App with explicit user ID attachment
+    url = settings.WEBAPP_URL
+    if user_id:
+        separator = "&" if "?" in url else "?"
+        url = f"{url}{separator}tg_user_id={user_id}"
+
+    webapp_btn = KeyboardButton(
+        text="📱 Mini App 11 «Б»",
+        web_app=WebAppInfo(url=url)
+    )
+
+    kb = [
+        [webapp_btn],
+        [
+            KeyboardButton(text="📅 Расписание"),
+            KeyboardButton(text="📚 Домашка")
+        ],
+        [
+            KeyboardButton(text="🔔 Звонки"),
+            KeyboardButton(text="🧹 График дежурств")
+        ],
+        [
+            KeyboardButton(text="☀️ До лета осталось"),
+            KeyboardButton(text="💡 Интересный факт")
+        ]
+    ]
+
+    if is_admin:
+        kb.append([KeyboardButton(text="👑 Панель управления")])
+
+    return ReplyKeyboardMarkup(
+        keyboard=kb,
+        resize_keyboard=True,
+        input_field_placeholder="11 «Б» Класс • Выберите раздел..."
+    )

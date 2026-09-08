@@ -1,0 +1,300 @@
+from datetime import date, timedelta
+from typing import List
+from aiogram import Router, F
+from aiogram.types import Message, CallbackQuery
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.db.crud import (
+    get_schedule_for_day, get_schedule_for_date, get_bell_schedule, get_bell_schedule_for_date,
+    get_substitutions_for_date, get_full_week_schedule, get_current_duty_info
+)
+
+from backend.bot.keyboards.inline import (
+    get_schedule_keyboard, get_day_picker_keyboard
+)
+
+from backend.config import get_today
+
+router = Router(name="schedule_router")
+
+DAYS_RU = {
+    1: "Понедельник",
+    2: "Вторник",
+    3: "Среда",
+    4: "Четверг",
+    5: "Пятница",
+    6: "Суббота",
+    7: "Воскресенье"
+}
+
+from backend.bot.services.academic_calendar import get_day_special_status
+
+async def format_day_schedule(session: AsyncSession, target_date: date) -> str:
+    day_of_week = target_date.isoweekday() # 1 = Monday, 7 = Sunday
+    day_name = DAYS_RU.get(day_of_week, "День")
+    date_str = target_date.strftime("%d.%m.%Y")
+
+    status, status_text = get_day_special_status(target_date)
+
+    if target_date <= date(2026, 9, 1):
+        if target_date == date(2026, 9, 1):
+            return f"🔔 **{day_name} ({date_str}) • 11 «Б»**\n\n🎉 **{status_text}!**\nТоржественная линейка и классный час — уроков не было."
+        return f"🌴 **{day_name} ({date_str}) • 11 «Б»**\n\n🎉 **{status_text}!**\nУроков нет, приятного отдыха!"
+
+    if status == "vacation":
+        return f"🌴 **{day_name} ({date_str}) • 11 «Б»**\n\n🎉 **{status_text}!**\nУроков нет, приятного отдыха!"
+
+    schedules = await get_schedule_for_date(session, target_date)
+
+    subs = {s.lesson_number: s for s in await get_substitutions_for_date(session, target_date)}
+
+    if status == "weekend" and not subs and not schedules:
+        return f"🏖 **{day_name} ({date_str}) • 11 «Б»**\n\n{status_text} — уроков нет, отдыхаем!"
+
+    bells = {b.lesson_number: b for b in await get_bell_schedule_for_date(session, target_date)}
+
+
+    if not schedules and not subs:
+        return f"📅 **{day_name} ({date_str}) • 11 «Б»**\n\nРасписание на этот день пока не заполнено."
+
+    header_extra = f" *(Рабочая суббота — перенос уроков)*" if status == "working_weekend" else ""
+    text_lines = [f"📅 **Расписание 11 «Б» на {day_name} ({date_str}):**{header_extra}\n"]
+
+
+    max_lesson = max(
+        [s.lesson_number for s in schedules] + [s.lesson_number for s in subs.values()] or [0]
+    )
+
+    sched_map = {s.lesson_number: s for s in schedules}
+
+    for num in range(1, max_lesson + 1):
+        bell = bells.get(num)
+        time_str = f" `{bell.start_time}-{bell.end_time}`" if bell else ""
+        sub = subs.get(num)
+        base = sched_map.get(num)
+
+        if sub:
+            if sub.is_cancelled:
+                old_name = sub.old_subject.name if sub.old_subject else (base.subject.name if base else "Урок")
+                text_lines.append(f"**{num}.**{time_str} ❌ ~~{old_name}~~ *(ОТМЕНА)*")
+            else:
+                new_name = sub.new_subject.name if sub.new_subject else (base.subject.name if base else "Урок")
+                comment = f" — *{sub.comment}*" if sub.comment else ""
+                text_lines.append(f"**{num}.**{time_str} {new_name}{comment}")
+        elif base:
+
+            text_lines.append(f"**{num}.**{time_str} {base.subject.name}")
+
+    return "\n".join(text_lines)
+
+@router.message(F.text == "📅 Расписание")
+async def show_schedule_menu(message: Message, db_session: AsyncSession):
+    today = date.today()
+    schedule_text = await format_day_schedule(db_session, today)
+    await message.answer(
+        schedule_text,
+        reply_markup=get_schedule_keyboard(),
+        parse_mode="Markdown"
+    )
+
+def format_bell_schedule_text(bells: list) -> str:
+    lines = ["🔔 **Расписание звонков:**\n"]
+    for b in bells:
+        break_str = f" *({b.break_duration} мин.)*" if b.break_duration else ""
+        lines.append(f"**{b.lesson_number} урок**  `{b.start_time} – {b.end_time}` {break_str}")
+    return "\n".join(lines)
+
+@router.message(F.text == "🔔 Звонки")
+
+async def show_bells(message: Message, db_session: AsyncSession):
+    bells = await get_bell_schedule_for_date(db_session, get_today())
+    if not bells:
+        await message.answer("🔔 Расписание звонков пока не заполнено.")
+        return
+
+    await message.answer(format_bell_schedule_text(bells), parse_mode="Markdown")
+
+@router.callback_query(F.data == "sched_today")
+async def cb_sched_today(callback: CallbackQuery, db_session: AsyncSession):
+    text = await format_day_schedule(db_session, get_today())
+    await callback.message.edit_text(text, reply_markup=get_schedule_keyboard(), parse_mode="Markdown")
+    await callback.answer()
+
+@router.callback_query(F.data == "sched_tomorrow")
+async def cb_sched_tomorrow(callback: CallbackQuery, db_session: AsyncSession):
+    tomorrow = get_today() + timedelta(days=1)
+    text = await format_day_schedule(db_session, tomorrow)
+    await callback.message.edit_text(text, reply_markup=get_schedule_keyboard(), parse_mode="Markdown")
+    await callback.answer()
+
+@router.callback_query(F.data == "sched_bells")
+async def cb_sched_bells(callback: CallbackQuery, db_session: AsyncSession):
+    bells = await get_bell_schedule_for_date(db_session, get_today())
+    if not bells:
+        await callback.answer("Расписание звонков не заполнено", show_alert=True)
+        return
+
+
+    text = format_bell_schedule_text(bells)
+    await callback.message.edit_text(text, reply_markup=get_schedule_keyboard(), parse_mode="Markdown")
+    await callback.answer()
+
+
+from backend.bot.keyboards.calendar import get_inline_calendar
+
+@router.callback_query(F.data == "cal_ignore")
+async def cb_cal_ignore(callback: CallbackQuery):
+    await callback.answer()
+
+@router.callback_query(F.data == "sched_calendar")
+async def cb_sched_calendar(callback: CallbackQuery):
+    today = get_today()
+    kb = get_inline_calendar("sched", year=today.year, month=today.month, back_callback="sched_menu")
+    await callback.message.edit_text(
+        "🗓 **Выберите дату на календаре:**",
+        reply_markup=kb,
+        parse_mode="Markdown"
+    )
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("cal_nav_sched_"))
+async def cb_cal_nav_sched(callback: CallbackQuery):
+    parts = callback.data.split("_")
+    year = int(parts[3])
+    month = int(parts[4])
+    kb = get_inline_calendar("sched", year=year, month=month, back_callback="sched_menu")
+    await callback.message.edit_text(
+        "🗓 **Выберите дату на календаре:**",
+        reply_markup=kb,
+        parse_mode="Markdown"
+    )
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("cal_act_sched_"))
+async def cb_cal_act_sched(callback: CallbackQuery, db_session: AsyncSession):
+    parts = callback.data.split("_")
+    year = int(parts[3])
+    month = int(parts[4])
+    day = int(parts[5])
+    target_date = date(year, month, day)
+
+    text = await format_day_schedule(db_session, target_date)
+    await callback.message.edit_text(
+        text,
+        reply_markup=get_schedule_keyboard(),
+        parse_mode="Markdown"
+    )
+    await callback.answer()
+
+@router.callback_query(F.data == "sched_pick_day")
+async def cb_sched_pick_day(callback: CallbackQuery):
+    await callback.message.edit_text(
+        "🗓 Выберите день недели:",
+        reply_markup=get_day_picker_keyboard()
+    )
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("sched_day_"))
+async def cb_sched_day_selected(callback: CallbackQuery, db_session: AsyncSession):
+    day_num = int(callback.data.replace("sched_day_", ""))
+    today = get_today()
+    current_day = today.isoweekday()
+    delta_days = (day_num - current_day) % 7
+    target_date = today + timedelta(days=delta_days)
+
+    text = await format_day_schedule(db_session, target_date)
+    await callback.message.edit_text(text, reply_markup=get_schedule_keyboard(), parse_mode="Markdown")
+    await callback.answer()
+
+@router.callback_query(F.data == "sched_week")
+async def cb_sched_week(callback: CallbackQuery, db_session: AsyncSession):
+    week_schedule = await get_full_week_schedule(db_session)
+    bells = {b.lesson_number: b for b in await get_bell_schedule(db_session)}
+
+    text_parts = ["📅 **Расписание 11 «Б» на всю неделю:**\n"]
+
+    for day_num in range(1, 7):
+        day_name = DAYS_RU.get(day_num, "")
+        items = week_schedule.get(day_num, [])
+        if not items:
+            continue
+        text_parts.append(f"📌 **{day_name}:**")
+        for it in items:
+            bell = bells.get(it.lesson_number)
+            t_str = f" `{bell.start_time}`" if bell else ""
+            text_parts.append(f"  {it.lesson_number}.{t_str} {it.subject.name}")
+        text_parts.append("")
+
+    full_text = "\n".join(text_parts) if len(text_parts) > 1 else "Расписание на неделю пока не заполнено."
+    await callback.message.edit_text(full_text, reply_markup=get_schedule_keyboard(), parse_mode="Markdown")
+    await callback.answer()
+
+@router.callback_query(F.data == "sched_menu")
+async def cb_sched_menu(callback: CallbackQuery, db_session: AsyncSession):
+    text = await format_day_schedule(db_session, get_today())
+    await callback.message.edit_text(text, reply_markup=get_schedule_keyboard(), parse_mode="Markdown")
+    await callback.answer()
+
+
+# ==================== SUMMER COUNTDOWN ====================
+@router.message(F.text == "☀️ До лета осталось")
+async def show_summer_countdown(message: Message):
+    today = get_today()
+    summer_start = date(2027, 5, 27)
+    school_start = date(2026, 9, 1)
+
+
+    if today >= summer_start:
+        await message.answer("🎉 **Ура! Летние каникулы уже наступили!** 🏖🌴", parse_mode="Markdown")
+        return
+
+    days_left = (summer_start - today).days
+    weeks_left = days_left // 7
+
+    total_school_days = (summer_start - school_start).days
+    days_passed = max(0, (today - school_start).days)
+    pct = min(100, int((days_passed / total_school_days) * 100))
+
+    filled = pct // 10
+    empty = 10 - filled
+    progress_bar = "█" * filled + "░" * empty
+
+    text = (
+        "☀️ **До лета осталось:**\n\n"
+        f"⏳ **{days_left} дней**\n"
+        f"📚 **{weeks_left} учебных недель**\n\n"
+        f"Прогресс учебного года:\n"
+        f"`[{progress_bar}]` **{pct}%** позади\n\n"
+        "🌴 *Летние каникулы начнутся 27 мая 2027 года! Отличной учебы и хорошего настроения!*"
+    )
+    await message.answer(text, parse_mode="Markdown")
+
+
+# ==================== DUTY ROSTER ====================
+@router.message(F.text == "🧹 График дежурств")
+async def show_duty_roster(message: Message, db_session: AsyncSession):
+
+    active_group, all_groups = await get_current_duty_info(db_session)
+
+    if not all_groups:
+        await message.answer("🧹 Список дежурных групп пока не настроен.", parse_mode="Markdown")
+        return
+
+    text_lines = ["🧹 **График дежурств 11 «Б»:**\n"]
+
+    if active_group:
+        text_lines.append(f"⭐ **Сейчас дежурит:** **{active_group.name}**")
+        text_lines.append(f"👥 **Состав:** {active_group.members}\n")
+
+    text_lines.append("📋 **Все дежурные группы класса:**")
+    for g in all_groups:
+        badge = " *(дежурит сейчас)* 👈" if active_group and g.group_number == active_group.group_number else ""
+        text_lines.append(f"• **{g.name}:** {g.members}{badge}")
+
+    text_lines.append("\n_Дежурство меняется автоматически каждую неделю_")
+    await message.answer("\n".join(text_lines), parse_mode="Markdown")
+
+
+
+
+

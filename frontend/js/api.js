@@ -1,0 +1,192 @@
+const API_BASE = "";
+
+function getTelegramInitData() {
+  if (window.Telegram?.WebApp?.initData) {
+    return window.Telegram.WebApp.initData;
+  }
+  try {
+    const hash = window.location.hash.slice(1);
+    if (hash) {
+      const params = new URLSearchParams(hash);
+      const fromHash = params.get("tgWebAppData");
+      if (fromHash) return fromHash;
+    }
+  } catch (e) {}
+  return "";
+}
+
+function getTelegramUser() {
+  if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
+    return window.Telegram.WebApp.initDataUnsafe.user;
+  }
+  try {
+    const raw = getTelegramInitData();
+    if (raw) {
+      const params = new URLSearchParams(raw);
+      const uStr = params.get("user");
+      if (uStr) return JSON.parse(uStr);
+    }
+  } catch (e) {}
+  return null;
+}
+
+function getTelegramUserId() {
+  // 1. window.Telegram.WebApp.initDataUnsafe.user.id
+  try {
+    const tgUser = getTelegramUser();
+    if (tgUser && tgUser.id) {
+      const sid = String(tgUser.id);
+      localStorage.setItem("cached_tg_uid", sid);
+      return sid;
+    }
+  } catch (e) {}
+
+  // 2. URL search parameters (?tg_user_id=, ?uid=, ?user_id=)
+  try {
+    const sParams = new URLSearchParams(window.location.search);
+    const fromSearch = sParams.get("tg_user_id") || sParams.get("uid") || sParams.get("user_id");
+    if (fromSearch) {
+      localStorage.setItem("cached_tg_uid", String(fromSearch));
+      return String(fromSearch);
+    }
+  } catch (e) {}
+
+  // 3. URL hash parameters (#tg_user_id=, #uid=, or encoded in #tgWebAppData)
+  try {
+    const h = window.location.hash;
+    if (h) {
+      // Check direct param
+      const mDirect = h.match(/(?:tg_user_id|uid|user_id)=([0-9]+)/);
+      if (mDirect && mDirect[1]) {
+        localStorage.setItem("cached_tg_uid", mDirect[1]);
+        return mDirect[1];
+      }
+      // Check encoded user JSON in tgWebAppData
+      const mJson = h.match(/(?:(?:%2522|%22|")id(?:%2522|%22|")\s*(?:%253A|%3A|:)\s*)([0-9]+)/);
+      if (mJson && mJson[1]) {
+        localStorage.setItem("cached_tg_uid", mJson[1]);
+        return mJson[1];
+      }
+    }
+  } catch (e) {}
+
+  // 4. Cached from previous authenticated session
+  try {
+    const cached = localStorage.getItem("cached_tg_uid");
+    if (cached && /^[0-9]+$/.test(cached)) return cached;
+  } catch (e) {}
+
+  return null;
+}
+
+async function apiRequest(endpoint, options = {}) {
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {})
+  };
+
+  const tgUid = getTelegramUserId();
+  if (tgUid) {
+    headers["X-Telegram-User-Id"] = tgUid;
+    // Also attach to query parameter for maximum reliability
+    const sep = endpoint.includes("?") ? "&" : "?";
+    if (!endpoint.includes("tg_user_id=")) {
+      endpoint = `${endpoint}${sep}tg_user_id=${tgUid}`;
+    }
+  }
+
+  // Safe initData: NEVER send raw non-ASCII strings in headers to avoid WHATWG Fetch crash
+  try {
+    const rawInit = getTelegramInitData();
+    if (rawInit && /^[\x20-\x7E]*$/.test(rawInit)) {
+      headers["X-Telegram-Init-Data"] = rawInit;
+    }
+  } catch (e) {}
+
+
+
+
+  try {
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers
+    });
+
+    if (!response.ok) {
+      let errorDetail = "";
+      try {
+        const err = await response.json();
+        errorDetail = err.detail || err.message || "";
+      } catch (e) {}
+
+      if (response.status === 401 || response.status === 403) {
+        throw new Error(errorDetail || "Доступ запрещен или требуется авторизация");
+      }
+      throw new Error(errorDetail || `Ошибка сервера: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error(`API Error on ${endpoint}:`, error);
+    throw error;
+  }
+}
+
+const api = {
+  getMe: () => apiRequest("/api/me"),
+  getStudents: () => apiRequest("/api/students"),
+  getBells: () => apiRequest("/api/bells"),
+  getSchedule: (dateStr) => apiRequest(`/api/schedule?target_date=${dateStr}`),
+  getHomework: (dateStr) => apiRequest(`/api/homework?target_date=${dateStr}`),
+  toggleHomework: (id) => apiRequest(`/api/homework/${id}/toggle`, { method: "POST" }),
+  getDuty: () => apiRequest("/api/duty"),
+  getDailyFact: () => apiRequest(`/api/facts/today?_t=${Date.now()}`),
+  setUserId: (uid) => {
+    if (uid) {
+      localStorage.setItem("cached_tg_uid", String(uid));
+    }
+  },
+  // Multiplayer Games
+  getClassmates: () => apiRequest("/api/games/classmates"),
+  inviteGame: (opponentTgId, hostName, gameType = "tictactoe", hostColor = "white", opponentName = "") =>
+    apiRequest("/api/games/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        opponent_tg_id: opponentTgId,
+        host_name: hostName,
+        opponent_name: opponentName,
+        game_type: gameType,
+        host_color: hostColor
+      })
+    }),
+  getGameRoom: (roomId) => apiRequest(`/api/games/room/${roomId}`),
+  joinGameRoom: (roomId, userName) =>
+    apiRequest(`/api/games/room/${roomId}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_name: userName })
+    }),
+  sendGameMove: (roomId, moveData) => {
+    const payload = typeof moveData === "number" ? { cell: moveData } : { move: moveData };
+    return apiRequest(`/api/games/room/${roomId}/move`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+  },
+  resignGame: (roomId) =>
+    apiRequest(`/api/games/room/${roomId}/resign`, {
+      method: "POST"
+    }),
+  rematchGame: (roomId) =>
+    apiRequest(`/api/games/room/${roomId}/rematch`, {
+      method: "POST"
+    }),
+  cancelGame: (roomId) =>
+    apiRequest(`/api/games/room/${roomId}/cancel`, {
+      method: "POST"
+    })
+};
+
+
