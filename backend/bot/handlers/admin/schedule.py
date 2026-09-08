@@ -358,20 +358,11 @@ async def msg_edit_dt_sched_bulk_save(message: Message, state: FSMContext, db_se
     )
     await state.set_state(EditDateScheduleStates.confirm_notification)
 
-    kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="📢 Да, оповестить класс!", callback_data="adm_dt_notify_yes"),
-                InlineKeyboardButton(text="🔇 Без оповещения", callback_data="adm_dt_notify_no")
-            ]
-        ]
-    )
-
     await message.answer(
         f"✅ **Расписание на {day_name} ({target_d.strftime('%d.%m.%Y')}) сохранено ({len(saved_items)} ур.)!**\n\n" +
         "\n".join(schedule_lines) + "\n\n" +
         "📢 **Разослать оповещение классу об изменении расписания?**",
-        reply_markup=kb,
+        reply_markup=get_date_schedule_notify_keyboard(),
         parse_mode="Markdown"
     )
 
@@ -443,22 +434,13 @@ async def cb_edit_dt_sched_save(callback: CallbackQuery, state: FSMContext, db_s
     )
     await state.set_state(EditDateScheduleStates.confirm_notification)
 
-    kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="📢 Да, оповестить класс!", callback_data="adm_dt_notify_yes"),
-                InlineKeyboardButton(text="🔇 Без оповещения", callback_data="adm_dt_notify_no")
-            ]
-        ]
-    )
-
     await callback.message.edit_text(
         f"✅ **Урок на дату сохранен!**\n\n"
         f"📅 **Дата:** {target_d.strftime('%d.%m.%Y')} ({day_name})\n"
         f"🔢 **Урок:** {l_num}-й\n"
         f"📖 **Предмет:** {subj.name if subj else ''}\n\n"
         "📢 **Разослать оповещение классу об изменении расписания?**",
-        reply_markup=kb,
+        reply_markup=get_date_schedule_notify_keyboard(),
         parse_mode="Markdown"
     )
     try:
@@ -489,19 +471,10 @@ async def cb_edit_dt_sched_reset(callback: CallbackQuery, state: FSMContext, db_
     )
     await state.set_state(EditDateScheduleStates.confirm_notification)
 
-    kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="📢 Да, оповестить класс!", callback_data="adm_dt_notify_yes"),
-                InlineKeyboardButton(text="🔇 Без оповещения", callback_data="adm_dt_notify_no")
-            ]
-        ]
-    )
-
     await callback.message.edit_text(
         f"🗑 **Расписание на {target_d.strftime('%d.%m.%Y')} сброшено к постоянному!**\n\n"
         "📢 **Оповестить класс о возврате к стандартному расписанию?**",
-        reply_markup=kb,
+        reply_markup=get_date_schedule_notify_keyboard(),
         parse_mode="Markdown"
     )
     try:
@@ -510,16 +483,20 @@ async def cb_edit_dt_sched_reset(callback: CallbackQuery, state: FSMContext, db_
         pass
 
 
-@router.callback_query(F.data == "adm_dt_notify_yes")
+@router.callback_query(F.data.in_(["adm_dt_notify_groups", "adm_dt_notify_pm", "adm_dt_notify_all", "adm_dt_notify_yes"]))
 async def cb_edit_dt_notify_yes(callback: CallbackQuery, state: FSMContext, bot: Bot):
     data = await state.get_data()
     title = data.get("alert_title", "Изменение расписания")
     lines = data.get("alert_lines", [])
 
-    await send_schedule_change_alert(bot, title, lines)
+    to_groups = callback.data in ("adm_dt_notify_groups", "adm_dt_notify_all", "adm_dt_notify_yes")
+    to_users = callback.data in ("adm_dt_notify_pm", "adm_dt_notify_all", "adm_dt_notify_yes")
+
+    await send_schedule_change_alert(bot, title, lines, to_groups=to_groups, to_users=to_users)
     await state.clear()
+    dest_text = "в чат и в ЛС" if (to_groups and to_users) else ("в чат" if to_groups else "в ЛС")
     await callback.message.edit_text(
-        "📢 **Оповещение об изменении расписания успешно разослано классу!**",
+        f"📢 **Оповещение об изменении расписания успешно разослано ({dest_text})!**",
         reply_markup=get_admin_panel_keyboard(),
         parse_mode="Markdown"
     )
@@ -964,7 +941,7 @@ async def msg_sub_finish(message: Message, state: FSMContext, db_session: AsyncS
     )
 
 
-@router.callback_query(F.data == "sub_notify_yes")
+@router.callback_query(F.data.in_(["sub_notify_groups", "sub_notify_pm", "sub_notify_all", "sub_notify_yes"]))
 async def cb_sub_broadcast(callback: CallbackQuery, state: FSMContext, db_session: AsyncSession, bot: Bot):
     data = await state.get_data()
     sub_date_str = data.get("sub_date") or data.get("edit_target_date")
@@ -972,6 +949,9 @@ async def cb_sub_broadcast(callback: CallbackQuery, state: FSMContext, db_sessio
         await callback.answer("Данные для оповещения не найдены", show_alert=True)
         await state.clear()
         return
+
+    to_groups = callback.data in ("sub_notify_groups", "sub_notify_all", "sub_notify_yes")
+    to_users = callback.data in ("sub_notify_pm", "sub_notify_all", "sub_notify_yes")
 
     sub_date = date.fromisoformat(sub_date_str)
     l_num = data.get("lesson_number")
@@ -984,32 +964,35 @@ async def cb_sub_broadcast(callback: CallbackQuery, state: FSMContext, db_sessio
             "Пожалуйста, проверьте расписание в боте или в Mini App."
         )
 
-        students = await get_notifiable_users(db_session)
-        groups = await get_approved_group_chats(db_session)
         sent_count = 0
 
-        for s in students:
-            try:
-                await bot.send_message(chat_id=s.tg_id, text=notif_text, parse_mode="Markdown")
-                sent_count += 1
-            except Exception:
-                pass
+        if to_users:
+            students = await get_notifiable_users(db_session)
+            for s in students:
+                try:
+                    await bot.send_message(chat_id=s.tg_id, text=notif_text, parse_mode="Markdown")
+                    sent_count += 1
+                except Exception:
+                    pass
 
-        for g in groups:
-            try:
-                await bot.send_message(
-                    chat_id=g.chat_id,
-                    message_thread_id=g.topic_schedule_id,
-                    text=notif_text,
-                    parse_mode="Markdown"
-                )
-                sent_count += 1
-            except Exception:
-                pass
+        if to_groups:
+            groups = await get_approved_group_chats(db_session)
+            for g in groups:
+                try:
+                    await bot.send_message(
+                        chat_id=g.chat_id,
+                        message_thread_id=g.topic_schedule_id,
+                        text=notif_text,
+                        parse_mode="Markdown"
+                    )
+                    sent_count += 1
+                except Exception:
+                    pass
 
         await state.clear()
+        dest_text = "в чат и в ЛС" if (to_groups and to_users) else ("в чат" if to_groups else "в ЛС")
         await callback.message.edit_text(
-            f"📢 Оповещение о замене успешно разослано {sent_count} получателям!",
+            f"📢 Оповещение о замене успешно разослано ({dest_text}) {sent_count} получателям!",
             reply_markup=get_admin_panel_keyboard()
         )
         try:
@@ -1022,12 +1005,13 @@ async def cb_sub_broadcast(callback: CallbackQuery, state: FSMContext, db_sessio
         title = data.get("alert_title", f"📅 **{day_name} ({sub_date.strftime('%d.%m.%Y')}):**")
         lines = data.get("alert_lines", [])
         try:
-            await send_schedule_change_alert(bot, title, lines)
+            await send_schedule_change_alert(bot, title, lines, to_groups=to_groups, to_users=to_users)
         except Exception as e:
             logger.error(f"Error sending schedule change alert: {e}")
         await state.clear()
+        dest_text = "в чат и в ЛС" if (to_groups and to_users) else ("в чат" if to_groups else "в ЛС")
         await callback.message.edit_text(
-            "📢 **Оповещение об изменении расписания успешно разослано классу!**",
+            f"📢 **Оповещение об изменении расписания успешно разослано ({dest_text})!**",
             reply_markup=get_admin_panel_keyboard(),
             parse_mode="Markdown"
         )

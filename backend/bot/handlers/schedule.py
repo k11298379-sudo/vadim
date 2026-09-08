@@ -76,7 +76,7 @@ async def format_day_schedule(session: AsyncSession, target_date: date) -> str:
         if sub:
             if sub.is_cancelled:
                 old_name = sub.old_subject.name if sub.old_subject else (base.subject.name if base else "Урок")
-                text_lines.append(f"**{num}.**{time_str} ❌ ~~{old_name}~~ *(ОТМЕНА)*")
+                text_lines.append(f"**{num}.**{time_str} ❌ ~~{old_name}~~")
             else:
                 new_name = sub.new_subject.name if sub.new_subject else (base.subject.name if base else "Урок")
                 comment = f" — *{sub.comment}*" if sub.comment else ""

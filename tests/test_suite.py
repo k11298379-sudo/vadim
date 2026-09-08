@@ -668,16 +668,26 @@ def test_keyboards_and_fastapi():
     assert "duty_bcast_dest_all" in duty_bcast_cbs
     print("[OK] Duty broadcast destination keyboard (pm, groups, all) verified.")
 
-    # Test Date Schedule Notify keyboard
-    from backend.bot.keyboards.admin_kb import get_date_schedule_notify_keyboard
+    # Test Date Schedule Notify keyboard & Substitutions keyboard
+    from backend.bot.keyboards.admin_kb import get_date_schedule_notify_keyboard, get_notify_confirm_keyboard
     from backend.bot.services.notifier import escape_md
     dt_kb = get_date_schedule_notify_keyboard()
     dt_cbs = [b.callback_data for row in dt_kb.inline_keyboard for b in row]
-    assert "adm_dt_notify_yes" in dt_cbs
+    assert "adm_dt_notify_groups" in dt_cbs
+    assert "adm_dt_notify_pm" in dt_cbs
+    assert "adm_dt_notify_all" in dt_cbs
     assert "adm_dt_notify_no" in dt_cbs
+
+    sub_kb = get_notify_confirm_keyboard()
+    sub_cbs = [b.callback_data for row in sub_kb.inline_keyboard for b in row]
+    assert "sub_notify_groups" in sub_cbs
+    assert "sub_notify_pm" in sub_cbs
+    assert "sub_notify_all" in sub_cbs
+    assert "sub_notify_no" in sub_cbs
+
     assert escape_md("mili_") == "mili\\_"
     assert escape_md("test_user_name*") == "test\\_user\\_name\\*"
-    print("[OK] Date schedule notify keyboard and escape_md verification passed.")
+    print("[OK] Schedule notify keyboards (groups, pm, all, no) and escape_md verification passed.")
 
     # Test HW notification choice keyboard
     hw_notif_kb = get_hw_notify_keyboard(999)

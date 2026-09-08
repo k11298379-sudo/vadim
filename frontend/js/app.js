@@ -464,9 +464,6 @@ async function loadSchedule() {
       card.className = "theme-card rounded-2xl p-4 flex items-center justify-between shadow-sm transition-all";
 
       let statusBadge = "";
-      if (l.is_cancelled) {
-        statusBadge = `<span class="badge-cancel text-[10px] font-bold px-2 py-0.5 rounded-full">ОТМЕНА</span>`;
-      }
 
 
       const commentText = l.comment ? `<p class="text-xs text-amber-600 mt-1 italic">${l.comment}</p>` : "";

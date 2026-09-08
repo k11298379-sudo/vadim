@@ -44,20 +44,30 @@ def get_cancel_keyboard() -> InlineKeyboardMarkup:
 def get_notify_confirm_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(text="📢 Да, разослать классу!", callback_data="sub_notify_yes"),
-                InlineKeyboardButton(text="🔇 Без оповещения", callback_data="sub_notify_no")
-            ]
+            [InlineKeyboardButton(text="👥 Скинуть в чат", callback_data="sub_notify_groups")],
+            [InlineKeyboardButton(text="👤 Всем в ЛС", callback_data="sub_notify_pm")],
+            [InlineKeyboardButton(text="📢 В чат + ЛС", callback_data="sub_notify_all")],
+            [InlineKeyboardButton(text="🔇 Без оповещения", callback_data="sub_notify_no")]
         ]
     )
 
 def get_date_schedule_notify_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(text="📢 Да, оповестить класс!", callback_data="adm_dt_notify_yes"),
-                InlineKeyboardButton(text="🔇 Без оповещения", callback_data="adm_dt_notify_no")
-            ]
+            [InlineKeyboardButton(text="👥 Скинуть в чат", callback_data="adm_dt_notify_groups")],
+            [InlineKeyboardButton(text="👤 Всем в ЛС", callback_data="adm_dt_notify_pm")],
+            [InlineKeyboardButton(text="📢 В чат + ЛС", callback_data="adm_dt_notify_all")],
+            [InlineKeyboardButton(text="🔇 Без оповещения", callback_data="adm_dt_notify_no")]
+        ]
+    )
+
+def get_date_bells_notify_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="👥 Скинуть в чат", callback_data="adm_dtb_notify_groups")],
+            [InlineKeyboardButton(text="👤 Всем в ЛС", callback_data="adm_dtb_notify_pm")],
+            [InlineKeyboardButton(text="📢 В чат + ЛС", callback_data="adm_dtb_notify_all")],
+            [InlineKeyboardButton(text="🔇 Без оповещения", callback_data="adm_dtb_notify_no")]
         ]
     )
 

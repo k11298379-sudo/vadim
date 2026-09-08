@@ -10,7 +10,9 @@ from backend.db.crud import (
     get_bell_schedule, get_bell_schedule_for_date, set_bell_schedule_item,
     set_bell_break_duration, clear_date_bells, save_bulk_date_bells
 )
-from backend.bot.keyboards.admin_kb import get_admin_panel_keyboard, get_cancel_keyboard
+from backend.bot.keyboards.admin_kb import (
+    get_admin_panel_keyboard, get_cancel_keyboard, get_date_bells_notify_keyboard
+)
 from backend.bot.keyboards.calendar import get_inline_calendar
 from backend.bot.services.notifier import send_schedule_change_alert
 from backend.bot.handlers.schedule import DAYS_RU
@@ -321,19 +323,10 @@ async def cb_dtb_preset_35(callback: CallbackQuery, state: FSMContext, db_sessio
     )
     await state.set_state(EditDateBellStates.confirm_notification)
 
-    kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="📢 Да, оповестить класс!", callback_data="adm_dtb_notify_yes"),
-                InlineKeyboardButton(text="🔇 Без оповещения", callback_data="adm_dtb_notify_no")
-            ]
-        ]
-    )
-
     await callback.message.edit_text(
         f"✅ **Установлены сокращенные уроки по 35 минут на {target_d.strftime('%d.%m.%Y')}!**\n\n"
         "📢 **Разослать оповещение классу об изменении звонков?**",
-        reply_markup=kb,
+        reply_markup=get_date_bells_notify_keyboard(),
         parse_mode="Markdown"
     )
     try:
@@ -372,19 +365,10 @@ async def cb_dtb_preset_30(callback: CallbackQuery, state: FSMContext, db_sessio
     )
     await state.set_state(EditDateBellStates.confirm_notification)
 
-    kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="📢 Да, оповестить класс!", callback_data="adm_dtb_notify_yes"),
-                InlineKeyboardButton(text="🔇 Без оповещения", callback_data="adm_dtb_notify_no")
-            ]
-        ]
-    )
-
     await callback.message.edit_text(
         f"✅ **Установлены сокращенные уроки по 30 минут на {target_d.strftime('%d.%m.%Y')}!**\n\n"
         "📢 **Разослать оповещение классу об изменении звонков?**",
-        reply_markup=kb,
+        reply_markup=get_date_bells_notify_keyboard(),
         parse_mode="Markdown"
     )
     try:
@@ -447,20 +431,11 @@ async def msg_dtb_bulk_save(message: Message, state: FSMContext, db_session: Asy
     )
     await state.set_state(EditDateBellStates.confirm_notification)
 
-    kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="📢 Да, оповестить класс!", callback_data="adm_dtb_notify_yes"),
-                InlineKeyboardButton(text="🔇 Без оповещения", callback_data="adm_dtb_notify_no")
-            ]
-        ]
-    )
-
     await message.answer(
         f"✅ **Расписание звонков на {target_d.strftime('%d.%m.%Y')} сохранено ({len(parsed)} ур.)!**\n\n"
         + "\n".join(bell_lines) + "\n\n"
         "📢 **Разослать оповещение классу об изменении звонков?**",
-        reply_markup=kb,
+        reply_markup=get_date_bells_notify_keyboard(),
         parse_mode="Markdown"
     )
 
@@ -486,19 +461,10 @@ async def cb_dtb_reset(callback: CallbackQuery, state: FSMContext, db_session: A
     )
     await state.set_state(EditDateBellStates.confirm_notification)
 
-    kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="📢 Да, оповестить класс!", callback_data="adm_dtb_notify_yes"),
-                InlineKeyboardButton(text="🔇 Без оповещения", callback_data="adm_dtb_notify_no")
-            ]
-        ]
-    )
-
     await callback.message.edit_text(
         f"🗑 **Расписание звонков на {target_d.strftime('%d.%m.%Y')} сброшено к стандартному!**\n\n"
         "📢 **Оповестить класс о возврате к стандартным звонкам?**",
-        reply_markup=kb,
+        reply_markup=get_date_bells_notify_keyboard(),
         parse_mode="Markdown"
     )
     try:
@@ -507,16 +473,20 @@ async def cb_dtb_reset(callback: CallbackQuery, state: FSMContext, db_session: A
         pass
 
 
-@router.callback_query(F.data == "adm_dtb_notify_yes")
+@router.callback_query(F.data.in_(["adm_dtb_notify_groups", "adm_dtb_notify_pm", "adm_dtb_notify_all", "adm_dtb_notify_yes"]))
 async def cb_dtb_notify_yes(callback: CallbackQuery, state: FSMContext, bot: Bot):
     data = await state.get_data()
     title = data.get("alert_title", "Изменение расписания звонков")
     lines = data.get("alert_lines", [])
 
-    await send_schedule_change_alert(bot, title, lines)
+    to_groups = callback.data in ("adm_dtb_notify_groups", "adm_dtb_notify_all", "adm_dtb_notify_yes")
+    to_users = callback.data in ("adm_dtb_notify_pm", "adm_dtb_notify_all", "adm_dtb_notify_yes")
+
+    await send_schedule_change_alert(bot, title, lines, to_groups=to_groups, to_users=to_users)
     await state.clear()
+    dest_text = "в чат и в ЛС" if (to_groups and to_users) else ("в чат" if to_groups else "в ЛС")
     await callback.message.edit_text(
-        "📢 **Оповещение об изменении звонков успешно разослано классу!**",
+        f"📢 **Оповещение об изменении звонков успешно разослано ({dest_text})!**",
         reply_markup=get_admin_panel_keyboard(),
         parse_mode="Markdown"
     )
@@ -869,16 +839,10 @@ async def cb_bell_wizard_save(callback: CallbackQuery, state: FSMContext, db_ses
         )
         await state.set_state(EditDateBellStates.confirm_notification)
 
-        kb = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [InlineKeyboardButton(text="📢 Да, оповестить класс!", callback_data="adm_dtb_notify_yes")],
-                [InlineKeyboardButton(text="🔇 Без оповещения", callback_data="adm_dtb_notify_no")]
-            ]
-        )
         await callback.message.edit_text(
             f"✅ **Расписание звонков на {day_name} ({target_d.strftime('%d.%m.%Y')}) сохранено!**\n\n"
             "📢 **Разослать классу и в беседы уведомление об изменении звонков?**",
-            reply_markup=kb,
+            reply_markup=get_date_bells_notify_keyboard(),
             parse_mode="Markdown"
         )
     try:

@@ -78,7 +78,7 @@ async def send_evening_digest(bot: Bot, target_date: Optional[date] = None) -> i
 
                 if sub:
                     if sub.is_cancelled:
-                        sched_lines.append(f"  {n}.{t_str} ❌ ~~{base.subject.name if base else 'Урок'}~~ (ОТМЕНА)")
+                        sched_lines.append(f"  {n}.{t_str} ❌ ~~{base.subject.name if base else 'Урок'}~~")
                     else:
                         sched_lines.append(f"  {n}.{t_str} {sub.new_subject.name if sub.new_subject else 'Урок'}")
                 elif base:
@@ -205,10 +205,16 @@ async def send_evening_digest(bot: Bot, target_date: Optional[date] = None) -> i
     return sent_count
 
 
-async def send_schedule_change_alert(bot: Bot, alert_title: str, schedule_lines: list[str]):
-
+async def send_schedule_change_alert(
+    bot: Bot,
+    alert_title: str,
+    schedule_lines: list[str],
+    to_groups: bool = True,
+    to_users: bool = True
+) -> tuple[int, int]:
     """
-    Sends notification about schedule change to all students and approved groups.
+    Sends notification about schedule change to students and/or approved groups.
+    Returns tuple: (groups_sent, users_sent)
     """
     body = "\n".join(schedule_lines)
     full_msg = (
@@ -217,26 +223,33 @@ async def send_schedule_change_alert(bot: Bot, alert_title: str, schedule_lines:
         f"{body}\n\n"
         f"📱 _Проверить полное расписание можно в Mini App или меню бота._"
     )
+    users_sent = 0
+    groups_sent = 0
     async with async_session_factory() as session:
-        students = await get_notifiable_users(session)
-        groups = await get_approved_group_chats(session)
+        if to_users:
+            students = await get_notifiable_users(session)
+            for st in students:
+                try:
+                    await bot.send_message(chat_id=st.tg_id, text=full_msg, parse_mode="Markdown")
+                    users_sent += 1
+                except Exception as e:
+                    logger.warning(f"Could not send schedule alert to user {st.tg_id}: {e}")
 
-        for st in students:
-            try:
-                await bot.send_message(chat_id=st.tg_id, text=full_msg, parse_mode="Markdown")
-            except Exception as e:
-                logger.warning(f"Could not send schedule alert to user {st.tg_id}: {e}")
+        if to_groups:
+            groups = await get_approved_group_chats(session)
+            for g in groups:
+                try:
+                    await bot.send_message(
+                        chat_id=g.chat_id,
+                        message_thread_id=g.topic_schedule_id,
+                        text=full_msg,
+                        parse_mode="Markdown"
+                    )
+                    groups_sent += 1
+                except Exception as e:
+                    logger.warning(f"Could not send schedule alert to group {g.chat_id}: {e}")
 
-        for g in groups:
-            try:
-                await bot.send_message(
-                    chat_id=g.chat_id,
-                    message_thread_id=g.topic_schedule_id,
-                    text=full_msg,
-                    parse_mode="Markdown"
-                )
-            except Exception as e:
-                logger.warning(f"Could not send schedule alert to group {g.chat_id}: {e}")
+    return groups_sent, users_sent
 
 
 async def send_new_homework_alert(
