@@ -78,11 +78,13 @@ async def send_evening_digest(bot: Bot, target_date: Optional[date] = None) -> i
 
                 if sub:
                     if sub.is_cancelled:
-                        sched_lines.append(f"  {n}.{t_str} ❌ ~~{base.subject.name if base else 'Урок'}~~")
-                    else:
-                        sched_lines.append(f"  {n}.{t_str} {sub.new_subject.name if sub.new_subject else 'Урок'}")
+                        continue
+                    sched_lines.append(f"  {n}.{t_str} {sub.new_subject.name if sub.new_subject else 'Урок'}")
                 elif base:
                     sched_lines.append(f"  {n}.{t_str} {base.subject.name}")
+
+            if len(sched_lines) == 1:
+                sched_lines.append("  🎉 _На завтра уроков нет!_")
 
         # 1. Рассылка по группам (с разделением по топикам/веткам)
         approved_groups = await get_approved_group_chats(session)

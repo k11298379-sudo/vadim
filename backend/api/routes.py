@@ -133,13 +133,12 @@ async def get_schedule(
         }
 
         if sub:
-            lesson_item["is_substitution"] = True
-            lesson_item["is_cancelled"] = sub.is_cancelled
-            lesson_item["comment"] = sub.comment or ""
             if sub.is_cancelled:
-                lesson_item["subject_name"] = sub.old_subject.name if sub.old_subject else (base.subject.name if base else "Урок")
-            else:
-                lesson_item["subject_name"] = sub.new_subject.name if sub.new_subject else (base.subject.name if base else "Урок")
+                continue
+            lesson_item["is_substitution"] = True
+            lesson_item["is_cancelled"] = False
+            lesson_item["comment"] = sub.comment or ""
+            lesson_item["subject_name"] = sub.new_subject.name if sub.new_subject else (base.subject.name if base else "Урок")
             lessons.append(lesson_item)
         elif base:
             lesson_item["subject_name"] = base.subject.name if base.subject else "Урок"

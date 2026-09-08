@@ -541,6 +541,12 @@ async def test_database_and_crud():
         assert "Химия" in sched_sub_text, "Substituted subject name must be in schedule text!"
         print("[OK] Schedule clean formatting without (ЗАМЕНА) label verified.")
 
+        # Test schedule cancellation (completely omitted from schedule)
+        await create_substitution(session, target_date=today, lesson_number=2, old_subject_id=None, new_subject_id=None, is_cancelled=True)
+        sched_cancel_text = await format_day_schedule(session, today)
+        assert "**2.**" not in sched_cancel_text, "Cancelled lesson must be completely omitted from schedule!"
+        print("[OK] Cancelled lesson completely omitted from schedule verified.")
+
         # Test admin self-demote and self-delete prevention
         from backend.bot.handlers.admin import cb_toggle_user_role, cb_admin_delete_user_ask
         from backend.db.models import User
