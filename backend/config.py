@@ -9,6 +9,10 @@ class Settings(BaseSettings):
 
     BOT_TOKEN: str = Field(default="", description="Telegram Bot API Token")
     ADMIN_ID: int = Field(default=0, description="Telegram ID of the primary administrator")
+    TELEGRAM_API_SERVER: str = Field(
+        default="",
+        description="Custom Telegram Bot API server / reverse proxy (e.g. Cloudflare Worker)"
+    )
     
     PORT: int = Field(default=8000, description="Port to listen on")
     HOST: str = Field(default="0.0.0.0", description="Host to listen on")
