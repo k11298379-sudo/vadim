@@ -1,9 +1,9 @@
 // ==============================================================================
-// МОДУЛЬ МИНИ-ИГР ДЛЯ MINI APP (2048, КРЕСТИКИ-НОЛИКИ, ЗМЕЙКА)
+// МОДУЛЬ МИНИ-ИГР ДЛЯ MINI APP (2048, КРЕСТИКИ-НОЛИКИ, ЗМЕЙКА, ТЕТРИС, ШАХМАТЫ)
 // ==============================================================================
 
 (function () {
-  let currentGame = "2048"; // '2048', 'tictactoe', 'snake'
+  let currentGame = "2048"; // '2048', 'tictactoe', 'snake', 'tetris', 'chess'
 
   function initGames() {
     const container = document.getElementById("pane-games");
@@ -25,11 +25,11 @@
             </h2>
             <p class="text-xs text-slate-400 font-medium">Отдохни на перемене с пользой для ума</p>
           </div>
-          <span class="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-violet-50 dark:bg-slate-800 text-violet-600 dark:text-violet-400 border border-violet-100 dark:border-slate-700">4 игры</span>
+          <span class="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-violet-50 dark:bg-slate-800 text-violet-600 dark:text-violet-400 border border-violet-100 dark:border-slate-700">5 игр</span>
         </div>
 
         <!-- Games selector tabs -->
-        <div class="grid grid-cols-4 gap-1 p-1 rounded-2xl bg-slate-200/70 dark:bg-slate-800/90 text-[11px] font-bold">
+        <div class="grid grid-cols-5 gap-1 p-1 rounded-2xl bg-slate-200/70 dark:bg-slate-800/90 text-[10px] font-bold">
           <button onclick="window.GAMES.switchGame('2048')" class="py-2 rounded-xl transition-all flex items-center justify-center gap-1 ${
             currentGame === '2048'
               ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
@@ -54,6 +54,14 @@
             <span>🐍</span>
             <span class="truncate">Змейка</span>
           </button>
+          <button onclick="window.GAMES.switchGame('tetris')" class="py-2 rounded-xl transition-all flex items-center justify-center gap-1 ${
+            currentGame === 'tetris'
+              ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
+          }">
+            <span>🧱</span>
+            <span class="truncate">Тетрис</span>
+          </button>
           <button onclick="window.GAMES.switchGame('chess')" class="py-2 rounded-xl transition-all flex items-center justify-center gap-1 ${
             currentGame === 'chess'
               ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
@@ -75,6 +83,7 @@
     if (currentGame === "2048") init2048();
     else if (currentGame === "tictactoe") initTicTacToe();
     else if (currentGame === "snake") initSnake();
+    else if (currentGame === "tetris") initTetris();
     else if (currentGame === "chess") initChess();
   }
 
@@ -91,12 +100,26 @@
       clearInterval(window._snakeInterval);
       window._snakeInterval = null;
     }
+    if (window._2048KeyHandler) {
+      window.removeEventListener("keydown", window._2048KeyHandler);
+      window._2048KeyHandler = null;
+    }
+    if (window._tetrisInterval) {
+      clearInterval(window._tetrisInterval);
+      window._tetrisInterval = null;
+    }
+    if (window._tetrisKeyHandler) {
+      window.removeEventListener("keydown", window._tetrisKeyHandler);
+      window._tetrisKeyHandler = null;
+    }
+    tetrisRunning = false;
   }
 
   function renderActiveGame() {
     if (currentGame === "2048") return render2048HTML();
     if (currentGame === "tictactoe") return renderTicTacToeHTML();
     if (currentGame === "snake") return renderSnakeHTML();
+    if (currentGame === "tetris") return renderTetrisHTML();
     if (currentGame === "chess") return renderChessHTML();
     return "";
   }
@@ -107,6 +130,7 @@
   let board2048 = [];
   let score2048 = 0;
   let best2048 = 0;
+  let isGameOver2048 = false;
 
   function render2048HTML() {
     best2048 = parseInt(localStorage.getItem("game_2048_best") || "0", 10);
@@ -129,20 +153,48 @@
           </button>
         </div>
 
-        <!-- 4x4 Grid Container -->
-        <div id="grid-2048" class="w-full aspect-square p-2 rounded-2xl bg-slate-200 dark:bg-slate-900 grid grid-cols-4 gap-2 touch-none select-none">
-          <!-- 16 cells generated in init2048 -->
+        <!-- 4x4 Grid Container with Game Over overlay -->
+        <div class="relative w-full aspect-square">
+          <div id="grid-2048" class="w-full h-full p-2 rounded-2xl bg-slate-200 dark:bg-slate-900 grid grid-cols-4 gap-2 touch-none select-none">
+            <!-- 16 cells generated in init2048 -->
+          </div>
+          <div id="game-over-2048" class="hidden absolute inset-0 rounded-2xl bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-10 space-y-3">
+            <div class="w-12 h-12 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-2xl mx-auto shadow-inner">
+              😢
+            </div>
+            <div>
+              <h3 class="text-base font-black text-white">Игра окончена!</h3>
+              <p class="text-xs text-slate-400 mt-0.5">Нет доступных ходов для объединения</p>
+            </div>
+            <div class="flex items-center gap-2 w-full justify-center">
+              <div class="px-3 py-1.5 rounded-xl bg-slate-800/90 border border-slate-700 text-center min-w-[80px]">
+                <span class="block text-[9px] font-bold text-slate-400 uppercase">Счёт</span>
+                <span id="final-score-2048" class="text-sm font-black text-white">0</span>
+              </div>
+              <div class="px-3 py-1.5 rounded-xl bg-amber-950/50 border border-amber-800/40 text-center min-w-[80px]">
+                <span class="block text-[9px] font-bold text-amber-500 uppercase">Рекорд</span>
+                <span id="final-best-2048" class="text-sm font-black text-amber-400">${best2048}</span>
+              </div>
+            </div>
+            <button onclick="window.GAMES.reset2048()" class="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs shadow-lg transition-all flex items-center gap-1.5">
+              <span>🔄</span> Сыграть заново
+            </button>
+          </div>
         </div>
 
-        <!-- Hint / Touch controls -->
+        <!-- Hint / Keyboard / Touch controls -->
         <div class="text-center text-[11px] text-slate-400">
-          Свайпайте в любую сторону для объединения одинаковых плиток
+          Свайпайте или используйте клавиши <span class="font-bold text-slate-600 dark:text-slate-300">W A S D</span> / стрелки
         </div>
       </div>
     `;
   }
 
   function init2048() {
+    isGameOver2048 = false;
+    const overEl = document.getElementById("game-over-2048");
+    if (overEl) overEl.classList.add("hidden");
+
     board2048 = [
       [0, 0, 0, 0],
       [0, 0, 0, 0],
@@ -154,6 +206,7 @@
     addRandomTile2048();
     updateBoard2048DOM();
     setupSwipe2048();
+    setupKeyboard2048();
   }
 
   function addRandomTile2048() {
@@ -217,7 +270,42 @@
     }
   }
 
+  function checkGameOver2048() {
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        if (board2048[r][c] === 0) return false;
+      }
+    }
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 3; c++) {
+        if (board2048[r][c] === board2048[r][c + 1]) return false;
+      }
+    }
+    for (let c = 0; c < 4; c++) {
+      for (let r = 0; r < 3; r++) {
+        if (board2048[r][c] === board2048[r + 1][c]) return false;
+      }
+    }
+    return true;
+  }
+
+  function triggerGameOver2048() {
+    isGameOver2048 = true;
+    const overEl = document.getElementById("game-over-2048");
+    if (overEl) {
+      const finalScoreEl = document.getElementById("final-score-2048");
+      if (finalScoreEl) finalScoreEl.textContent = score2048;
+      const finalBestEl = document.getElementById("final-best-2048");
+      if (finalBestEl) finalBestEl.textContent = best2048;
+      overEl.classList.remove("hidden");
+    }
+    if (window.Telegram?.WebApp?.HapticFeedback) {
+      window.Telegram.WebApp.HapticFeedback.notificationOccurred("error");
+    }
+  }
+
   function move2048(direction) {
+    if (isGameOver2048) return;
     let moved = false;
 
     function slide(row) {
@@ -264,7 +352,9 @@
     if (JSON.stringify(board2048) !== prevBoard) {
       addRandomTile2048();
       updateBoard2048DOM();
-      if (window.Telegram?.WebApp?.HapticFeedback) {
+      if (checkGameOver2048()) {
+        triggerGameOver2048();
+      } else if (window.Telegram?.WebApp?.HapticFeedback) {
         window.Telegram.WebApp.HapticFeedback.impactOccurred("light");
       }
     }
@@ -283,6 +373,7 @@
     }, { passive: true });
 
     gridEl.addEventListener("touchend", (e) => {
+      if (isGameOver2048) return;
       const diffX = e.changedTouches[0].clientX - startX;
       const diffY = e.changedTouches[0].clientY - startY;
       const absX = Math.abs(diffX);
@@ -296,6 +387,32 @@
         }
       }
     }, { passive: true });
+  }
+
+  function setupKeyboard2048() {
+    if (window._2048KeyHandler) {
+      window.removeEventListener("keydown", window._2048KeyHandler);
+    }
+    window._2048KeyHandler = function (e) {
+      if (currentGame !== "2048" || isGameOver2048) return;
+      const key = (e.key || "").toLowerCase();
+      const code = e.code || "";
+
+      if (key === "arrowup" || code === "KeyW" || key === "w" || key === "ц") {
+        e.preventDefault();
+        move2048("up");
+      } else if (key === "arrowdown" || code === "KeyS" || key === "s" || key === "ы") {
+        e.preventDefault();
+        move2048("down");
+      } else if (key === "arrowleft" || code === "KeyA" || key === "a" || key === "ф") {
+        e.preventDefault();
+        move2048("left");
+      } else if (key === "arrowright" || code === "KeyD" || key === "d" || key === "в") {
+        e.preventDefault();
+        move2048("right");
+      }
+    };
+    window.addEventListener("keydown", window._2048KeyHandler);
   }
 
   // ==============================================================================
@@ -1249,7 +1366,639 @@
   }
 
   // ==============================================================================
-  // GAME 4: CHESS (Шахматы - только онлайн дуэль на 2 игроков)
+  // GAME 4: TETRIS (Классический Тетрис)
+  // ==============================================================================
+  const TETRIS_COLS = 10;
+  const TETRIS_ROWS = 20;
+
+  const TETRIS_SHAPES = {
+    I: [
+      [0, 0, 0, 0],
+      [1, 1, 1, 1],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0]
+    ],
+    O: [
+      [1, 1],
+      [1, 1]
+    ],
+    T: [
+      [0, 1, 0],
+      [1, 1, 1],
+      [0, 0, 0]
+    ],
+    S: [
+      [0, 1, 1],
+      [1, 1, 0],
+      [0, 0, 0]
+    ],
+    Z: [
+      [1, 1, 0],
+      [0, 1, 1],
+      [0, 0, 0]
+    ],
+    J: [
+      [1, 0, 0],
+      [1, 1, 1],
+      [0, 0, 0]
+    ],
+    L: [
+      [0, 0, 1],
+      [1, 1, 1],
+      [0, 0, 0]
+    ]
+  };
+
+  const TETRIS_COLORS = {
+    I: "#06b6d4", // cyan
+    O: "#eab308", // yellow
+    T: "#a855f7", // purple
+    S: "#10b981", // emerald
+    Z: "#ef4444", // red
+    J: "#3b82f6", // blue
+    L: "#f97316"  // orange
+  };
+
+  let tetrisGrid = [];
+  let tetrisScore = 0;
+  let tetrisLines = 0;
+  let tetrisLevel = 1;
+  let tetrisBest = 0;
+  let tetrisPiece = null;
+  let tetrisNextPiece = null;
+  let tetrisRunning = false;
+  let tetrisPaused = false;
+  let tetrisGameOver = false;
+
+  function renderTetrisHTML() {
+    tetrisBest = parseInt(localStorage.getItem("game_tetris_best") || "0", 10);
+    return `
+      <div class="theme-card rounded-3xl p-3 sm:p-4 bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 shadow-sm space-y-3 max-w-sm mx-auto select-none">
+        <!-- Top Stats Bar -->
+        <div class="grid grid-cols-4 gap-1.5 text-center">
+          <div class="px-2 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700">
+            <span class="block text-[9px] font-bold text-slate-400 uppercase">Счёт</span>
+            <span id="tetris-score" class="text-xs sm:text-sm font-black text-slate-800 dark:text-white">${tetrisScore}</span>
+          </div>
+          <div class="px-2 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700">
+            <span class="block text-[9px] font-bold text-slate-400 uppercase">Линии</span>
+            <span id="tetris-lines" class="text-xs sm:text-sm font-black text-blue-600 dark:text-blue-400">${tetrisLines}</span>
+          </div>
+          <div class="px-2 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700">
+            <span class="block text-[9px] font-bold text-slate-400 uppercase">Уровень</span>
+            <span id="tetris-level" class="text-xs sm:text-sm font-black text-violet-600 dark:text-violet-400">${tetrisLevel}</span>
+          </div>
+          <div class="px-2 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-800/40">
+            <span class="block text-[9px] font-bold text-amber-500 uppercase">Рекорд</span>
+            <span id="tetris-best" class="text-xs sm:text-sm font-black text-amber-600 dark:text-amber-400">${tetrisBest}</span>
+          </div>
+        </div>
+
+        <!-- Main Game Area: Board + Sidebar -->
+        <div class="flex items-start justify-center gap-3 pt-1">
+          <!-- Canvas Container -->
+          <div class="relative rounded-2xl overflow-hidden bg-slate-900 border-2 border-slate-800 shadow-inner" style="width: 200px; height: 400px;">
+            <canvas id="tetris-canvas" width="200" height="400" class="block w-full h-full"></canvas>
+
+            <!-- Overlay for Start / Pause / Game Over -->
+            <div id="tetris-overlay" class="${tetrisRunning && !tetrisPaused ? 'hidden' : ''} absolute inset-0 bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center p-4 text-center z-10 space-y-3">
+              ${renderTetrisOverlayContent()}
+            </div>
+          </div>
+
+          <!-- Sidebar: Next Piece & Controls -->
+          <div class="flex flex-col items-center gap-3 w-24">
+            <!-- Next Piece Box -->
+            <div class="w-full p-2 rounded-2xl bg-slate-100 dark:bg-slate-700/60 border border-slate-200/60 dark:border-slate-700 text-center">
+              <span class="block text-[10px] font-bold text-slate-400 uppercase mb-1">След.</span>
+              <div class="w-16 h-16 mx-auto flex items-center justify-center bg-slate-900/60 dark:bg-slate-900 rounded-xl overflow-hidden shadow-inner">
+                <canvas id="tetris-next-canvas" width="64" height="64" class="block"></canvas>
+              </div>
+            </div>
+
+            <!-- Pause / Restart Quick Actions -->
+            <div class="w-full space-y-1.5">
+              <button
+                onclick="window.GAMES.toggleTetrisPause()"
+                id="btn-tetris-pause"
+                class="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all active:scale-95 flex items-center justify-center gap-1 shadow-sm">
+                <span>${tetrisPaused ? '▶️' : '⏸️'}</span>
+                <span>${tetrisPaused ? 'Пуск' : 'Пауза'}</span>
+              </button>
+              <button
+                onclick="window.GAMES.startTetrisGame()"
+                class="w-full py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1">
+                <span>🔄</span>
+                <span>Заново</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mobile Touch Controls -->
+        <div class="space-y-1.5 pt-1">
+          <div class="grid grid-cols-5 gap-1 max-w-[280px] mx-auto">
+            <button
+              type="button"
+              onpointerdown="window.GAMES.tetrisMoveLeft()"
+              class="py-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-black text-base active:scale-90 shadow-sm transition-all select-none touch-none flex items-center justify-center"
+              title="Влево">
+              ◀️
+            </button>
+            <button
+              type="button"
+              onpointerdown="window.GAMES.tetrisRotate()"
+              class="py-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 font-black text-base active:scale-90 shadow-sm transition-all select-none touch-none flex items-center justify-center border border-amber-500/30"
+              title="Поворот">
+              🔄
+            </button>
+            <button
+              type="button"
+              onpointerdown="window.GAMES.tetrisMoveRight()"
+              class="py-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-black text-base active:scale-90 shadow-sm transition-all select-none touch-none flex items-center justify-center"
+              title="Вправо">
+              ▶️
+            </button>
+            <button
+              type="button"
+              onpointerdown="window.GAMES.tetrisSoftDrop()"
+              class="py-3 rounded-xl bg-blue-500/15 hover:bg-blue-500/25 text-blue-600 dark:text-blue-400 font-black text-base active:scale-90 shadow-sm transition-all select-none touch-none flex items-center justify-center border border-blue-500/30"
+              title="Вниз">
+              ⬇️
+            </button>
+            <button
+              type="button"
+              onpointerdown="window.GAMES.tetrisHardDrop()"
+              class="py-3 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-600 dark:text-rose-400 font-black text-base active:scale-90 shadow-sm transition-all select-none touch-none flex items-center justify-center border border-rose-500/30"
+              title="Сброс">
+              ⏬
+            </button>
+          </div>
+
+          <!-- Desktop Controls Legend -->
+          <div class="text-center text-[10px] text-slate-400">
+            ПК: <span class="font-bold text-slate-600 dark:text-slate-300">W/↑</span> поворот, <span class="font-bold text-slate-600 dark:text-slate-300">A/D/←/→</span> движение, <span class="font-bold text-slate-600 dark:text-slate-300">Пробел</span> сброс, <span class="font-bold text-slate-600 dark:text-slate-300">P</span> пауза
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderTetrisOverlayContent() {
+    if (tetrisGameOver) {
+      return `
+        <div class="w-12 h-12 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-2xl mx-auto shadow-inner">
+          💥
+        </div>
+        <div>
+          <h3 class="text-base font-black text-white">Игра окончена!</h3>
+          <p class="text-xs text-slate-400 mt-0.5">Башня достигла вершины</p>
+        </div>
+        <div class="space-y-1 text-xs text-slate-300 bg-slate-800/80 p-2.5 rounded-xl border border-slate-700 w-full max-w-[170px] mx-auto">
+          <div>Счёт: <span class="font-bold text-white">${tetrisScore}</span></div>
+          <div>Линии: <span class="font-bold text-blue-400">${tetrisLines}</span></div>
+          <div>Рекорд: <span class="font-bold text-amber-400">${tetrisBest}</span></div>
+        </div>
+        <button
+          onclick="window.GAMES.startTetrisGame()"
+          class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs shadow-lg transition-all flex items-center gap-1.5">
+          <span>🎮</span> Играть снова
+        </button>
+      `;
+    }
+    if (tetrisPaused) {
+      return `
+        <div class="text-3xl">⏸️</div>
+        <h3 class="text-base font-black text-white">Пауза</h3>
+        <p class="text-xs text-slate-400">Нажмите «Продолжить», чтобы вернуться к игре</p>
+        <button
+          onclick="window.GAMES.toggleTetrisPause()"
+          class="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs shadow-md transition-all">
+          ▶️ Продолжить
+        </button>
+      `;
+    }
+    return `
+      <div class="text-4xl">🧱</div>
+      <h3 class="text-base font-black text-white">Классический Тетрис</h3>
+      <p class="text-xs text-slate-400">Собирай линии и ставь новые рекорды на перемене</p>
+      <button
+        onclick="window.GAMES.startTetrisGame()"
+        class="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-black text-xs shadow-lg transition-all">
+        🚀 Начать игру
+      </button>
+    `;
+  }
+
+  function initTetris() {
+    tetrisGrid = createTetrisGrid();
+    tetrisBest = parseInt(localStorage.getItem("game_tetris_best") || "0", 10);
+    drawTetrisCanvas();
+    drawTetrisNextPiece();
+    setupTetrisKeyboard();
+  }
+
+  function createTetrisGrid() {
+    const g = [];
+    for (let r = 0; r < TETRIS_ROWS; r++) {
+      g.push(new Array(TETRIS_COLS).fill(0));
+    }
+    return g;
+  }
+
+  function getRandomTetrisPiece() {
+    const types = ["I", "O", "T", "S", "Z", "J", "L"];
+    const type = types[Math.floor(Math.random() * types.length)];
+    const shape = TETRIS_SHAPES[type].map(row => [...row]);
+    const color = TETRIS_COLORS[type];
+    const x = Math.floor((TETRIS_COLS - shape[0].length) / 2);
+    const y = 0;
+    return { type, shape, color, x, y };
+  }
+
+  function startTetrisGame() {
+    tetrisGrid = createTetrisGrid();
+    tetrisScore = 0;
+    tetrisLines = 0;
+    tetrisLevel = 1;
+    tetrisRunning = true;
+    tetrisPaused = false;
+    tetrisGameOver = false;
+
+    tetrisPiece = getRandomTetrisPiece();
+    tetrisNextPiece = getRandomTetrisPiece();
+
+    const overlay = document.getElementById("tetris-overlay");
+    if (overlay) overlay.classList.add("hidden");
+
+    updateTetrisStatsDOM();
+    drawTetrisCanvas();
+    drawTetrisNextPiece();
+    resetTetrisSpeed();
+  }
+
+  function toggleTetrisPause() {
+    if (!tetrisRunning || tetrisGameOver) return;
+    tetrisPaused = !tetrisPaused;
+
+    const overlay = document.getElementById("tetris-overlay");
+    const btnPause = document.getElementById("btn-tetris-pause");
+
+    if (tetrisPaused) {
+      if (window._tetrisInterval) {
+        clearInterval(window._tetrisInterval);
+        window._tetrisInterval = null;
+      }
+      if (overlay) {
+        overlay.classList.remove("hidden");
+        overlay.innerHTML = renderTetrisOverlayContent();
+      }
+      if (btnPause) {
+        btnPause.innerHTML = `<span>▶️</span><span>Пуск</span>`;
+      }
+    } else {
+      if (overlay) overlay.classList.add("hidden");
+      if (btnPause) {
+        btnPause.innerHTML = `<span>⏸️</span><span>Пауза</span>`;
+      }
+      resetTetrisSpeed();
+    }
+  }
+
+  function rotateTetrisMatrix(matrix) {
+    const N = matrix.length;
+    const res = [];
+    for (let r = 0; r < N; r++) {
+      res[r] = [];
+      for (let c = 0; c < N; c++) {
+        res[r][c] = matrix[N - 1 - c][r];
+      }
+    }
+    return res;
+  }
+
+  function checkTetrisCollision(piece, grid, offsetX = 0, offsetY = 0) {
+    if (!piece) return true;
+    const shape = piece.shape;
+    const px = piece.x + offsetX;
+    const py = piece.y + offsetY;
+
+    for (let r = 0; r < shape.length; r++) {
+      for (let c = 0; c < shape[r].length; c++) {
+        if (shape[r][c]) {
+          const nx = px + c;
+          const ny = py + r;
+          if (nx < 0 || nx >= TETRIS_COLS || ny >= TETRIS_ROWS) return true;
+          if (ny >= 0 && grid[ny] && grid[ny][nx]) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  function tetrisRotate() {
+    if (!tetrisRunning || tetrisPaused || !tetrisPiece) return;
+    const rotatedShape = rotateTetrisMatrix(tetrisPiece.shape);
+    const kicks = [0, 1, -1, 2, -2];
+
+    for (let kick of kicks) {
+      if (!checkTetrisCollision({ ...tetrisPiece, shape: rotatedShape, x: tetrisPiece.x + kick }, tetrisGrid)) {
+        tetrisPiece.shape = rotatedShape;
+        tetrisPiece.x += kick;
+        drawTetrisCanvas();
+        if (window.Telegram?.WebApp?.HapticFeedback) {
+          window.Telegram.WebApp.HapticFeedback.selectionChanged();
+        }
+        return;
+      }
+    }
+  }
+
+  function tetrisMoveLeft() {
+    if (!tetrisRunning || tetrisPaused || !tetrisPiece) return;
+    if (!checkTetrisCollision(tetrisPiece, tetrisGrid, -1, 0)) {
+      tetrisPiece.x -= 1;
+      drawTetrisCanvas();
+      if (window.Telegram?.WebApp?.HapticFeedback) {
+        window.Telegram.WebApp.HapticFeedback.impactOccurred("light");
+      }
+    }
+  }
+
+  function tetrisMoveRight() {
+    if (!tetrisRunning || tetrisPaused || !tetrisPiece) return;
+    if (!checkTetrisCollision(tetrisPiece, tetrisGrid, 1, 0)) {
+      tetrisPiece.x += 1;
+      drawTetrisCanvas();
+      if (window.Telegram?.WebApp?.HapticFeedback) {
+        window.Telegram.WebApp.HapticFeedback.impactOccurred("light");
+      }
+    }
+  }
+
+  function tetrisSoftDrop() {
+    if (!tetrisRunning || tetrisPaused || !tetrisPiece) return;
+    if (!checkTetrisCollision(tetrisPiece, tetrisGrid, 0, 1)) {
+      tetrisPiece.y += 1;
+      tetrisScore += 1;
+      updateTetrisStatsDOM();
+      drawTetrisCanvas();
+    } else {
+      lockTetrisPiece();
+    }
+  }
+
+  function tetrisHardDrop() {
+    if (!tetrisRunning || tetrisPaused || !tetrisPiece) return;
+    let droppedRows = 0;
+    while (!checkTetrisCollision(tetrisPiece, tetrisGrid, 0, 1)) {
+      tetrisPiece.y += 1;
+      droppedRows += 1;
+    }
+    tetrisScore += droppedRows * 2;
+    updateTetrisStatsDOM();
+    if (window.Telegram?.WebApp?.HapticFeedback) {
+      window.Telegram.WebApp.HapticFeedback.impactOccurred("heavy");
+    }
+    lockTetrisPiece();
+  }
+
+  function lockTetrisPiece() {
+    for (let r = 0; r < tetrisPiece.shape.length; r++) {
+      for (let c = 0; c < tetrisPiece.shape[r].length; c++) {
+        if (tetrisPiece.shape[r][c]) {
+          const gy = tetrisPiece.y + r;
+          const gx = tetrisPiece.x + c;
+          if (gy >= 0 && gy < TETRIS_ROWS && gx >= 0 && gx < TETRIS_COLS) {
+            tetrisGrid[gy][gx] = tetrisPiece.color;
+          }
+        }
+      }
+    }
+
+    let cleared = 0;
+    for (let r = TETRIS_ROWS - 1; r >= 0; r--) {
+      if (tetrisGrid[r].every(cell => cell !== 0)) {
+        tetrisGrid.splice(r, 1);
+        tetrisGrid.unshift(new Array(TETRIS_COLS).fill(0));
+        cleared++;
+        r++;
+      }
+    }
+
+    if (cleared > 0) {
+      tetrisLines += cleared;
+      const pointMap = [0, 100, 300, 500, 800];
+      tetrisScore += (pointMap[cleared] || (cleared * 200)) * tetrisLevel;
+      tetrisLevel = Math.floor(tetrisLines / 10) + 1;
+      if (window.Telegram?.WebApp?.HapticFeedback) {
+        window.Telegram.WebApp.HapticFeedback.notificationOccurred("success");
+      }
+      resetTetrisSpeed();
+    }
+
+    if (tetrisScore > tetrisBest) {
+      tetrisBest = tetrisScore;
+      localStorage.setItem("game_tetris_best", tetrisBest);
+    }
+    updateTetrisStatsDOM();
+
+    tetrisPiece = tetrisNextPiece;
+    tetrisNextPiece = getRandomTetrisPiece();
+
+    if (checkTetrisCollision(tetrisPiece, tetrisGrid)) {
+      endTetrisGame();
+      return;
+    }
+
+    drawTetrisCanvas();
+    drawTetrisNextPiece();
+  }
+
+  function resetTetrisSpeed() {
+    if (window._tetrisInterval) clearInterval(window._tetrisInterval);
+    const speed = Math.max(90, 750 - (tetrisLevel - 1) * 65);
+    window._tetrisInterval = setInterval(tetrisTick, speed);
+  }
+
+  function tetrisTick() {
+    if (!tetrisRunning || tetrisPaused || !tetrisPiece) return;
+    if (!checkTetrisCollision(tetrisPiece, tetrisGrid, 0, 1)) {
+      tetrisPiece.y += 1;
+      drawTetrisCanvas();
+    } else {
+      lockTetrisPiece();
+    }
+  }
+
+  function endTetrisGame() {
+    tetrisRunning = false;
+    tetrisGameOver = true;
+    if (window._tetrisInterval) {
+      clearInterval(window._tetrisInterval);
+      window._tetrisInterval = null;
+    }
+    const overlay = document.getElementById("tetris-overlay");
+    if (overlay) {
+      overlay.classList.remove("hidden");
+      overlay.innerHTML = renderTetrisOverlayContent();
+    }
+    if (window.Telegram?.WebApp?.HapticFeedback) {
+      window.Telegram.WebApp.HapticFeedback.notificationOccurred("error");
+    }
+  }
+
+  function updateTetrisStatsDOM() {
+    const scoreEl = document.getElementById("tetris-score");
+    if (scoreEl) scoreEl.textContent = tetrisScore;
+
+    const linesEl = document.getElementById("tetris-lines");
+    if (linesEl) linesEl.textContent = tetrisLines;
+
+    const levelEl = document.getElementById("tetris-level");
+    if (levelEl) levelEl.textContent = tetrisLevel;
+
+    const bestEl = document.getElementById("tetris-best");
+    if (bestEl) bestEl.textContent = tetrisBest;
+  }
+
+  function drawTetrisCanvas() {
+    const canvas = document.getElementById("tetris-canvas");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const cellPx = 20;
+
+    ctx.fillStyle = "#0f172a";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.04)";
+    ctx.lineWidth = 1;
+    for (let c = 0; c <= TETRIS_COLS; c++) {
+      ctx.beginPath();
+      ctx.moveTo(c * cellPx, 0);
+      ctx.lineTo(c * cellPx, canvas.height);
+      ctx.stroke();
+    }
+    for (let r = 0; r <= TETRIS_ROWS; r++) {
+      ctx.beginPath();
+      ctx.moveTo(0, r * cellPx);
+      ctx.lineTo(canvas.width, r * cellPx);
+      ctx.stroke();
+    }
+
+    for (let r = 0; r < TETRIS_ROWS; r++) {
+      for (let c = 0; c < TETRIS_COLS; c++) {
+        if (tetrisGrid[r] && tetrisGrid[r][c]) {
+          drawTetrisBlock(ctx, c * cellPx, r * cellPx, cellPx, tetrisGrid[r][c]);
+        }
+      }
+    }
+
+    if (tetrisPiece && tetrisRunning) {
+      let ghostY = tetrisPiece.y;
+      while (!checkTetrisCollision(tetrisPiece, tetrisGrid, 0, ghostY - tetrisPiece.y + 1)) {
+        ghostY++;
+      }
+      if (ghostY > tetrisPiece.y) {
+        for (let r = 0; r < tetrisPiece.shape.length; r++) {
+          for (let c = 0; c < tetrisPiece.shape[r].length; c++) {
+            if (tetrisPiece.shape[r][c]) {
+              const gx = (tetrisPiece.x + c) * cellPx;
+              const gy = (ghostY + r) * cellPx;
+              ctx.strokeStyle = tetrisPiece.color;
+              ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+              ctx.lineWidth = 1.5;
+              ctx.strokeRect(gx + 1.5, gy + 1.5, cellPx - 3, cellPx - 3);
+              ctx.fillRect(gx + 1.5, gy + 1.5, cellPx - 3, cellPx - 3);
+            }
+          }
+        }
+      }
+
+      for (let r = 0; r < tetrisPiece.shape.length; r++) {
+        for (let c = 0; c < tetrisPiece.shape[r].length; c++) {
+          if (tetrisPiece.shape[r][c]) {
+            const px = (tetrisPiece.x + c) * cellPx;
+            const py = (tetrisPiece.y + r) * cellPx;
+            drawTetrisBlock(ctx, px, py, cellPx, tetrisPiece.color);
+          }
+        }
+      }
+    }
+  }
+
+  function drawTetrisBlock(ctx, x, y, size, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.roundRect(x + 1, y + 1, size - 2, size - 2, 3);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
+    ctx.fillRect(x + 2, y + 2, size - 4, 2);
+    ctx.fillRect(x + 2, y + 2, 2, size - 4);
+
+    ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+    ctx.fillRect(x + 2, y + size - 3, size - 4, 2);
+    ctx.fillRect(x + size - 3, y + 2, 2, size - 4);
+  }
+
+  function drawTetrisNextPiece() {
+    const canvas = document.getElementById("tetris-next-canvas");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!tetrisNextPiece) return;
+
+    const shape = tetrisNextPiece.shape;
+    const cellPx = 13;
+    const pieceW = shape[0].length * cellPx;
+    const pieceH = shape.length * cellPx;
+    const offsetX = Math.floor((canvas.width - pieceW) / 2);
+    const offsetY = Math.floor((canvas.height - pieceH) / 2);
+
+    for (let r = 0; r < shape.length; r++) {
+      for (let c = 0; c < shape[r].length; c++) {
+        if (shape[r][c]) {
+          drawTetrisBlock(ctx, offsetX + c * cellPx, offsetY + r * cellPx, cellPx, tetrisNextPiece.color);
+        }
+      }
+    }
+  }
+
+  function setupTetrisKeyboard() {
+    if (window._tetrisKeyHandler) {
+      window.removeEventListener("keydown", window._tetrisKeyHandler);
+    }
+    window._tetrisKeyHandler = function (e) {
+      if (currentGame !== "tetris") return;
+      const key = (e.key || "").toLowerCase();
+      const code = e.code || "";
+
+      if (key === "arrowleft" || code === "KeyA" || key === "a" || key === "ф") {
+        e.preventDefault();
+        tetrisMoveLeft();
+      } else if (key === "arrowright" || code === "KeyD" || key === "d" || key === "в") {
+        e.preventDefault();
+        tetrisMoveRight();
+      } else if (key === "arrowup" || code === "KeyW" || key === "w" || key === "ц" || key === "r" || key === "к") {
+        e.preventDefault();
+        tetrisRotate();
+      } else if (key === "arrowdown" || code === "KeyS" || key === "s" || key === "ы") {
+        e.preventDefault();
+        tetrisSoftDrop();
+      } else if (code === "Space" || key === " ") {
+        e.preventDefault();
+        tetrisHardDrop();
+      } else if (key === "p" || key === "з") {
+        e.preventDefault();
+        toggleTetrisPause();
+      }
+    };
+    window.addEventListener("keydown", window._tetrisKeyHandler);
+  }
+
+  // ==============================================================================
+  // GAME 5: CHESS (Шахматы - онлайн дуэль и режим на 2 игроков на 1 телефоне)
   // ==============================================================================
   let chessState = "lobby"; // 'lobby', 'loading', 'waiting', 'playing', 'finished', 'rejected'
   let chessRoomId = null;
@@ -1263,6 +2012,52 @@
   let chessPollTimer = null;
   let isChessPolling = false;
   let chessSelectedColor = "white"; // 'white' | 'black' | 'random'
+  let chessIsLocal = false;
+  let chessLocalAutoRotate = true;
+  let chessManualFlipped = false;
+
+  function toggleChessAutoRotate() {
+    chessLocalAutoRotate = !chessLocalAutoRotate;
+    if (window.Telegram?.WebApp?.HapticFeedback) {
+      window.Telegram.WebApp.HapticFeedback.selectionChanged();
+    }
+    renderGames();
+  }
+
+  function flipChessBoardManual() {
+    chessManualFlipped = !chessManualFlipped;
+    if (window.Telegram?.WebApp?.HapticFeedback) {
+      window.Telegram.WebApp.HapticFeedback.impactOccurred("light");
+    }
+    renderGames();
+  }
+
+  async function startLocalChessGame() {
+    chessIsLocal = true;
+    chessLocalAutoRotate = true;
+    chessManualFlipped = false;
+    chessState = "loading";
+    renderGames();
+
+    try {
+      const res = await api.createLocalGame("chess", "Белые");
+      if (res && res.room_id) {
+        chessRoomId = res.room_id;
+        chessRoomData = res;
+        chessState = "playing";
+        renderGames();
+      } else {
+        alert(res?.detail || "Ошибка создания локальной игры");
+        chessState = "lobby";
+        renderGames();
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Не удалось запустить игру");
+      chessState = "lobby";
+      renderGames();
+    }
+  }
 
   function setChessColor(color) {
     if (["white", "black", "random"].includes(color)) {
@@ -1402,8 +2197,19 @@
 
     if (chessState === "playing" || chessState === "finished") {
       const yourRole = chessRoomData?.your_role; // 'white' | 'black' | null
-      const isFlipped = yourRole === "black";
-      const isYourTurn = chessRoomData?.is_your_turn;
+      let isFlipped = false;
+      if (chessIsLocal) {
+        if (chessLocalAutoRotate) {
+          isFlipped = (chessRoomData?.turn === "black");
+          if (chessManualFlipped) isFlipped = !isFlipped;
+        } else {
+          isFlipped = chessManualFlipped;
+        }
+      } else {
+        isFlipped = (yourRole === "black");
+      }
+
+      const isYourTurn = chessIsLocal ? (chessState === "playing") : chessRoomData?.is_your_turn;
       const isFinished = chessState === "finished";
       const board = parseFen(chessRoomData?.fen);
 
@@ -1413,6 +2219,7 @@
       const oppName = isFlipped ? whiteName : blackName;
       const oppRole = isFlipped ? "white" : "black";
       const myName = isFlipped ? blackName : whiteName;
+      const myRole = isFlipped ? "black" : "white";
 
       const oppCaptured = (isFlipped ? chessRoomData?.captured_pieces?.by_white : chessRoomData?.captured_pieces?.by_black) || [];
       const myCaptured = (isFlipped ? chessRoomData?.captured_pieces?.by_black : chessRoomData?.captured_pieces?.by_white) || [];
@@ -1428,6 +2235,10 @@
           else if (reason === "repetition") reasonText = "Троекратное повторение";
           else if (reason === "fifty_moves") reasonText = "Правило 50 ходов";
           statusHTML = `<div class="p-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-extrabold">🤝 ${reasonText}! Боевая ничья!</div>`;
+        } else if (chessIsLocal) {
+          const winnerText = winner === "white" ? "Белые ⚪" : "Черные ⚫";
+          const reasonText = reason === "resignation" ? "сдачей" : (reason === "checkmate" ? "матом" : "победа");
+          statusHTML = `<div class="p-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-extrabold animate-pulse">🏆 ПОБЕДА: ${winnerText} (${reasonText})!</div>`;
         } else if (winner === yourRole) {
           const reasonText = reason === "resignation" ? "Соперник сдался" : "Мат сопернику";
           statusHTML = `<div class="p-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-extrabold animate-pulse">🏆 ПОБЕДА! ${reasonText}!</div>`;
@@ -1437,13 +2248,13 @@
         }
       } else {
         if (chessRoomData?.is_check) {
-          if (isYourTurn) {
-            statusHTML = `<div class="p-2 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-600 dark:text-rose-400 text-xs font-black animate-pulse">⚠️ ШАХ! Твой король атакован!</div>`;
-          } else {
-            statusHTML = `<div class="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-black">⚡ ШАХ сопернику!</div>`;
-          }
+          const target = chessRoomData.turn === "white" ? "Белому королю" : "Черному королю";
+          statusHTML = `<div class="p-2 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-600 dark:text-rose-400 text-xs font-black animate-pulse">⚠️ ШАХ ${target}!</div>`;
         } else {
-          if (isYourTurn) {
+          if (chessIsLocal) {
+            const turnName = chessRoomData.turn === "white" ? "Белые ⚪" : "Черные ⚫";
+            statusHTML = `<div class="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-extrabold">🟢 Ходят: ${turnName}</div>`;
+          } else if (isYourTurn) {
             statusHTML = `<div class="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-extrabold animate-pulse">🟢 Твой ход (${yourRole === 'white' ? 'Белые ♔' : 'Черные ♚'})</div>`;
           } else {
             statusHTML = `<div class="p-2 rounded-xl bg-slate-100 dark:bg-slate-700/60 text-slate-500 dark:text-slate-400 text-xs font-bold">⏳ Ход соперника (${oppName})...</div>`;
@@ -1464,27 +2275,60 @@
       const cRange = isFlipped ? [7, 6, 5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5, 6, 7];
 
       return `
-        <!-- Top Player (Opponent) Bar -->
+        <!-- Local Mode Rotation Controls -->
+        ${chessIsLocal ? `
+          <div class="flex items-center justify-between p-2 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-[11px] font-bold">
+            <span class="text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
+              <span>👥</span> 1 телефон (2 игрока)
+            </span>
+            <div class="flex items-center gap-1">
+              <button
+                type="button"
+                onclick="window.GAMES.toggleChessAutoRotate()"
+                title="Автоматически поворачивать доску к игроку, чей сейчас ход"
+                class="px-2 py-1 rounded-xl text-[10px] font-bold transition-all flex items-center gap-1 ${
+                  chessLocalAutoRotate
+                    ? 'bg-amber-600 text-white shadow-sm'
+                    : 'bg-white dark:bg-slate-700 text-slate-500'
+                }">
+                <span>🔄 Автоповорот:</span>
+                <span>${chessLocalAutoRotate ? 'ВКЛ' : 'ВЫКЛ'}</span>
+              </button>
+              <button
+                type="button"
+                onclick="window.GAMES.flipChessBoardManual()"
+                title="Перевернуть доску на 180°"
+                class="p-1 px-2 rounded-xl bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-[10px] font-bold shadow-sm transition-all active:scale-95 flex items-center gap-1">
+                <span>↕️</span> Повернуть
+              </button>
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- Top Player Bar -->
         <div class="flex items-center justify-between p-2 rounded-2xl bg-slate-100 dark:bg-slate-700/60 text-xs font-bold">
           <div class="flex items-center gap-1.5 min-w-0 pr-1">
             <span class="w-6 h-6 rounded-lg ${oppRole === 'white' ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-slate-800 text-white border border-slate-600'} flex items-center justify-center font-black text-xs shrink-0">
               ${oppRole === 'white' ? '♔' : '♚'}
             </span>
             <div class="text-left truncate">
-              <div class="truncate text-slate-800 dark:text-white">${escapeHtml(oppName)}</div>
+              <div class="truncate text-slate-800 dark:text-white flex items-center gap-1">
+                <span>${escapeHtml(oppName)}</span>
+                ${chessIsLocal && chessRoomData?.turn === oppRole && !isFinished ? '<span class="text-emerald-600 dark:text-emerald-400 font-black text-[10px] uppercase tracking-wider">(Ходит)</span>' : ''}
+              </div>
               <div class="text-[10px] text-slate-400 font-normal tracking-tight">
                 ${oppCaptured.length > 0 ? oppCaptured.map(p => CHESS_SYMBOLS[p] || p).join(' ') : 'Без взятий'}
               </div>
             </div>
           </div>
-          ${!isFinished && !isYourTurn ? '<span class="text-[10px] text-amber-500 font-black animate-pulse uppercase">Думает...</span>' : ''}
+          ${!isFinished && !chessIsLocal && !isYourTurn ? '<span class="text-[10px] text-amber-500 font-black animate-pulse uppercase">Думает...</span>' : ''}
         </div>
 
         <!-- Status / Turn Banner -->
         ${statusHTML}
 
         <!-- 8x8 Chess Board -->
-        <div class="w-full max-w-[320px] aspect-square mx-auto rounded-2xl overflow-hidden shadow-lg border-2 border-amber-950/40 select-none grid grid-cols-8 grid-rows-8 relative" style="touch-action: manipulation;">
+        <div class="w-full max-w-[320px] aspect-square mx-auto rounded-2xl overflow-hidden shadow-lg border-2 border-amber-950/40 select-none grid grid-cols-8 grid-rows-8 relative transition-all duration-300" style="touch-action: manipulation;">
           ${rRange.map(r => cRange.map(c => {
             const sq = rcToSquare(r, c);
             const piece = board[r][c];
@@ -1553,14 +2397,17 @@
           </div>
         ` : ''}
 
-        <!-- Bottom Player (You) Bar -->
+        <!-- Bottom Player Bar -->
         <div class="flex items-center justify-between p-2 rounded-2xl bg-slate-100 dark:bg-slate-700/60 text-xs font-bold">
           <div class="flex items-center gap-1.5 min-w-0 pr-1">
-            <span class="w-6 h-6 rounded-lg ${yourRole === 'white' ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-slate-800 text-white border border-slate-600'} flex items-center justify-center font-black text-xs shrink-0">
-              ${yourRole === 'white' ? '♔' : '♚'}
+            <span class="w-6 h-6 rounded-lg ${myRole === 'white' ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-slate-800 text-white border border-slate-600'} flex items-center justify-center font-black text-xs shrink-0">
+              ${myRole === 'white' ? '♔' : '♚'}
             </span>
             <div class="text-left truncate">
-              <div class="truncate text-slate-800 dark:text-white">${escapeHtml(myName)} (Вы)</div>
+              <div class="truncate text-slate-800 dark:text-white flex items-center gap-1">
+                <span>${escapeHtml(myName)}</span>
+                ${chessIsLocal ? (chessRoomData?.turn === myRole && !isFinished ? '<span class="text-emerald-600 dark:text-emerald-400 font-black text-[10px] uppercase tracking-wider">(Ходит)</span>' : '') : '(Вы)'}
+              </div>
               <div class="text-[10px] text-slate-400 font-normal tracking-tight">
                 ${myCaptured.length > 0 ? myCaptured.map(p => CHESS_SYMBOLS[p] || p).join(' ') : 'Без взятий'}
               </div>
@@ -1578,7 +2425,13 @@
         <!-- Actions (Finished) -->
         ${isFinished ? `
           <div class="space-y-2 pt-1">
-            ${chessRoomData?.rematch_requested_by ? `
+            ${chessIsLocal ? `
+              <button
+                onclick="window.GAMES.requestChessRematch()"
+                class="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-black text-xs shadow-md transition-all flex items-center justify-center gap-1.5">
+                <span>🔄</span> Сыграть новую партию
+              </button>
+            ` : (chessRoomData?.rematch_requested_by ? `
               ${chessRoomData.rematch_requested_by === yourRole ? `
                 <div class="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-xs font-bold text-slate-500 flex items-center justify-center gap-1.5">
                   <span class="animate-spin">⏳</span> Ждем согласие соперника на реванш...
@@ -1596,7 +2449,7 @@
                 class="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-black text-xs shadow-md transition-all flex items-center justify-center gap-1.5">
                 <span>🔄</span> Предложить реванш (смена цвета)
               </button>
-            `}
+            `)}
             <button
               onclick="window.GAMES.leaveChessGame()"
               class="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 text-slate-500 font-bold text-xs transition-all active:scale-95">
@@ -1610,6 +2463,32 @@
     // Default: Lobby
     return `
       <div class="space-y-3">
+        <!-- Local Mode: 2 Players on 1 Phone -->
+        <div class="p-3 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/15 border border-amber-500/30 text-left space-y-2 shadow-sm">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1.5 font-black text-xs text-slate-800 dark:text-white">
+              <span class="text-base">👥</span>
+              <span>Режим на 2 на 1 телефоне</span>
+            </div>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500 text-white shadow-sm">Оффлайн</span>
+          </div>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400">
+            Сыграйте партию вдвоем на одном экране на перемене. Экран будет автоматически поворачиваться к тому, чей сейчас ход!
+          </p>
+          <button
+            type="button"
+            onclick="window.GAMES.startLocalChessGame()"
+            class="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-black text-xs shadow-md transition-all flex items-center justify-center gap-1.5">
+            <span>⚔️</span> Начать игру на одном телефоне
+          </button>
+        </div>
+
+        <div class="relative flex py-1 items-center">
+          <div class="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
+          <span class="flex-shrink mx-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">или онлайн-дуэль</span>
+          <div class="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
+        </div>
+
         <div class="text-left px-1 space-y-0.5">
           <h3 class="text-xs font-black text-slate-800 dark:text-white flex items-center gap-1">
             <span>♟️</span> Шахматная онлайн-дуэль
@@ -1932,6 +2811,8 @@
     stopChessPolling();
     chessRoomId = null;
     chessRoomData = null;
+    chessIsLocal = false;
+    chessManualFlipped = false;
     chessState = "lobby";
     renderGames();
   }
@@ -1940,6 +2821,8 @@
     stopChessPolling();
     chessRoomId = null;
     chessRoomData = null;
+    chessIsLocal = false;
+    chessManualFlipped = false;
     chessState = "lobby";
     renderGames();
   }
@@ -1948,11 +2831,14 @@
     stopChessPolling();
     chessRoomId = null;
     chessRoomData = null;
+    chessIsLocal = false;
+    chessManualFlipped = false;
     chessState = "lobby";
     loadChessClassmates();
   }
 
   function startChessPolling() {
+    if (chessIsLocal) return; // No polling needed for local games
     stopChessPolling();
     isChessPolling = true;
     pollChessRoomState();
@@ -1967,7 +2853,7 @@
   }
 
   async function pollChessRoomState() {
-    if (!isChessPolling || !chessRoomId) return;
+    if (!isChessPolling || !chessRoomId || chessIsLocal) return;
 
     try {
       const data = await api.getGameRoom(chessRoomId);
@@ -2020,7 +2906,7 @@
         chessState = "finished";
         renderGames();
         if (window.Telegram?.WebApp?.HapticFeedback) {
-          if (data.winner === data.your_role) {
+          if (chessIsLocal || data.winner === data.your_role) {
             window.Telegram.WebApp.HapticFeedback.notificationOccurred("success");
           } else if (data.winner === "draw") {
             window.Telegram.WebApp.HapticFeedback.notificationOccurred("warning");
@@ -2055,7 +2941,21 @@
     backToLobby: backToLobby,
     filterClassmates: filterClassmates,
     refreshClassmates: loadClassmates,
-    // Chess Online
+    // Snake
+    startSnakeGame: startSnakeGame,
+    setSnakeDir: setSnakeDir,
+    // Tetris
+    startTetrisGame: startTetrisGame,
+    toggleTetrisPause: toggleTetrisPause,
+    tetrisMoveLeft: tetrisMoveLeft,
+    tetrisMoveRight: tetrisMoveRight,
+    tetrisRotate: tetrisRotate,
+    tetrisSoftDrop: tetrisSoftDrop,
+    tetrisHardDrop: tetrisHardDrop,
+    // Chess (Online & Local 2-Player)
+    startLocalChessGame: startLocalChessGame,
+    toggleChessAutoRotate: toggleChessAutoRotate,
+    flipChessBoardManual: flipChessBoardManual,
     openChessOnlineRoom: openChessOnlineRoom,
     inviteChessClassmate: inviteChessClassmate,
     chessSquareClick: chessSquareClick,
@@ -2067,9 +2967,6 @@
     backToChessLobby: backToChessLobby,
     filterChessClassmates: filterChessClassmates,
     refreshChessClassmates: loadChessClassmates,
-    setChessColor: setChessColor,
-    // Snake
-    startSnakeGame: startSnakeGame,
-    setSnakeDir: setSnakeDir
+    setChessColor: setChessColor
   };
 })();

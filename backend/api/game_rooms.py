@@ -155,7 +155,8 @@ class ChessRoom:
         host_name: str,
         opponent_tg_id: Optional[int] = None,
         opponent_name: Optional[str] = None,
-        host_color: str = "white"
+        host_color: str = "white",
+        is_local: bool = False
     ):
         self.room_id = room_id
         self.game_type = "chess"
@@ -163,17 +164,17 @@ class ChessRoom:
         self.host_name = host_name
         self.opponent_tg_id = opponent_tg_id
         self.opponent_name = opponent_name or "Соперник"
+        self.is_local = is_local
 
-        # Resolve host color: "white", "black", or "random"
-        req_color = str(host_color or "white").strip().lower()
-        if req_color == "random":
-            chosen = random.choice(["white", "black"])
-        elif req_color == "black":
-            chosen = "black"
+        # Randomize host color if requested
+        if host_color == "random":
+            actual_color = random.choice(["white", "black"])
+            self.color_choice_mode = "random"
         else:
-            chosen = "white"
-        self.host_color = chosen
-        self.color_choice_mode = req_color
+            actual_color = host_color if host_color in ["white", "black"] else "white"
+            self.color_choice_mode = actual_color
+
+        self.host_color = actual_color
 
         if self.host_color == "white":
             self.white_tg_id = host_tg_id
@@ -190,7 +191,7 @@ class ChessRoom:
             raise RuntimeError("Библиотека шахмат chess не установлена на сервере. Обратитесь к администратору.")
 
         self.board = chess.Board()
-        self.status = "waiting"
+        self.status = "playing" if is_local else "waiting"
         self.winner: Optional[str] = None  # "white", "black", "draw", or None
         self.termination_reason: Optional[str] = None  # "checkmate", "stalemate", "resignation", etc.
         self.rematch_requested_by: Optional[str] = None  # "white", "black", or None
@@ -212,6 +213,8 @@ class ChessRoom:
                 self.white_name = user_name
 
     def get_player_role(self, user_tg_id: int) -> Optional[str]:
+        if getattr(self, "is_local", False):
+            return self.turn
         if self.white_tg_id and user_tg_id == self.white_tg_id:
             return "white"
         if self.black_tg_id and user_tg_id == self.black_tg_id:
@@ -227,12 +230,13 @@ class ChessRoom:
         if self.status != "playing":
             return False, "Игра не активна"
 
-        role = self.get_player_role(user_tg_id)
-        if not role:
-            return False, "Вы не участник этой игры"
+        if not getattr(self, "is_local", False):
+            role = self.get_player_role(user_tg_id)
+            if not role:
+                return False, "Вы не участник этой игры"
 
-        if self.turn != role:
-            return False, "Сейчас ход другого игрока"
+            if self.turn != role:
+                return False, "Сейчас ход другого игрока"
 
         uci_str = str(move_data).strip().lower()
         try:
@@ -282,6 +286,13 @@ class ChessRoom:
         if self.status != "playing":
             return False, "Игра не активна"
 
+        if getattr(self, "is_local", False):
+            role = self.turn
+            self.status = "finished"
+            self.winner = "black" if role == "white" else "white"
+            self.termination_reason = "resignation"
+            return True, "Сдача принята"
+
         role = self.get_player_role(user_tg_id)
         if not role:
             return False, "Вы не участник этой игры"
@@ -295,6 +306,14 @@ class ChessRoom:
         self.last_activity = time.time()
         if self.status != "finished":
             return False, "Игра еще не окончена"
+
+        if getattr(self, "is_local", False):
+            self.board.reset()
+            self.winner = None
+            self.termination_reason = None
+            self.rematch_requested_by = None
+            self.status = "playing"
+            return True, "Новая игра начата"
 
         role = self.get_player_role(user_tg_id)
         if not role:
@@ -345,16 +364,18 @@ class ChessRoom:
         }
 
     def to_dict(self, viewer_tg_id: Optional[int] = None) -> dict:
-        viewer_role = self.get_player_role(viewer_tg_id) if viewer_tg_id else None
+        is_local = getattr(self, "is_local", False)
+        viewer_role = self.turn if is_local else (self.get_player_role(viewer_tg_id) if viewer_tg_id else None)
         last_move = self.board.peek().uci() if len(self.board.move_stack) > 0 else None
         legal_moves = [m.uci() for m in self.board.legal_moves] if self.status == "playing" else []
 
-        host_role = self.get_player_role(self.host_tg_id)
-        opp_role = self.get_player_role(self.opponent_tg_id) if self.opponent_tg_id else None
+        host_role = "white" if is_local else self.get_player_role(self.host_tg_id)
+        opp_role = "black" if is_local else (self.get_player_role(self.opponent_tg_id) if self.opponent_tg_id else None)
 
         return {
             "room_id": self.room_id,
             "game_type": "chess",
+            "is_local": is_local,
             "status": self.status,
             "host_color": self.host_color,
             "color_choice_mode": getattr(self, "color_choice_mode", self.host_color),
@@ -382,7 +403,7 @@ class ChessRoom:
             "termination_reason": self.termination_reason,
             "rematch_requested_by": self.rematch_requested_by,
             "your_role": viewer_role,
-            "is_your_turn": (self.status == "playing" and self.turn == viewer_role),
+            "is_your_turn": (self.status == "playing") if is_local else (self.status == "playing" and self.turn == viewer_role),
             "is_check": self.board.is_check(),
             "is_checkmate": self.board.is_checkmate(),
             "is_stalemate": self.board.is_stalemate(),
@@ -401,6 +422,28 @@ class GameRoomManager:
         expired = [rid for rid, r in self.rooms.items() if now - r.last_activity > 7200]
         for rid in expired:
             del self.rooms[rid]
+
+    def create_local_room(
+        self,
+        host_tg_id: int,
+        host_name: str,
+        game_type: str = "chess"
+    ) -> Any:
+        self.cleanup()
+        room_id = "local_" + uuid.uuid4().hex[:8]
+        if game_type == "chess":
+            room = ChessRoom(
+                room_id=room_id,
+                host_tg_id=host_tg_id,
+                host_name=host_name or "Белые",
+                opponent_tg_id=host_tg_id,
+                opponent_name="Черные",
+                host_color="white",
+                is_local=True
+            )
+            self.rooms[room_id] = room
+            return room
+        raise ValueError(f"Локальный режим не поддерживается для {game_type}")
 
     def create_room(
         self,
