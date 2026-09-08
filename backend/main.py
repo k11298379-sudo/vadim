@@ -95,13 +95,15 @@ async def lifespan(app: FastAPI):
                     await asyncio.sleep(1)
                     from backend.config import get_today
                     today_str = get_today().strftime("%d.%m.%Y")
+                    db_name = "SQLite (Локальная база dev)" if "sqlite" in settings.DATABASE_URL else "Neon PostgreSQL"
                     await bot.send_message(
                         chat_id=settings.ADMIN_ID,
                         text=(
-                            "🚀 **Деплой успешно завершен! Бот 11 «Б» запущен.**\n\n"
+                            "🧪 **Тестовый бот (Dev) успешно запущен на localhost!**\n\n"
                             f"📅 **Дата:** `{today_str}`\n"
-                            "⚡ База данных Neon PostgreSQL подключена.\n"
-                            "🔔 Все модули, расписание, звонки и Mini App готовы к работе!"
+                            f"⚡ База данных: `{db_name}`\n"
+                            f"🌐 Порт: `{settings.PORT}` (Cloudflare Worker active)\n"
+                            "🔔 Все модули и Mini App готовы к тестам!"
                         ),
                         parse_mode="Markdown"
                     )
