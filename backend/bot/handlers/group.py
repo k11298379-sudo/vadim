@@ -29,10 +29,17 @@ def get_admin_chat_approval_keyboard(chat_id: int) -> InlineKeyboardMarkup:
     )
 
 # 1. Event: Bot added to group
-@router.my_chat_member(ChatMemberUpdatedFilter(member_status_changed=JOIN_TRANSITION))
+@router.my_chat_member(
+    ChatMemberUpdatedFilter(member_status_changed=JOIN_TRANSITION),
+    F.chat.type.in_({"group", "supergroup"})
+)
 async def on_bot_added_to_group(event: ChatMemberUpdated, db_session: AsyncSession, bot: Bot):
     chat = event.chat
     inviter = event.from_user
+
+    # Only process actual group and supergroup chats
+    if chat.type not in ["group", "supergroup"]:
+        return
 
     # Register group chat as pending
     await create_or_update_group_chat(
