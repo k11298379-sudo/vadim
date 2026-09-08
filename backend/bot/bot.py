@@ -2,8 +2,6 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
-from aiogram.client.session.aiohttp import AiohttpSession
-from aiogram.client.telegram import TelegramAPIServer
 
 from backend.config import settings
 from backend.bot.middlewares.auth import AuthMiddleware
@@ -21,15 +19,8 @@ def set_current_bot(bot: Bot | None) -> None:
 def create_bot_and_dispatcher() -> tuple[Bot, Dispatcher]:
     global _current_bot
     token = settings.BOT_TOKEN if (settings.BOT_TOKEN and ":" in settings.BOT_TOKEN) else "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
-    
-    session = None
-    if settings.TELEGRAM_API_SERVER:
-        server = TelegramAPIServer.from_base(settings.TELEGRAM_API_SERVER.rstrip("/"))
-        session = AiohttpSession(api=server)
-
     bot = Bot(
         token=token,
-        session=session,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
     _current_bot = bot

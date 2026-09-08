@@ -316,8 +316,7 @@ async def get_telegram_media(file_id: str):
         if not file_info.file_path:
             raise HTTPException(status_code=404, detail="File path not found in Telegram")
 
-        base_api = settings.TELEGRAM_API_SERVER.rstrip("/") if settings.TELEGRAM_API_SERVER else "https://api.telegram.org"
-        file_url = f"{base_api}/file/bot{settings.BOT_TOKEN}/{file_info.file_path}"
+        file_url = f"https://api.telegram.org/file/bot{settings.BOT_TOKEN}/{file_info.file_path}"
         async with httpx.AsyncClient() as client:
             tg_resp = await client.get(file_url, timeout=25.0)
             if tg_resp.status_code != 200:
