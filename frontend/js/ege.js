@@ -32,6 +32,15 @@
   let lastPSelectedWord = null;
   let lastPAnswerCorrect = false;
 
+  function shuffleArray(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
   function initEge() {
     const container = document.getElementById("pane-ege");
     if (!container) return;
@@ -132,7 +141,7 @@
           : `
             <!-- Sub-tabs: Quiz vs Dictionary -->
             <div class="flex items-center p-1 rounded-2xl bg-slate-200/70 dark:bg-slate-800/90 text-xs font-bold">
-              <button onclick="window.EGE.setSubTab('quiz')" class="flex-1 py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+              <button id="ege-subtab-btn-quiz" onclick="window.EGE.setSubTab('quiz')" class="flex-1 py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
                 currentSubTab === 'quiz'
                   ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
@@ -140,7 +149,7 @@
                 <span>🎯</span>
                 <span>Тренажёр</span>
               </button>
-              <button onclick="window.EGE.setSubTab('dict')" class="flex-1 py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+              <button id="ege-subtab-btn-dict" onclick="window.EGE.setSubTab('dict')" class="flex-1 py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
                 currentSubTab === 'dict'
                   ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
@@ -187,6 +196,27 @@
     renderEge();
   }
 
+  function updateSubTabNavDOM() {
+    const btnQuiz = document.getElementById("ege-subtab-btn-quiz");
+    const btnDict = document.getElementById("ege-subtab-btn-dict");
+    if (!btnQuiz || !btnDict) return;
+
+    const activeClasses = ["bg-white", "dark:bg-slate-700", "text-blue-600", "dark:text-blue-400", "shadow-sm"];
+    const inactiveClasses = ["text-slate-500", "dark:text-slate-400", "hover:text-slate-700"];
+
+    if (currentSubTab === "quiz") {
+      btnQuiz.classList.add(...activeClasses);
+      btnQuiz.classList.remove(...inactiveClasses);
+      btnDict.classList.remove(...activeClasses);
+      btnDict.classList.add(...inactiveClasses);
+    } else {
+      btnDict.classList.add(...activeClasses);
+      btnDict.classList.remove(...inactiveClasses);
+      btnQuiz.classList.remove(...activeClasses);
+      btnQuiz.classList.add(...inactiveClasses);
+    }
+  }
+
   function setSubTab(tab) {
     currentSubTab = tab;
     if (window.Telegram?.WebApp?.HapticFeedback) {
@@ -197,6 +227,7 @@
       renderEge();
       return;
     }
+    updateSubTabNavDOM();
     if (currentTask === 5) {
       subContainer.innerHTML = currentSubTab === "quiz" ? renderParonymsQuizTab() : renderParonymsDictTab();
     } else {
@@ -850,9 +881,22 @@
 
     if (!pool || pool.length === 0) return;
 
-    const shuffled = [...pool].sort(() => Math.random() - 0.5);
-    const count = Math.min(pQuizTotal, shuffled.length);
-    pQuizQuestions = shuffled.slice(0, count);
+    // Shuffle pool using Fisher-Yates
+    const shuffled = shuffleArray(pool);
+
+    // Deduplicate by question ID or sentence
+    const seen = new Set();
+    const uniquePool = [];
+    for (const q of shuffled) {
+      const key = q.id !== undefined ? String(q.id) : (q.sentence || "").trim().toLowerCase();
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        uniquePool.push(q);
+      }
+    }
+
+    const count = Math.min(pQuizTotal, uniquePool.length);
+    pQuizQuestions = uniquePool.slice(0, count);
 
     pQuizIndex = 0;
     pQuizAnswered = false;
@@ -873,7 +917,18 @@
     const mistakes = getStoredPMistakes();
     if (!mistakes || mistakes.length === 0) return;
 
-    pQuizQuestions = [...mistakes].sort(() => Math.random() - 0.5);
+    // Deduplicate mistakes by id or sentence
+    const seen = new Set();
+    const uniqueMistakes = [];
+    for (const q of mistakes) {
+      const key = q && q.id !== undefined ? String(q.id) : (q && q.sentence ? q.sentence.trim().toLowerCase() : "");
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        uniqueMistakes.push(q);
+      }
+    }
+
+    pQuizQuestions = shuffleArray(uniqueMistakes);
     pQuizIndex = 0;
     pQuizAnswered = false;
     pQuizCorrectCount = 0;
@@ -906,7 +961,10 @@
         window.Telegram.WebApp.HapticFeedback.notificationOccurred("success");
       }
     } else {
-      pQuizMistakes.push(current);
+      const key = current.id !== undefined ? String(current.id) : (current.sentence || "").trim().toLowerCase();
+      if (!pQuizMistakes.some(m => (m.id !== undefined ? String(m.id) : (m.sentence || "").trim().toLowerCase()) === key)) {
+        pQuizMistakes.push(current);
+      }
       if (window.Telegram?.WebApp?.HapticFeedback) {
         window.Telegram.WebApp.HapticFeedback.notificationOccurred("error");
       }
@@ -939,14 +997,33 @@
 
   function savePMistakes(mistakes) {
     try {
-      localStorage.setItem("ege_task5_mistakes", JSON.stringify(mistakes));
+      const seen = new Set();
+      const unique = [];
+      for (const m of (mistakes || [])) {
+        const key = m && m.id !== undefined ? String(m.id) : (m && m.sentence ? m.sentence.trim().toLowerCase() : "");
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          unique.push(m);
+        }
+      }
+      localStorage.setItem("ege_task5_mistakes", JSON.stringify(unique));
     } catch (e) {}
   }
 
   function getStoredPMistakes() {
     try {
       const raw = localStorage.getItem("ege_task5_mistakes");
-      return raw ? JSON.parse(raw) : [];
+      const list = raw ? JSON.parse(raw) : [];
+      const seen = new Set();
+      const unique = [];
+      for (const m of list) {
+        const key = m && m.id !== undefined ? String(m.id) : (m && m.sentence ? m.sentence.trim().toLowerCase() : "");
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          unique.push(m);
+        }
+      }
+      return unique;
     } catch (e) {
       return [];
     }
@@ -1268,9 +1345,22 @@
     let pool = EGE_DATA.task4_words || [];
     if (pool.length === 0) return;
 
-    const shuffled = [...pool].sort(() => Math.random() - 0.5);
-    const count = Math.min(quizTotal, shuffled.length);
-    quizWords = shuffled.slice(0, count);
+    // Shuffle pool using Fisher-Yates
+    const shuffled = shuffleArray(pool);
+
+    // Strict deduplication by lowercase word so no word ever repeats in one test
+    const seenWords = new Set();
+    const uniquePool = [];
+    for (const item of shuffled) {
+      const key = (item.word || "").toLowerCase();
+      if (key && !seenWords.has(key)) {
+        seenWords.add(key);
+        uniquePool.push(item);
+      }
+    }
+
+    const count = Math.min(quizTotal, uniquePool.length);
+    quizWords = uniquePool.slice(0, count);
 
     quizIndex = 0;
     quizAnswered = false;
@@ -1291,7 +1381,18 @@
     const mistakes = getStoredMistakes();
     if (!mistakes || mistakes.length === 0) return;
 
-    quizWords = [...mistakes].sort(() => Math.random() - 0.5);
+    // Deduplicate mistakes by lowercase word
+    const seen = new Set();
+    const uniqueMistakes = [];
+    for (const m of mistakes) {
+      const key = (m && m.word ? m.word : "").toLowerCase();
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        uniqueMistakes.push(m);
+      }
+    }
+
+    quizWords = shuffleArray(uniqueMistakes);
     quizIndex = 0;
     quizAnswered = false;
     quizCorrectCount = 0;
@@ -1323,7 +1424,9 @@
         window.Telegram.WebApp.HapticFeedback.notificationOccurred("success");
       }
     } else {
-      quizMistakes.push(currentWord);
+      if (!quizMistakes.some(m => m.word.toLowerCase() === currentWord.word.toLowerCase())) {
+        quizMistakes.push(currentWord);
+      }
       if (window.Telegram?.WebApp?.HapticFeedback) {
         window.Telegram.WebApp.HapticFeedback.notificationOccurred("error");
       }
@@ -1354,14 +1457,35 @@
 
   function saveMistakes(mistakes) {
     try {
-      localStorage.setItem("ege_task4_mistakes", JSON.stringify(mistakes));
+      const seen = new Set();
+      const unique = [];
+      for (const m of (mistakes || [])) {
+        if (!m || !m.word) continue;
+        const key = m.word.toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          unique.push(m);
+        }
+      }
+      localStorage.setItem("ege_task4_mistakes", JSON.stringify(unique));
     } catch (e) {}
   }
 
   function getStoredMistakes() {
     try {
       const raw = localStorage.getItem("ege_task4_mistakes");
-      return raw ? JSON.parse(raw) : [];
+      const list = raw ? JSON.parse(raw) : [];
+      const seen = new Set();
+      const unique = [];
+      for (const m of list) {
+        if (!m || !m.word) continue;
+        const key = m.word.toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          unique.push(m);
+        }
+      }
+      return unique;
     } catch (e) {
       return [];
     }

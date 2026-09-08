@@ -130,7 +130,9 @@ async def create_or_update_group_chat(
     chat_type: str = "group",
     added_by: Optional[int] = None,
     role: str = "pending"
-) -> GroupChat:
+) -> Optional[GroupChat]:
+    if chat_type not in ["group", "supergroup"]:
+        return None
     chat = await get_group_chat_by_id(session, chat_id)
     if chat:
         chat.title = title
@@ -164,6 +166,7 @@ async def get_approved_group_chats(session: AsyncSession) -> List[GroupChat]:
     result = await session.execute(
         select(GroupChat).where(
             GroupChat.role == "approved",
+            GroupChat.chat_type.in_(["group", "supergroup"]),
             GroupChat.notifications_enabled == True
         )
     )
@@ -172,7 +175,10 @@ async def get_approved_group_chats(session: AsyncSession) -> List[GroupChat]:
 
 async def get_pending_group_chats(session: AsyncSession) -> List[GroupChat]:
     result = await session.execute(
-        select(GroupChat).where(GroupChat.role == "pending").order_by(GroupChat.created_at)
+        select(GroupChat).where(
+            GroupChat.role == "pending",
+            GroupChat.chat_type.in_(["group", "supergroup"])
+        ).order_by(GroupChat.created_at)
     )
     return list(result.scalars().all())
 

@@ -148,6 +148,15 @@ const api = {
   },
   // Multiplayer Games
   getClassmates: () => apiRequest("/api/games/classmates"),
+  createLocalGame: (gameType = "chess", hostName = "Игрок 1") =>
+    apiRequest("/api/games/local", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        game_type: gameType,
+        host_name: hostName
+      })
+    }),
   inviteGame: (opponentTgId, hostName, gameType = "tictactoe", hostColor = "white", opponentName = "") =>
     apiRequest("/api/games/invite", {
       method: "POST",

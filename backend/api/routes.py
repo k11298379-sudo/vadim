@@ -316,7 +316,8 @@ async def get_telegram_media(file_id: str):
         if not file_info.file_path:
             raise HTTPException(status_code=404, detail="File path not found in Telegram")
 
-        file_url = f"https://api.telegram.org/file/bot{settings.BOT_TOKEN}/{file_info.file_path}"
+        base_api = settings.TELEGRAM_API_SERVER.rstrip("/") if settings.TELEGRAM_API_SERVER else "https://api.telegram.org"
+        file_url = f"{base_api}/file/bot{settings.BOT_TOKEN}/{file_info.file_path}"
         async with httpx.AsyncClient() as client:
             tg_resp = await client.get(file_url, timeout=25.0)
             if tg_resp.status_code != 200:
@@ -438,6 +439,47 @@ async def _send_game_invite_notification(
         logger.info(f"Game invitation notification sent to {opponent_tg_id}")
     except Exception as e:
         logger.warning(f"Could not deliver game invitation to {opponent_tg_id}: {e}")
+
+
+@api_router.post("/games/local")
+async def create_local_game(
+    request: Request,
+    payload: Optional[Dict[str, Any]] = Body(default=None),
+    user: Optional[User] = Depends(get_optional_webapp_user)
+):
+    """Создает локальную комнату для 2 игроков на одном устройстве."""
+    try:
+        if not payload:
+            try:
+                payload = await request.json()
+            except Exception:
+                payload = {}
+
+        if not isinstance(payload, dict):
+            payload = {}
+
+        game_type = str(payload.get("game_type") or "chess").strip().lower()
+        host_tg_id = _extract_viewer_tg_id(user, request, payload=payload) or 0
+        host_name = user.display_name if user else payload.get("host_name", "Белые")
+
+        from backend.api.game_rooms import game_manager, chess
+        if game_type == "chess" and chess is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Шахматный режим загружается на сервере. Пожалуйста, подождите минуту!"
+            )
+
+        room = game_manager.create_local_room(
+            host_tg_id=host_tg_id,
+            host_name=host_name,
+            game_type=game_type
+        )
+        return room.to_dict(viewer_tg_id=host_tg_id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in create_local_game: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Ошибка сервера: {str(e)}")
 
 
 @api_router.post("/games/invite")

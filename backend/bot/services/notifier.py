@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 from datetime import date, timedelta
 from aiogram import Bot
 from sqlalchemy.ext.asyncio import AsyncSession
