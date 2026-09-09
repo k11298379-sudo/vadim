@@ -8,6 +8,13 @@
   let testerChecked = false;
 
   async function checkTesterStatus() {
+    // 0. Synchronous check of window.currentUser if already loaded
+    if (window.currentUser && typeof window.currentUser.is_tester !== "undefined") {
+      isTesterUser = Boolean(window.currentUser.is_tester);
+      testerChecked = true;
+      return isTesterUser;
+    }
+
     // 1. URL search param: ?tester=1 / ?tester=0 / ?role=tester
     try {
       const sParams = new URLSearchParams(window.location.search);
@@ -15,30 +22,75 @@
         const val = sParams.get("tester");
         isTesterUser = val === "1" || val === "true";
         testerChecked = true;
+        try { localStorage.setItem("is_tester", isTesterUser ? "1" : "0"); } catch (e) {}
         return isTesterUser;
       }
       if (sParams.get("role") === "tester") {
         isTesterUser = true;
         testerChecked = true;
+        try { localStorage.setItem("is_tester", "1"); } catch (e) {}
         return true;
       }
     } catch (e) {}
 
-    // 2. /api/me response
+    // 2. LocalStorage fast cache
     try {
-      if (window.api && typeof window.api.getMe === "function") {
-        const me = await window.api.getMe();
-        if (me && me.is_tester) {
-          isTesterUser = true;
+      const cachedTester = localStorage.getItem("is_tester");
+      if (cachedTester === "1") isTesterUser = true;
+      else if (cachedTester === "0") isTesterUser = false;
+    } catch (e) {}
+
+    // 3. /api/me response via api / window.api
+    try {
+      const apiObj = (typeof window !== "undefined" && window.api) || (typeof api !== "undefined" ? api : null);
+      if (apiObj && typeof apiObj.getMe === "function") {
+        const me = await apiObj.getMe();
+        if (me) {
+          window.currentUser = me;
+          isTesterUser = Boolean(me.is_tester);
+          try { localStorage.setItem("is_tester", isTesterUser ? "1" : "0"); } catch (e) {}
           testerChecked = true;
-          return true;
+          return isTesterUser;
         }
       }
     } catch (e) {}
 
-    isTesterUser = false;
+    // 4. Direct fetch to /api/me with user_id parameter fallback
+    try {
+      const sParams = new URLSearchParams(window.location.search);
+      const uid = sParams.get("user_id") || sParams.get("tg_user_id") || sParams.get("uid") || localStorage.getItem("cached_tg_uid");
+      const url = uid ? `/api/me?user_id=${uid}` : `/api/me`;
+      const resp = await fetch(url);
+      if (resp.ok) {
+        const me = await resp.json();
+        if (me) {
+          window.currentUser = me;
+          isTesterUser = Boolean(me.is_tester);
+          try { localStorage.setItem("is_tester", isTesterUser ? "1" : "0"); } catch (e) {}
+          testerChecked = true;
+          return isTesterUser;
+        }
+      }
+    } catch (e) {}
+
     testerChecked = true;
-    return false;
+    return isTesterUser;
+  }
+
+  function updateTesterStatus(isTester) {
+    const wasTester = isTesterUser;
+    isTesterUser = Boolean(isTester);
+    testerChecked = true;
+    try {
+      localStorage.setItem("is_tester", isTesterUser ? "1" : "0");
+    } catch (e) {}
+    if (isTesterUser && (currentGame === "2048" || !currentGame)) {
+      currentGame = "beta";
+    }
+    const container = document.getElementById("pane-games");
+    if (container && (wasTester !== isTesterUser || (isTesterUser && currentGame === "beta"))) {
+      renderGames();
+    }
   }
 
   async function initGames() {
@@ -83,7 +135,7 @@
         </div>
 
         <!-- Games selector tabs -->
-        <div class="grid ${gridCols} gap-1 p-1 rounded-2xl bg-slate-200/70 dark:bg-slate-800/90 text-[10px] font-bold">
+        <div class="grid ${gridCols} gap-1 p-1 rounded-2xl bg-slate-200/70 dark:bg-slate-800/90 text-[10px] font-bold" style="display: grid; grid-template-columns: repeat(${isTesterUser ? 6 : 5}, minmax(0, 1fr));">
           ${betaButtonHTML}
           <button onclick="window.GAMES.switchGame('2048')" class="py-2 rounded-xl transition-all flex items-center justify-center gap-1 ${
             currentGame === '2048'
@@ -3019,6 +3071,8 @@
   window.GAMES = {
     init: initGames,
     switchGame: switchGame,
+    updateTesterStatus: updateTesterStatus,
+    checkTesterStatus: checkTesterStatus,
     cleanup: cleanupCurrentGame,
     // 2048
     reset2048: init2048,

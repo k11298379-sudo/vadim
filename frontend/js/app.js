@@ -53,7 +53,7 @@ async function initApp() {
   initCalendarModal();
   initPhotoViewer();
   renderDateSelector();
-  loadUserData();
+  await loadUserData();
   loadDutyWidget();
   loadDailyFactWidget();
 
@@ -128,6 +128,10 @@ async function loadUserData() {
 
   try {
     const me = await api.getMe();
+    window.currentUser = me;
+    if (window.GAMES && typeof window.GAMES.updateTesterStatus === "function") {
+      window.GAMES.updateTesterStatus(Boolean(me && me.is_tester));
+    }
     if (me && me.full_name) {
       const roleTag = me.role === "admin" ? " • 👑 Админ" : "";
       userBadge.textContent = me.full_name + roleTag;

@@ -155,10 +155,17 @@ app.include_router(api_router)
 async def health_check():
     return {"status": "ok", "service": "class-bot"}
 
+class NoCacheStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        return response
+
 # Static files for Telegram Mini App
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
 if os.path.exists(frontend_path):
-    app.mount("/static", StaticFiles(directory=frontend_path), name="static")
+    app.mount("/static", NoCacheStaticFiles(directory=frontend_path), name="static")
 
 @app.get("/")
 async def root():
