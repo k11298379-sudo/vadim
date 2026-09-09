@@ -55,12 +55,12 @@ async def send_evening_digest(bot: Bot, target_date: Optional[date] = None) -> i
         subs = {s.lesson_number: s for s in await get_substitutions_for_date(session, tomorrow)}
         tomorrow_homeworks = await get_homework_for_date(session, tomorrow)
 
-        # Другие активные задания на ближайшую неделю после завтра
+        # Другие активные задания на будущие даты после завтра
         res_upcoming = await session.execute(
             select(Homework)
             .options(joinedload(Homework.subject))
-            .where(Homework.due_date > tomorrow, Homework.due_date <= tomorrow + timedelta(days=7))
-            .order_by(Homework.due_date.asc())
+            .where(Homework.due_date > tomorrow)
+            .order_by(Homework.due_date.asc(), Homework.created_at.desc())
         )
         other_upcoming_homeworks = list(res_upcoming.scalars().all())
 
@@ -181,7 +181,7 @@ async def send_evening_digest(bot: Bot, target_date: Optional[date] = None) -> i
                     uncompleted_other.append(hw)
 
             if uncompleted_other:
-                user_lines.append("\n⏳ **Другие несделанные задания (на ближайшие дни):**")
+                user_lines.append("\n⏳ **Другие несделанные задания (на будущие дни):**")
                 for hw in uncompleted_other:
                     d_str = hw.due_date.strftime("%d.%m")
                     user_lines.append(f"  • 📌 **{hw.subject.name}** (к {d_str}): {escape_md(hw.description)}")
