@@ -36,6 +36,7 @@ async def get_me(user: Optional[User] = Depends(get_optional_webapp_user)):
             "full_name": user.display_name,
             "custom_name": user.custom_name,
             "role": user.role,
+            "is_tester": bool(getattr(user, "is_tester", False)),
             "class_name": "11 «Б»",
             "notifications_enabled": user.notifications_enabled
         }
@@ -45,6 +46,7 @@ async def get_me(user: Optional[User] = Depends(get_optional_webapp_user)):
         "tg_id": 0,
         "full_name": "",
         "role": "student",
+        "is_tester": False,
         "class_name": "11 «Б»",
         "notifications_enabled": False
     }

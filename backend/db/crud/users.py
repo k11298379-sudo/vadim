@@ -67,6 +67,19 @@ async def update_user_custom_name(
     return user
 
 
+async def update_user_tester_status(
+    session: AsyncSession,
+    tg_id: int,
+    is_tester: bool
+) -> Optional[User]:
+    user = await get_user_by_tg_id(session, tg_id)
+    if user:
+        user.is_tester = is_tester
+        await session.commit()
+        await session.refresh(user)
+    return user
+
+
 
 async def get_pending_users(session: AsyncSession) -> List[User]:
     result = await session.execute(select(User).where(User.role == "pending").order_by(User.created_at))

@@ -3,17 +3,71 @@
 // ==============================================================================
 
 (function () {
-  let currentGame = "2048"; // '2048', 'tictactoe', 'snake', 'tetris', 'chess'
+  let currentGame = "2048"; // 'beta', '2048', 'tictactoe', 'snake', 'tetris', 'chess'
+  let isTesterUser = false;
+  let testerChecked = false;
 
-  function initGames() {
+  async function checkTesterStatus() {
+    // 1. URL search param: ?tester=1 / ?tester=0 / ?role=tester
+    try {
+      const sParams = new URLSearchParams(window.location.search);
+      if (sParams.has("tester")) {
+        const val = sParams.get("tester");
+        isTesterUser = val === "1" || val === "true";
+        testerChecked = true;
+        return isTesterUser;
+      }
+      if (sParams.get("role") === "tester") {
+        isTesterUser = true;
+        testerChecked = true;
+        return true;
+      }
+    } catch (e) {}
+
+    // 2. /api/me response
+    try {
+      if (window.api && typeof window.api.getMe === "function") {
+        const me = await window.api.getMe();
+        if (me && me.is_tester) {
+          isTesterUser = true;
+          testerChecked = true;
+          return true;
+        }
+      }
+    } catch (e) {}
+
+    isTesterUser = false;
+    testerChecked = true;
+    return false;
+  }
+
+  async function initGames() {
     const container = document.getElementById("pane-games");
     if (!container) return;
+    await checkTesterStatus();
+    if (isTesterUser && currentGame === "2048") {
+      currentGame = "beta";
+    }
     renderGames();
   }
 
   function renderGames() {
     const container = document.getElementById("pane-games");
     if (!container) return;
+
+    const gameCountLabel = isTesterUser ? "6 игр (🧪 Тест)" : "5 игр";
+    const gridCols = isTesterUser ? "grid-cols-6" : "grid-cols-5";
+
+    const betaButtonHTML = isTesterUser ? `
+      <button onclick="window.GAMES.switchGame('beta')" class="py-2 rounded-xl transition-all flex items-center justify-center gap-1 ${
+        currentGame === 'beta'
+          ? 'bg-white dark:bg-slate-700 text-violet-600 dark:text-violet-400 shadow-sm'
+          : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
+      }">
+        <span>🧪</span>
+        <span class="truncate">Тест</span>
+      </button>
+    ` : "";
 
     container.innerHTML = `
       <!-- Header -->
@@ -25,11 +79,12 @@
             </h2>
             <p class="text-xs text-slate-400 font-medium">Отдохни на перемене с пользой для ума</p>
           </div>
-          <span class="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-violet-50 dark:bg-slate-800 text-violet-600 dark:text-violet-400 border border-violet-100 dark:border-slate-700">5 игр</span>
+          <span class="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-violet-50 dark:bg-slate-800 text-violet-600 dark:text-violet-400 border border-violet-100 dark:border-slate-700">${gameCountLabel}</span>
         </div>
 
         <!-- Games selector tabs -->
-        <div class="grid grid-cols-5 gap-1 p-1 rounded-2xl bg-slate-200/70 dark:bg-slate-800/90 text-[10px] font-bold">
+        <div class="grid ${gridCols} gap-1 p-1 rounded-2xl bg-slate-200/70 dark:bg-slate-800/90 text-[10px] font-bold">
+          ${betaButtonHTML}
           <button onclick="window.GAMES.switchGame('2048')" class="py-2 rounded-xl transition-all flex items-center justify-center gap-1 ${
             currentGame === '2048'
               ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
@@ -88,6 +143,9 @@
   }
 
   function switchGame(gameId) {
+    if (gameId === "beta" && !isTesterUser) {
+      gameId = "2048";
+    }
     cleanupCurrentGame();
     currentGame = gameId;
     renderGames();
@@ -116,12 +174,49 @@
   }
 
   function renderActiveGame() {
+    if (currentGame === "beta") return renderBetaHTML();
     if (currentGame === "2048") return render2048HTML();
     if (currentGame === "tictactoe") return renderTicTacToeHTML();
     if (currentGame === "snake") return renderSnakeHTML();
     if (currentGame === "tetris") return renderTetrisHTML();
     if (currentGame === "chess") return renderChessHTML();
     return "";
+  }
+
+  function renderBetaHTML() {
+    return `
+      <div class="theme-card rounded-3xl p-5 bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 shadow-sm space-y-4 max-w-sm mx-auto text-center animate-fade-in">
+        <div class="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-violet-500/20 to-purple-600/20 dark:from-violet-400/20 dark:to-purple-500/20 flex items-center justify-center text-3xl shadow-inner border border-violet-500/30">
+          🧪
+        </div>
+        
+        <div class="space-y-1.5">
+          <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-700">
+            <span class="w-2 h-2 rounded-full bg-violet-500 animate-pulse"></span>
+            Закрытый бета-тест
+          </div>
+          <h3 class="text-base font-black text-slate-900 dark:text-white tracking-tight">Экспериментальная игра</h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-xs mx-auto">
+            Эта вкладка сейчас доступна <b>только участникам с ролью Тестер</b>. Здесь будет размещена следующая мини-игра для 11 «Б».
+          </p>
+        </div>
+
+        <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-700/60 text-left space-y-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-slate-400 font-medium">Статус разработки:</span>
+            <span class="font-bold text-amber-500 flex items-center gap-1">🛠️ В разработке</span>
+          </div>
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-slate-400 font-medium">Доступ:</span>
+            <span class="font-bold text-violet-600 dark:text-violet-400 flex items-center gap-1">🔒 Скрыта от остальных</span>
+          </div>
+        </div>
+
+        <div class="text-[11px] text-slate-400">
+          Остальные 5 игр доступны во вкладках правее.
+        </div>
+      </div>
+    `;
   }
 
   // ==============================================================================

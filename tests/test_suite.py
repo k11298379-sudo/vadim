@@ -30,7 +30,7 @@ from backend.db.crud import (
     get_bell_schedule_for_date, clear_date_bells, save_bulk_date_bells, clear_all_duty_members,
     find_upcoming_dates_for_subject, auto_shift_active_homeworks,
     delete_homework, get_homework_by_id, get_recent_active_homeworks,
-    delete_user, get_all_users
+    delete_user, get_all_users, update_user_tester_status
 )
 
 
@@ -143,6 +143,13 @@ async def test_database_and_crud():
 
         student = await update_user_role(session, 111222, "student")
         assert student.role == "student"
+        assert student.is_tester is False
+
+        student = await update_user_tester_status(session, 111222, True)
+        assert student.is_tester is True
+
+        student = await update_user_tester_status(session, 111222, False)
+        assert student.is_tester is False
 
         group = await create_or_update_group_chat(session, chat_id=-100999, title="11-Б Класс", added_by=111222, role="pending")
         assert group.role == "pending"

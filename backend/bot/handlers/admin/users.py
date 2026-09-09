@@ -9,7 +9,7 @@ from backend.db.models import User
 from backend.db.crud import (
     get_pending_users, get_pending_group_chats, get_active_users,
     get_approved_group_chats, get_user_by_tg_id, update_user_role,
-    get_all_users, delete_user, update_user_custom_name
+    get_all_users, delete_user, update_user_custom_name, update_user_tester_status
 )
 from backend.bot.keyboards.admin_kb import get_admin_panel_keyboard, get_cancel_keyboard
 from backend.bot.keyboards.main_menu import get_main_keyboard
@@ -96,17 +96,24 @@ async def cb_view_students(callback: CallbackQuery, db_session: AsyncSession):
 
     for i, s in enumerate(students, start=1):
         role_label = "👑 [Админ]" if s.role == "admin" else "👤 [Ученик]"
+        tester_badge = " 🧪 [Тестер]" if getattr(s, "is_tester", False) else ""
         safe_disp = escape_md(s.display_name)
         uname = f" (@{escape_md(s.username)})" if s.username else ""
-        lines.append(f"{i}. {safe_disp}{uname} — {role_label}")
+        lines.append(f"{i}. {safe_disp}{uname} — {role_label}{tester_badge}")
 
-        row = [InlineKeyboardButton(text=f"✏️ {s.display_name[:12]}", callback_data=f"adm_ren_ask_{s.tg_id}")]
+        tester_icon = "🧪 Тестер: ✅" if getattr(s, "is_tester", False) else "🧪 Тестер: ⬜"
+        buttons.append([
+            InlineKeyboardButton(text=f"✏️ {s.display_name[:12]}", callback_data=f"adm_ren_ask_{s.tg_id}"),
+            InlineKeyboardButton(text=tester_icon, callback_data=f"adm_tog_test_{s.tg_id}")
+        ])
+
         # Don't show role/delete controls for primary owner ADMIN_ID and for the admin themselves!
         if s.tg_id != settings.ADMIN_ID and s.tg_id != callback.from_user.id:
             toggle_text = "Снять админа" if s.role == "admin" else "Сделать админом"
-            row.append(InlineKeyboardButton(text=f"👑 {toggle_text}", callback_data=f"adm_toggle_role_{s.tg_id}"))
-            row.append(InlineKeyboardButton(text="🗑 Удалить", callback_data=f"adm_del_user_ask_{s.tg_id}"))
-        buttons.append(row)
+            buttons.append([
+                InlineKeyboardButton(text=f"👑 {toggle_text}", callback_data=f"adm_toggle_role_{s.tg_id}"),
+                InlineKeyboardButton(text="🗑 Удалить", callback_data=f"adm_del_user_ask_{s.tg_id}")
+            ])
 
     if groups:
         lines.append(f"\n👥 **Авторизованные группы ({len(groups)}):**")
@@ -317,6 +324,29 @@ async def cb_toggle_user_role(callback: CallbackQuery, db_session: AsyncSession,
         await cb_view_students(callback, db_session)
     else:
         await callback.answer("Невозможно изменить права главного создателя", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("adm_tog_test_"))
+async def cb_toggle_user_tester(callback: CallbackQuery, db_session: AsyncSession, current_user: User):
+    if not is_admin(current_user, callback.from_user.id):
+        return
+
+    target_id = int(callback.data.replace("adm_tog_test_", ""))
+    user = await get_user_by_tg_id(db_session, target_id)
+    if user:
+        new_status = not bool(getattr(user, "is_tester", False))
+        await update_user_tester_status(db_session, target_id, new_status)
+        state_str = "выдан (Тестер)" if new_status else "снят"
+        try:
+            await callback.answer(f"Доступ к закрытому тестированию {state_str}!", show_alert=True)
+        except Exception:
+            pass
+        await cb_view_students(callback, db_session)
+    else:
+        try:
+            await callback.answer("Пользователь не найден", show_alert=True)
+        except Exception:
+            pass
 
 
 @router.callback_query(F.data == "admin_delete_user")

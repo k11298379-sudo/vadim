@@ -60,11 +60,14 @@ async function initApp() {
   const urlParams = new URLSearchParams(window.location.search);
   const roomId = urlParams.get("room");
   const gameType = urlParams.get("game");
+  const tabParam = urlParams.get("tab");
   if (roomId) {
     switchTab("games");
     if (window.GAMES && typeof window.GAMES.openOnlineRoom === "function") {
       window.GAMES.openOnlineRoom(roomId, gameType);
     }
+  } else if (tabParam) {
+    switchTab(tabParam);
   } else {
     loadTabContent(activeTab);
   }

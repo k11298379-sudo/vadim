@@ -18,6 +18,7 @@ class User(Base):
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     custom_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # Реальное имя, назначенное админом
     role: Mapped[str] = mapped_column(String(50), default="pending", nullable=False)  # admin, student, pending, rejected
+    is_tester: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="0")
     notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 

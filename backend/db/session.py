@@ -62,6 +62,8 @@ async def init_db():
                 cols_u = [row[1] for row in res_u.fetchall()]
                 if "custom_name" not in cols_u:
                     await conn.execute(text("ALTER TABLE users ADD COLUMN custom_name VARCHAR(255);"))
+                if "is_tester" not in cols_u:
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN is_tester BOOLEAN DEFAULT 0;"))
 
                 res_dg = await conn.execute(text("PRAGMA table_info(duty_groups);"))
                 cols_dg = [row[1] for row in res_dg.fetchall()]
@@ -84,6 +86,7 @@ async def init_db():
             else:
                 await conn.execute(text("ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS assigned_date DATE;"))
                 await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_name VARCHAR(255);"))
+                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_tester BOOLEAN DEFAULT FALSE;"))
                 await conn.execute(text("ALTER TABLE duty_groups ADD COLUMN IF NOT EXISTS member_ids JSONB;"))
                 await conn.execute(text("ALTER TABLE daily_facts ADD COLUMN IF NOT EXISTS hour INTEGER DEFAULT 0;"))
                 await conn.execute(text("ALTER TABLE daily_facts ADD COLUMN IF NOT EXISTS minute INTEGER DEFAULT 0;"))
