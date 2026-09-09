@@ -151,6 +151,20 @@ async def get_recent_active_homeworks(session: AsyncSession, limit: int = 15) ->
     return list(result.scalars().all())
 
 
+async def get_all_upcoming_homeworks(session: AsyncSession, from_date: Optional[date] = None) -> List[Homework]:
+    """Возвращает все домашние задания, начиная с from_date (по умолчанию сегодня) и на любые будущие даты"""
+    from backend.config import get_today
+    if from_date is None:
+        from_date = get_today()
+    result = await session.execute(
+        select(Homework)
+        .options(joinedload(Homework.subject))
+        .where(Homework.due_date >= from_date)
+        .order_by(Homework.due_date.asc(), Homework.created_at.desc())
+    )
+    return list(result.scalars().all())
+
+
 # ----------------- DEADLINES -----------------
 
 async def get_upcoming_deadlines(session: AsyncSession, from_date: Optional[date] = None) -> List[Deadline]:

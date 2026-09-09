@@ -12,7 +12,8 @@ from backend.db.models import Homework, User
 from backend.db.crud import (
     get_homework_for_date, get_homework_by_subject,
     get_all_subjects, get_homework_by_id, get_subject_by_id,
-    get_user_homework_status, toggle_homework_completion
+    get_user_homework_status, toggle_homework_completion,
+    get_all_upcoming_homeworks
 )
 from backend.bot.keyboards.inline import (
     get_homework_keyboard, get_subjects_keyboard, get_homework_item_keyboard
@@ -401,12 +402,10 @@ async def cb_hw_view_subject(callback: CallbackQuery, db_session: AsyncSession, 
 
 @router.callback_query(F.data == "hw_my_tasks")
 async def cb_hw_my_tasks(callback: CallbackQuery, db_session: AsyncSession, current_user: User, bot: Bot):
-    # Fetch upcoming homework for next 7 days
-    today = date.today()
-    all_hw: List[Homework] = []
-    for i in range(8):
-        hws = await get_homework_for_date(db_session, today + timedelta(days=i))
-        all_hw.extend(hws)
+    # Fetch upcoming homework: today + all future
+    from backend.config import get_today
+    today = get_today()
+    all_hw = await get_all_upcoming_homeworks(db_session, today)
 
     # Filter uncompleted
     uncompleted = []
@@ -417,7 +416,7 @@ async def cb_hw_my_tasks(callback: CallbackQuery, db_session: AsyncSession, curr
 
     if not uncompleted:
         await callback.message.edit_text(
-            "🎉 **Отлично! У вас нет несделанных заданий на ближайшую неделю!**",
+            "🎉 **Отлично! У вас нет невыполненных заданий (все актуальные ДЗ сделаны)!**",
             reply_markup=get_homework_keyboard(),
             parse_mode="Markdown"
         )
@@ -425,7 +424,7 @@ async def cb_hw_my_tasks(callback: CallbackQuery, db_session: AsyncSession, curr
         return
 
     await callback.message.edit_text(
-        f"📝 **Ваши невыполненные задания ({len(uncompleted)}):**",
+        f"📝 **Ваши невыполненные задания ({len(uncompleted)}):**\n_(начиная с сегодня и все будущие)_",
         parse_mode="Markdown"
     )
 
