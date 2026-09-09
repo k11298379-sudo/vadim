@@ -410,7 +410,7 @@ async def cb_cal_act_adm_hw(callback: CallbackQuery, state: FSMContext, db_sessi
         f"👉 **{day_ru}, {due_d.strftime('%d.%m.%Y')}**\n\n"
         "✍️ **Отправьте задание в чат одним сообщением:**\n"
         "• Текстом (номера, параграфы)\n"
-        "• Либо фото или документом с подписью!",
+        "• Либо фото, документом (PDF, Word) или файлом с подписью!",
         reply_markup=get_cancel_keyboard()
     )
     try:
@@ -436,7 +436,7 @@ async def msg_add_hw_date_text(message: Message, state: FSMContext, db_session: 
             f"👉 **{day_ru}, {dt.strftime('%d.%m.%Y')}**\n\n"
             "✍️ **Отправьте задание в чат одним сообщением:**\n"
             "• Текстом (номера, параграфы)\n"
-            "• Либо фото или документом с подписью!",
+            "• Либо фото, документом (PDF, Word) или файлом с подписью!",
             reply_markup=get_cancel_keyboard()
         )
     except ValueError:
@@ -459,6 +459,22 @@ async def msg_add_hw_collect_content(message: Message, state: FSMContext, db_ses
             "type": "document",
             "file_id": message.document.file_id,
             "file_name": message.document.file_name or "документ"
+        })
+        if message.caption and not description:
+            description = message.caption.strip()
+    elif message.video:
+        attachments.append({
+            "type": "document",
+            "file_id": message.video.file_id,
+            "file_name": message.video.file_name or "видео.mp4"
+        })
+        if message.caption and not description:
+            description = message.caption.strip()
+    elif message.audio:
+        attachments.append({
+            "type": "document",
+            "file_id": message.audio.file_id,
+            "file_name": message.audio.file_name or "аудио.mp3"
         })
         if message.caption and not description:
             description = message.caption.strip()
@@ -491,7 +507,7 @@ async def msg_add_hw_collect_content(message: Message, state: FSMContext, db_ses
         att_str = f"📎 **Прикреплено файлов:** {num_att} ({', '.join(details)})"
         save_btn_label = f"💾 Сохранить ДЗ ({num_att} влож.)"
     else:
-        att_str = "📎 Вложений нет (можно отправить фото/документы)"
+        att_str = "📎 Вложений нет (можно отправить фото/документы/файлы)"
         save_btn_label = "💾 Сохранить ДЗ"
 
     desc_escaped = escape_md(description)
