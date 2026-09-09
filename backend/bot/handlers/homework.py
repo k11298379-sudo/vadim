@@ -416,7 +416,7 @@ async def cb_hw_my_tasks(callback: CallbackQuery, db_session: AsyncSession, curr
 
     if not uncompleted:
         await callback.message.edit_text(
-            "🎉 **Отлично! У вас нет невыполненных заданий (все актуальные ДЗ сделаны)!**",
+            "🎉 **Отлично! У вас нет невыполненных заданий!**",
             reply_markup=get_homework_keyboard(),
             parse_mode="Markdown"
         )
@@ -424,7 +424,7 @@ async def cb_hw_my_tasks(callback: CallbackQuery, db_session: AsyncSession, curr
         return
 
     await callback.message.edit_text(
-        f"📝 **Ваши невыполненные задания ({len(uncompleted)}):**\n_(начиная с сегодня и все будущие)_",
+        f"📝 **Ваши невыполненные задания ({len(uncompleted)}):**",
         parse_mode="Markdown"
     )
 
