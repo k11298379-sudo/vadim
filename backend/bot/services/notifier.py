@@ -181,7 +181,7 @@ async def send_evening_digest(bot: Bot, target_date: Optional[date] = None) -> i
                     uncompleted_other.append(hw)
 
             if uncompleted_other:
-                user_lines.append("\n⏳ **Другие несделанные задания (на будущие дни):**")
+                user_lines.append("\n⏳ **Другие несделанные задания:**")
                 for hw in uncompleted_other:
                     d_str = hw.due_date.strftime("%d.%m")
                     user_lines.append(f"  • 📌 **{hw.subject.name}** (к {d_str}): {escape_md(hw.description)}")
