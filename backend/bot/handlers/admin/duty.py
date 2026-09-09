@@ -355,7 +355,7 @@ async def cb_admin_duty_broadcast_start(callback: CallbackQuery, state: FSMConte
     await callback.message.edit_text(
         f"📢 **Объявление дежурным ({active_group.name}):**\n\n"
         f"👥 **Состав:** {members_str}\n\n"
-        "Отправьте текст сообщения для дежурных (или фото с описанием):",
+        "Отправьте текст сообщения для дежурных или прикрепите файл (фото, PDF, документ, видео, аудио) с описанием:",
         reply_markup=get_cancel_keyboard(),
         parse_mode="Markdown"
     )
@@ -371,18 +371,49 @@ async def msg_admin_duty_broadcast_text(message: Message, state: FSMContext, db_
         return
 
     text = message.text or message.caption or ""
-    photo_id = message.photo[-1].file_id if message.photo else None
+    attachment_type = None
+    file_id = None
+    file_name = None
 
-    if not text and not photo_id:
-        await message.answer("⚠️ Пожалуйста, введите текст сообщения или отправьте фото:")
+    if message.photo:
+        attachment_type = "photo"
+        file_id = message.photo[-1].file_id
+    elif message.document:
+        attachment_type = "document"
+        file_id = message.document.file_id
+        file_name = message.document.file_name or "документ"
+    elif message.video:
+        attachment_type = "video"
+        file_id = message.video.file_id
+        file_name = message.video.file_name or "видео"
+    elif message.audio:
+        attachment_type = "audio"
+        file_id = message.audio.file_id
+        file_name = message.audio.file_name or "аудио"
+
+    if not text and not attachment_type:
+        await message.answer("⚠️ Пожалуйста, введите текст сообщения или прикрепите файл (фото, PDF, документ, видео, аудио):")
         return
 
-    await state.update_data(broadcast_text=text, photo_id=photo_id)
+    photo_id = file_id if attachment_type == "photo" else None
+    await state.update_data(
+        broadcast_text=text,
+        photo_id=photo_id,
+        attachment_type=attachment_type,
+        attachment_file_id=file_id,
+        attachment_file_name=file_name
+    )
     await state.set_state(DutyBroadcastStates.confirm_destination)
 
     data = await state.get_data()
     g_name = data.get("duty_group_name", "дежурных")
-    preview_text = text if text else "*(без текста, только фото)*"
+    type_label = {
+        "photo": "фото",
+        "document": f"файл ({file_name})" if file_name else "документ",
+        "video": "видео",
+        "audio": "аудио"
+    }.get(attachment_type, "файл")
+    preview_text = text if text else f"*(без текста, только {type_label})*"
 
     active_group, _ = await get_current_duty_info(db_session)
     duty_users = await get_users_in_duty_group(db_session, active_group) if active_group else []
@@ -398,9 +429,30 @@ async def msg_admin_duty_broadcast_text(message: Message, state: FSMContext, db_
         "Куда отправить объявление?"
     )
 
-    if photo_id:
+    if attachment_type == "photo":
         await message.answer_photo(
-            photo=photo_id,
+            photo=file_id,
+            caption=prompt_text,
+            reply_markup=get_duty_broadcast_destination_keyboard(),
+            parse_mode="Markdown"
+        )
+    elif attachment_type == "document":
+        await message.answer_document(
+            document=file_id,
+            caption=prompt_text,
+            reply_markup=get_duty_broadcast_destination_keyboard(),
+            parse_mode="Markdown"
+        )
+    elif attachment_type == "video":
+        await message.answer_video(
+            video=file_id,
+            caption=prompt_text,
+            reply_markup=get_duty_broadcast_destination_keyboard(),
+            parse_mode="Markdown"
+        )
+    elif attachment_type == "audio":
+        await message.answer_audio(
+            audio=file_id,
             caption=prompt_text,
             reply_markup=get_duty_broadcast_destination_keyboard(),
             parse_mode="Markdown"
@@ -422,6 +474,8 @@ async def cb_admin_duty_broadcast_send(callback: CallbackQuery, state: FSMContex
     data = await state.get_data()
     raw_text = data.get("broadcast_text", "")
     photo_id = data.get("photo_id")
+    attachment_type = data.get("attachment_type") or ("photo" if photo_id else None)
+    file_id = data.get("attachment_file_id") or photo_id
 
     active_group, _ = await get_current_duty_info(db_session)
     duty_users = await get_users_in_duty_group(db_session, active_group) if active_group else []
@@ -433,6 +487,11 @@ async def cb_admin_duty_broadcast_send(callback: CallbackQuery, state: FSMContex
         "🧹 **ОБЪЯВЛЕНИЕ ДЕЖУРНЫМ • 11 «Б»**\n\n"
         f"{raw_text}\n\n"
         f"📌 _Дежурит: {group_name}_"
+    )
+    pm_plain = (
+        "🧹 ОБЪЯВЛЕНИЕ ДЕЖУРНЫМ • 11 «Б»\n\n"
+        f"{raw_text}\n\n"
+        f"📌 Дежурит: {group_name}"
     )
 
     mentions = []
@@ -451,47 +510,55 @@ async def cb_admin_duty_broadcast_send(callback: CallbackQuery, state: FSMContex
     if members_name:
         group_text += f"\n👥 _Состав: {members_name}_"
 
+    group_plain = group_text.replace("**", "").replace("*", "").replace("`", "").replace("_", "")
+
+    async def _send_media_or_msg(chat_id: int, thread_id: int, formatted_text: str, plain_content: str):
+        kwargs = {"message_thread_id": thread_id} if thread_id else {}
+        if attachment_type == "photo":
+            try:
+                await bot.send_photo(chat_id=chat_id, photo=file_id, caption=formatted_text, parse_mode="Markdown", **kwargs)
+            except Exception:
+                await bot.send_photo(chat_id=chat_id, photo=file_id, caption=plain_content, **kwargs)
+        elif attachment_type == "document":
+            try:
+                await bot.send_document(chat_id=chat_id, document=file_id, caption=formatted_text, parse_mode="Markdown", **kwargs)
+            except Exception:
+                await bot.send_document(chat_id=chat_id, document=file_id, caption=plain_content, **kwargs)
+        elif attachment_type == "video":
+            try:
+                await bot.send_video(chat_id=chat_id, video=file_id, caption=formatted_text, parse_mode="Markdown", **kwargs)
+            except Exception:
+                await bot.send_video(chat_id=chat_id, video=file_id, caption=plain_content, **kwargs)
+        elif attachment_type == "audio":
+            try:
+                await bot.send_audio(chat_id=chat_id, audio=file_id, caption=formatted_text, parse_mode="Markdown", **kwargs)
+            except Exception:
+                await bot.send_audio(chat_id=chat_id, audio=file_id, caption=plain_content, **kwargs)
+        else:
+            try:
+                await bot.send_message(chat_id=chat_id, text=formatted_text, parse_mode="Markdown", **kwargs)
+            except Exception:
+                await bot.send_message(chat_id=chat_id, text=plain_content, **kwargs)
+
     sent_pm = 0
     sent_groups = 0
 
     if dest in ["pm", "all"]:
         for u in duty_users:
             try:
-                if photo_id:
-                    await bot.send_photo(chat_id=u.tg_id, photo=photo_id, caption=pm_text, parse_mode="Markdown")
-                else:
-                    await bot.send_message(chat_id=u.tg_id, text=pm_text, parse_mode="Markdown")
+                await _send_media_or_msg(u.tg_id, None, pm_text, pm_plain)
                 sent_pm += 1
-            except Exception:
-                try:
-                    plain = pm_text.replace("**", "").replace("*", "").replace("`", "").replace("_", "")
-                    if photo_id:
-                        await bot.send_photo(chat_id=u.tg_id, photo=photo_id, caption=plain)
-                    else:
-                        await bot.send_message(chat_id=u.tg_id, text=plain)
-                    sent_pm += 1
-                except Exception as e:
-                    logger.warning(f"Could not send duty PM to {u.tg_id}: {e}")
+            except Exception as e:
+                logger.warning(f"Could not send duty PM to {u.tg_id}: {e}")
 
     if dest in ["groups", "all"]:
         groups = await get_approved_group_chats(db_session)
         for g in groups:
             try:
-                if photo_id:
-                    await bot.send_photo(chat_id=g.chat_id, message_thread_id=g.topic_duty_id, photo=photo_id, caption=group_text, parse_mode="Markdown")
-                else:
-                    await bot.send_message(chat_id=g.chat_id, message_thread_id=g.topic_duty_id, text=group_text, parse_mode="Markdown")
+                await _send_media_or_msg(g.chat_id, g.topic_duty_id, group_text, group_plain)
                 sent_groups += 1
-            except Exception:
-                try:
-                    plain_g = group_text.replace("**", "").replace("*", "").replace("`", "").replace("_", "")
-                    if photo_id:
-                        await bot.send_photo(chat_id=g.chat_id, message_thread_id=g.topic_duty_id, photo=photo_id, caption=plain_g)
-                    else:
-                        await bot.send_message(chat_id=g.chat_id, message_thread_id=g.topic_duty_id, text=plain_g)
-                    sent_groups += 1
-                except Exception as e:
-                    logger.warning(f"Could not send duty announcement to group {g.chat_id}: {e}")
+            except Exception as e:
+                logger.warning(f"Could not send duty announcement to group {g.chat_id}: {e}")
 
     await state.clear()
 
@@ -503,7 +570,8 @@ async def cb_admin_duty_broadcast_send(callback: CallbackQuery, state: FSMContex
     if dest in ["groups", "all"]:
         res_lines.append(f"👥 Отправлено в бесед: **{sent_groups}**")
 
-    if callback.message.photo:
+    has_media = bool(callback.message.photo or callback.message.document or callback.message.video or callback.message.audio)
+    if has_media:
         try:
             await callback.message.delete()
         except Exception:
@@ -514,11 +582,18 @@ async def cb_admin_duty_broadcast_send(callback: CallbackQuery, state: FSMContex
             parse_mode="Markdown"
         )
     else:
-        await callback.message.edit_text(
-            "\n".join(res_lines),
-            reply_markup=get_admin_panel_keyboard(),
-            parse_mode="Markdown"
-        )
+        try:
+            await callback.message.edit_text(
+                "\n".join(res_lines),
+                reply_markup=get_admin_panel_keyboard(),
+                parse_mode="Markdown"
+            )
+        except Exception:
+            await callback.message.answer(
+                "\n".join(res_lines),
+                reply_markup=get_admin_panel_keyboard(),
+                parse_mode="Markdown"
+            )
     try:
         await callback.answer()
     except Exception:
