@@ -13,31 +13,26 @@ from backend.db.models import User
 router = Router(name="settings_router")
 
 
-def build_settings_keyboard(canteen_on: bool, currency_on: bool, is_admin: bool = False) -> InlineKeyboardMarkup:
+def build_settings_keyboard(canteen_on: bool, currency_on: bool) -> InlineKeyboardMarkup:
     canteen_icon = "✅ Вкл" if canteen_on else "⬜ Выкл"
     currency_icon = "✅ Вкл" if currency_on else "⬜ Выкл"
 
-    buttons = [
-        [
-            InlineKeyboardButton(
-                text=f"🍽 Столовая (после 5 урока): {canteen_icon}",
-                callback_data="set_canteen_toggle"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=f"🪙 Игровая экосистема: {currency_icon}",
-                callback_data="set_currency_toggle"
-            )
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=f"🍽 Столовая (после 5 урока): {canteen_icon}",
+                    callback_data="set_canteen_toggle"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=f"🪙 Игровая экосистема: {currency_icon}",
+                    callback_data="set_currency_toggle"
+                )
+            ]
         ]
-    ]
-
-    if is_admin:
-        buttons.append([
-            InlineKeyboardButton(text="🔙 В панель управления", callback_data="admin_menu_back")
-        ])
-
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    )
 
 
 def format_settings_text(canteen_on: bool, currency_on: bool, coins: int) -> str:
@@ -78,11 +73,10 @@ async def show_settings(message: Message, current_user: User):
     canteen_on = bool(getattr(current_user, "canteen_reminder_enabled", False))
     currency_on = bool(getattr(current_user, "currency_ecosystem_enabled", False))
     coins = getattr(current_user, "coins", 100) or 0
-    is_admin = bool(getattr(current_user, "is_admin", False))
 
     await message.answer(
         format_settings_text(canteen_on, currency_on, coins),
-        reply_markup=build_settings_keyboard(canteen_on, currency_on, is_admin=is_admin),
+        reply_markup=build_settings_keyboard(canteen_on, currency_on),
         parse_mode="HTML"
     )
 
@@ -92,11 +86,10 @@ async def cb_open_settings(callback: CallbackQuery, current_user: User):
     canteen_on = bool(getattr(current_user, "canteen_reminder_enabled", False))
     currency_on = bool(getattr(current_user, "currency_ecosystem_enabled", False))
     coins = getattr(current_user, "coins", 100) or 0
-    is_admin = bool(getattr(current_user, "is_admin", False))
 
     await callback.message.edit_text(
         format_settings_text(canteen_on, currency_on, coins),
-        reply_markup=build_settings_keyboard(canteen_on, currency_on, is_admin=is_admin),
+        reply_markup=build_settings_keyboard(canteen_on, currency_on),
         parse_mode="HTML"
     )
     try:
@@ -112,11 +105,10 @@ async def cb_toggle_canteen(callback: CallbackQuery, db_session: AsyncSession, c
     user = await get_user_by_tg_id(db_session, current_user.tg_id) or current_user
     currency_on = bool(getattr(user, "currency_ecosystem_enabled", False))
     coins = getattr(user, "coins", 100) or 0
-    is_admin = bool(getattr(user, "is_admin", False))
 
     await callback.message.edit_text(
         format_settings_text(new_val, currency_on, coins),
-        reply_markup=build_settings_keyboard(new_val, currency_on, is_admin=is_admin),
+        reply_markup=build_settings_keyboard(new_val, currency_on),
         parse_mode="HTML"
     )
     status_msg = "✅ Напоминание о столовой включено!" if new_val else "⬜ Напоминание о столовой выключено"
@@ -130,11 +122,10 @@ async def cb_toggle_currency(callback: CallbackQuery, db_session: AsyncSession, 
     user = await get_user_by_tg_id(db_session, current_user.tg_id) or current_user
     canteen_on = bool(getattr(user, "canteen_reminder_enabled", False))
     coins = getattr(user, "coins", 100) or 0
-    is_admin = bool(getattr(user, "is_admin", False))
 
     await callback.message.edit_text(
         format_settings_text(canteen_on, new_val, coins),
-        reply_markup=build_settings_keyboard(canteen_on, new_val, is_admin=is_admin),
+        reply_markup=build_settings_keyboard(canteen_on, new_val),
         parse_mode="HTML"
     )
     status_msg = (

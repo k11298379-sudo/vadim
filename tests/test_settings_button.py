@@ -12,20 +12,13 @@ from backend.bot.handlers.settings import (
 )
 from backend.db.models import User
 
-def test_settings_keyboard_admin_and_student():
-    # Student keyboard
-    kb_student = build_settings_keyboard(canteen_on=True, currency_on=False, is_admin=False)
-    assert len(kb_student.inline_keyboard) == 2
-    assert "Столовая" in kb_student.inline_keyboard[0][0].text
-    assert "✅ Вкл" in kb_student.inline_keyboard[0][0].text
-    assert "Игровая экосистема" in kb_student.inline_keyboard[1][0].text
-    assert "⬜ Выкл" in kb_student.inline_keyboard[1][0].text
-
-    # Admin keyboard
-    kb_admin = build_settings_keyboard(canteen_on=False, currency_on=True, is_admin=True)
-    assert len(kb_admin.inline_keyboard) == 3
-    assert kb_admin.inline_keyboard[2][0].callback_data == "admin_menu_back"
-    assert "В панель управления" in kb_admin.inline_keyboard[2][0].text
+def test_settings_keyboard():
+    kb = build_settings_keyboard(canteen_on=True, currency_on=False)
+    assert len(kb.inline_keyboard) == 2
+    assert "Столовая" in kb.inline_keyboard[0][0].text
+    assert "✅ Вкл" in kb.inline_keyboard[0][0].text
+    assert "Игровая экосистема" in kb.inline_keyboard[1][0].text
+    assert "⬜ Выкл" in kb.inline_keyboard[1][0].text
 
 def test_format_settings_text():
     text = format_settings_text(canteen_on=True, currency_on=True, coins=150)
@@ -41,14 +34,13 @@ async def test_cb_open_settings():
     user.canteen_reminder_enabled = True
     user.currency_ecosystem_enabled = False
     user.coins = 200
-    user.is_admin = True
 
     await cb_open_settings(callback, user)
     callback.message.edit_text.assert_called_once()
     args, kwargs = callback.message.edit_text.call_args
     assert "Напоминание о столовой:" in args[0]
     kb = kwargs["reply_markup"]
-    assert any(b[0].callback_data == "admin_menu_back" for b in kb.inline_keyboard)
+    assert len(kb.inline_keyboard) == 2
 
 async def test_cb_toggle_currency_sends_guide():
     callback = AsyncMock()
@@ -90,7 +82,7 @@ async def test_cb_toggle_currency_sends_guide():
         settings_mod.get_user_by_tg_id = orig_get
 
 if __name__ == "__main__":
-    test_settings_keyboard_admin_and_student()
+    test_settings_keyboard()
     test_format_settings_text()
     asyncio.run(test_cb_open_settings())
     asyncio.run(test_cb_toggle_currency_sends_guide())
