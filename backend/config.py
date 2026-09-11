@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     HOST: str = Field(default="0.0.0.0", description="Host to listen on")
     BASE_URL: str = Field(default="http://localhost:8000", description="Base URL of the server")
     WEBAPP_URL: str = Field(default="http://localhost:8000/app", description="Public URL for Telegram Mini App")
+    AUTO_TUNNEL: bool = Field(default=True, description="Automatically start Cloudflare Tunnel for local HTTPS if available")
     
     DATABASE_URL: str = Field(
         default="sqlite+aiosqlite:///./data/bot.db",

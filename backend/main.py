@@ -110,10 +110,26 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(check_and_send_evening_digest_on_startup())
 
 
+    # Start Cloudflare Tunnel if configured and URL is not already HTTPS
+    port = int(os.environ.get("PORT", settings.PORT))
+    if getattr(settings, "AUTO_TUNNEL", True) and not settings.WEBAPP_URL.startswith("https://"):
+        try:
+            from backend.tunnel import start_tunnel
+            tunnel_url = await start_tunnel(port)
+            if tunnel_url:
+                settings.WEBAPP_URL = f"{tunnel_url}/app"
+                settings.BASE_URL = tunnel_url
+                print("\n" + "=" * 64)
+                print(f"🚀 CLOUDFLARE HTTPS ТУННЕЛЬ АКТИВЕН!")
+                print(f"📱 Ссылка на Mini App: {settings.WEBAPP_URL}")
+                print("=" * 64 + "\n", flush=True)
+        except Exception as e:
+            logger.warning(f"Could not start Cloudflare tunnel: {e}")
+
     # Start Aiogram polling and register command hints in background task
     global polling_task
     if settings.BOT_TOKEN and not settings.BOT_TOKEN.startswith("1234567890:ABCdef"):
-        logger.info("Registering Telegram command autocomplete hints...")
+        logger.info("Registering Telegram command autocomplete hints and menu button...")
         await setup_bot_commands(bot)
         logger.info("Starting Telegram Bot long-polling...")
         polling_task = asyncio.create_task(dp.start_polling(bot))
@@ -126,14 +142,20 @@ async def lifespan(app: FastAPI):
                     from backend.config import get_today
                     today_str = get_today().strftime("%d.%m.%Y")
                     db_name = "SQLite (Локальная база dev)" if "sqlite" in settings.DATABASE_URL else "Neon PostgreSQL"
+                    webapp_info = (
+                        f"📱 **Mini App для телефона:**\n{settings.WEBAPP_URL}\n"
+                        if settings.WEBAPP_URL.startswith("https://")
+                        else ""
+                    )
                     await bot.send_message(
                         chat_id=settings.ADMIN_ID,
                         text=(
-                            "🧪 **Тестовый бот (Dev) успешно запущен на localhost!**\n\n"
+                            "🧪 **Тестовый бот (Dev) успешно запущен!**\n\n"
                             f"📅 **Дата:** `{today_str}`\n"
                             f"⚡ База данных: `{db_name}`\n"
-                            f"🌐 Порт: `{settings.PORT}` (Cloudflare Worker active)\n"
-                            "🔔 Все модули и Mini App готовы к тестам!"
+                            f"🌐 Порт: `{settings.PORT}`\n"
+                            f"{webapp_info}\n"
+                            "🔔 Кнопка «📱 Mini App» активирована в меню Telegram!"
                         ),
                         parse_mode="Markdown"
                     )
@@ -147,11 +169,13 @@ async def lifespan(app: FastAPI):
 
     yield
 
-
-
-
     # --- Shutdown ---
     logger.info("Shutting down...")
+    try:
+        from backend.tunnel import stop_tunnel
+        await stop_tunnel()
+    except Exception:
+        pass
     if polling_task:
         polling_task.cancel()
         try:
