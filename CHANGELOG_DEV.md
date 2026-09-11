@@ -40,6 +40,15 @@
    - Крупные модули разделены на небольшие пакеты (`backend/bot/handlers/admin/schedule/`, `homework/`, `bells/`, `duty/`, `backend/db/crud/`, `backend/api/routers/`, `frontend/src/js/ege/`).
    - 100% обратная совместимость через `__init__.py`.
 
+9. **Исправление назначения даты ДЗ для предметов вне расписания**
+   - Если предмет отсутствует в будущем расписании уроков, бот больше НЕ назначает автоматически сдачу на завтра.
+   - Вместо этого бот сразу переходит в режим выбора даты и открывает интерактивный календарь, требуя явного указания даты администратором.
+
+10. **Обновление текстур карт в игре «Дурак» (36 карт)**
+   - Текстуры карт заменены на новые детализированные классические текстуры из архива `complete-deck-playing-cards.zip`.
+   - Сохранена колода строго из 36 карт (ранги от 6 до Туза для 4 мастей), без 2-5 и джокеров.
+   - Сгенерированы HD PNG с альфа-прозрачностью и SVG-обёртки в `frontend/img/cards/`.
+
 ---
 
 ## 🗂 Список измененных и добавленных файлов
@@ -68,7 +77,7 @@
 - `backend/main.py`:
   - `check_and_send_evening_digest_on_startup`: добавлен пропуск пятницы и субботы (`today.isoweekday() in (5, 6)`).
 
-### Обработчики бота:
+### Обработчики бота и ДЗ:
 - `backend/bot/keyboards/admin_kb.py`:
   - В `get_admin_panel_keyboard()` удалены кнопки «Список предметов», «Изменить имя», «Удалить пользователя». Расширена кнопка звонков.
 - `backend/bot/handlers/admin/schedule/permanent.py`:
@@ -77,6 +86,8 @@
 - `backend/bot/handlers/admin/schedule/date_override.py`:
   - Добавлена кнопка «📌 Сделать это расписание постоянным».
   - Добавлен обработчик `cb_edit_dt_sched_make_permanent`.
+- `backend/bot/handlers/admin/homework/helpers.py` & `backend/bot/handlers/admin/homework/add.py`:
+  - Устранена автоматическая подстановка даты «завтра» для предметов вне расписания. Добавлен обязательный выбор на календаре.
 - `backend/bot/handlers/start.py`:
   - Регистрационные заявки отправляются через `notify_all_admins`.
   - Добавлена проверка `target_user.role != "pending"` в `callback_admin_approve` и `callback_admin_reject`.
@@ -91,6 +102,14 @@
   - Меню настроек и переключатели.
 - `backend/bot/handlers/economy.py`:
   - Команды `/cash` и `/work`.
+
+### Фронтенд и графика:
+- `frontend/img/cards/`:
+  - 36 карт (ранги 6..10, J, Q, K, A для 4 мастей) в форматах PNG и SVG с прозрачными скругленными углами из архива `complete-deck-playing-cards.zip`.
+- `frontend/js/durak.js`:
+  - Отображение новых PNG карт с автоматическим fallback на SVG.
+- `scripts/extract_new_cards.py`:
+  - Скрипт нарезки текстур из исходного листа игральных карт.
 
 ### Правила и стандарты кода:
 - `AGENTS.md` & `GEMINI.md`:

@@ -281,7 +281,19 @@ async def msg_add_hw_collect_content(message: Message, state: FSMContext, db_ses
     due_d_str = data.get("due_date")
     from backend.config import get_today
     today = get_today()
-    due_d = date.fromisoformat(due_d_str) if due_d_str else (today + timedelta(days=1))
+
+    if not due_d_str:
+        await state.set_state(AddHomeworkStates.entering_date)
+        kb = get_inline_calendar("adm_hw", year=today.year, month=today.month, back_callback="admin_cancel")
+        await safe_answer(
+            message,
+            "⚠️ **Дата сдачи ещё не выбрана!**\n\n"
+            "Этого предмета нет в расписании уроков. Пожалуйста, выберите дату сдачи на календаре:",
+            reply_markup=kb
+        )
+        return
+
+    due_d = date.fromisoformat(due_d_str)
     day_ru = DAYS_RU.get(due_d.isoweekday(), "")
 
     kb = InlineKeyboardMarkup(
@@ -317,7 +329,10 @@ async def cb_add_hw_save_now(callback: CallbackQuery, state: FSMContext, db_sess
     from backend.config import get_today
     today = get_today()
 
-    due_d_str = data.get("due_date") or (today + timedelta(days=1)).isoformat()
+    due_d_str = data.get("due_date")
+    if not due_d_str:
+        await callback.answer("⚠️ Сначала выберите дату сдачи ДЗ!", show_alert=True)
+        return
     due_d = date.fromisoformat(due_d_str)
 
     assigned_d_str = data.get("assigned_date") or today.isoformat()

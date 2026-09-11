@@ -124,11 +124,11 @@
     const suitName = SUIT_NAME_MAP[card.suit] || 'spades';
     const sel = selected ? ' dk-card--selected' : '';
     const cls = selectable ? ' dk-card--selectable' : '';
-    const imgSrc = `/static/img/cards/${card.rank}_${suitName}.svg`;
+    const imgSrc = `/static/img/cards/${card.rank}_${suitName}.png`;
 
     return `
       <div class="dk-card${cls}${sel}" data-suit="${card.suit}" data-rank="${card.rank}">
-        <img src="${imgSrc}" class="dk-card__img" alt="${card.rank}${card.suit}" />
+        <img src="${imgSrc}" onerror="this.onerror=null;this.src='/static/img/cards/${card.rank}_${suitName}.svg'" class="dk-card__img" alt="${card.rank}${card.suit}" />
       </div>`;
   }
 

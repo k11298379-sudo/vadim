@@ -226,6 +226,34 @@ async def proceed_to_entering_content(
     dates, is_sched = await get_upcoming_or_fallback_dates(
         db_session, subject_id, from_date=today + timedelta(days=1), limit=4
     )
+
+    if not is_sched:
+        # Урока нет в будущем расписании — НЕ ставим на завтра по умолчанию!
+        await state.update_data(
+            subject_id=subject_id,
+            due_date=None,
+            assigned_date=today.isoformat(),
+            attachments=[],
+            description=""
+        )
+        await state.set_state(AddHomeworkStates.entering_date)
+        kb = get_inline_calendar("adm_hw", year=today.year, month=today.month, back_callback="admin_cancel")
+        text = (
+            f"📚 **Добавление ДЗ — {subj_name}**\n\n"
+            "⚠️ **Этого предмета нет в будущем расписании уроков.**\n"
+            "Бот не стал автоматически назначать сдачу на завтра.\n\n"
+            "📅 **Пожалуйста, выберите дату сдачи на календаре:**"
+        )
+        if isinstance(target_msg, CallbackQuery):
+            await safe_edit_text(target_msg.message, text, reply_markup=kb)
+            try:
+                await target_msg.answer()
+            except Exception:
+                pass
+        else:
+            await safe_answer(target_msg, text, reply_markup=kb)
+        return
+
     default_d = dates[0] if dates else (today + timedelta(days=1))
 
     await state.update_data(
@@ -241,7 +269,7 @@ async def proceed_to_entering_content(
     sched_hint = " *(следующий урок)*" if is_sched else ""
     text = (
         f"📚 **Добавление ДЗ — {subj_name}**\n\n"
-        f"📅 **Дата сдачи по умолчанию:**\n"
+        f"📅 **Дата сдачи (следующий урок в расписании):**\n"
         f"👉 **{d_name}, {default_d.strftime('%d.%m.%Y')}**{sched_hint}\n\n"
         "✍️ **Отправьте задание в чат:**\n"
         "• Текстом (номера упражнений, параграфы)\n"
