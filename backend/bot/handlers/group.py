@@ -62,31 +62,36 @@ async def on_bot_added_to_group(event: ChatMemberUpdated, db_session: AsyncSessi
         parse_mode="Markdown"
     )
 
-    # Notify admin
-    if settings.ADMIN_ID:
-        inviter_name = inviter.full_name if inviter else "Неизвестно"
-        inviter_uname = f"@{inviter.username}" if inviter and inviter.username else ""
-        
-        admin_text = (
-            "🔔 **Новая заявка на авторизацию группового чата!**\n\n"
-            f"👥 **Группа:** {chat.title}\n"
-            f"🆔 **ID чата:** `{chat.id}`\n"
-            f"👤 **Добавил:** {inviter_name} {inviter_uname}"
-        )
-        try:
-            await bot.send_message(
-                chat_id=settings.ADMIN_ID,
-                text=admin_text,
-                reply_markup=get_admin_chat_approval_keyboard(chat.id),
-                parse_mode="Markdown"
-            )
-        except Exception as e:
-            print(f"Failed to notify admin about new group: {e}")
+    # Notify all admins
+    from backend.bot.services.notifier import notify_all_admins
+    inviter_name = inviter.full_name if inviter else "Неизвестно"
+    inviter_uname = f"@{inviter.username}" if inviter and inviter.username else ""
+    
+    admin_text = (
+        "🔔 **Новая заявка на авторизацию группового чата!**\n\n"
+        f"👥 **Группа:** {chat.title}\n"
+        f"🆔 **ID чата:** `{chat.id}`\n"
+        f"👤 **Добавил:** {inviter_name} {inviter_uname}"
+    )
+    await notify_all_admins(
+        bot=bot,
+        session=db_session,
+        text=admin_text,
+        reply_markup=get_admin_chat_approval_keyboard(chat.id)
+    )
 
 # Admin approve group callback
 @router.callback_query(F.data.startswith("admin_chat_approve_"))
 async def cb_admin_approve_chat(callback: CallbackQuery, db_session: AsyncSession, bot: Bot):
     chat_id = int(callback.data.replace("admin_chat_approve_", ""))
+    existing_chat = await get_group_chat_by_id(db_session, chat_id)
+    if not existing_chat:
+        await callback.answer("Чат не найден", show_alert=True)
+        return
+    if existing_chat.role != "pending":
+        await callback.answer(f"Заявка чата уже обработана (статус: {existing_chat.role})!", show_alert=True)
+        return
+
     chat = await update_group_chat_role(db_session, chat_id, "approved")
 
     await callback.message.edit_text(
@@ -113,6 +118,14 @@ async def cb_admin_approve_chat(callback: CallbackQuery, db_session: AsyncSessio
 @router.callback_query(F.data.startswith("admin_chat_reject_"))
 async def cb_admin_reject_chat(callback: CallbackQuery, db_session: AsyncSession, bot: Bot):
     chat_id = int(callback.data.replace("admin_chat_reject_", ""))
+    existing_chat = await get_group_chat_by_id(db_session, chat_id)
+    if not existing_chat:
+        await callback.answer("Чат не найден", show_alert=True)
+        return
+    if existing_chat.role != "pending":
+        await callback.answer(f"Заявка чата уже обработана (статус: {existing_chat.role})!", show_alert=True)
+        return
+
     await update_group_chat_role(db_session, chat_id, "rejected")
 
     await callback.message.edit_text(

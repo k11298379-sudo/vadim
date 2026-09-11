@@ -56,7 +56,7 @@ async def cmd_test_digest(message: Message, bot: Bot, current_user: User):
         return
     await message.answer("⏳ Запускаю тестовую рассылку вечернего напоминания в ЛС...")
     from backend.bot.services.notifier import send_evening_digest
-    count = await send_evening_digest(bot)
+    count = await send_evening_digest(bot, force=True)
     await message.answer(f"✅ Персональные напоминания с чек-листом успешно разосланы в ЛС {count} ученикам!")
 
 

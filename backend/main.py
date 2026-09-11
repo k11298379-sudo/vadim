@@ -77,6 +77,9 @@ async def lifespan(app: FastAPI):
             await asyncio.sleep(3)
             from backend.config import get_current_date_and_hour
             today, current_hour = get_current_date_and_hour()
+            if today.isoweekday() in (5, 6):
+                # По пятницам и субботам вечером уведомления не отправляются
+                return
             if current_hour >= 19:
                 from backend.db.crud import get_class_setting, set_class_setting
                 async with async_session_factory() as session:

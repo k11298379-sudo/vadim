@@ -93,6 +93,14 @@ async def get_active_users(session: AsyncSession) -> List[User]:
     return list(result.scalars().all())
 
 
+async def get_admin_users(session: AsyncSession) -> List[User]:
+    """Возвращает всех пользователей с ролью администратора (admin)"""
+    result = await session.execute(
+        select(User).where(User.role == "admin").order_by(User.full_name)
+    )
+    return list(result.scalars().all())
+
+
 async def get_notifiable_users(session: AsyncSession) -> List[User]:
     result = await session.execute(
         select(User).where(

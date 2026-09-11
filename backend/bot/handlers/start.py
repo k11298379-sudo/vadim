@@ -42,24 +42,21 @@ async def register_pending_user_and_notify_admin(
     else:
         return user
 
-    # Notify admin about registration request
-    if settings.ADMIN_ID:
-        uname_str = f"@{username}" if username else "без @username"
-        title = "🔔 **Повторная заявка на доступ к боту!**" if is_reapply else "🔔 **Новая заявка на доступ к боту!**"
-        admin_text = (
-            f"{title}\n\n"
-            f"👤 **Пользователь:** {full_name}\n"
-            f"🔗 **Telegram:** {uname_str}"
-        )
-        try:
-            await bot.send_message(
-                chat_id=settings.ADMIN_ID,
-                text=admin_text,
-                reply_markup=get_admin_approval_keyboard(user_id),
-                parse_mode="Markdown"
-            )
-        except Exception as e:
-            print(f"Failed to notify admin: {e}")
+    # Notify all admins about registration request
+    from backend.bot.services.notifier import notify_all_admins
+    uname_str = f"@{username}" if username else "без @username"
+    title = "🔔 **Повторная заявка на доступ к боту!**" if is_reapply else "🔔 **Новая заявка на доступ к боту!**"
+    admin_text = (
+        f"{title}\n\n"
+        f"👤 **Пользователь:** {full_name}\n"
+        f"🔗 **Telegram:** {uname_str}"
+    )
+    await notify_all_admins(
+        bot=bot,
+        session=session,
+        text=admin_text,
+        reply_markup=get_admin_approval_keyboard(user_id)
+    )
     return user
 
 
@@ -116,6 +113,9 @@ async def callback_admin_approve(callback: CallbackQuery, state: FSMContext, db_
     target_user = await get_user_by_tg_id(db_session, target_tg_id)
     if not target_user:
         await callback.answer("Пользователь не найден", show_alert=True)
+        return
+    if target_user.role != "pending":
+        await callback.answer(f"Заявка уже обработана (статус: {target_user.role})!", show_alert=True)
         return
 
     await state.set_state(ApproveUserStates.entering_name)
@@ -227,6 +227,14 @@ async def msg_admin_approve_custom_name(message: Message, state: FSMContext, db_
 @router.callback_query(F.data.startswith("admin_reject_"))
 async def callback_admin_reject(callback: CallbackQuery, db_session: AsyncSession, bot: Bot):
     target_tg_id = int(callback.data.replace("admin_reject_", ""))
+    target_user = await get_user_by_tg_id(db_session, target_tg_id)
+    if not target_user:
+        await callback.answer("Пользователь не найден", show_alert=True)
+        return
+    if target_user.role != "pending":
+        await callback.answer(f"Заявка уже обработана (статус: {target_user.role})!", show_alert=True)
+        return
+
     await update_user_role(db_session, target_tg_id, "rejected")
     
     await callback.message.edit_text(

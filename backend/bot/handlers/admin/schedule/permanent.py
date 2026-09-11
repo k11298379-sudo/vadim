@@ -47,6 +47,7 @@ async def cb_start_edit_schedule(callback: CallbackQuery, state: FSMContext, cur
             current_row = []
     if current_row:
         buttons.append(current_row)
+    buttons.append([InlineKeyboardButton(text="📅 Скопировать с конкретной даты", callback_data="adm_sc_copy_from_date")])
     buttons.append([InlineKeyboardButton(text="🔙 В меню", callback_data="admin_menu_back")])
 
     await state.set_state(EditScheduleStates.choosing_day)
@@ -224,5 +225,80 @@ async def cb_edit_sched_save(callback: CallbackQuery, state: FSMContext, db_sess
         await callback.answer("Сохранено!")
     except Exception:
         pass
+
+
+@router.callback_query(F.data == "adm_sc_copy_from_date")
+async def cb_start_copy_from_date(callback: CallbackQuery, state: FSMContext, current_user: User):
+    if not is_admin(current_user, callback.from_user.id):
+        return
+    today = date.today()
+    kb = get_inline_calendar("adm_sccpy", year=today.year, month=today.month, back_callback="admin_edit_schedule")
+    await callback.message.edit_text(
+        "📅 **Копирование расписания с даты:**\n\n"
+        "Выберите дату, расписание которой нужно сохранить как постоянное (для соответствующего дня недели):",
+        reply_markup=kb,
+        parse_mode="Markdown"
+    )
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("cal_nav_adm_sccpy_"))
+async def cb_cal_nav_adm_sccpy(callback: CallbackQuery):
+    parts = callback.data.split("_")
+    year = int(parts[4])
+    month = int(parts[5])
+    kb = get_inline_calendar("adm_sccpy", year=year, month=month, back_callback="admin_edit_schedule")
+    await callback.message.edit_text(
+        "📅 **Копирование расписания с даты:**\n\n"
+        "Выберите дату, расписание которой нужно сохранить как постоянное (для соответствующего дня недели):",
+        reply_markup=kb,
+        parse_mode="Markdown"
+    )
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("cal_act_adm_sccpy_"))
+async def cb_cal_act_adm_sccpy(callback: CallbackQuery, state: FSMContext, db_session: AsyncSession):
+    parts = callback.data.split("_")
+    year = int(parts[4])
+    month = int(parts[5])
+    day = int(parts[6])
+    target_d = date(year, month, day)
+
+    lessons = await get_schedule_for_date(db_session, target_d)
+    if not lessons:
+        await callback.answer("На выбранную дату нет уроков для копирования!", show_alert=True)
+        return
+
+    day_num = target_d.isoweekday()
+    day_name = DAYS_RU.get(day_num, "день")
+
+    lessons_tuples = [(l.lesson_number, l.subject.name) for l in lessons]
+    await save_bulk_permanent_schedule(db_session, day_num, lessons_tuples)
+    await auto_shift_active_homeworks(db_session)
+
+    lesson_lines = [f"{l.lesson_number}. {l.subject.name}" for l in lessons]
+    lessons_str = "\n".join(lesson_lines)
+
+    await state.clear()
+    await callback.message.edit_text(
+        f"✅ **Расписание с даты {target_d.strftime('%d.%m.%Y')} успешно установлено как постоянное на каждый {day_name}!**\n\n"
+        f"🗓 **Постоянные уроки ({day_name}):**\n"
+        f"{lessons_str}\n\n"
+        f"_Теперь это расписание действует на все недели вперед как постоянное._",
+        reply_markup=get_admin_panel_keyboard(),
+        parse_mode="Markdown"
+    )
+    try:
+        await callback.answer("Расписание скопировано в постоянное!")
+    except Exception:
+        pass
+
 
 

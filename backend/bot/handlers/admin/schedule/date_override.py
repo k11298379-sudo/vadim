@@ -92,6 +92,7 @@ async def cb_cal_act_adm_dtsched(callback: CallbackQuery, state: FSMContext, db_
         [InlineKeyboardButton(text="🎛 Пошаговый конструктор (кнопками)", callback_data="adm_dt_wizard")],
         [InlineKeyboardButton(text="✏️ Ввести весь день текстом (быстро)", callback_data="adm_dt_bulk")],
         [InlineKeyboardButton(text="🔢 Изменить отдельный урок", callback_data="adm_dt_single")],
+        [InlineKeyboardButton(text="📌 Сделать это расписание постоянным", callback_data="adm_dt_make_permanent")],
         [InlineKeyboardButton(text="🗑 Сбросить (к постоянному)", callback_data="adm_dt_reset")],
         [InlineKeyboardButton(text="🔙 К выбору даты", callback_data="admin_edit_date_schedule")]
     ]
@@ -105,6 +106,44 @@ async def cb_cal_act_adm_dtsched(callback: CallbackQuery, state: FSMContext, db_
     )
     try:
         await callback.answer()
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data == "adm_dt_make_permanent")
+async def cb_edit_dt_sched_make_permanent(callback: CallbackQuery, state: FSMContext, db_session: AsyncSession):
+    data = await state.get_data()
+    target_d_str = data.get("edit_target_date")
+    if not target_d_str:
+        await callback.answer("Выберите дату заново", show_alert=True)
+        return
+    target_d = date.fromisoformat(target_d_str)
+    day_num = target_d.isoweekday()
+    day_name = DAYS_RU.get(day_num, "день")
+
+    lessons = await get_schedule_for_date(db_session, target_d)
+    if not lessons:
+        await callback.answer("На эту дату нет уроков для сохранения!", show_alert=True)
+        return
+
+    lessons_tuples = [(l.lesson_number, l.subject.name) for l in lessons]
+    await save_bulk_permanent_schedule(db_session, day_num, lessons_tuples)
+    await clear_date_schedule(db_session, target_d)
+
+    lesson_lines = [f"{l.lesson_number}. {l.subject.name}" for l in lessons]
+    lessons_str = "\n".join(lesson_lines)
+
+    await state.clear()
+    await callback.message.edit_text(
+        f"✅ **Расписание с даты {target_d.strftime('%d.%m.%Y')} успешно установлено как постоянное на каждый {day_name}!**\n\n"
+        f"🗓 **Постоянные уроки ({day_name}):**\n"
+        f"{lessons_str}\n\n"
+        f"_Теперь это расписание действует на все недели вперед как постоянное._",
+        reply_markup=get_admin_panel_keyboard(),
+        parse_mode="Markdown"
+    )
+    try:
+        await callback.answer("Установлено как постоянное!")
     except Exception:
         pass
 

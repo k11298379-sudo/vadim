@@ -19,7 +19,6 @@ def get_admin_panel_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="📢 Скинуть расписание", callback_data="admin_broadcast_schedule")
             ],
             [
-                InlineKeyboardButton(text="📚 Список предметов", callback_data="admin_manage_subjects"),
                 InlineKeyboardButton(text="🔔 Звонки и перемены", callback_data="admin_edit_bells")
             ],
             [
@@ -29,10 +28,6 @@ def get_admin_panel_keyboard() -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(text="👥 Заявки на вход", callback_data="admin_view_pending"),
                 InlineKeyboardButton(text="📋 Права доступа", callback_data="admin_view_students")
-            ],
-            [
-                InlineKeyboardButton(text="✏️ Изменить имя", callback_data="admin_change_name"),
-                InlineKeyboardButton(text="🗑 Удалить пользователя", callback_data="admin_delete_user")
             ]
         ]
     )

@@ -656,13 +656,14 @@ def test_keyboards_and_fastapi():
     adm_kb = get_admin_panel_keyboard()
     adm_cb = [b.callback_data for row in adm_kb.inline_keyboard for b in row]
     assert "admin_delete_hw" in adm_cb, "admin_delete_hw must be present in admin panel"
-    assert "admin_delete_user" in adm_cb, "admin_delete_user must be present in admin panel"
+    assert "admin_delete_user" not in adm_cb, "admin_delete_user removed from main admin panel"
+    assert "admin_manage_subjects" not in adm_cb, "admin_manage_subjects removed from main admin panel"
     assert "admin_broadcast_custom" in adm_cb, "admin_broadcast_custom must be present in admin panel"
     assert "admin_edit_date_schedule" in adm_cb
     assert "admin_edit_schedule" in adm_cb
     assert "admin_manage_duty" in adm_cb
     assert "admin_broadcast_schedule" in adm_cb, "admin_broadcast_schedule must be present in admin panel"
-    print("[OK] Admin panel with HW delete, user delete, urgent broadcast, schedule broadcast, duty announcement, date schedule, permanent schedule & duty roster verified.")
+    print("[OK] Admin panel verified: HW delete, urgent broadcast, schedule broadcast, duty announcement, date schedule, permanent schedule & duty roster verified; redundant buttons removed.")
 
     # Test Schedule Broadcast Keyboards
     from backend.bot.keyboards.admin_kb import get_schedule_broadcast_day_keyboard, get_schedule_broadcast_destination_keyboard

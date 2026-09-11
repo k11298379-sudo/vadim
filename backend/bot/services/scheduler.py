@@ -15,7 +15,12 @@ scheduler = AsyncIOScheduler(timezone=settings.TIMEZONE)
 def setup_scheduler(bot: Bot):
     try:
         hour, minute = settings.NOTIFICATION_TIME_EVENING.split(":")
-        trigger = CronTrigger(hour=int(hour), minute=int(minute), timezone=settings.TIMEZONE)
+        trigger = CronTrigger(
+            day_of_week="mon-thu,sat,sun",
+            hour=int(hour),
+            minute=int(minute),
+            timezone=settings.TIMEZONE
+        )
 
         scheduler.add_job(
             send_evening_digest,

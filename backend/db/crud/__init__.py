@@ -11,6 +11,7 @@ from backend.db.crud.users import (
     update_user_tester_status,
     get_pending_users,
     get_active_users,
+    get_admin_users,
     get_notifiable_users,
     toggle_user_notifications,
     get_all_users,
