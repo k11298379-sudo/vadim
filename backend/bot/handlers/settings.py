@@ -13,26 +13,31 @@ from backend.db.models import User
 router = Router(name="settings_router")
 
 
-def build_settings_keyboard(canteen_on: bool, currency_on: bool) -> InlineKeyboardMarkup:
+def build_settings_keyboard(canteen_on: bool, currency_on: bool, is_admin: bool = False) -> InlineKeyboardMarkup:
     canteen_icon = "✅ Вкл" if canteen_on else "⬜ Выкл"
     currency_icon = "✅ Вкл" if currency_on else "⬜ Выкл"
 
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=f"🍽 Столовая (после 5 урока): {canteen_icon}",
-                    callback_data="set_canteen_toggle"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text=f"🪙 Игровая экосистема: {currency_icon}",
-                    callback_data="set_currency_toggle"
-                )
-            ]
+    buttons = [
+        [
+            InlineKeyboardButton(
+                text=f"🍽 Столовая (после 5 урока): {canteen_icon}",
+                callback_data="set_canteen_toggle"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=f"🪙 Игровая экосистема: {currency_icon}",
+                callback_data="set_currency_toggle"
+            )
         ]
-    )
+    ]
+
+    if is_admin:
+        buttons.append([
+            InlineKeyboardButton(text="🔙 В панель управления", callback_data="admin_menu_back")
+        ])
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def format_settings_text(canteen_on: bool, currency_on: bool, coins: int) -> str:
@@ -49,18 +54,55 @@ def format_settings_text(canteen_on: bool, currency_on: bool, coins: int) -> str
     )
 
 
+ECOSYSTEM_GUIDE_TEXT = (
+    "🎉 <b>Игровая экосистема 11 «Б» активирована!</b>\n\n"
+    "Вам стали доступны внутриклассная экономика, монеты и карточные баталии:\n\n"
+    "🃏 <b>Игра «Дурак» в Mini App:</b>\n"
+    "• Нажмите кнопку <b>«📱 Mini App 11 «Б»</b> внизу экрана → перейдите во вкладку <b>«Игры»</b> → <b>«Дурак»</b>.\n"
+    "• Колода из 36 карт, качественные текстуры, козырь виден прямо на столе настоящей картой!\n"
+    "• Доступны одиночная игра против бота и онлайн-комнаты с одноклассниками.\n"
+    "• <b>Ставки:</b> выбирайте быстрые суммы (10, 25, 50, 100 🪙), вводите <b>любую произвольную ставку</b> или ставьте всё кнопкой <b>«🔥 Ва-банк»</b>.\n"
+    "• Победитель забирает весь банк игры!\n\n"
+    "💰 <b>Команды бота:</b>\n"
+    "• <code>/cash</code> (или <code>/balance</code>) — проверить текущий баланс монет.\n"
+    "• <code>/work</code> — ежедневная подработка (+75 🪙 раз в сутки).\n\n"
+    "🏆 <b>Рейтинг богачей:</b>\n"
+    "• В меню Дурака нажмите «🏆 Рейтинг богачей», чтобы увидеть лидеров класса по балансу монет.\n\n"
+    "<i>Удачи в играх! Экосистему всегда можно отключить здесь же в настройках.</i>"
+)
+
+
 @router.message(F.text == "⚙️ Настройки")
 @router.message(Command("settings"))
 async def show_settings(message: Message, current_user: User):
     canteen_on = bool(getattr(current_user, "canteen_reminder_enabled", False))
     currency_on = bool(getattr(current_user, "currency_ecosystem_enabled", False))
     coins = getattr(current_user, "coins", 100) or 0
+    is_admin = bool(getattr(current_user, "is_admin", False))
 
     await message.answer(
         format_settings_text(canteen_on, currency_on, coins),
-        reply_markup=build_settings_keyboard(canteen_on, currency_on),
+        reply_markup=build_settings_keyboard(canteen_on, currency_on, is_admin=is_admin),
         parse_mode="HTML"
     )
+
+
+@router.callback_query(F.data == "open_settings")
+async def cb_open_settings(callback: CallbackQuery, current_user: User):
+    canteen_on = bool(getattr(current_user, "canteen_reminder_enabled", False))
+    currency_on = bool(getattr(current_user, "currency_ecosystem_enabled", False))
+    coins = getattr(current_user, "coins", 100) or 0
+    is_admin = bool(getattr(current_user, "is_admin", False))
+
+    await callback.message.edit_text(
+        format_settings_text(canteen_on, currency_on, coins),
+        reply_markup=build_settings_keyboard(canteen_on, currency_on, is_admin=is_admin),
+        parse_mode="HTML"
+    )
+    try:
+        await callback.answer()
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data == "set_canteen_toggle")
@@ -70,10 +112,11 @@ async def cb_toggle_canteen(callback: CallbackQuery, db_session: AsyncSession, c
     user = await get_user_by_tg_id(db_session, current_user.tg_id) or current_user
     currency_on = bool(getattr(user, "currency_ecosystem_enabled", False))
     coins = getattr(user, "coins", 100) or 0
+    is_admin = bool(getattr(user, "is_admin", False))
 
     await callback.message.edit_text(
         format_settings_text(new_val, currency_on, coins),
-        reply_markup=build_settings_keyboard(new_val, currency_on),
+        reply_markup=build_settings_keyboard(new_val, currency_on, is_admin=is_admin),
         parse_mode="HTML"
     )
     status_msg = "✅ Напоминание о столовой включено!" if new_val else "⬜ Напоминание о столовой выключено"
@@ -87,15 +130,19 @@ async def cb_toggle_currency(callback: CallbackQuery, db_session: AsyncSession, 
     user = await get_user_by_tg_id(db_session, current_user.tg_id) or current_user
     canteen_on = bool(getattr(user, "canteen_reminder_enabled", False))
     coins = getattr(user, "coins", 100) or 0
+    is_admin = bool(getattr(user, "is_admin", False))
 
     await callback.message.edit_text(
         format_settings_text(canteen_on, new_val, coins),
-        reply_markup=build_settings_keyboard(canteen_on, new_val),
+        reply_markup=build_settings_keyboard(canteen_on, new_val, is_admin=is_admin),
         parse_mode="HTML"
     )
     status_msg = (
-        "🪙 Игровая экосистема включена! Доступны /cash, /work и игра Дурак со ставками."
+        "🪙 Игровая экосистема включена!"
         if new_val else
         "⬜ Игровая экосистема выключена"
     )
-    await callback.answer(status_msg, show_alert=new_val)
+    await callback.answer(status_msg)
+
+    if new_val:
+        await callback.message.answer(ECOSYSTEM_GUIDE_TEXT, parse_mode="HTML")

@@ -1,14 +1,4 @@
-// ==============================================================================
 // МОДУЛЬ МИНИ-ИГР ДЛЯ MINI APP — КООРДИНАТОР И РОУТЕР
-// Модули игр:
-// - 2048: games/game_2048.js (window.GAMES_2048)
-// - Крестики-нолики: games/game_tictactoe.js (window.GAMES_TICTACTOE)
-// - Змейка: games/game_snake.js (window.GAMES_SNAKE)
-// - Тетрис: games/game_tetris.js (window.GAMES_TETRIS)
-// - Шахматы: games/game_chess.js (window.GAMES_CHESS)
-// - Дурак: durak.js (window.DURAK)
-// ==============================================================================
-
 (function () {
   'use strict';
 
@@ -311,33 +301,39 @@
     `;
   }
 
-  // ==============================================================================
-  // DURAK (Мост к window.DURAK)
-  // ==============================================================================
-
+  // DURAK bridge
   function renderDurakHTML() {
     return `<div id="durak-root" style="min-height:400px;"></div>`;
   }
 
   function initDurak() {
+    const el = document.getElementById('durak-root');
+    if (!el) return;
     if (typeof window.DURAK !== 'undefined') {
-      const el = document.getElementById('durak-root');
-      if (el) window.DURAK.init(el);
-    } else {
-      const script = document.createElement('script');
-      script.src = '/static/js/durak.js?v=20260911_1';
-      script.onload = () => {
-        const el = document.getElementById('durak-root');
-        if (el && window.DURAK) window.DURAK.init(el);
-      };
-      document.head.appendChild(script);
+      window.DURAK.init(el);
+      return;
     }
+    const scripts = [
+      '/static/js/durak/durak_cards.js?v=20260911_2',
+      '/static/js/durak/durak_menu.js?v=20260911_2',
+      '/static/js/durak/durak_game.js?v=20260911_2',
+      '/static/js/durak.js?v=20260911_2'
+    ];
+    let idx = 0;
+    function loadNext() {
+      if (idx >= scripts.length) {
+        if (window.DURAK) window.DURAK.init(el);
+        return;
+      }
+      const s = document.createElement('script');
+      s.src = scripts[idx++];
+      s.onload = loadNext;
+      document.head.appendChild(s);
+    }
+    loadNext();
   }
 
-  // ==============================================================================
   // ПУБЛИЧНЫЙ ФАСАД window.GAMES (100% совместимость со всеми onclick в HTML)
-  // ==============================================================================
-
   window.GAMES = {
     init: initGames,
     switchGame: switchGame,
