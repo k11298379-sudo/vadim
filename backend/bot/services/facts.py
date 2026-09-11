@@ -345,8 +345,8 @@ async def fetch_fact_from_gemini(
     slot = target_hour * 2 + min_slot
     topic = ROTATING_TOPICS[slot % len(ROTATING_TOPICS)]
 
-    # gemini-3.5-flash-lite provides fast and reliable responses on free-tier without 503 errors
-    models_to_try = ["gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-flash-latest"]
+    # Gemini 3.6 Flash is the active official model for generateContent
+    models_to_try = ["gemini-3.6-flash", "gemini-flash-latest"]
 
     prompt = (
         "Ты — ведущий научно-популярного канала для старшеклассников (11 класс). "

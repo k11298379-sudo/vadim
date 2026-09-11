@@ -663,7 +663,8 @@ def test_keyboards_and_fastapi():
     assert "admin_edit_schedule" in adm_cb
     assert "admin_manage_duty" in adm_cb
     assert "admin_broadcast_schedule" in adm_cb, "admin_broadcast_schedule must be present in admin panel"
-    print("[OK] Admin panel verified: HW delete, urgent broadcast, schedule broadcast, duty announcement, date schedule, permanent schedule & duty roster verified; redundant buttons removed.")
+    assert "admin_give_coins" in adm_cb, "admin_give_coins must be present in admin panel"
+    print("[OK] Admin panel verified: HW delete, urgent broadcast, schedule broadcast, duty announcement, date schedule, permanent schedule, duty roster & give coins verified; redundant buttons removed.")
 
     # Test Schedule Broadcast Keyboards
     from backend.bot.keyboards.admin_kb import get_schedule_broadcast_day_keyboard, get_schedule_broadcast_destination_keyboard

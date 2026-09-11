@@ -28,10 +28,24 @@ from backend.api.routes import api_router
 from backend.bot.bot import create_bot_and_dispatcher
 from backend.bot.services.scheduler import setup_scheduler
 
-# Configure logging
+# Configure logging with console and file handler
+from logging.handlers import RotatingFileHandler
+os.makedirs("data", exist_ok=True)
+_file_handler = RotatingFileHandler(
+    os.path.join("data", "bot.log"),
+    maxBytes=5 * 1024 * 1024,
+    backupCount=3,
+    encoding="utf-8"
+)
+_file_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        _file_handler
+    ]
 )
 logger = logging.getLogger("botdz")
 

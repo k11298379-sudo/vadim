@@ -28,6 +28,9 @@ def get_admin_panel_keyboard() -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(text="👥 Заявки на вход", callback_data="admin_view_pending"),
                 InlineKeyboardButton(text="📋 Права доступа", callback_data="admin_view_students")
+            ],
+            [
+                InlineKeyboardButton(text="🪙 Выдать монеты", callback_data="admin_give_coins")
             ]
         ]
     )
