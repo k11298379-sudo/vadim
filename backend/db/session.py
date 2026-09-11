@@ -64,6 +64,14 @@ async def init_db():
                     await conn.execute(text("ALTER TABLE users ADD COLUMN custom_name VARCHAR(255);"))
                 if "is_tester" not in cols_u:
                     await conn.execute(text("ALTER TABLE users ADD COLUMN is_tester BOOLEAN DEFAULT 0;"))
+                if "canteen_reminder_enabled" not in cols_u:
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN canteen_reminder_enabled BOOLEAN DEFAULT 0;"))
+                if "currency_ecosystem_enabled" not in cols_u:
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN currency_ecosystem_enabled BOOLEAN DEFAULT 0;"))
+                if "coins" not in cols_u:
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN coins INTEGER DEFAULT 100;"))
+                if "last_work_date" not in cols_u:
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN last_work_date DATE;"))
 
                 res_dg = await conn.execute(text("PRAGMA table_info(duty_groups);"))
                 cols_dg = [row[1] for row in res_dg.fetchall()]
@@ -87,6 +95,10 @@ async def init_db():
                 await conn.execute(text("ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS assigned_date DATE;"))
                 await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_name VARCHAR(255);"))
                 await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_tester BOOLEAN DEFAULT FALSE;"))
+                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS canteen_reminder_enabled BOOLEAN DEFAULT FALSE;"))
+                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS currency_ecosystem_enabled BOOLEAN DEFAULT FALSE;"))
+                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS coins INTEGER DEFAULT 100;"))
+                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_work_date DATE;"))
                 await conn.execute(text("ALTER TABLE duty_groups ADD COLUMN IF NOT EXISTS member_ids JSONB;"))
                 await conn.execute(text("ALTER TABLE daily_facts ADD COLUMN IF NOT EXISTS hour INTEGER DEFAULT 0;"))
                 await conn.execute(text("ALTER TABLE daily_facts ADD COLUMN IF NOT EXISTS minute INTEGER DEFAULT 0;"))

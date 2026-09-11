@@ -58,3 +58,14 @@ async def cmd_test_digest(message: Message, bot: Bot, current_user: User):
     from backend.bot.services.notifier import send_evening_digest
     count = await send_evening_digest(bot)
     await message.answer(f"✅ Персональные напоминания с чек-листом успешно разосланы в ЛС {count} ученикам!")
+
+
+@router.message(F.text.in_(["/test_canteen", "/canteen"]))
+async def cmd_test_canteen(message: Message, bot: Bot, current_user: User):
+    if not is_admin(current_user, message.from_user.id):
+        return
+    await message.answer("⏳ Запускаю тестовую отправку 3 сообщений о столовой в ЛС...")
+    from backend.bot.services.canteen import send_canteen_reminder
+    count = await send_canteen_reminder(bot, force=True)
+    await message.answer(f"✅ Напоминание о столовой (3 сообщения) успешно отправлено {count} пользователям с включённой настройкой!")
+

@@ -1,0 +1,391 @@
+"""
+Игра «Дурак» — pure-Python логика.
+Не зависит от Telegram/FastAPI — можно тестировать отдельно.
+
+Правила: стандартный «Подкидной Дурак».
+- Колода 36 карт (6..Туз), козырь — масть нижней карты.
+- Ход: атакующий бросает карту, защищающийся отбивает или берёт.
+- Победитель тот, кто первым избавился от карт.
+- Проигравший («дурак») — последний с картами.
+"""
+import random
+import uuid
+from typing import Optional
+
+SUITS = ["♠", "♥", "♦", "♣"]
+RANKS = ["6", "7", "8", "9", "10", "J", "Q", "K", "A"]
+RANK_ORDER = {r: i for i, r in enumerate(RANKS)}
+
+
+class Card:
+    __slots__ = ("suit", "rank")
+
+    def __init__(self, suit: str, rank: str):
+        self.suit = suit
+        self.rank = rank
+
+    def beats(self, other: "Card", trump: str) -> bool:
+        """Может ли эта карта побить other?"""
+        if self.suit == other.suit:
+            return RANK_ORDER[self.rank] > RANK_ORDER[other.rank]
+        if self.suit == trump and other.suit != trump:
+            return True
+        return False
+
+    def to_dict(self) -> dict:
+        return {"suit": self.suit, "rank": self.rank}
+
+    @staticmethod
+    def from_dict(d: dict) -> "Card":
+        return Card(d["suit"], d["rank"])
+
+    def __repr__(self) -> str:
+        return f"{self.rank}{self.suit}"
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, Card) and self.suit == other.suit and self.rank == other.rank
+
+    def __hash__(self):
+        return hash((self.suit, self.rank))
+
+
+class Deck:
+    def __init__(self):
+        self._cards = [Card(s, r) for s in SUITS for r in RANKS]
+        random.shuffle(self._cards)
+
+    def deal(self, count: int) -> list[Card]:
+        taken = self._cards[:count]
+        self._cards = self._cards[count:]
+        return taken
+
+    def __len__(self) -> int:
+        return len(self._cards)
+
+    @property
+    def trump_card(self) -> Optional[Card]:
+        return self._cards[-1] if self._cards else None
+
+
+class DurakGame:
+    """
+    Состояние одной партии «Дурака».
+
+    players_count: 2..6
+    bot_player: если True — второй игрок управляется ботом.
+    """
+
+    def __init__(self, player_ids: list[int], bot_indices: Optional[list[int]] = None, stake: int = 0):
+        if not (2 <= len(player_ids) <= 6):
+            raise ValueError("Нужно от 2 до 6 игроков")
+
+        self.game_id = str(uuid.uuid4())[:8]
+        self.player_ids = player_ids
+        self.bot_indices = set(bot_indices or [])
+        self.stake = max(0, int(stake))
+        self.total_pot = self.stake * len(player_ids)
+
+        deck = Deck()
+        self.trump_suit: str = deck.trump_card.suit  # type: ignore
+        self.trump_card: Optional[dict] = deck.trump_card.to_dict() if deck.trump_card else None
+
+        # Раздача по 6 карт
+        self.hands: dict[int, list[dict]] = {}
+        for pid in player_ids:
+            dealt = deck.deal(6)
+            self.hands[pid] = [c.to_dict() for c in dealt]
+
+        self.deck: list[dict] = [c.to_dict() for c in deck._cards]  # остаток колоды
+
+        # Стол: список {"attack": card_dict, "defend": card_dict | null}
+        self.table: list[dict] = []
+
+        # Определяем, кто первым ходит — у кого наименьший козырь
+        self.current_attacker: int = self._find_first_attacker()
+        self.current_defender: int = self._next_player(self.current_attacker)
+
+        # Фазы: "attack", "defend", "done"
+        self.phase: str = "attack"
+        self.winner: Optional[int] = None  # None пока игра идёт
+        self.loser: Optional[int] = None
+        self.beaten: list[dict] = []  # сыгранные карты (отбой)
+
+    # ------------------------------------------------------------------
+    # Вспомогательные
+    # ------------------------------------------------------------------
+
+    def _find_first_attacker(self) -> int:
+        best_pid = self.player_ids[0]
+        best_rank = None
+        for pid in self.player_ids:
+            trump_cards = [Card.from_dict(c) for c in self.hands[pid] if c["suit"] == self.trump_suit]
+            if trump_cards:
+                min_card = min(trump_cards, key=lambda c: RANK_ORDER[c.rank])
+                if best_rank is None or RANK_ORDER[min_card.rank] < RANK_ORDER[best_rank]:
+                    best_rank = min_card.rank
+                    best_pid = pid
+        return best_pid
+
+    def _next_player(self, pid: int) -> int:
+        idx = self.player_ids.index(pid)
+        # Пропускаем вышедших игроков (пустая рука + пустая колода)
+        for _ in range(len(self.player_ids) - 1):
+            idx = (idx + 1) % len(self.player_ids)
+            nxt = self.player_ids[idx]
+            if self.hands[nxt] or self.deck:
+                return nxt
+        return self.player_ids[(self.player_ids.index(pid) + 1) % len(self.player_ids)]
+
+    def _refill_hands(self):
+        """Дотянуть карты до 6 после каждого хода (сначала атакующий)."""
+        order = [self.current_attacker] + [
+            p for p in self.player_ids if p != self.current_attacker and p != self.current_defender
+        ] + [self.current_defender]
+
+        for pid in order:
+            while self.deck and len(self.hands[pid]) < 6:
+                self.hands[pid].append(self.deck.pop(0))
+
+    def _check_game_over(self) -> bool:
+        """Проверить, закончилась ли игра."""
+        if self.deck:
+            return False
+        players_with_cards = [p for p in self.player_ids if self.hands[p]]
+        if len(players_with_cards) <= 1:
+            if len(players_with_cards) == 1:
+                self.loser = players_with_cards[0]
+            winners = [p for p in self.player_ids if not self.hands[p]]
+            self.winner = winners[0] if winners else None
+            self.phase = "done"
+            return True
+        return False
+
+    # ------------------------------------------------------------------
+    # Игровые действия
+    # ------------------------------------------------------------------
+
+    def attack(self, attacker_id: int, card_dict: dict) -> dict:
+        """Атака картой."""
+        if self.phase != "attack":
+            return {"ok": False, "error": "Сейчас не фаза атаки"}
+        if attacker_id != self.current_attacker:
+            return {"ok": False, "error": "Не ваш ход атаковать"}
+
+        card = Card.from_dict(card_dict)
+
+        # Проверка: карта есть в руке
+        if card_dict not in self.hands[attacker_id]:
+            return {"ok": False, "error": "Карты нет в руке"}
+
+        # Проверка: первая карта стола — любая; следующие — только того же ранга
+        if self.table:
+            ranks_on_table = set()
+            for slot in self.table:
+                ranks_on_table.add(slot["attack"]["rank"])
+                if slot.get("defend"):
+                    ranks_on_table.add(slot["defend"]["rank"])
+            if card.rank not in ranks_on_table:
+                return {"ok": False, "error": "Можно подкидывать только карты тех же рангов"}
+
+        # Ограничение: не больше 6 карт на столе и не больше карт в руке защитника
+        if len(self.table) >= 6 or len(self.table) >= len(self.hands[self.current_defender]):
+            return {"ok": False, "error": "Больше карт подкидывать нельзя"}
+
+        self.hands[attacker_id].remove(card_dict)
+        self.table.append({"attack": card_dict, "defend": None})
+        self.phase = "defend"
+        return {"ok": True}
+
+    def defend(self, defender_id: int, attack_card_dict: dict, defend_card_dict: dict) -> dict:
+        """Защита: бить карту attack_card_dict картой defend_card_dict."""
+        if self.phase != "defend":
+            return {"ok": False, "error": "Сейчас не фаза защиты"}
+        if defender_id != self.current_defender:
+            return {"ok": False, "error": "Не ваш ход защищаться"}
+
+        # Найти незакрытый слот
+        slot = None
+        for s in self.table:
+            if s["attack"] == attack_card_dict and s["defend"] is None:
+                slot = s
+                break
+        if slot is None:
+            return {"ok": False, "error": "Карта для отбоя не найдена на столе"}
+
+        if defend_card_dict not in self.hands[defender_id]:
+            return {"ok": False, "error": "Карты нет в руке"}
+
+        attack_card = Card.from_dict(attack_card_dict)
+        defend_card = Card.from_dict(defend_card_dict)
+
+        if not defend_card.beats(attack_card, self.trump_suit):
+            return {"ok": False, "error": "Этой картой нельзя отбить"}
+
+        self.hands[defender_id].remove(defend_card_dict)
+        slot["defend"] = defend_card_dict
+
+        # Если все карты на столе отбиты → атакующий может подкинуть или завершить ход
+        all_closed = all(s["defend"] is not None for s in self.table)
+        if all_closed:
+            self.phase = "attack"  # атакующий может подкинуть или передать ход
+        return {"ok": True}
+
+    def take(self, defender_id: int) -> dict:
+        """Защитник берёт все карты со стола."""
+        if defender_id != self.current_defender:
+            return {"ok": False, "error": "Не ваш ход"}
+        if not self.table:
+            return {"ok": False, "error": "Стол пуст"}
+
+        # Взять все карты стола в руку
+        for slot in self.table:
+            self.hands[defender_id].append(slot["attack"])
+            if slot["defend"]:
+                self.hands[defender_id].append(slot["defend"])
+        self.table = []
+
+        # Ход переходит к следующему после защитника
+        new_attacker = self._next_player(self.current_defender)
+        self.current_defender = self._next_player(new_attacker)
+        self.current_attacker = new_attacker
+
+        self._refill_hands()
+        self._check_game_over()
+        self.phase = "attack"
+        return {"ok": True}
+
+    def pass_attack(self, attacker_id: int) -> dict:
+        """Атакующий завершает ход (больше не подкидывает)."""
+        if attacker_id != self.current_attacker:
+            return {"ok": False, "error": "Не ваш ход"}
+
+        # Проверка: все карты на столе отбиты
+        open_slots = [s for s in self.table if s["defend"] is None]
+        if open_slots:
+            return {"ok": False, "error": "Не все карты отбиты — сначала подождите ответа защитника"}
+
+        # Отбой — снять карты со стола
+        for slot in self.table:
+            self.beaten.append(slot["attack"])
+            if slot["defend"]:
+                self.beaten.append(slot["defend"])
+        self.table = []
+
+        # Ход переходит к защитнику
+        new_attacker = self.current_defender
+        self.current_defender = self._next_player(new_attacker)
+        self.current_attacker = new_attacker
+
+        self._refill_hands()
+        self._check_game_over()
+        self.phase = "attack"
+        return {"ok": True}
+
+    # ------------------------------------------------------------------
+    # Ход бота
+    # ------------------------------------------------------------------
+
+    def bot_move(self) -> Optional[dict]:
+        """
+        Выполнить ход за бота. Возвращает описание действия или None.
+        Эвристика:
+        - Атака: бросить наименьшую некозырную карту (или наименьшую козырную).
+        - Защита: отбить наименьшей подходящей картой (предпочтительно некозырной).
+        - Взять: если нечем отбить.
+        """
+        if self.phase == "attack" and self.current_attacker in self.bot_indices:
+            hand = self.hands[self.current_attacker]
+            if not hand:
+                return self.pass_attack(self.current_attacker)
+
+            # Найти карту для атаки
+            # Если стол пуст — любая наименьшая; иначе — только подходящего ранга
+            if self.table:
+                ranks_on_table = set()
+                for slot in self.table:
+                    ranks_on_table.add(slot["attack"]["rank"])
+                    if slot.get("defend"):
+                        ranks_on_table.add(slot["defend"]["rank"])
+                candidates = [c for c in hand if c["rank"] in ranks_on_table]
+            else:
+                candidates = list(hand)
+
+            if not candidates:
+                return self.pass_attack(self.current_attacker)
+
+            # Предпочитаем некозырные наименьшие
+            non_trump = [c for c in candidates if c["suit"] != self.trump_suit]
+            choice = min(non_trump or candidates, key=lambda c: RANK_ORDER[c["rank"]])
+            result = self.attack(self.current_attacker, choice)
+            return {"action": "attack", "card": choice, "result": result}
+
+        elif self.phase == "defend" and self.current_defender in self.bot_indices:
+            hand = self.hands[self.current_defender]
+            # Найти первый незакрытый слот
+            open_slots = [s for s in self.table if s["defend"] is None]
+            if not open_slots:
+                return self.pass_attack(self.current_attacker)
+
+            slot = open_slots[0]
+            atk_card = Card.from_dict(slot["attack"])
+
+            # Найти наименьшую подходящую карту
+            best_def = None
+            best_def_dict = None
+            for cd in hand:
+                c = Card.from_dict(cd)
+                if c.beats(atk_card, self.trump_suit):
+                    if best_def is None:
+                        best_def = c
+                        best_def_dict = cd
+                    else:
+                        # Предпочитаем некозырную; среди равных — наименьшую
+                        if best_def.suit == self.trump_suit and c.suit != self.trump_suit:
+                            best_def = c
+                            best_def_dict = cd
+                        elif best_def.suit == c.suit and RANK_ORDER[c.rank] < RANK_ORDER[best_def.rank]:
+                            best_def = c
+                            best_def_dict = cd
+
+            if best_def_dict:
+                result = self.defend(self.current_defender, slot["attack"], best_def_dict)
+                return {"action": "defend", "card": best_def_dict, "result": result}
+            else:
+                result = self.take(self.current_defender)
+                return {"action": "take", "result": result}
+
+        return None
+
+    # ------------------------------------------------------------------
+    # Сериализация
+    # ------------------------------------------------------------------
+
+    def to_state(self, for_player_id: Optional[int] = None) -> dict:
+        """
+        Сериализовать состояние игры.
+        Если for_player_id указан — скрыть чужие карты.
+        """
+        hands_view: dict = {}
+        for pid in self.player_ids:
+            if for_player_id is None or pid == for_player_id or pid in self.bot_indices:
+                hands_view[str(pid)] = self.hands[pid]
+            else:
+                hands_view[str(pid)] = len(self.hands[pid])  # type: ignore  # только количество
+
+        return {
+            "game_id": self.game_id,
+            "trump_suit": self.trump_suit,
+            "trump_card": self.trump_card,
+            "deck_count": len(self.deck),
+            "hands": hands_view,
+            "table": self.table,
+            "current_attacker": self.current_attacker,
+            "current_defender": self.current_defender,
+            "phase": self.phase,
+            "winner": self.winner,
+            "loser": self.loser,
+            "stake": self.stake,
+            "total_pot": self.total_pot,
+            "player_ids": self.player_ids,
+            "bot_indices": list(self.bot_indices),
+        }

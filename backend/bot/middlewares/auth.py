@@ -161,6 +161,13 @@ class AuthMiddleware(BaseMiddleware):
                         return
 
 
+                    # Live-логирование действий пользователя
+                    try:
+                        from backend.bot.handlers.admin.logging import log_user_action
+                        await log_user_action(bot, event, user)
+                    except Exception:
+                        pass
+
                     try:
                         return await handler(event, data)
                     except Exception as handler_err:

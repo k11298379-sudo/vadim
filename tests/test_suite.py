@@ -650,8 +650,8 @@ def test_keyboards_and_fastapi():
     assert "🧹 График дежурств" in btn_texts
     assert "☀️ До лета осталось" in btn_texts
     assert "💡 Интересный факт" in btn_texts
-    assert "⚙️ Настройки" not in btn_texts, "Settings button should be removed"
-    print("[OK] Main keyboard buttons verified (Duty, Summer and Interesting Fact present, Settings removed).")
+    assert "⚙️ Настройки" in btn_texts, "Settings button should be present"
+    print("[OK] Main keyboard buttons verified (Duty, Summer, Interesting Fact, and Settings present).")
 
     adm_kb = get_admin_panel_keyboard()
     adm_cb = [b.callback_data for row in adm_kb.inline_keyboard for b in row]

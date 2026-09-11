@@ -3,6 +3,7 @@
 
 from backend.db.crud.users import (
     get_user_by_tg_id,
+    get_user_by_username,
     create_user,
     update_user_role,
     update_user_name_and_role,
@@ -20,6 +21,12 @@ from backend.db.crud.users import (
     get_approved_group_chats,
     get_pending_group_chats,
     update_group_chat_topic,
+    toggle_user_canteen_reminder,
+    toggle_user_currency_ecosystem,
+    get_canteen_reminder_users,
+    perform_user_work,
+    add_user_coins,
+    get_currency_leaderboard,
 )
 
 from backend.db.crud.subjects import (

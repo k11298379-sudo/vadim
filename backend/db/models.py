@@ -20,6 +20,10 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(50), default="pending", nullable=False)  # admin, student, pending, rejected
     is_tester: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="0")
     notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    canteen_reminder_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="0")
+    currency_ecosystem_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="0")
+    coins: Mapped[int] = mapped_column(Integer, default=100, nullable=False, server_default="100")
+    last_work_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     homework_statuses: Mapped[List["UserHomeworkStatus"]] = relationship("UserHomeworkStatus", back_populates="user", cascade="all, delete-orphan")

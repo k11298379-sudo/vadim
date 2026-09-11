@@ -137,3 +137,43 @@ async def get_current_webapp_user(
     )
 
 
+def extract_viewer_tg_id(
+    user: Optional[User],
+    request: Any,
+    payload: Optional[Dict[str, Any]] = None,
+    query_tg_id: Optional[int] = None
+) -> Optional[int]:
+    if user and user.tg_id:
+        return user.tg_id
+    if payload and payload.get("tg_user_id"):
+        try:
+            return int(payload["tg_user_id"])
+        except Exception:
+            pass
+    if payload and payload.get("user_id"):
+        try:
+            return int(payload["user_id"])
+        except Exception:
+            pass
+    if query_tg_id:
+        return query_tg_id
+    if hasattr(request, "headers"):
+        hdr = request.headers.get("x-telegram-user-id") or request.headers.get("X-Telegram-User-Id")
+        if hdr:
+            try:
+                return int(hdr)
+            except Exception:
+                pass
+    if hasattr(request, "query_params"):
+        q = request.query_params.get("tg_user_id") or request.query_params.get("uid") or request.query_params.get("user_id")
+        if q:
+            try:
+                return int(q)
+            except Exception:
+                pass
+    return None
+
+_extract_viewer_tg_id = extract_viewer_tg_id
+
+
+

@@ -114,6 +114,13 @@ async def cb_view_students(callback: CallbackQuery, db_session: AsyncSession):
                 InlineKeyboardButton(text=f"👑 {toggle_text}", callback_data=f"adm_toggle_role_{s.tg_id}"),
                 InlineKeyboardButton(text="🗑 Удалить", callback_data=f"adm_del_user_ask_{s.tg_id}")
             ])
+            # Кнопка логирования — только для учеников (не для самого себя и не для владельца)
+            if s.role != "admin":
+                from backend.bot.handlers.admin.logging import is_logged
+                log_icon = "🔴 Лог: вкл" if is_logged(s.tg_id) else "🔍 Лог"
+                buttons.append([
+                    InlineKeyboardButton(text=log_icon, callback_data=f"adm_log_open_{s.tg_id}")
+                ])
 
     if groups:
         lines.append(f"\n👥 **Авторизованные группы ({len(groups)}):**")

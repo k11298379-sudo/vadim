@@ -1,4 +1,17 @@
 import os
+import sys
+
+# Ensure root directory is always in sys.path regardless of how main.py is called
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+# Ensure console supports UTF-8 emojis without crashing on Windows
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 import asyncio
 import logging
 from contextlib import asynccontextmanager
@@ -154,6 +167,11 @@ app.include_router(api_router)
 @app.get("/health")
 async def health_check():
     return {"status": "ok", "service": "class-bot"}
+
+@app.get("/favicon.ico")
+async def favicon():
+    return Response(content=b"", media_type="image/x-icon")
+
 
 class NoCacheStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):
