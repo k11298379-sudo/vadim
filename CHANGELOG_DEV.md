@@ -78,7 +78,7 @@
 16. **Файловое логирование и команда `/logs` для инспекции ошибок**
    - В `backend/main.py` добавлен `RotatingFileHandler` с записью в `data/bot.log` (до 5 МБ, UTF-8).
    - Добавлена команда администратора `/logs` для быстрого просмотра последних 35 строк логов прямо в Telegram.
-   - В `backend/bot/services/facts.py` исправлен список моделей Gemini: устаревшие названия заменены на актуальную официальную модель `gemini-3.6-flash`, устраняя предупреждения 404/not found.
+   - В `backend/bot/services/facts.py` установлены приоритетные модели с максимальными лимитами RPM (запросов в минуту) и RPD (запросов в день) — линейка Flash-Lite: `gemini-flash-lite-latest`, `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite` (с fallback на `gemini-3.6-flash`), что гарантирует бесперебойную генерацию фактов без исчерпания дневных квот.
 
 ---
 
@@ -135,7 +135,7 @@
   - В `cmd_test_digest` добавлен флаг `force=True`.
   - Добавлена команда `/logs` для просмотра последних записей логов бота.
 - `backend/bot/services/facts.py`:
-  - Обновлён список моделей Gemini на активную модель `gemini-3.6-flash`.
+  - Установлен приоритет высоколимитных моделей Flash-Lite (`gemini-flash-lite-latest`, `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`) с максимальным RPM и RPD для экономии квот.
 - `backend/main.py`:
   - Добавлен `RotatingFileHandler` для записи логов в `data/bot.log`.
 - `backend/bot/handlers/settings.py` & `backend/bot/keyboards/main_menu.py`:
