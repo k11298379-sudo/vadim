@@ -141,21 +141,31 @@ async def lifespan(app: FastAPI):
                     await asyncio.sleep(1)
                     from backend.config import get_today
                     today_str = get_today().strftime("%d.%m.%Y")
-                    db_name = "SQLite (Локальная база dev)" if "sqlite" in settings.DATABASE_URL else "Neon PostgreSQL"
+                    is_dev_db = "sqlite" in settings.DATABASE_URL
+                    bot_header = (
+                        "🧪 **Тестовый бот (Dev) успешно запущен на localhost!**"
+                        if is_dev_db
+                        else "🚀 **Деплой успешно завершен! Бот 11 «Б» запущен.**"
+                    )
+                    db_name = "SQLite (Локальная база dev)" if is_dev_db else "Neon PostgreSQL"
                     webapp_info = (
                         f"📱 **Mini App для телефона:**\n{settings.WEBAPP_URL}\n"
                         if settings.WEBAPP_URL.startswith("https://")
                         else ""
                     )
+                    extra_info = (
+                        f"🌐 Порт: `{settings.PORT}`\n🔔 Все модули и Mini App готовы к тестам!"
+                        if is_dev_db
+                        else f"🌐 Порт: `{settings.PORT}`\n🔔 Все модули, расписание, звонки и Mini App готовы к работе!"
+                    )
                     await bot.send_message(
                         chat_id=settings.ADMIN_ID,
                         text=(
-                            "🧪 **Тестовый бот (Dev) успешно запущен!**\n\n"
+                            f"{bot_header}\n\n"
                             f"📅 **Дата:** `{today_str}`\n"
                             f"⚡ База данных: `{db_name}`\n"
-                            f"🌐 Порт: `{settings.PORT}`\n"
-                            f"{webapp_info}\n"
-                            "🔔 Кнопка «📱 Mini App» активирована в меню Telegram!"
+                            f"{extra_info}\n"
+                            f"{webapp_info}"
                         ),
                         parse_mode="Markdown"
                     )

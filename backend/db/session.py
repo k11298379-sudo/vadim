@@ -4,7 +4,7 @@ from backend.config import settings
 from backend.db.models import Base
 
 def create_configured_engine():
-    raw_url = settings.DATABASE_URL
+    raw_url = os.environ.get("DATABASE_URL") or settings.DATABASE_URL
     if raw_url.startswith("sqlite"):
         os.makedirs("./data", exist_ok=True)
         return create_async_engine(raw_url, echo=False, future=True, pool_pre_ping=True)

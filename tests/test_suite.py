@@ -11,6 +11,7 @@ os.environ["BOT_TOKEN"] = "1234567890:ABCdefFakeTestToken"
 
 from backend.config import settings, get_today
 settings.BOT_TOKEN = "1234567890:ABCdefFakeTestToken"
+settings.DATABASE_URL = "sqlite+aiosqlite:///./data/test_suite.db"
 from backend.db.session import init_db, async_session_factory, engine
 
 from backend.db.seed import seed_initial_data
