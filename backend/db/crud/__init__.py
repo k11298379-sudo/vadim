@@ -106,6 +106,19 @@ from backend.db.crud.birthdays import (
     get_upcoming_birthdays,
 )
 
+from backend.db.crud.polls import (
+    create_poll,
+    get_poll_by_id,
+    get_active_polls,
+    close_poll,
+    delete_poll,
+    record_or_update_vote,
+    get_poll_results_data,
+    get_poll_non_voters,
+    format_poll_message_text,
+    add_dispatched_message,
+)
+
 from backend.db.crud.rpg import (
     HERO_CLASSES,
     get_or_create_rpg_character,
@@ -197,6 +210,17 @@ __all__ = [
     "get_all_birthdays",
     "get_birthdays_for_date",
     "get_upcoming_birthdays",
+    # polls
+    "create_poll",
+    "get_poll_by_id",
+    "get_active_polls",
+    "close_poll",
+    "delete_poll",
+    "record_or_update_vote",
+    "get_poll_results_data",
+    "get_poll_non_voters",
+    "format_poll_message_text",
+    "add_dispatched_message",
     # rpg
     "HERO_CLASSES",
     "get_or_create_rpg_character",

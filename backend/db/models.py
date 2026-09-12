@@ -238,3 +238,50 @@ class StudentBirthday(Base):
     full_name: Mapped[str] = mapped_column(String(100), nullable=False)
     birth_day: Mapped[int] = mapped_column(Integer, nullable=False)    # 1..31
     birth_month: Mapped[int] = mapped_column(Integer, nullable=False)  # 1..12
+
+
+class ClassPoll(Base):
+    __tablename__ = "class_polls"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    question: Mapped[str] = mapped_column(String(500), nullable=False)
+    is_anonymous: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    allow_revote: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_closed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    creator_tg_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    # Список отправленных сообщений: [{"chat_id": ..., "message_id": ...}]
+    dispatched_messages: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+
+    options: Mapped[List["ClassPollOption"]] = relationship("ClassPollOption", back_populates="poll", cascade="all, delete-orphan", order_by="ClassPollOption.order_index")
+    votes: Mapped[List["ClassPollVote"]] = relationship("ClassPollVote", back_populates="poll", cascade="all, delete-orphan")
+
+
+class ClassPollOption(Base):
+    __tablename__ = "class_poll_options"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    poll_id: Mapped[int] = mapped_column(Integer, ForeignKey("class_polls.id", ondelete="CASCADE"), nullable=False, index=True)
+    option_text: Mapped[str] = mapped_column(String(200), nullable=False)
+    order_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    poll: Mapped["ClassPoll"] = relationship("ClassPoll", back_populates="options")
+    votes: Mapped[List["ClassPollVote"]] = relationship("ClassPollVote", back_populates="option", cascade="all, delete-orphan")
+
+
+class ClassPollVote(Base):
+    __tablename__ = "class_poll_votes"
+    __table_args__ = (
+        UniqueConstraint("poll_id", "user_tg_id", name="uq_poll_user_vote"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    poll_id: Mapped[int] = mapped_column(Integer, ForeignKey("class_polls.id", ondelete="CASCADE"), nullable=False, index=True)
+    option_id: Mapped[int] = mapped_column(Integer, ForeignKey("class_poll_options.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_tg_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    voted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    poll: Mapped["ClassPoll"] = relationship("ClassPoll", back_populates="votes")
+    option: Mapped["ClassPollOption"] = relationship("ClassPollOption", back_populates="votes")
