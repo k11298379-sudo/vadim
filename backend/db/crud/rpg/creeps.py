@@ -35,21 +35,21 @@ NATAR_CREEPS_POOL = [
 ]
 
 NATAR_FLOOR_BOSSES = [
-    {"name": "Мясник Катакомб", "icon": "🪝", "base_hp": 25000, "base_atk": 45, "base_def": 15, "gold": 140, "xp": 160},
-    {"name": "Повелитель Теней", "icon": "💀", "base_hp": 35000, "base_atk": 55, "base_def": 18, "gold": 160, "xp": 180},
-    {"name": "Древний Терзатель", "icon": "🔮", "base_hp": 50000, "base_atk": 65, "base_def": 22, "gold": 180, "xp": 220},
-    {"name": "Дракон Инферно", "icon": "🐉", "base_hp": 70000, "base_atk": 80, "base_def": 26, "gold": 210, "xp": 250},
-    {"name": "РОШАН СВИРЕПЫЙ (Roshan)", "icon": "🐲", "base_hp": 95000, "base_atk": 100, "base_def": 32, "gold": 260, "xp": 300},
-    {"name": "Левиафан Бездны (Tidehunter)", "icon": "🐙", "base_hp": 125000, "base_atk": 120, "base_def": 36, "gold": 310, "xp": 360},
-    {"name": "Повелитель Душ (Nevermore)", "icon": "💀", "base_hp": 160000, "base_atk": 145, "base_def": 40, "gold": 370, "xp": 430},
-    {"name": "Чумной Владыка (Necrophos)", "icon": "🧟", "base_hp": 205000, "base_atk": 170, "base_def": 44, "gold": 440, "xp": 510},
-    {"name": "Демиург Арсенала (Invoker)", "icon": "🧙‍♂️", "base_hp": 260000, "base_atk": 200, "base_def": 48, "gold": 520, "xp": 600},
-    {"name": "Всадник Хаоса (Chaos Knight)", "icon": "🐎", "base_hp": 325000, "base_atk": 235, "base_def": 52, "gold": 610, "xp": 700},
-    {"name": "Тёмный Терзатель Бездны", "icon": "💎", "base_hp": 400000, "base_atk": 275, "base_def": 58, "gold": 720, "xp": 820},
-    {"name": "Вестник Апокалипсиса (Doom)", "icon": "👹", "base_hp": 490000, "base_atk": 320, "base_def": 64, "gold": 840, "xp": 950},
-    {"name": "Первобытный Титан (Primal Beast)", "icon": "🦣", "base_hp": 600000, "base_atk": 370, "base_def": 70, "gold": 980, "xp": 1100},
-    {"name": "Призрачный Рошан Хаоса", "icon": "👻", "base_hp": 730000, "base_atk": 430, "base_def": 78, "gold": 1150, "xp": 1300},
-    {"name": "Пожиратель Миров (Enigma Cosmic)", "icon": "🌌", "base_hp": 900000, "base_atk": 500, "base_def": 88, "gold": 1400, "xp": 1600}
+    {"name": "Мясник Катакомб", "icon": "🪝", "base_hp": 180000, "base_atk": 65, "base_def": 25, "gold": 220, "xp": 260},
+    {"name": "Повелитель Теней", "icon": "💀", "base_hp": 260000, "base_atk": 80, "base_def": 30, "gold": 260, "xp": 310},
+    {"name": "Древний Терзатель", "icon": "🔮", "base_hp": 380000, "base_atk": 98, "base_def": 35, "gold": 320, "xp": 380},
+    {"name": "Дракон Инферно", "icon": "🐉", "base_hp": 540000, "base_atk": 120, "base_def": 42, "gold": 390, "xp": 460},
+    {"name": "РОШАН СВИРЕПЫЙ (Roshan)", "icon": "🐲", "base_hp": 750000, "base_atk": 150, "base_def": 50, "gold": 480, "xp": 560},
+    {"name": "Левиафан Бездны (Tidehunter)", "icon": "🐙", "base_hp": 1000000, "base_atk": 180, "base_def": 58, "gold": 580, "xp": 680},
+    {"name": "Повелитель Душ (Nevermore)", "icon": "💀", "base_hp": 1300000, "base_atk": 220, "base_def": 65, "gold": 700, "xp": 820},
+    {"name": "Чумной Владыка (Necrophos)", "icon": "🧟", "base_hp": 1700000, "base_atk": 260, "base_def": 72, "gold": 840, "xp": 980},
+    {"name": "Демиург Арсенала (Invoker)", "icon": "🧙‍♂️", "base_hp": 2200000, "base_atk": 310, "base_def": 80, "gold": 1000, "xp": 1180},
+    {"name": "Всадник Хаоса (Chaos Knight)", "icon": "🐎", "base_hp": 2800000, "base_atk": 365, "base_def": 90, "gold": 1200, "xp": 1400},
+    {"name": "Тёмный Терзатель Бездны", "icon": "💎", "base_hp": 3500000, "base_atk": 425, "base_def": 100, "gold": 1450, "xp": 1680},
+    {"name": "Вестник Апокалипсиса (Doom)", "icon": "👹", "base_hp": 4300000, "base_atk": 490, "base_def": 112, "gold": 1750, "xp": 2000},
+    {"name": "Первобытный Титан (Primal Beast)", "icon": "🦣", "base_hp": 5200000, "base_atk": 560, "base_def": 125, "gold": 2100, "xp": 2400},
+    {"name": "Призрачный Рошан Хаоса", "icon": "👻", "base_hp": 6300000, "base_atk": 640, "base_def": 140, "gold": 2500, "xp": 2850},
+    {"name": "Пожиратель Миров (Enigma Cosmic)", "icon": "🌌", "base_hp": 7800000, "base_atk": 740, "base_def": 160, "gold": 3000, "xp": 3400}
 ]
 
 # Backwards compat aliases

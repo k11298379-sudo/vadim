@@ -1729,18 +1729,18 @@
   }
 
 
-  // Anti-one-shot protection and safe damage applier for Epic Boss Battles
+  // Anti-one-shot protection and calibrated damage applier for Epic Boss Battles
   function applyDamageToBoss(boss, rawDmg, isCrit) {
     if (!boss || boss.hp <= 0) return 0;
 
     // TIER-BASED DAMAGE SCALING: Every boss tier has an exact mathematically calibrated duration!
-    //   Tier 1 (Golem):    ~30 sec  (~84 hits @ ~2.8 hits/sec)
-    //   Tier 2 (Lich):     ~46 sec  (~128 hits)
-    //   Tier 3 (Tormentor):~62 sec  (~173 hits)
-    //   Tier 4 (Dragon):   ~78 sec  (~218 hits)
-    //   Tier 5 (Roshan):   ~94 sec  (~263 hits, ~1.6 min)
-    //   Tier 10 (CK):      ~174 sec (~487 hits, ~2.9 min)
-    //   Tier 15 (Enigma):  ~254 sec (~711 hits, ~4.2 minutes of intense dodging!)
+    //   Tier 1 (Golem / Floor 1): ~75-85 sec  (intense, strategic battle)
+    //   Tier 2 (Lich):           ~85-95 sec
+    //   Tier 3 (Tormentor):      ~95-110 sec
+    //   Tier 4 (Dragon):         ~110-125 sec
+    //   Tier 5 (Roshan):         ~125-145 sec
+    //   Tier 10 (CK):            ~175-200 sec
+    //   Tier 15 (Enigma):        ~240-270 sec (~4.5 minutes of bullet hell mastery!)
     const BOSS_TIER_MAP = {
       golem: 1, lich: 2, tormentor: 3, dragon: 4, roshan: 5,
       tidehunter: 6, sf_boss: 7, necrophos: 8, invoker_boss: 9, chaos_knight: 10,
@@ -1752,10 +1752,10 @@
       if (bId.includes(k)) { tier = v; break; }
     }
 
-    // Target duration scales strictly with tier: 45s (Tier 1) up to ~3.5 minutes (Tier 15)
-    const targetSeconds = 45 + (tier - 1) * 18;
-    // Accounts for total party output (~8-10 damage events/sec from player, companions, skills, dots)
-    const targetHits = Math.floor(targetSeconds * 7.5);
+    // Target duration scales strictly with tier: 75s (Tier 1) up to ~4.5 minutes (Tier 15)
+    const targetSeconds = 75 + (tier - 1) * 12;
+    // Calibrated for realistic multi-character hit density (~18 damage events/sec from player, companions, skills, dots)
+    const targetHits = Math.floor(targetSeconds * 18);
 
     // Baseline damage per normal auto-attack hit (% of boss maxHp)
     const basePctPerHit = 1.0 / targetHits;
@@ -1768,18 +1768,66 @@
     // Hit ratio: skills deal 1.5x - 2.8x, companion/DOT ticks deal 0.04x - 0.45x
     const hitRatio = Math.max(0.04, Math.min(2.8, rawDmg / playerAtk));
 
-    // Stagger bonus (+40% damage when boss is staggered / poise broken)
-    const staggerMult = boss.isStaggered ? 1.4 : 1.0;
+    // Stagger bonus (+50% damage when boss is staggered / poise broken)
+    const staggerMult = boss.isStaggered ? 1.5 : 1.0;
 
     // Crit multiplier
     const critMult = isCrit ? 1.3 : 1.0;
 
-    // Damage calculation: capped per single hit so skills feel impactful without vaporizing boss
+    // Base calculated damage
     const calculatedDmg = Math.floor(baseHitDmg * hitRatio * staggerMult * critMult);
-    const maxAllowedDmg = Math.floor(baseHitDmg * 2.2 * (boss.isStaggered ? 1.4 : 1.0));
-    const finalDmg = Math.max(1, Math.min(calculatedDmg, maxAllowedDmg));
+    const maxAllowedHitDmg = Math.floor(baseHitDmg * 2.5 * (boss.isStaggered ? 1.5 : 1.0));
+    let finalDmg = Math.max(1, Math.min(calculatedDmg, maxAllowedHitDmg));
 
+    // DPS THROTTLE (CEILING PER SECOND):
+    // Prevents autoclickers, rapid taps, Rot ticks, and companion spam from melting boss in seconds!
+    // Normal phase: max 1.35% HP / sec (~74s min TTK under continuous party onslaught)
+    // Staggered phase: max 2.50% HP / sec (~40s min during burst window)
+    const curSec = Math.floor((ARENA.frameCount || 0) / 60);
+    if (boss._dmgWindowSec !== curSec) {
+      boss._dmgWindowSec = curSec;
+      boss._dmgTakenThisSec = 0;
+    }
+
+    const secCapPct = boss.isStaggered ? 0.025 : 0.0135;
+    const maxSecDmg = Math.floor(boss.maxHp * secCapPct);
+    const roomLeft = Math.max(0, maxSecDmg - (boss._dmgTakenThisSec || 0));
+
+    if (roomLeft <= 0) {
+      // Ironclad resistance: chips minimum damage so visual clicks, audio, and floating texts still trigger
+      finalDmg = Math.max(1, Math.floor(finalDmg * 0.05));
+    } else if (finalDmg > roomLeft) {
+      const excess = finalDmg - roomLeft;
+      finalDmg = roomLeft + Math.floor(excess * 0.08);
+    }
+
+    boss._dmgTakenThisSec = (boss._dmgTakenThisSec || 0) + finalDmg;
     boss.hp = Math.max(0, boss.hp - finalDmg);
+
+    // BOSS PHASES (Epic Boss Phase Transitions):
+    // Phase 2 at 66% HP: Boss Enrages, gains speed and a radial shockwave!
+    const hpRatio = boss.hp / boss.maxHp;
+    if (hpRatio <= 0.66 && !boss._phase2Triggered) {
+      boss._phase2Triggered = true;
+      boss.enrageStage = "angry";
+      boss.speed = (boss.speed || 0.6) * 1.15;
+      spawnFloatingText(boss.x, boss.y - 45, "🔥 БОСС ВПАДАЕТ В ЯРОСТЬ! ФАЗА 2!", "#ea580c");
+      triggerHaptic("heavy");
+      if (ARENA.cameraTrauma !== undefined) ARENA.cameraTrauma = 0.65;
+      if (!ARENA.shockwaves) ARENA.shockwaves = [];
+      ARENA.shockwaves.push({ x: boss.x, y: boss.y, radius: 10, maxRadius: 90, alpha: 1.0, color: "#ea580c" });
+    }
+    // Phase 3 at 33% HP: Desperation Frenzy!
+    if (hpRatio <= 0.33 && !boss._phase3Triggered) {
+      boss._phase3Triggered = true;
+      boss.enrageStage = "enraged";
+      boss.speed = (boss.speed || 0.6) * 1.20;
+      spawnFloatingText(boss.x, boss.y - 45, "⚡ СМЕРТЕЛЬНАЯ ФАЗА! БОСС БЕЗУМЕН!", "#ef4444");
+      triggerHaptic("heavy");
+      if (ARENA.cameraTrauma !== undefined) ARENA.cameraTrauma = 0.85;
+      if (!ARENA.shockwaves) ARENA.shockwaves = [];
+      ARENA.shockwaves.push({ x: boss.x, y: boss.y, radius: 10, maxRadius: 120, alpha: 1.0, color: "#ef4444" });
+    }
 
     if (boss.hp <= 0 && ARENA.isRaidBossBattle && ARENA.waveState !== "boss_victory") {
       handleRaidBossDefeat();
@@ -4457,14 +4505,13 @@
 
   function spawnBossCreep() {
     const floor = RPG_STATE.profile?.dungeon_floor || 1;
-    // Hardcore exponential scaling: floor 1 = ~28k HP, floor 5 = ~110k HP, floor 10 = ~670k HP, floor 20 = ~23M HP!
-    const floorScale = Math.pow(1.42, Math.max(0, floor - 1));
+    const floorScale = Math.pow(1.22, Math.max(0, floor - 1));
 
     const bossTypes = [
-      { name: "РОШАН СВИРЕПЫЙ (Roshan)", icon: "🐲", baseHp: 28000, baseAtk: 45, badgeBg: "#7f1d1d", badgeBorder: "#facc15" },
-      { name: "ДРЕВНИЙ ТЕРЗАТЕЛЬ (Tormentor)", icon: "💎", baseHp: 24000, baseAtk: 50, badgeBg: "#4a044e", badgeBorder: "#c084fc" },
-      { name: "ЧЕРНЫЙ ДРАКОН ИНФЕРНО", icon: "🌋", baseHp: 32000, baseAtk: 42, badgeBg: "#7c2d12", badgeBorder: "#ea580c" },
-      { name: "АРХИЛИЧ НЕКРОПОЛЯ", icon: "💀", baseHp: 22000, baseAtk: 55, badgeBg: "#18181b", badgeBorder: "#e4e4e7" }
+      { name: "РОШАН СВИРЕПЫЙ (Roshan)", icon: "🐲", baseHp: 1500000, baseAtk: 50, badgeBg: "#7f1d1d", badgeBorder: "#facc15" },
+      { name: "ДРЕВНИЙ ТЕРЗАТЕЛЬ (Tormentor)", icon: "💎", baseHp: 1400000, baseAtk: 55, badgeBg: "#4a044e", badgeBorder: "#c084fc" },
+      { name: "ЧЕРНЫЙ ДРАКОН ИНФЕРНО", icon: "🌋", baseHp: 1600000, baseAtk: 48, badgeBg: "#7c2d12", badgeBorder: "#ea580c" },
+      { name: "АРХИЛИЧ НЕКРОПОЛЯ", icon: "💀", baseHp: 1300000, baseAtk: 58, badgeBg: "#18181b", badgeBorder: "#e4e4e7" }
     ];
     const bt = bossTypes[Math.floor(Math.random() * bossTypes.length)];
 
@@ -4472,13 +4519,10 @@
     const playerAtk = Math.max(30, Math.floor(((stats.min_atk || 30) + (stats.max_atk || 50)) / 2));
     const playerHp = Math.max(400, stats.hp_max || 400);
 
-    const calculatedHp = Math.max(
-      Math.floor(bt.baseHp * Math.pow(1.36, Math.max(0, floor - 1))),
-      Math.floor(playerAtk * 50 * Math.pow(1.05, Math.max(0, floor - 1)))
-    );
+    const calculatedHp = Math.floor(bt.baseHp * floorScale);
     const calculatedAtk = Math.max(
-      Math.floor(bt.baseAtk * Math.pow(1.26, Math.max(0, floor - 1))),
-      Math.floor(playerHp * 0.09)
+      Math.floor(bt.baseAtk * Math.pow(1.20, Math.max(0, floor - 1))),
+      Math.floor(playerHp * 0.10)
     );
 
     const boss = {

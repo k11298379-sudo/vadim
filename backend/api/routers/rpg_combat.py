@@ -1,4 +1,4 @@
-﻿import random
+import random
 from typing import Optional, Dict, Any, List
 from fastapi import Depends, HTTPException, Body
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -164,8 +164,8 @@ async def slash_creep_wave_endpoint(
     crit_chance = stats.get("crit_chance", 15)
     dodge_chance = stats.get("dodge_chance", 5)
     h_def = max(0, stats.get("defense", 5))
-    h_dr = min(0.82, (h_def * 0.05) / (1.0 + h_def * 0.05 + floor * 0.4))
-    e_dr = min(0.85, (max(0, enemy_def) * 0.05) / (1.0 + max(0, enemy_def) * 0.05))
+    boss_armor_bonus = 20 if is_boss_wave else 0
+    e_dr = min(0.88 if is_boss_wave else 0.85, (max(0, enemy_def + boss_armor_bonus) * 0.05) / (1.0 + max(0, enemy_def + boss_armor_bonus) * 0.05))
     reflect_pct = h_bonus.get("reflect", 0)
     bonus_flat_magic = h_bonus.get("burst_magic", 0) + h_bonus.get("lightning", 0)
 
