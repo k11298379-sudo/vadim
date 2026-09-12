@@ -93,6 +93,16 @@
    - В Telegram автоматически активируется постоянная кнопка меню `[📱 Mini App]` и кнопка `[📱 Mini App 11 «Б»]` в клавиатуре чата.
    - Mini App открывается на смартфонах нативно прямо в Telegram с поддержкой вибрации, темы оформления и передачей Telegram ID пользователя.
 
+20. **Интеграция RPG игры «natarGRP» вместо плейсхолдера «Тест»**
+   - Плейсхолдер «Тест» (beta) полностью заменён на ролевую игру «⚔️ natarGRP» в Mini App.
+   - Модель `RPGCharacter` в SQLAlchemy: 7 героев (Pudge, Juggernaut, Phantom Assassin, Shadow Fiend, Invoker, Wraith King, Anti-Mage), 3 базовых атрибута (Сила, Ловкость, Интеллект + Живучесть), система очков прокачки за уровни и золото.
+   - Каталог из 146 предметов (5 уровней редкости) с гиперболической формулой поглощения урона бронёй, заточкой в кузнице (`+1`, `+2`...), слотами оружия, брони и реликвий, а также продажей лишнего лута.
+   - Подземелья (Dungeon Waves): генерация волн мобов и боссов с сундуками наград (деревянный, бронзовый, серебряный, золотой, мифический).
+   - Совместные рейды (Co-op Boss Raids): битвы от 1 до 3 игроков против 15 уникальных боссов со спец-атаками, масштабированием здоровья и эксклюзивным дропом.
+   - Пошаговые PvP дуэли 1v1 с боевым логом и рейтингом.
+   - Тайная лавка с 42 товарами, таблица лидеров игроков, безопасная смена класса с сохранением экипировки в инвентаре.
+   - Строгая архитектурная декомпозиция (все Python-файлы логики до 350 строк, модульный пакет `backend/db/crud/rpg/`).
+
 ---
 
 ## 🗂 Список измененных и добавленных файлов
@@ -169,10 +179,44 @@
   - Компактный оркестратор и фасад игры «Дурак».
 - `frontend/js/games.js`:
   - Роутинг и безопасная динамическая подгрузка модулей «Дурака».
+  - Замена вкладки «Тест» на «⚔️ natarGRP», инициализация `window.RPG.init()`, очистка комнат при смене вкладок.
+- `frontend/js/rpg.js`:
+  - Полнофункциональный интерфейс ролевой игры natarGRP (выбор класса, инвентарь, кузница, лавка, волны подземелья, боссы, лобби PvP и Co-op).
 - `frontend/index.html`:
-  - Подключение модулей `durak/`.
+  - Подключение модулей `durak/` и `js/rpg.js`.
 - `scripts/extract_new_cards.py`:
   - Скрипт нарезки текстур из исходного листа игральных карт.
+
+### Ролевая игра «natarGRP» (Бэкенд):
+- `backend/db/models.py`:
+  - Модель `RPGCharacter` (класс, уровень, опыт, золото, кристаллы, 4 атрибута, экипировка, инвентарь, прогресс подземелья, PvP-рейтинг и победы, боссы).
+- `backend/db/crud/rpg/`:
+  - `heroes.py`, `heroes_part1.py`, `heroes_part2.py`: 7 классов персонажей со скиллами и атрибутами.
+  - `items_catalog.py`: 146 предметов снаряжения и 5 уровней редкости.
+  - `creeps.py`: Каталог монстров и боссов подземелья.
+  - `character.py`: Создание профиля, расчет эффективных характеристик с учетом формулы брони и статов.
+  - `loot.py`: Генерация случайного лута, смарт-дроп под класс героя.
+  - `chests.py` & `chests_drops.py`: Открытие сундуков за волны и рейды с эксклюзивными таблицами боссов.
+  - `inventory.py` & `inventory_sell.py`: Экипировка, снятие, использование зелий, заточка в кузнице и продажа.
+  - `dungeon.py` & `dungeon_core.py`: Пошаговый симулятор волн подземелья.
+  - `shop.py` & `shop_catalog.py`: Тайная лавка, прокачка базовых атрибутов, таблица лидеров.
+  - `__init__.py`: Фасадный экспорт всех методов RPG CRUD.
+- `backend/api/rpg_bosses.py`:
+  - Каталог из 15 рейдовых боссов с уникальными атаками и фазами.
+- `backend/api/rpg_pvp.py`:
+  - Игровой движок пошаговых дуэлей 1v1 (`RPGPvPRoom`).
+- `backend/api/rpg_coop.py`, `rpg_coop_boss_turn.py`, `rpg_coop_helpers.py`:
+  - Движок совместных рейдов на боссов до 3 игроков (`RPGCoopBossRoom`) с поочередными ходами босса и автоботами при нехватке участников.
+- `backend/api/game_rooms.py`:
+  - Интеграция RPG комнат в менеджер комнат `GameRoomManager`.
+- `backend/api/routers/rpg.py` & `backend/api/routers/rpg_combat.py`:
+  - REST API эндпоинты `/api/rpg/*` (профиль, выбор класса, статы, инвентарь, магазин, волны, сундуки, боссы, лидерборд, синхронизация комнат).
+- `backend/api/routers/games_rpg_hooks.py`:
+  - Хуки генерации приглашений в Telegram, валидации и распределения рейдового лута.
+- `backend/api/routers/games.py`:
+  - Интеграция RPG хуков в лобби игр, добавление эндпоинта добавления бота-союзника `/api/games/room/{room_id}/bot`.
+- `tests/test_rpg_game.py` & `tests/test_rpg_ecosystem.py`:
+  - Комплексные интеграционные тесты механик natarGRP (прокачка, бой, дуэли, рейды, лавка, кузница, снятие экипировки, математика гиперболической брони).
 
 ### Правила и стандарты кода:
 - `AGENTS.md` & `GEMINI.md`:
@@ -192,6 +236,34 @@
    ALTER TABLE users ADD COLUMN coins INTEGER DEFAULT 100;
    ALTER TABLE users ADD COLUMN last_work_at TIMESTAMP;
    ```
+   А также создайте таблицу `rpg_characters` (для игры natarGRP):
+   ```sql
+   CREATE TABLE IF NOT EXISTS rpg_characters (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+       hero_class VARCHAR(50) NOT NULL DEFAULT 'knight',
+       level INTEGER NOT NULL DEFAULT 1,
+       xp INTEGER NOT NULL DEFAULT 0,
+       gold INTEGER NOT NULL DEFAULT 150,
+       gems INTEGER NOT NULL DEFAULT 10,
+       strength INTEGER NOT NULL DEFAULT 10,
+       agility INTEGER NOT NULL DEFAULT 10,
+       intelligence INTEGER NOT NULL DEFAULT 10,
+       vitality INTEGER NOT NULL DEFAULT 10,
+       stat_points INTEGER NOT NULL DEFAULT 2,
+       equipment JSON NOT NULL,
+       inventory JSON NOT NULL,
+       dungeon_floor INTEGER NOT NULL DEFAULT 1,
+       dungeon_cleared INTEGER NOT NULL DEFAULT 0,
+       pvp_rating INTEGER NOT NULL DEFAULT 1000,
+       pvp_wins INTEGER NOT NULL DEFAULT 0,
+       pvp_losses INTEGER NOT NULL DEFAULT 0,
+       boss_kills INTEGER NOT NULL DEFAULT 0,
+       updated_at DATETIME NOT NULL,
+       created_at DATETIME NOT NULL
+   );
+   CREATE INDEX IF NOT EXISTS ix_rpg_characters_user_id ON rpg_characters(user_id);
+   ```
    *(При создании чистой базы таблицы создаются автоматически через SQLAlchemy).*
 
 2. **Слияние кода**:
@@ -199,7 +271,10 @@
    - Запустите тесты:
      ```bash
      python tests/test_suite.py
+     python tests/test_rpg_game.py
+     python tests/test_rpg_ecosystem.py
      ```
 
 3. **Перезапуск службы бота**:
    - Перезапустите бота `systemctl restart botdz` (или соответствующий процесс).
+

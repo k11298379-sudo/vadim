@@ -12,6 +12,10 @@ except ImportError:
     chess = None
     logger.warning("Module 'chess' is not installed. Chess games will be unavailable until installed.")
 
+from backend.api.rpg_bosses import RAID_BOSSES
+from backend.api.rpg_pvp import RPGPvPRoom
+from backend.api.rpg_coop import RPGCoopBossRoom
+
 
 WIN_COMBOS = [
     (0, 1, 2), (3, 4, 5), (6, 7, 8),  # Rows
@@ -452,7 +456,10 @@ class GameRoomManager:
         opponent_tg_id: Optional[int] = None,
         opponent_name: Optional[str] = None,
         game_type: str = "tictactoe",
-        host_color: str = "white"
+        host_color: str = "white",
+        boss_id: str = "roshan",
+        is_solo: bool = False,
+        hero_data: Optional[Dict[str, Any]] = None
     ) -> Any:
         self.cleanup()
         room_id = uuid.uuid4().hex[:10]
@@ -464,6 +471,28 @@ class GameRoomManager:
                 opponent_tg_id=opponent_tg_id,
                 opponent_name=opponent_name,
                 host_color=host_color
+            )
+        elif game_type == "rpg_duel":
+            from backend.api.rpg_pvp import RPGPvPRoom
+            room = RPGPvPRoom(
+                room_id=room_id,
+                host_tg_id=host_tg_id,
+                host_name=host_name,
+                opponent_tg_id=opponent_tg_id,
+                opponent_name=opponent_name,
+                hero_data=hero_data
+            )
+        elif game_type == "rpg_coop":
+            from backend.api.rpg_coop import RPGCoopBossRoom
+            room = RPGCoopBossRoom(
+                room_id=room_id,
+                host_tg_id=host_tg_id,
+                host_name=host_name,
+                opponent_tg_id=opponent_tg_id,
+                opponent_name=opponent_name,
+                boss_id=boss_id,
+                is_solo=is_solo,
+                hero_data=hero_data
             )
         else:
             room = TicTacToeRoom(
@@ -490,6 +519,9 @@ class GameRoomManager:
         if user_tg_id == room.host_tg_id:
             return True, "Вы создатель комнаты"
 
+        if hasattr(room, "add_coop_player"):
+            return room.add_coop_player(user_tg_id, user_name)
+
         if room.opponent_tg_id and room.opponent_tg_id != user_tg_id:
             return False, "Эта игра предназначена для другого игрока"
 
@@ -505,6 +537,14 @@ class GameRoomManager:
             room.status = "playing"
         room.last_activity = time.time()
         return True, "Успешное подключение"
+
+    def add_bot_to_coop(self, room_id: str) -> tuple[bool, str]:
+        room = self.get_room(room_id)
+        if not room or getattr(room, "game_type", None) != "rpg_coop":
+            return False, "Комната рейда не найдена"
+        if hasattr(room, "add_bot_ally"):
+            return room.add_bot_ally()
+        return False, "Не поддерживается"
 
     def make_move(self, room_id: str, user_tg_id: int, move_data: Any) -> tuple[bool, str]:
         room = self.get_room(room_id)

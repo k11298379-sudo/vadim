@@ -1,0 +1,74 @@
+﻿import logging
+from typing import Optional, Dict, Any, Tuple
+from sqlalchemy.ext.asyncio import AsyncSession
+from backend.db.models import User
+
+logger = logging.getLogger(__name__)
+
+async def prepare_rpg_hero_data(session: AsyncSession, user: Optional[User], host_name: str) -> Optional[Dict[str, Any]]:
+    if not user:
+        return None
+    try:
+        from backend.db.crud.rpg import get_or_create_rpg_character, serialize_character_profile
+        char = await get_or_create_rpg_character(session, user_id=user.id)
+        return serialize_character_profile(char, user_name=host_name)
+    except Exception as e:
+        logger.warning(f"Could not load hero_data for game room: {e}")
+        return None
+
+def get_rpg_invite_details(room: Any, game_type: str, base_url: str, separator: str, opponent_tg_id: int, escaped_host_name: str) -> Tuple[str, str, str]:
+    if game_type == "rpg_duel":
+        game_url = f"{base_url}{separator}room={room.room_id}&game=rpg_duel&tg_user_id={opponent_tg_id}"
+        invite_text = (
+            f"⚔️ <b>{escaped_host_name}</b> бросает тебе вызов на <b>Dota 2 PvP Дуэль 1v1</b>!\n\n"
+            f"⚡ Проверь своего персонажа в честном бою на арене!"
+        )
+        btn_text = "⚔️ Принять вызов на Дуэль"
+        return game_url, invite_text, btn_text
+    elif game_type == "rpg_coop":
+        game_url = f"{base_url}{separator}room={room.room_id}&game=rpg_coop&tg_user_id={opponent_tg_id}"
+        boss_name = getattr(room, "boss", {}).get("name", "Босс")
+        boss_icon = getattr(room, "boss", {}).get("icon", "🐲")
+        invite_text = (
+            f"{boss_icon} <b>{escaped_host_name}</b> зовет тебя в совместный <b>Рейд на {boss_name}</b>!\n\n"
+            f"🛡️ Готов объединить силы и выбить легендарный дроп?"
+        )
+        btn_text = "🛡️ Вступить в Рейд"
+        return game_url, invite_text, btn_text
+    return "", "", ""
+
+async def handle_rpg_room_joined(room: Any, session: AsyncSession, user: Optional[User], user_name: str):
+    if room and getattr(room, "game_type", None) == "rpg_duel" and hasattr(room, "sync_character_data"):
+        try:
+            from backend.db.crud.rpg import get_or_create_rpg_character, serialize_character_profile
+            char = await get_or_create_rpg_character(session, user_id=user.id if user else 1)
+            prof = serialize_character_profile(char, user_name=user_name)
+            room.sync_character_data("opponent", prof)
+        except Exception as e:
+            logger.warning(f"Could not sync opponent duel stats: {e}")
+
+async def handle_rpg_room_moved(room: Any, session: AsyncSession, user: Optional[User]):
+    if room and getattr(room, "game_type", None) == "rpg_coop" and room.status == "finished" and room.winner == "heroes":
+        if not getattr(room, "reward_distributed", False):
+            room.reward_distributed = True
+            try:
+                from backend.db.crud.rpg import get_or_create_rpg_character, add_xp_and_gold_to_character, open_boss_raid_chest
+                boss_gold = room.boss.get("gold_reward", 1000)
+                boss_xp = room.boss.get("xp_reward", 750)
+                user_id = user.id if user else 1
+                char = await get_or_create_rpg_character(session, user_id=user_id)
+                await add_xp_and_gold_to_character(session, char, xp_amount=boss_xp, gold_amount=boss_gold)
+                char.boss_kills = getattr(char, "boss_kills", 0) + 1
+                chest_res = await open_boss_raid_chest(session, char, boss_id=room.boss.get("id", "roshan"))
+                room.victory_rewards = {
+                    "boss_name": room.boss.get("name"),
+                    "boss_icon": room.boss.get("icon"),
+                    "gold_earned": boss_gold + chest_res.get("gold_reward", 0),
+                    "xp_earned": boss_xp,
+                    "gems_earned": chest_res.get("gems_reward", 25),
+                    "chest": chest_res,
+                    "item": chest_res.get("item")
+                }
+                await session.commit()
+            except Exception as ex:
+                logger.warning(f"Could not award coop boss reward: {ex}")

@@ -146,8 +146,11 @@ async def invite_opponent_to_game(
         except (ValueError, TypeError):
             opponent_tg_id = 0
 
-        if not opponent_tg_id:
+        if not opponent_tg_id and game_type != "rpg_coop":
             raise HTTPException(status_code=400, detail="opponent_tg_id is required")
+
+        if opponent_tg_id == 0:
+            opponent_tg_id = None
 
         game_type = str(payload.get("game_type") or "tictactoe").strip().lower()
         host_color = str(payload.get("host_color") or "white").strip().lower()
@@ -171,13 +174,23 @@ async def invite_opponent_to_game(
                 logger.warning(f"Could not get opponent user from DB: {ex}")
                 opp_name = "Одноклассник"
 
+        boss_id = str(payload.get("boss_id") or "golem").strip().lower()
+        is_solo = bool(payload.get("is_solo", False))
+        hero_data = payload.get("hero_data")
+        if not hero_data and game_type in ["rpg_coop", "rpg_duel"]:
+            from backend.api.routers.games_rpg_hooks import prepare_rpg_hero_data
+            hero_data = await prepare_rpg_hero_data(session, user, host_name)
+
         room = game_manager.create_room(
             host_tg_id=host_tg_id,
             host_name=host_name,
             opponent_tg_id=opponent_tg_id,
             opponent_name=opp_name,
             game_type=game_type,
-            host_color=host_color
+            host_color=host_color,
+            boss_id=boss_id,
+            is_solo=is_solo,
+            hero_data=hero_data
         )
 
         from backend.bot.bot import get_current_bot
@@ -191,7 +204,12 @@ async def invite_opponent_to_game(
                 separator = "&" if "?" in base_url else "?"
                 escaped_host_name = html.escape(str(host_name or "Одноклассник"))
 
-                if game_type == "chess":
+                if game_type in ["rpg_duel", "rpg_coop"]:
+                    from backend.api.routers.games_rpg_hooks import get_rpg_invite_details
+                    game_url, invite_text, btn_text = get_rpg_invite_details(
+                        room, game_type, base_url, separator, opponent_tg_id, escaped_host_name
+                    )
+                elif game_type == "chess":
                     game_url = f"{base_url}{separator}room={room.room_id}&game=chess&tg_user_id={opponent_tg_id}"
                     host_color_actual = getattr(room, "host_color", "white")
                     if host_color_actual == "black":
@@ -278,7 +296,8 @@ async def join_game_room(
     room_id: str,
     request: Request,
     payload: Dict[str, Any] = {},
-    user: Optional[User] = Depends(get_optional_webapp_user)
+    user: Optional[User] = Depends(get_optional_webapp_user),
+    session: AsyncSession = Depends(get_db_session)
 ):
     """Подключение соперника к созданной комнате."""
     from backend.api.game_rooms import game_manager
@@ -290,6 +309,9 @@ async def join_game_room(
         raise HTTPException(status_code=400, detail=msg)
 
     room = game_manager.get_room(room_id)
+    if room:
+        from backend.api.routers.games_rpg_hooks import handle_rpg_room_joined
+        await handle_rpg_room_joined(room, session, user, user_name)
     return room.to_dict(viewer_tg_id=viewer_tg_id)
 
 
@@ -298,19 +320,42 @@ async def make_game_move(
     room_id: str,
     request: Request,
     payload: Dict[str, Any],
-    user: Optional[User] = Depends(get_optional_webapp_user)
+    user: Optional[User] = Depends(get_optional_webapp_user),
+    session: AsyncSession = Depends(get_db_session)
 ):
-    """Ход в игре (Крестики-нолики или Шахматы)."""
+    """Ход в игре (Крестики-нолики, Шахматы или RPG)."""
     from backend.api.game_rooms import game_manager
     viewer_tg_id = _extract_viewer_tg_id(user, request, payload=payload) or 0
     move_val = payload.get("move") or payload.get("uci")
     if move_val is None:
         move_val = payload.get("cell")
+    if move_val is None and "action" in payload:
+        move_val = payload.get("action")
 
     ok, msg = game_manager.make_move(room_id, viewer_tg_id, move_val)
     if not ok:
         raise HTTPException(status_code=400, detail=msg)
 
+    room = game_manager.get_room(room_id)
+    if room:
+        from backend.api.routers.games_rpg_hooks import handle_rpg_room_moved
+        await handle_rpg_room_moved(room, session, user)
+    return room.to_dict(viewer_tg_id=viewer_tg_id)
+
+
+@router.post("/games/room/{room_id}/bot")
+async def add_bot_to_coop_room(
+    room_id: str,
+    request: Request,
+    payload: Dict[str, Any] = {},
+    user: Optional[User] = Depends(get_optional_webapp_user)
+):
+    """Добавляет бота в кооп-рейд."""
+    from backend.api.game_rooms import game_manager
+    viewer_tg_id = _extract_viewer_tg_id(user, request, payload=payload) or 0
+    ok, msg = game_manager.add_bot_to_coop(room_id)
+    if not ok:
+        raise HTTPException(status_code=400, detail=msg)
     room = game_manager.get_room(room_id)
     return room.to_dict(viewer_tg_id=viewer_tg_id)
 

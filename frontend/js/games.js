@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  let currentGame = "2048"; // 'beta', '2048', 'tictactoe', 'snake', 'tetris', 'chess', 'durak'
+  let currentGame = "2048"; // 'rpg', '2048', 'tictactoe', 'snake', 'tetris', 'chess', 'durak'
   let isTesterUser = false;
   let isCurrencyEnabled = false;
   let userCoins = 0;
@@ -85,10 +85,10 @@
       localStorage.setItem("is_tester", isTesterUser ? "1" : "0");
     } catch (e) {}
     if (isTesterUser && (currentGame === "2048" || !currentGame)) {
-      currentGame = "beta";
+      currentGame = "rpg";
     }
     const container = document.getElementById("pane-games");
-    if (container && (wasTester !== isTesterUser || (isTesterUser && currentGame === "beta"))) {
+    if (container && (wasTester !== isTesterUser || (isTesterUser && currentGame === "rpg"))) {
       renderGames();
     }
   }
@@ -98,7 +98,7 @@
     if (!container) return;
     await checkTesterStatus();
     if (isTesterUser && currentGame === "2048") {
-      currentGame = "beta";
+      currentGame = "rpg";
     }
     if (currentGame === "durak" && !isCurrencyEnabled) {
       currentGame = "2048";
@@ -118,16 +118,16 @@
     if (isTesterUser) activeTabsCount += 1;
     if (isCurrencyEnabled) activeTabsCount += 1;
 
-    const gameCountLabel = `${activeTabsCount} игр${isTesterUser ? ' (🧪 Тест)' : ''}`;
+    const gameCountLabel = `${activeTabsCount} игр${isTesterUser ? ' (⚔️ natarGRP)' : ''}`;
 
-    const betaButtonHTML = isTesterUser ? `
-      <button onclick="window.GAMES.switchGame('beta')" class="py-2 rounded-xl transition-all flex items-center justify-center gap-1 ${
-        currentGame === 'beta'
-          ? 'bg-white dark:bg-slate-700 text-violet-600 dark:text-violet-400 shadow-sm'
+    const rpgButtonHTML = isTesterUser ? `
+      <button onclick="window.GAMES.switchGame('rpg')" class="py-2 rounded-xl transition-all flex items-center justify-center gap-1 ${
+        currentGame === 'rpg'
+          ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-sm'
           : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
       }">
-        <span>🧪</span>
-        <span class="truncate">Тест</span>
+        <span>⚔️</span>
+        <span class="truncate">natarGRP</span>
       </button>
     ` : "";
 
@@ -152,12 +152,12 @@
             </h2>
             <p class="text-xs text-slate-400 font-medium">Отдохни на перемене с пользой для ума</p>
           </div>
-          <span class="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-violet-50 dark:bg-slate-800 text-violet-600 dark:text-violet-400 border border-violet-100 dark:border-slate-700">${gameCountLabel}</span>
+          <span class="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-amber-50 dark:bg-slate-800 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-slate-700">${gameCountLabel}</span>
         </div>
 
         <!-- Games selector tabs -->
         <div class="gap-1 p-1 rounded-2xl bg-slate-200/70 dark:bg-slate-800/90 text-[10px] font-bold" style="display: grid; grid-template-columns: repeat(${activeTabsCount}, minmax(0, 1fr));">
-          ${betaButtonHTML}
+          ${rpgButtonHTML}
           <button onclick="window.GAMES.switchGame('2048')" class="py-2 rounded-xl transition-all flex items-center justify-center gap-1 ${
             currentGame === '2048'
               ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
@@ -209,7 +209,11 @@
     `;
 
     // After DOM update, initialize specific game listeners
-    if (currentGame === "2048") {
+    if (currentGame === "rpg") {
+      if (window.RPG && typeof window.RPG.init === "function") {
+        window.RPG.init();
+      }
+    } else if (currentGame === "2048") {
       if (window.GAMES_2048) window.GAMES_2048.init();
     } else if (currentGame === "tictactoe") {
       if (window.GAMES_TICTACTOE) window.GAMES_TICTACTOE.init();
@@ -225,7 +229,7 @@
   }
 
   function switchGame(gameId) {
-    if (gameId === "beta" && !isTesterUser) {
+    if (gameId === "rpg" && !isTesterUser) {
       gameId = "2048";
     }
     cleanupCurrentGame();
@@ -234,6 +238,10 @@
   }
 
   function cleanupCurrentGame() {
+    if (window.RPG) {
+      if (typeof window.RPG.leavePvPRoom === "function") window.RPG.leavePvPRoom();
+      if (typeof window.RPG.leaveCoopRoom === "function") window.RPG.leaveCoopRoom();
+    }
     if (window.GAMES_2048 && typeof window.GAMES_2048.cleanup === 'function') {
       window.GAMES_2048.cleanup();
     }
@@ -255,7 +263,7 @@
   }
 
   function renderActiveGame() {
-    if (currentGame === "beta") return renderBetaHTML();
+    if (currentGame === "rpg") return `<div id="rpg-root"></div>`;
     if (currentGame === "2048") return window.GAMES_2048 ? window.GAMES_2048.renderHTML() : "";
     if (currentGame === "tictactoe") return window.GAMES_TICTACTOE ? window.GAMES_TICTACTOE.renderHTML() : "";
     if (currentGame === "snake") return window.GAMES_SNAKE ? window.GAMES_SNAKE.renderHTML() : "";
@@ -265,41 +273,6 @@
     return "";
   }
 
-  function renderBetaHTML() {
-    return `
-      <div class="theme-card rounded-3xl p-5 bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 shadow-sm space-y-4 max-w-sm mx-auto text-center animate-fade-in">
-        <div class="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-violet-500/20 to-purple-600/20 dark:from-violet-400/20 dark:to-purple-500/20 flex items-center justify-center text-3xl shadow-inner border border-violet-500/30">
-          🧪
-        </div>
-        
-        <div class="space-y-1.5">
-          <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-700">
-            <span class="w-2 h-2 rounded-full bg-violet-500 animate-pulse"></span>
-            Закрытый бета-тест
-          </div>
-          <h3 class="text-base font-black text-slate-900 dark:text-white tracking-tight">Экспериментальная игра</h3>
-          <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-xs mx-auto">
-            Эта вкладка сейчас доступна <b>только участникам с ролью Тестер</b>. Здесь будет размещена следующая мини-игра для 11 «Б».
-          </p>
-        </div>
-
-        <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-700/60 text-left space-y-2">
-          <div class="flex items-center justify-between text-xs">
-            <span class="text-slate-400 font-medium">Статус разработки:</span>
-            <span class="font-bold text-amber-500 flex items-center gap-1">🛠️ В разработке</span>
-          </div>
-          <div class="flex items-center justify-between text-xs">
-            <span class="text-slate-400 font-medium">Доступ:</span>
-            <span class="font-bold text-violet-600 dark:text-violet-400 flex items-center gap-1">🔒 Скрыта от остальных</span>
-          </div>
-        </div>
-
-        <div class="text-[11px] text-slate-400">
-          Остальные 6 игр доступны во вкладках правее.
-        </div>
-      </div>
-    `;
-  }
 
   // DURAK bridge
   function renderDurakHTML() {
@@ -342,6 +315,9 @@
     updateTesterStatus: updateTesterStatus,
     checkTesterStatus: checkTesterStatus,
     cleanup: cleanupCurrentGame,
+
+    // natarGRP RPG
+    initRPG: () => window.RPG && typeof window.RPG.init === "function" && window.RPG.init(),
 
     // 2048
     reset2048: () => window.GAMES_2048 && window.GAMES_2048.reset(),

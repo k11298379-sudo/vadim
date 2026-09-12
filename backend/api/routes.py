@@ -15,6 +15,7 @@ from backend.api.routers import (
     homework_router,
     games_router,
     durak_router,
+    rpg_router,
 )
 from backend.api.auth import extract_viewer_tg_id, _extract_viewer_tg_id
 
@@ -25,9 +26,11 @@ api_router.include_router(schedule_router)
 api_router.include_router(homework_router)
 api_router.include_router(games_router)
 api_router.include_router(durak_router)
+api_router.include_router(rpg_router)
 
 __all__ = [
     "api_router",
     "extract_viewer_tg_id",
     "_extract_viewer_tg_id",
 ]
+
