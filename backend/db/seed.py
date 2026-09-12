@@ -93,7 +93,6 @@ async def seed_initial_data(session: AsyncSession):
         if val in ["1", "4"]:
             await set_class_setting(session, "current_duty_group", "")
 
-
-
-
-
+    # Seed student birthdays for 11 «Б»
+    from backend.db.crud.birthdays import seed_default_birthdays
+    await seed_default_birthdays(session)

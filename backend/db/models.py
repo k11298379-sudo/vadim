@@ -231,7 +231,10 @@ class RPGCharacter(Base):
     user: Mapped["User"] = relationship("User")
 
 
+class StudentBirthday(Base):
+    __tablename__ = "student_birthdays"
 
-
-
-
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    full_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    birth_day: Mapped[int] = mapped_column(Integer, nullable=False)    # 1..31
+    birth_month: Mapped[int] = mapped_column(Integer, nullable=False)  # 1..12

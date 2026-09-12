@@ -109,6 +109,16 @@ async def lifespan(app: FastAPI):
 
     asyncio.create_task(check_and_send_evening_digest_on_startup())
 
+    # Catch-up birthday greetings on startup if not yet checked/sent today
+    async def check_and_send_birthdays_on_startup():
+        try:
+            await asyncio.sleep(4)
+            from backend.bot.services.birthdays import check_and_send_birthday_greetings
+            await check_and_send_birthday_greetings(bot)
+        except Exception as ex:
+            logger.warning(f"Error checking birthday greetings on startup: {ex}")
+
+    asyncio.create_task(check_and_send_birthdays_on_startup())
 
     # Start Cloudflare Tunnel if configured and URL is not already HTTPS
     port = int(os.environ.get("PORT", settings.PORT))

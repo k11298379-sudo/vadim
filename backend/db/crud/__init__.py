@@ -99,6 +99,13 @@ from backend.db.crud.duty import (
     get_users_in_duty_group,
 )
 
+from backend.db.crud.birthdays import (
+    seed_default_birthdays,
+    get_all_birthdays,
+    get_birthdays_for_date,
+    get_upcoming_birthdays,
+)
+
 from backend.db.crud.rpg import (
     HERO_CLASSES,
     get_or_create_rpg_character,
@@ -185,6 +192,11 @@ __all__ = [
     "get_current_duty_info",
     "clear_all_duty_members",
     "get_users_in_duty_group",
+    # birthdays
+    "seed_default_birthdays",
+    "get_all_birthdays",
+    "get_birthdays_for_date",
+    "get_upcoming_birthdays",
     # rpg
     "HERO_CLASSES",
     "get_or_create_rpg_character",

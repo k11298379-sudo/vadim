@@ -64,6 +64,16 @@ def setup_scheduler(bot: Bot):
             except Exception as ex:
                 logger.error(f"Error in daily cleanup: {ex}")
 
+        # Автоматические поздравления с Днём Рождения в 00:00 (Екатеринбург) в важные объявления
+        from backend.bot.services.birthdays import check_and_send_birthday_greetings
+        scheduler.add_job(
+            check_and_send_birthday_greetings,
+            trigger=CronTrigger(hour=0, minute=0, timezone=settings.TIMEZONE),
+            args=[bot],
+            id="daily_birthday_greetings_job",
+            replace_existing=True
+        )
+
         scheduler.add_job(
             run_daily_cleanup,
             trigger=CronTrigger(hour=0, minute=5, timezone=settings.TIMEZONE),

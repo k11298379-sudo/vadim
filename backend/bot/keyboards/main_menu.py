@@ -27,8 +27,11 @@ def get_main_keyboard(is_admin: bool = False, user_id: int | None = None) -> Rep
             KeyboardButton(text="🧹 График дежурств")
         ],
         [
-            KeyboardButton(text="☀️ До лета осталось"),
+            KeyboardButton(text="🎂 Дни рождения"),
             KeyboardButton(text="💡 Интересный факт")
+        ],
+        [
+            KeyboardButton(text="☀️ До лета осталось")
         ]
     ])
 
