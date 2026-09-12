@@ -1752,9 +1752,10 @@
       if (bId.includes(k)) { tier = v; break; }
     }
 
-    // Target duration scales strictly with tier: +16s per tier
-    const targetSeconds = 30 + (tier - 1) * 16;
-    const targetHits = Math.floor(targetSeconds * 2.8); // ~2.8 shots/sec auto-attack
+    // Target duration scales strictly with tier: 45s (Tier 1) up to ~3.5 minutes (Tier 15)
+    const targetSeconds = 45 + (tier - 1) * 18;
+    // Accounts for total party output (~8-10 damage events/sec from player, companions, skills, dots)
+    const targetHits = Math.floor(targetSeconds * 7.5);
 
     // Baseline damage per normal auto-attack hit (% of boss maxHp)
     const basePctPerHit = 1.0 / targetHits;
@@ -1764,18 +1765,18 @@
     const stats = RPG_STATE.profile?.stats || {};
     const playerAtk = Math.max(30, Math.floor(((stats.min_atk || 30) + (stats.max_atk || 50)) / 2));
 
-    // Hit ratio: skills deal 3.8x - 6.0x, companions deal 0.35x
-    const hitRatio = Math.max(0.15, rawDmg / playerAtk);
+    // Hit ratio: skills deal 1.5x - 2.8x, companion/DOT ticks deal 0.04x - 0.45x
+    const hitRatio = Math.max(0.04, Math.min(2.8, rawDmg / playerAtk));
 
-    // Stagger bonus (+150% damage when boss is staggered / poise broken)
-    const staggerMult = boss.isStaggered ? 2.5 : 1.0;
+    // Stagger bonus (+40% damage when boss is staggered / poise broken)
+    const staggerMult = boss.isStaggered ? 1.4 : 1.0;
 
     // Crit multiplier
-    const critMult = isCrit ? 1.5 : 1.0;
+    const critMult = isCrit ? 1.3 : 1.0;
 
-    // Damage calculation: capped per single hit so skills feel impactful (up to 3.5x) without trivializing
+    // Damage calculation: capped per single hit so skills feel impactful without vaporizing boss
     const calculatedDmg = Math.floor(baseHitDmg * hitRatio * staggerMult * critMult);
-    const maxAllowedDmg = Math.floor(baseHitDmg * 3.5 * (boss.isStaggered ? 2.0 : 1.0));
+    const maxAllowedDmg = Math.floor(baseHitDmg * 2.2 * (boss.isStaggered ? 1.4 : 1.0));
     const finalDmg = Math.max(1, Math.min(calculatedDmg, maxAllowedDmg));
 
     boss.hp = Math.max(0, boss.hp - finalDmg);
@@ -1816,22 +1817,22 @@
       if (bId.includes(k)) { tier = v; break; }
     }
 
-    // BASE GENTLE SCALING PER HIT (% of player max HP):
-    // Golem (tier 1): 1.7% HP per normal hit (survives 60 hits!)
-    // Lich (tier 2): 2.2% HP
-    // Tormentor (tier 3): 2.7% HP
-    // Dragon (tier 4): 3.2% HP
-    // Roshan (tier 5): 3.7% HP
-    // Enigma (tier 15): 8.5% HP (survives 12-15 hits!)
-    const basePct = (0.012 + tier * 0.005) * baseMult;
+    // THREATENING BOSS DAMAGE SCALING PER HIT (% of player max HP):
+    // Golem (tier 1): 8% HP per normal hit
+    // Lich (tier 2): 10% HP
+    // Tormentor (tier 3): 12% HP
+    // Dragon (tier 4): 14% HP
+    // Roshan (tier 5): 16% HP (Smashes/Charges deal 24-35%)
+    // Enigma (tier 15): 28% HP
+    const basePct = (0.07 + Math.min(tier, 15) * 0.014) * baseMult;
     let rawDmg = Math.floor(pMax * basePct);
 
-    // Defense reduction: player armor mitigates up to 50% of damage
-    const dr = Math.min(0.50, (def * 0.03) / (1.0 + def * 0.03));
-    let finalDmg = Math.max(8, Math.floor(rawDmg * (1.0 - dr)));
+    // Defense reduction: player armor mitigates up to 45% of damage
+    const dr = Math.min(0.45, (def * 0.025) / (1.0 + def * 0.025));
+    let finalDmg = Math.max(15, Math.floor(rawDmg * (1.0 - dr)));
 
     if (p.isBlocking) {
-      finalDmg = Math.floor(finalDmg * 0.35);
+      finalDmg = Math.floor(finalDmg * 0.40);
     }
 
     return finalDmg;
@@ -1854,13 +1855,12 @@
       if (bId.includes(k)) { tier = v; break; }
     }
 
-    // ABSOLUTE ANTI-ONE-SHOT CEILING per single hit:
-    // Golem: max 4% player max HP
-    // Lich: max 5% player max HP
-    // Roshan: max 8% player max HP
-    // Enigma: max 15% player max HP
-    const maxHitPct = 0.03 + Math.min(tier, 15) * 0.008;
-    const maxDmg = Math.max(12, Math.floor(pMax * maxHitPct));
+    // FAIR ANTI-ONE-SHOT CEILING per single hit:
+    // Golem: max 25% player max HP
+    // Roshan: max 38% player max HP
+    // Enigma: max 48% player max HP
+    const maxHitPct = 0.22 + Math.min(tier, 15) * 0.018;
+    const maxDmg = Math.max(25, Math.floor(pMax * maxHitPct));
     let finalDmg = Math.min(Math.max(1, rawDmg), maxDmg);
 
     // HEALTH GATE PROTECTION:
@@ -2392,47 +2392,46 @@
             });
           }
 
-          // Trigger Charge / Таран (Every ~13 sec, 2.2s warning beam!)
-          if (boss.chargeCooldown <= 0 && minDist > 95) {
+          // Trigger Charge / Таран (Every ~8 sec, 1.1s clear warning beam!)
+          if (boss.chargeCooldown <= 0 && minDist > 80) {
             boss.state = "telegraph_charge";
-            boss.stateTimer = 130; // 2.2 seconds of clear warning beam!
+            boss.stateTimer = 68; // ~1.1 seconds warning beam
             boss.chargeAngle = Math.atan2(p.y - boss.y, p.x - boss.x);
-            // Slower readable rush: 2.2 px/frame!
-            boss.chargeVx = Math.cos(boss.chargeAngle) * 2.2;
-            boss.chargeVy = Math.sin(boss.chargeAngle) * 2.2;
-            boss.chargeCooldown = 750; // ~12.5s cooldown
-            spawnFloatingText(boss.x, boss.y - 35, "⚠️ ТАРАН ЧЕРЕЗ 2 СЕК!", "#ef4444");
+            // Menacing charge rush: 3.2 px/frame
+            boss.chargeVx = Math.cos(boss.chargeAngle) * 3.2;
+            boss.chargeVy = Math.sin(boss.chargeAngle) * 3.2;
+            boss.chargeCooldown = 480; // 8s cooldown
+            spawnFloatingText(boss.x, boss.y - 35, "⚠️ ТАРАН! РЫВОК В СТОРОНУ!", "#ef4444");
             triggerHaptic("heavy");
           }
-          // Trigger Barrage / Ракеты (Every ~9 sec, slow floating rockets)
-          else if (boss.barrageCooldown <= 0 && minDist > 85) {
+          // Trigger Barrage / Ракеты (Every ~6 sec)
+          else if (boss.barrageCooldown <= 0 && minDist > 75) {
             boss.state = "barrage";
-            boss.stateTimer = 40;
-            boss.barrageCooldown = 540; // 9s cooldown
+            boss.stateTimer = 35;
+            boss.barrageCooldown = 360; // 6s cooldown
             spawnFloatingText(boss.x, boss.y - 30, "🚀 ЗАЛП РАКЕТ!", "#f59e0b");
-            // Launch slow floating rockets that player can easily weave between
             const pAng = Math.atan2(p.y - boss.y, p.x - boss.x);
-            const numRockets = boss.enrageStage === "enraged" ? 3 : 2;
+            const numRockets = boss.enrageStage === "enraged" ? 5 : 3;
             for (let r = 0; r < numRockets; r++) {
-              const spread = (r - (numRockets - 1) / 2) * 0.28;
+              const spread = (r - (numRockets - 1) / 2) * 0.26;
               const rAng = pAng + spread;
               ARENA.bossProjectiles.push({
                 x: boss.x + Math.cos(rAng) * (boss.radius + 8),
                 y: boss.y + Math.sin(rAng) * (boss.radius + 8),
-                vx: Math.cos(rAng) * 1.15, // Ultra-slow floating speed!
-                vy: Math.sin(rAng) * 1.15,
+                vx: Math.cos(rAng) * 2.2,
+                vy: Math.sin(rAng) * 2.2,
                 radius: 8.0,
                 color: "#ef4444",
-                timer: 320,
-                dmg: calculateBossAttackDamage(boss, 0.70)
+                timer: 260,
+                dmg: calculateBossAttackDamage(boss, 0.85)
               });
             }
           }
-          // Trigger Melee Strike if close (1.6s windup warning circle!)
-          else if (minDist < 54 && boss.meleeCooldown <= 0) {
+          // Trigger Melee Strike if close (0.85s windup warning circle)
+          else if (minDist < 60 && boss.meleeCooldown <= 0) {
             boss.state = "telegraph_melee";
-            boss.stateTimer = 95; // 1.6s telegraph windup
-            boss.meleeCooldown = 260; // 4.3 seconds between melee attacks
+            boss.stateTimer = 52; // ~0.85s telegraph windup
+            boss.meleeCooldown = 150; // 2.5 seconds between melee attacks
             spawnFloatingText(boss.x, boss.y - 30, "⚠️ ЗАМАХ!", "#f59e0b");
           }
         }
@@ -2500,10 +2499,10 @@
             if (p.currentHp <= 0) { handlePlayerArenaDeath(); return; }
           }
 
-          // Hit arena wall -> STUNNED for 3.3 seconds! (Huge player damage window)
+          // Hit arena wall -> STUNNED for 1.5 seconds! (Reward player for baiting charge into wall)
           if (boss.x <= 32 || boss.x >= ARENA.width - 32 || boss.y <= 40 || boss.y >= ARENA.height - 40) {
             boss.state = "stunned";
-            boss.stateTimer = 200; // 3.3s stun
+            boss.stateTimer = 90; // ~1.5s stun
             ARENA.cameraTrauma = 0.5;
             triggerHaptic("heavy");
             spawnFloatingText(boss.x, boss.y - 35, "💫 БОСС ВРЕЗАЛСЯ В СТЕНУ! ОШЕЛОМЛЕН!", "#facc15");
@@ -4491,7 +4490,7 @@
       x: (ARENA.width || 360) / 2,
       y: 95,
       radius: 30, // Scaled down for comfortable arena space
-      speed: 0.42, // Heavy, deliberate slow walk!
+      speed: 0.65, // Active, menacing movement speed
       hp: calculatedHp,
       maxHp: calculatedHp,
       atk: calculatedAtk,
@@ -4501,21 +4500,21 @@
       attackCooldown: 0,
       state: "chase",
       stateTimer: 0,
-      meleeCooldown: 120,
-      chargeCooldown: 450,
-      barrageCooldown: 300,
+      meleeCooldown: 60,
+      chargeCooldown: 220,
+      barrageCooldown: 140,
       chargeAngle: 0,
       chargeVx: 0,
       chargeVy: 0,
       facing: 1,
       enrageTimer: 0,
       enrageStage: "normal",
-      poise: 350,
-      maxPoise: 350,
+      poise: 800,
+      maxPoise: 800,
       isStaggered: false,
       staggerTimer: 0,
       bossType: (bt.name.toLowerCase().includes("терзатель") || bt.name.toLowerCase().includes("tormentor")) ? "tormentor" :
-                (bt.name.toLowerCase().includes("лич") || bt.name.toLowerCase().includes("archlich")) ? "archlich" :
+                (bt.name.toLowerCase().includes("лич") || bt.name.toLowerCase().includes("archlich")) ? "lich" :
                 (bt.name.toLowerCase().includes("дракон") || bt.name.toLowerCase().includes("dragon")) ? "dragon" : "roshan"
     };
 
@@ -6120,7 +6119,7 @@
       x: 180,
       y: 95,
       radius: Math.floor(30 * (b.scale || 1.15)),
-      speed: 0.42, // Heavy, deliberate slow walk!
+      speed: 0.65, // Menacing, active movement speed
       hp: finalHp,
       maxHp: finalHp,
       atk: b.baseAtk || 50,
@@ -6131,13 +6130,13 @@
       isMinion: false,
       shielded: false,
       attackCooldown: 0,
-      poise: 600,
-      maxPoise: 600,
+      poise: 1600,
+      maxPoise: 1600,
       state: "chase",
       stateTimer: 0,
-      meleeCooldown: 120, // 2s initial wait
-      chargeCooldown: 450, // 7.5s initial wait before first charge
-      barrageCooldown: 300, // 5s initial wait before first barrage
+      meleeCooldown: 60, // 1s initial wait
+      chargeCooldown: 220, // 3.6s initial wait before first charge
+      barrageCooldown: 140, // 2.3s initial wait before first barrage
       chargeAngle: 0,
       chargeVx: 0,
       chargeVy: 0,
