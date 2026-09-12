@@ -66,11 +66,16 @@ async def cmd_start(message: Message, db_session: AsyncSession, bot: Bot, curren
     username = message.from_user.username
     full_name = message.from_user.full_name or "Ученик"
 
+    local_app_link = ""
+    if not settings.WEBAPP_URL.startswith("https://"):
+        local_app_link = f"\n\n💻 **Mini App (в браузере):**\nhttp://localhost:{settings.PORT}/app?tg_user_id={user_id}"
+
     # If user is admin
     if settings.ADMIN_ID and user_id == settings.ADMIN_ID:
         await message.answer(
             f"👋 **Здравствуйте, Администратор ({full_name})!**\n\n"
-            "Вам доступно полное управление ботом класса, расписанием, ДЗ и заявками учеников.",
+            "Вам доступно полное управление ботом класса, расписанием, ДЗ и заявками учеников."
+            f"{local_app_link}",
             reply_markup=get_main_keyboard(is_admin=True, user_id=user_id),
             parse_mode="Markdown"
         )
@@ -82,7 +87,8 @@ async def cmd_start(message: Message, db_session: AsyncSession, bot: Bot, curren
         role_label = " (Администратор)" if is_user_adm else ""
         await message.answer(
             f"👋 **Привет, {current_user.display_name}!**{role_label}\n\n"
-            "Добро пожаловать в бот класса! Выберите нужный раздел в меню ниже или откройте Mini App:",
+            "Добро пожаловать в бот класса! Выберите нужный раздел в меню ниже:"
+            f"{local_app_link}",
             reply_markup=get_main_keyboard(is_admin=is_user_adm, user_id=user_id),
             parse_mode="Markdown"
         )
