@@ -91,7 +91,7 @@ async def run_birthdays_test_suite():
         assert "Глеб" in msg_single
         assert "С ДНЁМ РОЖДЕНИЯ" in msg_single
         assert "ЕГЭ" in msg_single
-        assert "11 «Б»" in msg_single
+        assert "От всего нашего класса" in msg_single
         print("[OK] Single celebrant greeting message format verified.")
 
         july_list = await get_birthdays_for_date(session, 10, 7)

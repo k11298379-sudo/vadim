@@ -3,7 +3,7 @@ from datetime import date
 from collections import defaultdict
 from aiogram import Router, F
 from aiogram.filters import Command
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import get_today
@@ -39,7 +39,7 @@ async def build_birthdays_overview_text(session: AsyncSession, today: date) -> s
     upcoming = await get_upcoming_birthdays(session, today, limit=3)
 
     lines = [
-        "🎂 **Дни рождения 11 «Б» класса** 🎈",
+        "🎂 **Дни рождения нашего класса** 🎈",
         "──────────────────────"
     ]
 
@@ -92,40 +92,27 @@ async def build_birthdays_overview_text(session: AsyncSession, today: date) -> s
     return "\n".join(lines)
 
 
-def get_birthdays_inline_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="🔄 Обновить", callback_data="birthdays_refresh")
-        ]
-    ])
-
-
 @router.message(F.text == "🎂 Дни рождения")
 @router.message(Command("birthdays"))
 async def cmd_birthdays(message: Message):
-    """Показывает календарь дней рождения учеников 11 «Б» класса."""
+    """Показывает календарь дней рождения учеников класса."""
     today = get_today()
     async with async_session_factory() as session:
         text = await build_birthdays_overview_text(session, today)
         await message.answer(
             text,
-            reply_markup=get_birthdays_inline_keyboard(),
             parse_mode="Markdown"
         )
 
 
 @router.callback_query(F.data == "birthdays_refresh")
 async def cb_birthdays_refresh(callback: CallbackQuery):
-    """Обновляет сообщение со списком именинников."""
+    """Обработка нажатия на устаревшую кнопку обновления."""
     today = get_today()
     async with async_session_factory() as session:
         text = await build_birthdays_overview_text(session, today)
         try:
-            await callback.message.edit_text(
-                text,
-                reply_markup=get_birthdays_inline_keyboard(),
-                parse_mode="Markdown"
-            )
-            await callback.answer("Список обновлен!")
+            await callback.message.edit_text(text, parse_mode="Markdown")
+            await callback.answer("Список актуален!")
         except Exception:
             await callback.answer("Данные актуальны.")

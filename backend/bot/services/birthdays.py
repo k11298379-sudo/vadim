@@ -32,21 +32,18 @@ def format_birthday_message(students: List[StudentBirthday], target_date: Option
     if len(students) == 1:
         names_str = f"✨ **{students[0].full_name}** ✨"
         header_who = "свой день рождения празднует:"
-        pronoun = "тебя"
         wish_form = "твой"
     else:
         names_joined = " и ".join(f"**{s.full_name}**" for s in students)
         names_str = f"✨ {names_joined} ✨"
         header_who = "свой день рождения празднуют:"
-        pronoun = "вас"
         wish_form = "ваш"
 
     return (
         "🎉 **С ДНЁМ РОЖДЕНИЯ!** 🎂🎈\n\n"
         f"Сегодня, **{day} {month_name}**, {header_who}\n"
         f"{names_str}\n\n"
-        f"От всего сердца поздравляем {pronoun} от имени всего 11 «Б» класса! 🥳\n\n"
-        "Желаем:\n"
+        "От всего нашего класса:\n"
         "🎯 **Максимальных баллов на ЕГЭ** и легкого поступления в вуз мечты!\n"
         "💪 **Крепкого здоровья**, океана энергии и отличного настроения каждый день!\n"
         "🌟 **Верных друзей**, ярких впечатлений и незабываемого выпускного года!\n"
