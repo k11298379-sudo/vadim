@@ -1425,6 +1425,13 @@
     if (!canvas) canvas = document.getElementById("rpg-action-canvas");
     if (!canvas) return;
 
+    // If canvas has no rendered size yet (DOM not laid out), defer until next frame
+    const earlyRect = canvas.getBoundingClientRect();
+    if (earlyRect.width < 10 && canvas.clientWidth < 10) {
+      requestAnimationFrame(() => bindArenaCanvas(canvas));
+      return;
+    }
+
     ARENA.canvas = canvas;
     ARENA.ctx = canvas.getContext("2d");
     if (ARENA.ctx) {
