@@ -95,6 +95,12 @@ async def init_db():
                 cols_rc = [row[1] for row in res_rc.fetchall()]
                 if "stat_points" not in cols_rc:
                     await conn.execute(text("ALTER TABLE rpg_characters ADD COLUMN stat_points INTEGER DEFAULT 2;"))
+                for col in ["hp_max", "mp_max", "hp", "mp", "hp_current", "current_hp"]:
+                    if col in cols_rc:
+                        try:
+                            await conn.execute(text(f"ALTER TABLE rpg_characters DROP COLUMN {col};"))
+                        except Exception:
+                            pass
             else:
                 await conn.execute(text("ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS assigned_date DATE;"))
                 await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_name VARCHAR(255);"))
@@ -107,6 +113,39 @@ async def init_db():
                 await conn.execute(text("ALTER TABLE daily_facts ADD COLUMN IF NOT EXISTS hour INTEGER DEFAULT 0;"))
                 await conn.execute(text("ALTER TABLE daily_facts ADD COLUMN IF NOT EXISTS minute INTEGER DEFAULT 0;"))
                 await conn.execute(text("ALTER TABLE rpg_characters ADD COLUMN IF NOT EXISTS stat_points INTEGER DEFAULT 2;"))
+                # Clean up any legacy columns or constraints in rpg_characters from earlier prototypes
+                await conn.execute(text("""
+                    DO $$
+                    DECLARE
+                        legacy_col TEXT;
+                    BEGIN
+                        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'rpg_characters') THEN
+                            FOR legacy_col IN SELECT unnest(ARRAY['hp_max', 'mp_max', 'hp', 'mp', 'hp_current', 'current_hp', 'mana', 'max_hp', 'max_mp'])
+                            LOOP
+                                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'rpg_characters' AND column_name = legacy_col) THEN
+                                    EXECUTE format('ALTER TABLE rpg_characters DROP COLUMN %I CASCADE;', legacy_col);
+                                END IF;
+                            END LOOP;
+
+                            FOR legacy_col IN 
+                                SELECT column_name 
+                                FROM information_schema.columns 
+                                WHERE table_name = 'rpg_characters' 
+                                  AND is_nullable = 'NO' 
+                                  AND column_name NOT IN (
+                                      'id', 'user_id', 'hero_class', 'level', 'xp', 'gold', 'gems',
+                                      'strength', 'agility', 'intelligence', 'vitality', 'stat_points',
+                                      'equipment', 'inventory', 'dungeon_floor', 'dungeon_cleared',
+                                      'pvp_rating', 'pvp_wins', 'pvp_losses', 'boss_kills',
+                                      'created_at', 'updated_at'
+                                  )
+                            LOOP
+                                EXECUTE format('ALTER TABLE rpg_characters ALTER COLUMN %I DROP NOT NULL;', legacy_col);
+                                EXECUTE format('ALTER TABLE rpg_characters ALTER COLUMN %I SET DEFAULT 0;', legacy_col);
+                            END LOOP;
+                        END IF;
+                    END $$;
+                """))
                 await conn.execute(text("ALTER TABLE group_chats ADD COLUMN IF NOT EXISTS topic_hw_id INTEGER;"))
                 await conn.execute(text("ALTER TABLE group_chats ADD COLUMN IF NOT EXISTS topic_schedule_id INTEGER;"))
                 await conn.execute(text("ALTER TABLE group_chats ADD COLUMN IF NOT EXISTS topic_duty_id INTEGER;"))
