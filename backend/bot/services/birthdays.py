@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from datetime import date
 from typing import List, Optional
 from aiogram import Bot
@@ -30,6 +31,8 @@ def format_birthday_message(students: List[StudentBirthday], target_date: Option
     month_name = MONTH_NAMES_GENITIVE.get(target_date.month, "сегодня")
 
     if len(students) == 1:
+        if students[0].full_name.strip().lower() == "исайкин":
+            return "Исайкин с днем рождения!!!! 🎂🍰🎆🎇"
         name = students[0].full_name
         return (
             f"🎉🎂 **С ДНЁМ РОЖДЕНИЯ, {name}!** 🎂🎉\n\n"
@@ -59,10 +62,10 @@ def format_birthday_message(students: List[StudentBirthday], target_date: Option
 
 async def check_and_send_birthday_greetings(bot: Bot, force: bool = False) -> int:
     """
-    Проверяет, есть ли сегодня именинники в 11 «Б» классе,
+    Проверяет, есть ли сегодня именинники в классе,
     и рассылает праздничное поздравление в беседы класса в топик «Важные объявления».
     Срабатывает ровно в 00:00 (Asia/Yekaterinburg).
-    Использует отметку last_birthday_congratulation_date для защиты от дублей при перезагрузках.
+    Для пользователя Исайкин отправляется специальное тройное уведомление с салютами и тортами.
     """
     today = get_today()
     today_str = str(today)
@@ -76,12 +79,23 @@ async def check_and_send_birthday_greetings(bot: Bot, force: bool = False) -> in
 
         birthday_students = await get_birthdays_for_date(session, today.day, today.month)
         if not birthday_students:
-            logger.info(f"No birthdays in 11 «Б» on {today.day}.{today.month}. Marking as checked.")
+            logger.info(f"No birthdays in class on {today.day}.{today.month}. Marking as checked.")
             await set_class_setting(session, "last_birthday_congratulation_date", today_str)
             return 0
 
         logger.info(f"Found {len(birthday_students)} birthday celebrant(s) today ({today_str}): {[s.full_name for s in birthday_students]}. Sending greetings...")
-        msg_text = format_birthday_message(birthday_students, today)
+
+        messages_to_send: List[str] = []
+        isaykin_students = [s for s in birthday_students if s.full_name.strip().lower() == "исайкин"]
+        other_students = [s for s in birthday_students if s.full_name.strip().lower() != "исайкин"]
+
+        if other_students:
+            messages_to_send.append(format_birthday_message(other_students, today))
+
+        if isaykin_students:
+            # Особенное поздравление для Исайкина: 3 сообщения с эмодзи тортов и фейерверков
+            isaykin_msg = "Исайкин с днем рождения!!!! 🎂🍰🎆🎇"
+            messages_to_send.extend([isaykin_msg, isaykin_msg, isaykin_msg])
 
         groups = await get_approved_group_chats(session)
         sent_count = 0
@@ -89,27 +103,30 @@ async def check_and_send_birthday_greetings(bot: Bot, force: bool = False) -> in
         for g in groups:
             target_thread = g.topic_announcements_id
             kwargs = {"message_thread_id": target_thread} if target_thread else {}
-            try:
-                await bot.send_message(
-                    chat_id=g.chat_id,
-                    text=msg_text,
-                    parse_mode="Markdown",
-                    **kwargs
-                )
-                sent_count += 1
-            except Exception as e:
-                logger.warning(f"Could not send birthday greeting to group {g.chat_id} with thread {target_thread}: {e}")
-                if target_thread:
-                    try:
-                        await bot.send_message(
-                            chat_id=g.chat_id,
-                            text=msg_text,
-                            parse_mode="Markdown"
-                        )
-                        sent_count += 1
-                    except Exception as ex2:
-                        logger.error(f"Failed fallback sending birthday greeting to group {g.chat_id}: {ex2}")
+            for text_msg in messages_to_send:
+                try:
+                    await bot.send_message(
+                        chat_id=g.chat_id,
+                        text=text_msg,
+                        parse_mode="Markdown",
+                        **kwargs
+                    )
+                    sent_count += 1
+                    if len(messages_to_send) > 1:
+                        await asyncio.sleep(0.3)
+                except Exception as e:
+                    logger.warning(f"Could not send birthday greeting to group {g.chat_id} with thread {target_thread}: {e}")
+                    if target_thread:
+                        try:
+                            await bot.send_message(
+                                chat_id=g.chat_id,
+                                text=text_msg,
+                                parse_mode="Markdown"
+                            )
+                            sent_count += 1
+                        except Exception as ex2:
+                            logger.error(f"Failed fallback sending birthday greeting to group {g.chat_id}: {ex2}")
 
         await set_class_setting(session, "last_birthday_congratulation_date", today_str)
-        logger.info(f"Birthday greetings successfully sent to {sent_count} group(s).")
+        logger.info(f"Birthday greetings successfully sent ({sent_count} msg(s)).")
         return sent_count
