@@ -2124,8 +2124,20 @@
       ARENA.startLoopTimeout = null;
     }
     ARENA.startLoopTimeout = setTimeout(() => {
-      if (!ARENA.isRaidBossBattle || !ARENA.bossEntity) {
-        initArenaCanvas();
+      // Ensure canvas has real pixel dimensions before starting the loop
+      const canvas = document.getElementById("rpg-action-canvas");
+      if (canvas) {
+        const r = canvas.getBoundingClientRect();
+        const hasSize = (r.width > 50) || (canvas.clientWidth > 50);
+        if (!hasSize) {
+          // Canvas not laid out yet — retry after one more frame
+          ARENA.startLoopTimeout = null;
+          requestAnimationFrame(() => startArenaLoop());
+          return;
+        }
+        if (!ARENA.isRaidBossBattle || !ARENA.bossEntity) {
+          initArenaCanvas();
+        }
       }
       ARENA.running = true;
       function loop() {
@@ -2139,7 +2151,7 @@
         ARENA.animId = requestAnimationFrame(loop);
       }
       ARENA.animId = requestAnimationFrame(loop);
-    }, 50);
+    }, 80);
   }
 
   function stopArenaLoop() {
@@ -4004,6 +4016,7 @@
     const boss = ARENA.bossEntity;
     if (!boss || boss.hp <= 0) return;
 
+    const p = ARENA.player;
     const stats = RPG_STATE.profile?.stats || {};
     const baseAtk = Math.max(30, Math.floor(((stats.min_atk || 30) + (stats.max_atk || 50)) / 2));
 
@@ -8387,6 +8400,8 @@
     if (!ctx) return;
     const clientW = canvas.clientWidth || (canvas.getBoundingClientRect && canvas.getBoundingClientRect().width) || 360;
     const clientH = canvas.clientHeight || (canvas.getBoundingClientRect && canvas.getBoundingClientRect().height) || (ARENA.topDownMode || ARENA.isRaidBossBattle ? 520 : 320);
+    const w = ARENA.width || clientW || 360;
+    const h = ARENA.height || clientH || 320;
     const time = ARENA.frameCount || 0;
 
     // Camera Trauma Shake (Sekiro / Hollow Knight impact feel)
@@ -10597,54 +10612,60 @@
             </button>
           </div>
 
-          <!-- Virtual Touch Joystick (Bottom Center) -->
+          <!-- Virtual Touch Joystick (Bottom Left, clear of action buttons) -->
           <div id="rpg-virtual-joystick-zone"
-               class="absolute bottom-3 left-1/2 -translate-x-1/2 w-28 h-28 flex items-center justify-center pointer-events-auto z-30 select-none touch-none">
-            <div id="rpg-joystick-base" class="relative w-24 h-24 rounded-full border-2 border-amber-400/50 bg-slate-900/80 shadow-2xl flex items-center justify-center backdrop-blur-md ring-2 ring-amber-500/20">
+               class="absolute bottom-3 left-3 w-24 h-24 flex items-center justify-center pointer-events-auto z-30 select-none touch-none">
+            <div id="rpg-joystick-base" class="relative w-20 h-20 rounded-full border-2 border-amber-400/50 bg-slate-900/80 shadow-2xl flex items-center justify-center backdrop-blur-md ring-2 ring-amber-500/20">
               <span class="absolute top-1 text-[9px] text-amber-300/50">▲</span>
               <span class="absolute bottom-1 text-[9px] text-amber-300/50">▼</span>
               <span class="absolute left-1.5 text-[9px] text-amber-300/50">◀</span>
               <span class="absolute right-1.5 text-[9px] text-amber-300/50">▶</span>
-              <div id="rpg-joystick-knob" class="w-10 h-10 rounded-full bg-gradient-to-tr from-amber-500 to-yellow-300 shadow-xl border-2 border-white pointer-events-none flex items-center justify-center">
+              <div id="rpg-joystick-knob" class="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-yellow-300 shadow-xl border-2 border-white pointer-events-none flex items-center justify-center">
                 <span class="text-xs font-black text-slate-950">🕹️</span>
               </div>
             </div>
           </div>
 
-          <!-- Left Controls (Potion & Active Items) -->
-          <div class="absolute bottom-3 left-3 flex flex-col items-center gap-2 z-20">
-            <button onclick="window.RPG.usePotionAction()" title="Зелье / Сыр [F / 1]" class="w-12 h-12 rounded-2xl bg-emerald-600/95 border-2 border-emerald-300 text-white font-bold text-xl flex items-center justify-center shadow-lg active:scale-90 transition-transform">
+          <!-- Potion button (above joystick) -->
+          <div class="absolute bottom-28 left-3 z-20">
+            <button onclick="window.RPG.usePotionAction()" title="Зелье / Сыр [F / 1]" class="w-10 h-10 rounded-2xl bg-emerald-600/95 border-2 border-emerald-300 text-white font-bold text-lg flex items-center justify-center shadow-lg active:scale-90 transition-transform">
               🧪
             </button>
           </div>
 
           <!-- Right Action Buttons (Attack, Dash / Roll, Skill 1, Ultimate) -->
-          <div class="absolute bottom-3 right-3 flex items-center gap-1.5 z-20">
-            <!-- Attack / Shoot Button [Space / Click] -->
-            <button id="rpg-btn-attack" onclick="window.RPG.playerSlashAttackAction()" title="Атака / Выстрел в босса [Пробел / Клик]"
-              class="w-12 h-12 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 border-2 border-amber-300 text-white font-black text-xs flex flex-col items-center justify-center shadow-lg shadow-red-600/40 active:scale-90 transition-transform">
-              <span class="text-base leading-none">⚔️</span>
-              <span class="text-[8px] font-bold mt-0.5">АТАКА</span>
-            </button>
+          <div class="absolute bottom-3 right-3 flex flex-col gap-1.5 z-20">
+            <!-- Top row: Skill 1 + Ultimate -->
+            <div class="flex items-center gap-1.5">
+              <!-- Hero Skill 1 Button [E] -->
+              <button id="rpg-btn-skill1" onclick="window.RPG.castSkill1Action()" title="${cfg.skill1Name} [E]" class="w-11 h-11 rounded-2xl ${s1CdSec > 0 ? 'bg-slate-800/80 border border-slate-700 opacity-60' : 'bg-gradient-to-r from-blue-600 to-cyan-600 border-2 border-cyan-400'} text-white font-black text-sm flex flex-col items-center justify-center shadow-lg active:scale-90 transition-transform">
+                <span class="text-base">${cfg.skill1Icon || '⚡'}</span>
+                <span id="rpg-cd-skill1" class="text-[8px] font-bold">${s1CdSec > 0 ? `${s1CdSec}с` : 'Скилл'}</span>
+              </button>
 
-            <!-- Dash / Roll Button -->
-            <button onclick="window.RPG.playerDashRollAction()" title="Рывок / Кувырок [Shift / C]"
-              class="w-12 h-12 rounded-2xl ${ARENA.dodgeCooldown > 0 ? 'bg-slate-800/80 border border-slate-700 opacity-60' : 'bg-gradient-to-r from-sky-500 to-cyan-500 border-2 border-sky-300 shadow-sky-500/40 animate-pulse'} text-white font-black text-sm flex flex-col items-center justify-center shadow-lg active:scale-90 transition-all">
-              <span class="text-lg">🌀</span>
-              <span class="text-[8px] leading-tight font-bold">${ARENA.dodgeCooldown > 0 ? Math.ceil(ARENA.dodgeCooldown / 60) + 'с' : 'Рывок'}</span>
-            </button>
+              <!-- Hero Ultimate Skill Button [Q] -->
+              <button id="rpg-btn-ult" onclick="window.RPG.castUltimateAction()" title="${cfg.ultName} [Q]" class="w-11 h-11 rounded-2xl ${ultCdSec > 0 ? 'bg-slate-800/80 border border-slate-700 opacity-60' : 'bg-gradient-to-r from-purple-600 to-indigo-600 border-2 border-purple-400'} text-white font-black text-sm flex flex-col items-center justify-center shadow-lg active:scale-90 transition-transform">
+                <span class="text-base">${cfg.ultIcon || '🌟'}</span>
+                <span id="rpg-cd-ult" class="text-[8px] font-bold">${ultCdSec > 0 ? `${ultCdSec}с` : 'Ульта'}</span>
+              </button>
+            </div>
 
-            <!-- Hero Skill 1 Button [E] -->
-            <button id="rpg-btn-skill1" onclick="window.RPG.castSkill1Action()" title="${cfg.skill1Name} [E]" class="w-12 h-12 rounded-2xl ${s1CdSec > 0 ? 'bg-slate-800/80 border border-slate-700 opacity-60' : 'bg-gradient-to-r from-blue-600 to-cyan-600 border-2 border-cyan-400'} text-white font-black text-sm flex flex-col items-center justify-center shadow-lg active:scale-90 transition-transform">
-              <span class="text-base">${cfg.skill1Icon || '⚡'}</span>
-              <span id="rpg-cd-skill1" class="text-[9px] font-bold">${s1CdSec > 0 ? `${s1CdSec}с` : 'Скилл 1'}</span>
-            </button>
+            <!-- Bottom row: Attack + Dash -->
+            <div class="flex items-center gap-1.5">
+              <!-- Attack / Shoot Button [Space / Click] -->
+              <button id="rpg-btn-attack" onclick="window.RPG.playerSlashAttackAction()" title="Атака [Пробел / Клик]"
+                class="w-11 h-11 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 border-2 border-amber-300 text-white font-black text-xs flex flex-col items-center justify-center shadow-lg shadow-red-600/40 active:scale-90 transition-transform">
+                <span class="text-base leading-none">⚔️</span>
+                <span class="text-[8px] font-bold mt-0.5">АТАК</span>
+              </button>
 
-            <!-- Hero Ultimate Skill Button [Q] -->
-            <button id="rpg-btn-ult" onclick="window.RPG.castUltimateAction()" title="${cfg.ultName} [Q]" class="w-12 h-12 rounded-2xl ${ultCdSec > 0 ? 'bg-slate-800/80 border border-slate-700 opacity-60' : 'bg-gradient-to-r from-purple-600 to-indigo-600 border-2 border-purple-400'} text-white font-black text-sm flex flex-col items-center justify-center shadow-lg active:scale-90 transition-transform">
-              <span class="text-base">${cfg.ultIcon || '🌟'}</span>
-              <span id="rpg-cd-ult" class="text-[9px] font-bold">${ultCdSec > 0 ? `${ultCdSec}с` : 'Ульта'}</span>
-            </button>
+              <!-- Dash / Roll Button -->
+              <button onclick="window.RPG.playerDashRollAction()" title="Рывок / Кувырок [Shift / C]"
+                class="w-11 h-11 rounded-2xl ${ARENA.dodgeCooldown > 0 ? 'bg-slate-800/80 border border-slate-700 opacity-60' : 'bg-gradient-to-r from-sky-500 to-cyan-500 border-2 border-sky-300 shadow-sky-500/40'} text-white font-black text-sm flex flex-col items-center justify-center shadow-lg active:scale-90 transition-all">
+                <span class="text-base">🌀</span>
+                <span class="text-[8px] leading-tight font-bold">${ARENA.dodgeCooldown > 0 ? Math.ceil(ARENA.dodgeCooldown / 60) + 'с' : 'Рывок'}</span>
+              </button>
+            </div>
           </div>
         </div>
 
