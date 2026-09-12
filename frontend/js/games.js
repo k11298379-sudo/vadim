@@ -306,6 +306,55 @@
     loadNext();
   }
 
+  async function openOnlineRoom(roomId, gameType) {
+    if (gameType === "rpg_duel") {
+      currentGame = "rpg";
+      renderGames();
+      if (window.RPG && typeof window.RPG.openPvPRoom === "function") {
+        window.RPG.openPvPRoom(roomId);
+      }
+      return;
+    }
+    if (gameType === "rpg_coop") {
+      currentGame = "rpg";
+      renderGames();
+      if (window.RPG && typeof window.RPG.openCoopRoom === "function") {
+        window.RPG.openCoopRoom(roomId);
+      }
+      return;
+    }
+    if (gameType === "chess") {
+      if (window.GAMES_CHESS) return window.GAMES_CHESS.openChessOnlineRoom(roomId);
+    }
+    try {
+      if (window.api && typeof window.api.getGameRoom === "function") {
+        const room = await window.api.getGameRoom(roomId);
+        if (room) {
+          if (room.game_type === "rpg_duel") {
+            currentGame = "rpg";
+            renderGames();
+            if (window.RPG && typeof window.RPG.openPvPRoom === "function") {
+              window.RPG.openPvPRoom(roomId, room);
+            }
+            return;
+          }
+          if (room.game_type === "rpg_coop") {
+            currentGame = "rpg";
+            renderGames();
+            if (window.RPG && typeof window.RPG.openCoopRoom === "function") {
+              window.RPG.openCoopRoom(roomId, room);
+            }
+            return;
+          }
+          if (room.game_type === "chess") {
+            if (window.GAMES_CHESS) return window.GAMES_CHESS.openChessOnlineRoom(roomId);
+          }
+        }
+      }
+    } catch (e) {}
+    if (window.GAMES_TICTACTOE) return window.GAMES_TICTACTOE.openOnlineRoom(roomId);
+  }
+
   // ПУБЛИЧНЫЙ ФАСАД window.GAMES (100% совместимость со всеми onclick в HTML)
   window.GAMES = {
     init: initGames,
@@ -326,7 +375,7 @@
     setTTTMode: (m) => window.GAMES_TICTACTOE && window.GAMES_TICTACTOE.setTTTMode(m),
     cellClickTTT: (i) => window.GAMES_TICTACTOE && window.GAMES_TICTACTOE.cellClickTTT(i),
     resetTTT: () => window.GAMES_TICTACTOE && window.GAMES_TICTACTOE.resetTTT(),
-    openOnlineRoom: (c) => window.GAMES_TICTACTOE && window.GAMES_TICTACTOE.openOnlineRoom(c),
+    openOnlineRoom: openOnlineRoom,
     inviteClassmate: (id, n) => window.GAMES_TICTACTOE && window.GAMES_TICTACTOE.inviteClassmate(id, n),
     makeOnlineMove: (i) => window.GAMES_TICTACTOE && window.GAMES_TICTACTOE.makeOnlineMove(i),
     requestRematch: () => window.GAMES_TICTACTOE && window.GAMES_TICTACTOE.requestRematch(),

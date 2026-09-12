@@ -99,6 +99,13 @@ from backend.db.crud.duty import (
     get_users_in_duty_group,
 )
 
+from backend.db.crud.rpg import (
+    HERO_CLASSES,
+    get_or_create_rpg_character,
+    get_rpg_shop_catalog,
+    get_rpg_leaderboard_data,
+)
+
 __all__ = [
     # users & group chats
     "get_user_by_tg_id",
@@ -178,4 +185,9 @@ __all__ = [
     "get_current_duty_info",
     "clear_all_duty_members",
     "get_users_in_duty_group",
+    # rpg
+    "HERO_CLASSES",
+    "get_or_create_rpg_character",
+    "get_rpg_shop_catalog",
+    "get_rpg_leaderboard_data",
 ]

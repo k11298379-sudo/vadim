@@ -1,9 +1,54 @@
-﻿import logging
+import asyncio
+import logging
 from typing import Optional, Dict, Any, Tuple
+from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.db.models import User
 
 logger = logging.getLogger(__name__)
+
+def get_public_webapp_url(request: Request) -> str:
+    """Returns reliable public HTTPS URL of the Mini App, auto-detecting proxy/tunnel domains."""
+    from backend.config import settings
+    configured = settings.WEBAPP_URL.strip() if settings.WEBAPP_URL else ""
+    if configured and not ("localhost" in configured or "127.0.0.1" in configured):
+        return configured
+
+    ref = request.headers.get("referer")
+    if ref and ref.startswith("https://"):
+        return ref.split("?")[0].split("#")[0]
+
+    origin = request.headers.get("origin")
+    if origin and origin.startswith("https://"):
+        return f"{origin.rstrip('/')}/app"
+
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    proto = request.headers.get("x-forwarded-proto", "https")
+    if host and not ("localhost" in host or "127.0.0.1" in host):
+        return f"{proto}://{host}/app"
+
+    return configured or "https://t.me"
+
+async def send_game_invite_notification(
+    bot,
+    opponent_tg_id: int,
+    invite_text: str,
+    reply_markup
+):
+    """Sends invitation to opponent in the background without blocking the HTTP request."""
+    try:
+        await asyncio.wait_for(
+            bot.send_message(
+                chat_id=opponent_tg_id,
+                text=invite_text,
+                reply_markup=reply_markup
+            ),
+            timeout=8.0
+        )
+        logger.info(f"Game invitation notification sent to {opponent_tg_id}")
+    except Exception as e:
+        logger.warning(f"Could not deliver game invitation to {opponent_tg_id}: {e}")
+
 
 async def prepare_rpg_hero_data(session: AsyncSession, user: Optional[User], host_name: str) -> Optional[Dict[str, Any]]:
     if not user:

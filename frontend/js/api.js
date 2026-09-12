@@ -31,6 +31,13 @@ function getTelegramUser() {
 }
 
 function getTelegramUserId() {
+  // 0. Admin Test Account override for bug hunting
+  try {
+    const adminOverride = localStorage.getItem("admin_test_tg_uid");
+    if (adminOverride && /^[0-9]+$/.test(adminOverride)) {
+      return String(adminOverride);
+    }
+  } catch (e) {}
   // 1. window.Telegram.WebApp.initDataUnsafe.user.id
   try {
     const tgUser = getTelegramUser();
@@ -97,8 +104,9 @@ async function apiRequest(endpoint, options = {}) {
 
   // Safe initData: NEVER send raw non-ASCII strings in headers to avoid WHATWG Fetch crash
   try {
+    const hasAdminOverride = !!localStorage.getItem("admin_test_tg_uid");
     const rawInit = getTelegramInitData();
-    if (rawInit && /^[\x20-\x7E]*$/.test(rawInit)) {
+    if (!hasAdminOverride && rawInit && /^[\x20-\x7E]*$/.test(rawInit)) {
       headers["X-Telegram-Init-Data"] = rawInit;
     }
   } catch (e) {}
@@ -119,10 +127,17 @@ async function apiRequest(endpoint, options = {}) {
         errorDetail = err.detail || err.message || "";
       } catch (e) {}
 
-      if (response.status === 401 || response.status === 403) {
-        throw new Error(errorDetail || "Доступ запрещен или требуется авторизация");
+      let errMsg = errorDetail;
+      if (!errMsg) {
+        if (response.status === 401 || response.status === 403) {
+          errMsg = "Доступ запрещен или требуется авторизация";
+        } else {
+          errMsg = `Ошибка сервера: ${response.status}`;
+        }
       }
-      throw new Error(errorDetail || `Ошибка сервера: ${response.status}`);
+      const errObj = new Error(errMsg);
+      errObj.status = response.status;
+      throw errObj;
     }
 
     return await response.json();
@@ -157,7 +172,7 @@ const api = {
         host_name: hostName
       })
     }),
-  inviteGame: (opponentTgId, hostName, gameType = "tictactoe", hostColor = "white", opponentName = "") =>
+  inviteGame: (opponentTgId, hostName, gameType = "tictactoe", hostColor = "white", opponentName = "", bossId = null, isSolo = false, heroData = null) =>
     apiRequest("/api/games/invite", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -166,7 +181,10 @@ const api = {
         host_name: hostName,
         opponent_name: opponentName,
         game_type: gameType,
-        host_color: hostColor
+        host_color: hostColor,
+        boss_id: bossId,
+        is_solo: isSolo,
+        hero_data: heroData
       })
     }),
   getGameRoom: (roomId) => apiRequest(`/api/games/room/${roomId}`),
@@ -184,6 +202,10 @@ const api = {
       body: JSON.stringify(payload)
     });
   },
+  addCoopBot: (roomId) =>
+    apiRequest(`/api/games/room/${roomId}/bot`, {
+      method: "POST"
+    }),
   resignGame: (roomId) =>
     apiRequest(`/api/games/room/${roomId}/resign`, {
       method: "POST"
@@ -195,7 +217,79 @@ const api = {
   cancelGame: (roomId) =>
     apiRequest(`/api/games/room/${roomId}/cancel`, {
       method: "POST"
+    }),
+  // Dota 2 RPG Endpoints
+  getRpgHeroes: () => apiRequest("/api/rpg/heroes"),
+  getRpgProfile: () => apiRequest("/api/rpg/profile"),
+  selectRpgHero: (heroClass) =>
+    apiRequest("/api/rpg/class/select", {
+      method: "POST",
+      body: JSON.stringify({ hero_class: heroClass })
+    }),
+  upgradeRpgStat: (statName, extra = {}) =>
+    apiRequest("/api/rpg/upgrade/stat", {
+      method: "POST",
+      body: JSON.stringify({ stat: statName, ...extra })
+    }),
+  equipRpgItem: (itemUid) =>
+    apiRequest("/api/rpg/inventory/equip", {
+      method: "POST",
+      body: JSON.stringify({ item_uid: itemUid })
+    }),
+  unequipRpgItem: (slotOrUid) =>
+    apiRequest("/api/rpg/inventory/unequip", {
+      method: "POST",
+      body: JSON.stringify({ slot: slotOrUid })
+    }),
+  useRpgItem: (itemUid) =>
+    apiRequest("/api/rpg/inventory/use", {
+      method: "POST",
+      body: JSON.stringify({ item_uid: itemUid })
+    }),
+  getRpgShop: () => apiRequest("/api/rpg/shop"),
+  buyRpgShopItem: (itemId) =>
+    apiRequest("/api/rpg/shop/buy", {
+      method: "POST",
+      body: JSON.stringify({ item_id: itemId })
+    }),
+  forgeRpgItem: (itemUid) =>
+    apiRequest("/api/rpg/inventory/forge", {
+      method: "POST",
+      body: JSON.stringify({ item_uid: itemUid })
+    }),
+  sellRpgItem: (itemUid) =>
+    apiRequest("/api/rpg/inventory/sell", {
+      method: "POST",
+      body: JSON.stringify({ item_uid: itemUid })
+    }),
+  slashCreepWave: (payload = {}) =>
+    apiRequest("/api/rpg/dungeon/wave", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
+  openRpgChest: (wave) =>
+    apiRequest("/api/rpg/chest/open", {
+      method: "POST",
+      body: JSON.stringify({ wave: wave || 10 })
+    }),
+  getRpgLeaderboard: () => apiRequest("/api/rpg/leaderboard"),
+  getCoopBosses: () => apiRequest("/api/rpg/bosses"),
+  syncRpgRoom: (roomId) =>
+    apiRequest(`/api/rpg/room/${roomId}/sync`, {
+      method: "POST"
+    }),
+  sellMultipleRpgItems: (itemUids) =>
+    apiRequest("/api/rpg/inventory/sell_multiple", {
+      method: "POST",
+      body: JSON.stringify({ item_uids: itemUids })
+    }),
+  resetRpgCharacter: () =>
+    apiRequest("/api/rpg/reset", {
+      method: "POST"
     })
 };
 
 window.api = api;
+
+
+

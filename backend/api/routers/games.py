@@ -1,4 +1,5 @@
 import asyncio
+import html
 import logging
 from typing import Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, BackgroundTasks, Body
@@ -37,48 +38,10 @@ async def get_classmates_for_game(
     ]
 
 
-def _get_public_webapp_url(request: Request) -> str:
-    """Returns reliable public HTTPS URL of the Mini App, auto-detecting proxy/tunnel domains."""
-    from backend.config import settings
-    configured = settings.WEBAPP_URL.strip() if settings.WEBAPP_URL else ""
-    if configured and not ("localhost" in configured or "127.0.0.1" in configured):
-        return configured
-
-    ref = request.headers.get("referer")
-    if ref and ref.startswith("https://"):
-        return ref.split("?")[0].split("#")[0]
-
-    origin = request.headers.get("origin")
-    if origin and origin.startswith("https://"):
-        return f"{origin.rstrip('/')}/app"
-
-    host = request.headers.get("x-forwarded-host") or request.headers.get("host")
-    proto = request.headers.get("x-forwarded-proto", "https")
-    if host and not ("localhost" in host or "127.0.0.1" in host):
-        return f"{proto}://{host}/app"
-
-    return configured or "https://t.me"
-
-
-async def _send_game_invite_notification(
-    bot,
-    opponent_tg_id: int,
-    invite_text: str,
-    reply_markup
-):
-    """Sends invitation to opponent in the background without blocking the HTTP request."""
-    try:
-        await asyncio.wait_for(
-            bot.send_message(
-                chat_id=opponent_tg_id,
-                text=invite_text,
-                reply_markup=reply_markup
-            ),
-            timeout=8.0
-        )
-        logger.info(f"Game invitation notification sent to {opponent_tg_id}")
-    except Exception as e:
-        logger.warning(f"Could not deliver game invitation to {opponent_tg_id}: {e}")
+from backend.api.routers.games_rpg_hooks import (
+    get_public_webapp_url as _get_public_webapp_url,
+    send_game_invite_notification as _send_game_invite_notification,
+)
 
 
 @router.post("/games/local")
@@ -141,6 +104,7 @@ async def invite_opponent_to_game(
         if not isinstance(payload, dict):
             payload = {}
 
+        game_type = str(payload.get("game_type") or "tictactoe").strip().lower()
         try:
             opponent_tg_id = int(payload.get("opponent_tg_id") or 0)
         except (ValueError, TypeError):
@@ -152,7 +116,6 @@ async def invite_opponent_to_game(
         if opponent_tg_id == 0:
             opponent_tg_id = None
 
-        game_type = str(payload.get("game_type") or "tictactoe").strip().lower()
         host_color = str(payload.get("host_color") or "white").strip().lower()
         host_tg_id = _extract_viewer_tg_id(user, request, payload=payload) or 0
         host_name = user.display_name if user else payload.get("host_name", "Одноклассник")
@@ -342,73 +305,5 @@ async def make_game_move(
         await handle_rpg_room_moved(room, session, user)
     return room.to_dict(viewer_tg_id=viewer_tg_id)
 
-
-@router.post("/games/room/{room_id}/bot")
-async def add_bot_to_coop_room(
-    room_id: str,
-    request: Request,
-    payload: Dict[str, Any] = {},
-    user: Optional[User] = Depends(get_optional_webapp_user)
-):
-    """Добавляет бота в кооп-рейд."""
-    from backend.api.game_rooms import game_manager
-    viewer_tg_id = _extract_viewer_tg_id(user, request, payload=payload) or 0
-    ok, msg = game_manager.add_bot_to_coop(room_id)
-    if not ok:
-        raise HTTPException(status_code=400, detail=msg)
-    room = game_manager.get_room(room_id)
-    return room.to_dict(viewer_tg_id=viewer_tg_id)
-
-
-@router.post("/games/room/{room_id}/resign")
-async def resign_game_room(
-    room_id: str,
-    request: Request,
-    payload: Dict[str, Any] = {},
-    user: Optional[User] = Depends(get_optional_webapp_user)
-):
-    """Сдача в партии."""
-    from backend.api.game_rooms import game_manager
-    viewer_tg_id = _extract_viewer_tg_id(user, request, payload=payload) or 0
-
-    ok, msg = game_manager.resign_room(room_id, viewer_tg_id)
-    if not ok:
-        raise HTTPException(status_code=400, detail=msg)
-
-    room = game_manager.get_room(room_id)
-    return room.to_dict(viewer_tg_id=viewer_tg_id)
-
-
-@router.post("/games/room/{room_id}/rematch")
-async def rematch_game_room(
-    room_id: str,
-    request: Request,
-    payload: Dict[str, Any] = {},
-    user: Optional[User] = Depends(get_optional_webapp_user)
-):
-    """Запрос или подтверждение реванша."""
-    from backend.api.game_rooms import game_manager
-    viewer_tg_id = _extract_viewer_tg_id(user, request, payload=payload) or 0
-
-    ok, msg = game_manager.request_rematch(room_id, viewer_tg_id)
-    if not ok:
-        raise HTTPException(status_code=400, detail=msg)
-
-    room = game_manager.get_room(room_id)
-    return room.to_dict(viewer_tg_id=viewer_tg_id)
-
-
-@router.post("/games/room/{room_id}/cancel")
-async def cancel_game_room(
-    room_id: str,
-    request: Request,
-    payload: Dict[str, Any] = {},
-    user: Optional[User] = Depends(get_optional_webapp_user)
-):
-    """Отмена вызова создателем."""
-    from backend.api.game_rooms import game_manager
-    viewer_tg_id = _extract_viewer_tg_id(user, request, payload=payload) or 0
-    game_manager.cancel_room(room_id, viewer_tg_id)
-    return {"status": "canceled"}
 
 

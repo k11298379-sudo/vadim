@@ -14,6 +14,7 @@ from backend.api.routers import (
     schedule_router,
     homework_router,
     games_router,
+    games_actions_router,
     durak_router,
     rpg_router,
 )
@@ -25,6 +26,7 @@ api_router.include_router(common_router)
 api_router.include_router(schedule_router)
 api_router.include_router(homework_router)
 api_router.include_router(games_router)
+api_router.include_router(games_actions_router)
 api_router.include_router(durak_router)
 api_router.include_router(rpg_router)
 
