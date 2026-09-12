@@ -42,24 +42,21 @@ async def register_pending_user_and_notify_admin(
     else:
         return user
 
-    # Notify admin about registration request
-    if settings.ADMIN_ID:
-        uname_str = f"@{username}" if username else "без @username"
-        title = "🔔 **Повторная заявка на доступ к боту!**" if is_reapply else "🔔 **Новая заявка на доступ к боту!**"
-        admin_text = (
-            f"{title}\n\n"
-            f"👤 **Пользователь:** {full_name}\n"
-            f"🔗 **Telegram:** {uname_str}"
-        )
-        try:
-            await bot.send_message(
-                chat_id=settings.ADMIN_ID,
-                text=admin_text,
-                reply_markup=get_admin_approval_keyboard(user_id),
-                parse_mode="Markdown"
-            )
-        except Exception as e:
-            print(f"Failed to notify admin: {e}")
+    # Notify all admins about registration request
+    from backend.bot.services.notifier import notify_all_admins
+    uname_str = f"@{username}" if username else "без @username"
+    title = "🔔 **Повторная заявка на доступ к боту!**" if is_reapply else "🔔 **Новая заявка на доступ к боту!**"
+    admin_text = (
+        f"{title}\n\n"
+        f"👤 **Пользователь:** {full_name}\n"
+        f"🔗 **Telegram:** {uname_str}"
+    )
+    await notify_all_admins(
+        bot=bot,
+        session=session,
+        text=admin_text,
+        reply_markup=get_admin_approval_keyboard(user_id)
+    )
     return user
 
 
@@ -69,11 +66,16 @@ async def cmd_start(message: Message, db_session: AsyncSession, bot: Bot, curren
     username = message.from_user.username
     full_name = message.from_user.full_name or "Ученик"
 
+    local_app_link = ""
+    if not settings.WEBAPP_URL.startswith("https://"):
+        local_app_link = f"\n\n💻 **Mini App (в браузере):**\nhttp://localhost:{settings.PORT}/app?tg_user_id={user_id}"
+
     # If user is admin
     if settings.ADMIN_ID and user_id == settings.ADMIN_ID:
         await message.answer(
             f"👋 **Здравствуйте, Администратор ({full_name})!**\n\n"
-            "Вам доступно полное управление ботом класса, расписанием, ДЗ и заявками учеников.",
+            "Вам доступно полное управление ботом класса, расписанием, ДЗ и заявками учеников."
+            f"{local_app_link}",
             reply_markup=get_main_keyboard(is_admin=True, user_id=user_id),
             parse_mode="Markdown"
         )
@@ -85,7 +87,8 @@ async def cmd_start(message: Message, db_session: AsyncSession, bot: Bot, curren
         role_label = " (Администратор)" if is_user_adm else ""
         await message.answer(
             f"👋 **Привет, {current_user.display_name}!**{role_label}\n\n"
-            "Добро пожаловать в бот класса! Выберите нужный раздел в меню ниже или откройте Mini App:",
+            "Добро пожаловать в бот класса! Выберите нужный раздел в меню ниже:"
+            f"{local_app_link}",
             reply_markup=get_main_keyboard(is_admin=is_user_adm, user_id=user_id),
             parse_mode="Markdown"
         )
@@ -116,6 +119,9 @@ async def callback_admin_approve(callback: CallbackQuery, state: FSMContext, db_
     target_user = await get_user_by_tg_id(db_session, target_tg_id)
     if not target_user:
         await callback.answer("Пользователь не найден", show_alert=True)
+        return
+    if target_user.role != "pending":
+        await callback.answer(f"Заявка уже обработана (статус: {target_user.role})!", show_alert=True)
         return
 
     await state.set_state(ApproveUserStates.entering_name)
@@ -227,6 +233,14 @@ async def msg_admin_approve_custom_name(message: Message, state: FSMContext, db_
 @router.callback_query(F.data.startswith("admin_reject_"))
 async def callback_admin_reject(callback: CallbackQuery, db_session: AsyncSession, bot: Bot):
     target_tg_id = int(callback.data.replace("admin_reject_", ""))
+    target_user = await get_user_by_tg_id(db_session, target_tg_id)
+    if not target_user:
+        await callback.answer("Пользователь не найден", show_alert=True)
+        return
+    if target_user.role != "pending":
+        await callback.answer(f"Заявка уже обработана (статус: {target_user.role})!", show_alert=True)
+        return
+
     await update_user_role(db_session, target_tg_id, "rejected")
     
     await callback.message.edit_text(

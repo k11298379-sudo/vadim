@@ -36,6 +36,8 @@ from backend.bot.handlers.admin import (
     homework,
     users,
     broadcast,
+    logging as admin_logging,
+    coins as admin_coins,
 )
 
 # Re-export handlers for backward compatibility with tests
@@ -145,6 +147,8 @@ router.include_router(schedule.router)
 router.include_router(homework.router)
 router.include_router(users.router)
 router.include_router(broadcast.router)
+router.include_router(admin_logging.router)
+router.include_router(admin_coins.router)
 
 __all__ = [
     "router",

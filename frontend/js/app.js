@@ -1,3 +1,11 @@
+/**
+ * app.js — Главный контроллер Mini App 11 «Б».
+ * Маршрутизация вкладок, загрузка расписания, ДЗ и звонков.
+ * Вынесенные модули:
+ * - /static/js/app_calendar.js (календарь, каникулы, выбор даты)
+ * - /static/js/app_lightbox.js (галерея фото и зум)
+ */
+
 // Application state for 11 "Б"
 let currentDate = new Date();
 let selectedDateStr = formatDateISO(currentDate);
@@ -8,63 +16,27 @@ let isCalendarPicked = false;
 let calViewDate = new Date();
 
 
-function formatDateISO(d) {
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
 
-const MONTHS_RU = [
-  "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
-  "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
-];
-
-const DAYS_SHORT = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
-
-// Academic Calendar helpers in JS
-const VACATIONS = [
-  { start: "2026-10-26", end: "2026-11-03", name: "Осенние каникулы" },
-  { start: "2026-12-31", end: "2027-01-10", name: "Зимние каникулы" },
-  { start: "2027-03-27", end: "2027-04-04", name: "Весенние каникулы" },
-  { start: "2027-05-27", end: "2027-08-31", name: "Летние каникулы" }
-];
-
-const WORKING_SATURDAYS = new Set(["2027-02-20"]);
-
-function getDayType(isoStr, dayOfWeek) {
-  for (const v of VACATIONS) {
-    if (isoStr >= v.start && isoStr <= v.end) {
-      return "vacation";
-    }
-  }
-  if (WORKING_SATURDAYS.has(isoStr)) {
-    return "working_sat";
-  }
-  if (dayOfWeek === 0 || dayOfWeek === 6) {
-    return "weekend";
-  }
-  return "regular";
-}
-
-// Initialize
 async function initApp() {
   initTabs();
   initCalendarModal();
   initPhotoViewer();
   renderDateSelector();
-  loadUserData();
+  await loadUserData();
   loadDutyWidget();
   loadDailyFactWidget();
 
   const urlParams = new URLSearchParams(window.location.search);
   const roomId = urlParams.get("room");
   const gameType = urlParams.get("game");
+  const tabParam = urlParams.get("tab");
   if (roomId) {
     switchTab("games");
     if (window.GAMES && typeof window.GAMES.openOnlineRoom === "function") {
       window.GAMES.openOnlineRoom(roomId, gameType);
     }
+  } else if (tabParam) {
+    switchTab(tabParam);
   } else {
     loadTabContent(activeTab);
   }
@@ -125,6 +97,10 @@ async function loadUserData() {
 
   try {
     const me = await api.getMe();
+    window.currentUser = me;
+    if (window.GAMES && typeof window.GAMES.updateTesterStatus === "function") {
+      window.GAMES.updateTesterStatus(Boolean(me && me.is_tester));
+    }
     if (me && me.full_name) {
       const roleTag = me.role === "admin" ? " • 👑 Админ" : "";
       userBadge.textContent = me.full_name + roleTag;
@@ -237,178 +213,6 @@ function initTabs() {
   });
 }
 
-// --- INTERACTIVE CALENDAR MODAL ---
-function initCalendarModal() {
-  const openBtn = document.getElementById("open-calendar-btn");
-  const closeBtn = document.getElementById("cal-close-btn");
-  const modal = document.getElementById("calendar-modal");
-  const prevBtn = document.getElementById("cal-prev-month");
-  const nextBtn = document.getElementById("cal-next-month");
-  const todayBtn = document.getElementById("cal-today-btn");
-
-  if (openBtn) {
-    openBtn.addEventListener("click", () => {
-      haptic.impact("light");
-      const [y, m, d] = selectedDateStr.split("-").map(Number);
-      calViewDate = new Date(y, m - 1, 1);
-      renderCalendarGrid();
-      modal.classList.remove("hidden");
-    });
-  }
-
-  if (closeBtn) {
-    closeBtn.addEventListener("click", () => {
-      haptic.selection();
-      modal.classList.add("hidden");
-    });
-  }
-
-  if (prevBtn) {
-    prevBtn.addEventListener("click", () => {
-      haptic.selection();
-      calViewDate.setMonth(calViewDate.getMonth() - 1);
-      renderCalendarGrid();
-    });
-  }
-
-  if (nextBtn) {
-    nextBtn.addEventListener("click", () => {
-      haptic.selection();
-      calViewDate.setMonth(calViewDate.getMonth() + 1);
-      renderCalendarGrid();
-    });
-  }
-
-  if (todayBtn) {
-    todayBtn.addEventListener("click", () => {
-      haptic.impact("medium");
-      const today = new Date();
-      selectedDateStr = formatDateISO(today);
-      isCalendarPicked = false;
-      modal.classList.add("hidden");
-      renderDateSelector();
-      loadTabContent(activeTab);
-    });
-  }
-}
-
-function renderCalendarGrid() {
-  const monthTitle = document.getElementById("cal-month-title");
-  const daysGrid = document.getElementById("cal-days-grid");
-  if (!monthTitle || !daysGrid) return;
-
-  const year = calViewDate.getFullYear();
-  const month = calViewDate.getMonth();
-  monthTitle.textContent = `${MONTHS_RU[month]} ${year}`;
-
-  daysGrid.innerHTML = "";
-
-  const firstDayOfMonth = new Date(year, month, 1);
-  const lastDayOfMonth = new Date(year, month + 1, 0);
-
-  let firstDayIndex = firstDayOfMonth.getDay(); // 0 is Sun
-  firstDayIndex = (firstDayIndex === 0 ? 6 : firstDayIndex - 1); // convert to Mon=0
-
-  const totalDays = lastDayOfMonth.getDate();
-
-  // Blank days before first day
-  for (let i = 0; i < firstDayIndex; i++) {
-    const blank = document.createElement("div");
-    blank.className = "py-2";
-    daysGrid.appendChild(blank);
-  }
-
-  const todayIso = formatDateISO(new Date());
-
-  for (let day = 1; day <= totalDays; day++) {
-    const dObj = new Date(year, month, day);
-    const iso = formatDateISO(dObj);
-    const dayOfWeek = dObj.getDay();
-    const dayType = getDayType(iso, dayOfWeek);
-    const isSelected = (iso === selectedDateStr);
-    const isToday = (iso === todayIso);
-
-    const btn = document.createElement("button");
-    btn.className = `py-1.5 px-1 rounded-xl text-xs font-semibold flex flex-col items-center justify-center transition-all ${
-      isSelected
-        ? "bg-blue-600 text-white shadow-md shadow-blue-500/30 scale-105 font-bold"
-        : isToday
-        ? "border-2 border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-slate-800"
-        : dayType === "vacation"
-        ? "bg-amber-100/70 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 hover:bg-amber-200"
-        : "text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
-    }`;
-
-    let badge = "";
-    if (dayType === "vacation") badge = `<span class="text-[9px] block">🌴</span>`;
-    else if (dayType === "working_sat") badge = `<span class="text-[9px] block">💼</span>`;
-
-    btn.innerHTML = `
-      <span>${day}</span>
-      ${badge}
-    `;
-
-    btn.addEventListener("click", () => {
-      haptic.impact("light");
-      selectedDateStr = iso;
-      isCalendarPicked = true;
-      document.getElementById("calendar-modal").classList.add("hidden");
-      renderDateSelector();
-      loadTabContent(activeTab);
-    });
-
-    daysGrid.appendChild(btn);
-  }
-}
-
-// Date selector horizontal strip
-function renderDateSelector() {
-  const container = document.getElementById("date-selector");
-  if (!container) return;
-
-  container.innerHTML = "";
-  const [y, m, d] = selectedDateStr.split("-").map(Number);
-  const baseDate = new Date(y, m - 1, d);
-
-  const dayOfWeek = baseDate.getDay();
-  const diff = baseDate.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Monday
-  const startOfWeek = new Date(baseDate);
-  startOfWeek.setDate(diff);
-
-  for (let i = 0; i < 6; i++) {
-    const d = new Date(startOfWeek);
-    d.setDate(startOfWeek.getDate() + i);
-    const iso = formatDateISO(d);
-    const isSelected = (iso === selectedDateStr);
-    const dayType = getDayType(iso, d.getDay());
-
-    const btn = document.createElement("button");
-    btn.className = `flex flex-col items-center justify-center py-2 px-3 rounded-2xl text-xs transition-all ${
-      isSelected
-        ? "bg-blue-600 text-white font-bold shadow-md shadow-blue-500/20 scale-105"
-        : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
-    }`;
-
-    let icon = "";
-    if (dayType === "vacation") icon = " 🌴";
-
-    btn.innerHTML = `
-      <span class="text-[10px] uppercase opacity-75">${DAYS_SHORT[d.getDay()]}${icon}</span>
-      <span class="text-sm font-semibold">${d.getDate()}</span>
-    `;
-
-    btn.addEventListener("click", () => {
-      haptic.impact("light");
-      selectedDateStr = iso;
-      isCalendarPicked = false;
-      renderDateSelector();
-      if (activeTab === "schedule") loadSchedule();
-      if (activeTab === "homework") loadHomework();
-    });
-
-    container.appendChild(btn);
-  }
-}
 
 async function loadTabContent(tab) {
   if (tab === "schedule") await loadSchedule();
@@ -678,263 +482,5 @@ async function loadBells() {
     list.innerHTML = `<div class="text-center py-6 text-red-500 text-sm">Ошибка: ${err.message}</div>`;
   }
 }
-
-// ==================== PHOTO VIEWER / LIGHTBOX MODAL ====================
-let galleryPhotos = [];
-let galleryCurrentIndex = 0;
-let pvScale = 1.0;
-let pvTranslateX = 0;
-let pvTranslateY = 0;
-let pvIsDragging = false;
-let pvStartX = 0;
-let pvStartY = 0;
-let pvInitialPinchDist = 0;
-let pvInitialScale = 1.0;
-
-function initPhotoViewer() {
-  const modal = document.getElementById("photo-viewer-modal");
-  const closeBtn = document.getElementById("pv-close-btn");
-  const prevBtn = document.getElementById("pv-prev-btn");
-  const nextBtn = document.getElementById("pv-next-btn");
-  const zoomInBtn = document.getElementById("pv-zoom-in");
-  const zoomOutBtn = document.getElementById("pv-zoom-out");
-  const viewport = document.getElementById("pv-viewport");
-
-  if (!modal) return;
-
-  closeBtn?.addEventListener("click", closePhotoGallery);
-
-  prevBtn?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    if (galleryCurrentIndex > 0) {
-      showGalleryImage(galleryCurrentIndex - 1);
-    }
-  });
-
-  nextBtn?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    if (galleryCurrentIndex < galleryPhotos.length - 1) {
-      showGalleryImage(galleryCurrentIndex + 1);
-    }
-  });
-
-  zoomInBtn?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    pvScale = Math.min(4.0, pvScale + 0.5);
-    updateImageTransform();
-  });
-
-  zoomOutBtn?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    pvScale = Math.max(1.0, pvScale - 0.5);
-    if (pvScale === 1.0) {
-      pvTranslateX = 0;
-      pvTranslateY = 0;
-    }
-    updateImageTransform();
-  });
-
-  // Double tap / double click to toggle zoom
-  let lastTap = 0;
-  viewport?.addEventListener("click", (e) => {
-    if (e.target.closest("button") || e.target.closest("a")) return;
-    const now = Date.now();
-    if (now - lastTap < 300) {
-      if (pvScale > 1.0) {
-        pvScale = 1.0;
-        pvTranslateX = 0;
-        pvTranslateY = 0;
-      } else {
-        pvScale = 2.5;
-      }
-      updateImageTransform();
-    }
-    lastTap = now;
-  });
-
-  // Mouse Drag / Pan
-  viewport?.addEventListener("mousedown", (e) => {
-    if (pvScale > 1.0) {
-      pvIsDragging = true;
-      pvStartX = e.clientX - pvTranslateX;
-      pvStartY = e.clientY - pvTranslateY;
-    }
-  });
-
-  window.addEventListener("mousemove", (e) => {
-    if (pvIsDragging && pvScale > 1.0) {
-      pvTranslateX = e.clientX - pvStartX;
-      pvTranslateY = e.clientY - pvStartY;
-      updateImageTransform();
-    }
-  });
-
-  window.addEventListener("mouseup", () => {
-    pvIsDragging = false;
-  });
-
-  // Touch Pinch-to-Zoom & Pan
-  viewport?.addEventListener("touchstart", (e) => {
-    if (e.touches.length === 2) {
-      pvInitialPinchDist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      pvInitialScale = pvScale;
-    } else if (e.touches.length === 1 && pvScale > 1.0) {
-      pvIsDragging = true;
-      pvStartX = e.touches[0].clientX - pvTranslateX;
-      pvStartY = e.touches[0].clientY - pvTranslateY;
-    }
-  }, { passive: false });
-
-  viewport?.addEventListener("touchmove", (e) => {
-    if (e.touches.length === 2) {
-      e.preventDefault();
-      const currentDist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      if (pvInitialPinchDist > 0) {
-        pvScale = Math.min(4.0, Math.max(1.0, pvInitialScale * (currentDist / pvInitialPinchDist)));
-        updateImageTransform();
-      }
-    } else if (e.touches.length === 1 && pvIsDragging && pvScale > 1.0) {
-      e.preventDefault();
-      pvTranslateX = e.touches[0].clientX - pvStartX;
-      pvTranslateY = e.touches[0].clientY - pvStartY;
-      updateImageTransform();
-    }
-  }, { passive: false });
-
-  viewport?.addEventListener("touchend", (e) => {
-    if (e.touches.length < 2) {
-      pvInitialPinchDist = 0;
-    }
-    if (e.touches.length === 0) {
-      pvIsDragging = false;
-      if (pvScale <= 1.0) {
-        pvScale = 1.0;
-        pvTranslateX = 0;
-        pvTranslateY = 0;
-        updateImageTransform();
-      }
-    }
-  });
-
-  // Keyboard navigation
-  window.addEventListener("keydown", (e) => {
-    if (modal.classList.contains("hidden")) return;
-    if (e.key === "Escape") closePhotoGallery();
-    if (e.key === "ArrowLeft" && galleryCurrentIndex > 0) showGalleryImage(galleryCurrentIndex - 1);
-    if (e.key === "ArrowRight" && galleryCurrentIndex < galleryPhotos.length - 1) showGalleryImage(galleryCurrentIndex + 1);
-  });
-}
-
-function updateImageTransform() {
-  const img = document.getElementById("pv-image");
-  if (img) {
-    img.style.transform = `translate(${pvTranslateX}px, ${pvTranslateY}px) scale(${pvScale})`;
-  }
-}
-
-function openPhotoGallery(photos, startIndex, title = "", desc = "") {
-  galleryPhotos = photos;
-  galleryCurrentIndex = startIndex || 0;
-
-  const modal = document.getElementById("photo-viewer-modal");
-  const titleEl = document.getElementById("pv-caption-title");
-  const descEl = document.getElementById("pv-caption-desc");
-
-  if (!modal) return;
-
-  if (titleEl) titleEl.textContent = title;
-  if (descEl) descEl.textContent = desc;
-
-  modal.classList.remove("hidden");
-  setTimeout(() => {
-    modal.classList.remove("opacity-0");
-  }, 10);
-
-  showGalleryImage(galleryCurrentIndex);
-}
-
-function showGalleryImage(idx) {
-  galleryCurrentIndex = idx;
-  pvScale = 1.0;
-  pvTranslateX = 0;
-  pvTranslateY = 0;
-  updateImageTransform();
-
-  const photo = galleryPhotos[idx];
-  const img = document.getElementById("pv-image");
-  const counter = document.getElementById("pv-counter");
-  const dlBtn = document.getElementById("pv-download-btn");
-  const prevBtn = document.getElementById("pv-prev-btn");
-  const nextBtn = document.getElementById("pv-next-btn");
-  const titleEl = document.getElementById("pv-caption-title");
-  const descEl = document.getElementById("pv-caption-desc");
-
-  // Support both raw string URL or object with .url
-  const url = typeof photo === "string" ? photo : (photo?.url || "");
-
-  if (img && url) {
-    img.src = url;
-    if (photo && typeof photo === "object" && photo.title) {
-      img.alt = photo.title;
-    } else if (titleEl?.textContent) {
-      img.alt = titleEl.textContent;
-    }
-  }
-
-  // Update caption if individual photo object provides it
-  if (photo && typeof photo === "object") {
-    if (photo.title && titleEl) titleEl.textContent = photo.title;
-    if (photo.desc && descEl) descEl.textContent = photo.desc;
-  }
-
-  if (counter) {
-    counter.textContent = `${idx + 1} / ${galleryPhotos.length}`;
-  }
-
-  if (dlBtn && url) {
-    dlBtn.href = url;
-    const filename = url.split("/").pop() || `photo_${idx + 1}.webp`;
-    dlBtn.setAttribute("download", filename);
-  }
-
-  if (prevBtn) {
-    if (galleryPhotos.length > 1 && idx > 0) {
-      prevBtn.classList.remove("hidden");
-    } else {
-      prevBtn.classList.add("hidden");
-    }
-  }
-
-  if (nextBtn) {
-    if (galleryPhotos.length > 1 && idx < galleryPhotos.length - 1) {
-      nextBtn.classList.remove("hidden");
-    } else {
-      nextBtn.classList.add("hidden");
-    }
-  }
-}
-
-function closePhotoGallery() {
-  const modal = document.getElementById("photo-viewer-modal");
-  if (!modal) return;
-  modal.classList.add("opacity-0");
-  setTimeout(() => {
-    modal.classList.add("hidden");
-    pvScale = 1.0;
-    pvTranslateX = 0;
-    pvTranslateY = 0;
-    updateImageTransform();
-  }, 200);
-}
-
-// Ensure globally accessible
-window.openPhotoGallery = openPhotoGallery;
-window.closePhotoGallery = closePhotoGallery;
 
 

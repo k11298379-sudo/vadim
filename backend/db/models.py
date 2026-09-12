@@ -18,7 +18,12 @@ class User(Base):
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     custom_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # Реальное имя, назначенное админом
     role: Mapped[str] = mapped_column(String(50), default="pending", nullable=False)  # admin, student, pending, rejected
+    is_tester: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="0")
     notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    canteen_reminder_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="0")
+    currency_ecosystem_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="0")
+    coins: Mapped[int] = mapped_column(Integer, default=100, nullable=False, server_default="100")
+    last_work_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     homework_statuses: Mapped[List["UserHomeworkStatus"]] = relationship("UserHomeworkStatus", back_populates="user", cascade="all, delete-orphan")
@@ -187,6 +192,44 @@ class DailyFact(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     fact_text: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class RPGCharacter(Base):
+    __tablename__ = "rpg_characters"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+    hero_class: Mapped[str] = mapped_column(String(50), default="knight", nullable=False)  # knight, mage, ranger, etc.
+    level: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    xp: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    gold: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
+    gems: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+
+    # Base attributes
+    strength: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    agility: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    intelligence: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    vitality: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    stat_points: Mapped[int] = mapped_column(Integer, default=2, server_default="2", nullable=False)
+
+    # Equipment slots: {"weapon": {...}, "armor": {...}, "relic": {...}}
+    equipment: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # Inventory list of item dicts
+    inventory: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+
+    # Progress stats
+    dungeon_floor: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    dungeon_cleared: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    pvp_rating: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)
+    pvp_wins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    pvp_losses: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    boss_kills: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user: Mapped["User"] = relationship("User")
+
 
 
 

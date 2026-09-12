@@ -3,12 +3,15 @@
 
 from backend.db.crud.users import (
     get_user_by_tg_id,
+    get_user_by_username,
     create_user,
     update_user_role,
     update_user_name_and_role,
     update_user_custom_name,
+    update_user_tester_status,
     get_pending_users,
     get_active_users,
+    get_admin_users,
     get_notifiable_users,
     toggle_user_notifications,
     get_all_users,
@@ -19,6 +22,12 @@ from backend.db.crud.users import (
     get_approved_group_chats,
     get_pending_group_chats,
     update_group_chat_topic,
+    toggle_user_canteen_reminder,
+    toggle_user_currency_ecosystem,
+    get_canteen_reminder_users,
+    perform_user_work,
+    add_user_coins,
+    get_currency_leaderboard,
 )
 
 from backend.db.crud.subjects import (
@@ -90,6 +99,13 @@ from backend.db.crud.duty import (
     get_users_in_duty_group,
 )
 
+from backend.db.crud.rpg import (
+    HERO_CLASSES,
+    get_or_create_rpg_character,
+    get_rpg_shop_catalog,
+    get_rpg_leaderboard_data,
+)
+
 __all__ = [
     # users & group chats
     "get_user_by_tg_id",
@@ -97,6 +113,7 @@ __all__ = [
     "update_user_role",
     "update_user_name_and_role",
     "update_user_custom_name",
+    "update_user_tester_status",
     "get_pending_users",
     "get_active_users",
     "get_notifiable_users",
@@ -168,4 +185,9 @@ __all__ = [
     "get_current_duty_info",
     "clear_all_duty_members",
     "get_users_in_duty_group",
+    # rpg
+    "HERO_CLASSES",
+    "get_or_create_rpg_character",
+    "get_rpg_shop_catalog",
+    "get_rpg_leaderboard_data",
 ]

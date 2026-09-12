@@ -1,0 +1,12242 @@
+/**
+ * natarGRP — Action RPG Engine & UI for 11 «Б» Mini App
+ * Features:
+ *  - 7 Hero Archetypes with Primary Attribute Bonus (+1 Damage per point)
+ *  - 3-Attribute System: Сила (HP, HP-regen), Ловкость (Atk-speed, Armor, Crit/Dodge), Интеллект (Mana, MP-regen, Magic Resist)
+ *  - Interactive 2D Action Arena on <canvas> with Virtual Joystick, WASD controls, manual/auto-cleave, ultimate skills
+ *  - Swarming creeps, damage numbers, and vacuum loot pickups (gold coins & XP gems)
+ *  - Floor Bosses & Reward Chests every 10-20 waves with functional items
+ *  - Labeled Gear: Slot badges (Оружие/Броня/Реликвия/Зелье), Rarity badges, and clear stat previews
+ *  - Secret Shop Forge (+1..+99) & Item Market
+ *  - Co-op Boss Raids & 1v1 PvP Duels
+ *  - Class Leaderboard
+ */
+
+(function () {
+  // Safe roundRect polyfill for mobile WebViews (Telegram on Android/iOS)
+  if (typeof CanvasRenderingContext2D !== "undefined" && !CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, radii) {
+      const r = Math.min((typeof radii === "number" ? radii : 12), w / 2, h / 2);
+      this.beginPath();
+      this.moveTo(x + r, y);
+      this.lineTo(x + w - r, y);
+      this.arcTo(x + w, y, x + w, y + r, r);
+      this.lineTo(x + w, y + h - r);
+      this.arcTo(x + w, y + h, x + w - r, y + h, r);
+      this.lineTo(x + r, y + h);
+      this.arcTo(x, y + h, x, y + h - r, r);
+      this.lineTo(x, y + r);
+      this.arcTo(x, y, x + r, y, r);
+      this.closePath();
+      return this;
+    };
+  }
+
+  function safeRoundRect(ctx, x, y, w, h, r) {
+    const rad = Math.min(r || 12, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rad, y);
+    ctx.lineTo(x + w - rad, y);
+    ctx.arcTo(x + w, y, x + w, y + rad, rad);
+    ctx.lineTo(x + w, y + h - rad);
+    ctx.arcTo(x + w, y + h, x + w - rad, y + h, rad);
+    ctx.lineTo(x + rad, y + h);
+    ctx.arcTo(x, y + h, x, y + h - rad, rad);
+    ctx.lineTo(x, y + rad);
+    ctx.arcTo(x, y, x + rad, y, rad);
+    ctx.closePath();
+  }
+
+  function formatCompact(num) {
+    if (num == null) return "0";
+    const n = Math.abs(num);
+    if (n >= 1_000_000_000) return (num / 1_000_000_000).toFixed(1) + "B";
+    if (n >= 1_000_000) return (num / 1_000_000).toFixed(1) + "M";
+    if (n >= 10_000) return (num / 1_000).toFixed(1) + "k";
+    return num.toLocaleString ? num.toLocaleString("ru-RU") : String(num);
+  }
+
+  const RPG_STATE = {
+    profile: null,
+    heroesList: [],
+    activeTab: "farm", // 'farm', 'hero', 'chests', 'coop', 'pvp', 'leaderboard'
+    loading: false,
+    errorMessage: null,
+    
+    // Farm Mode: 'arena' (Active 2D Combat) or 'sim' (Fast Sim / Auto)
+    farmMode: "arena",
+    autoFarm: false,
+    autoFarmTimer: null,
+    isFighting: false,
+    lastBattle: null,
+    combatLog: [],
+    killsSession: 0,
+    
+    // Chest Rewards
+    activeChestModal: null, // { chest_name, chest_icon, tier, gold_reward, gems_reward, item, opened: bool }
+    
+    // Co-op Bosses
+    coopBosses: [],
+    selectedBoss: "roshan",
+    coopRoomId: null,
+    coopRoomData: null,
+    coopPolling: null,
+    
+    // PvP Duels
+    pvpRoomId: null,
+    pvpRoomData: null,
+    pvpPolling: null,
+    classmates: [],
+    classmatesSearch: "",
+    
+    // Leaderboard
+    leaderboard: [],
+    
+    // Modals
+    inspectedItem: null,
+    selectedItemUids: new Set(),
+    isSelectionMode: false,
+    forgeItem: null,
+    forgeSuccessAnimation: false,
+    levelUpNotification: null,
+    shopModalOpen: false,
+    shopLoading: false,
+    shopCatalog: [],
+    shopFilter: "all",
+    buyingItemId: null,
+    slotFilterModal: null,
+    adminModalOpen: false,
+    adminTestSlots: [
+      { id: "main", name: "👑 Основной (Админ)", tg_id: null },
+      { id: "999001", name: "🧪 Тест #1 (Чистый старт 1 ур.)", tg_id: "999001" },
+      { id: "999002", name: "🧪 Тест #2 (Чистый старт 1 ур.)", tg_id: "999002" },
+      { id: "999003", name: "🧪 Тест #3 (Песочница)", tg_id: "999003" },
+      { id: "999004", name: "🧪 Тест #4 (Песочница)", tg_id: "999004" }
+    ]
+  };
+
+  const RARITY_MAP = {
+    common: { name: "Обычный", color: "border-slate-400 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300", badge: "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300" },
+    uncommon: { name: "Необычный", color: "border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300", badge: "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30" },
+    rare: { name: "Редкий", color: "border-sky-500 bg-sky-50/70 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300", badge: "bg-sky-500/10 text-sky-600 border border-sky-500/20" },
+    epic: { name: "Эпический", color: "border-purple-500 bg-purple-50/70 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300", badge: "bg-purple-500/10 text-purple-600 border border-purple-500/20" },
+    legendary: { name: "Легендарный", color: "border-amber-500 bg-amber-50/70 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300", badge: "bg-amber-500/20 text-amber-600 font-extrabold border border-amber-500/40 shadow-sm" },
+    immortal: { name: "Бессмертный", color: "border-orange-500 bg-orange-50/80 dark:bg-orange-950/50 text-orange-700 dark:text-orange-300", badge: "bg-orange-600 text-white font-black shadow-md shadow-orange-600/30" }
+  };
+
+  const FALLBACK_SHOP_CATALOG = [
+  {
+    "id": "shop_w_guard_sword",
+    "name": "Меч Стража Катакомб",
+    "icon": "🗡️",
+    "type": "weapon",
+    "slot": "weapon",
+    "slot_name": "Оружие",
+    "slot_icon": "⚔️",
+    "rarity": "common",
+    "price_gold": 150,
+    "price_gems": 0,
+    "base_min": 16,
+    "base_max": 24,
+    "bonus": {
+      "atk": 5
+    },
+    "bonus_desc": "⚔️ +16..24 Урон | 🗡️ +5 Атака"
+  },
+  {
+    "id": "shop_w_shadow_blades",
+    "name": "Клинки Теней",
+    "icon": "🗡️",
+    "type": "weapon",
+    "slot": "weapon",
+    "slot_name": "Оружие",
+    "slot_icon": "⚔️",
+    "rarity": "rare",
+    "price_gold": 450,
+    "price_gems": 0,
+    "base_min": 26,
+    "base_max": 38,
+    "bonus": {
+      "crit": 20
+    },
+    "bonus_desc": "⚔️ +26..38 Урон | 💥 +20% Крит"
+  },
+  {
+    "id": "shop_w_harpoon",
+    "name": "Гарпун Катакомб",
+    "icon": "🔱",
+    "type": "weapon",
+    "slot": "weapon",
+    "slot_name": "Оружие",
+    "slot_icon": "⚔️",
+    "rarity": "rare",
+    "price_gold": 550,
+    "price_gems": 0,
+    "base_min": 32,
+    "base_max": 48,
+    "bonus": {
+      "double_hit": 25,
+      "str": 12
+    },
+    "bonus_desc": "⚔️ +32..48 Урон | 🥩 +12 Сила"
+  },
+  {
+    "id": "shop_w_storm_axe",
+    "name": "Секира Бури",
+    "icon": "🪓",
+    "type": "weapon",
+    "slot": "weapon",
+    "slot_name": "Оружие",
+    "slot_icon": "⚔️",
+    "rarity": "epic",
+    "price_gold": 1200,
+    "price_gems": 0,
+    "base_min": 42,
+    "base_max": 60,
+    "bonus": {
+      "cleave": 40,
+      "hp_regen": 8
+    },
+    "bonus_desc": "⚔️ +42..60 Урон | 🌪️ Сплэш 40% | 🩹 +8 HP/сек"
+  },
+  {
+    "id": "shop_w_blood_reaper",
+    "name": "Кровавый Жнец",
+    "icon": "🔴",
+    "type": "weapon",
+    "slot": "weapon",
+    "slot_name": "Оружие",
+    "slot_icon": "⚔️",
+    "rarity": "epic",
+    "price_gold": 1400,
+    "price_gems": 0,
+    "base_min": 45,
+    "base_max": 65,
+    "bonus": {
+      "armor_pierce": 15
+    },
+    "bonus_desc": "⚔️ +45..65 Урон | 🩸 -15 Брони врага"
+  },
+  {
+    "id": "shop_w_thunder_hammer",
+    "name": "Громовой Молот",
+    "icon": "⚡",
+    "type": "weapon",
+    "slot": "weapon",
+    "slot_name": "Оружие",
+    "slot_icon": "⚔️",
+    "rarity": "legendary",
+    "price_gold": 2800,
+    "price_gems": 25,
+    "base_min": 44,
+    "base_max": 64,
+    "bonus": {
+      "lightning": 45
+    },
+    "bonus_desc": "⚔️ +44..64 Урон | ⚡ Цепная молния"
+  },
+  {
+    "id": "shop_a_forged_cuirass",
+    "name": "Кованый Панцирь",
+    "icon": "🛡️",
+    "type": "armor",
+    "slot": "armor",
+    "slot_name": "Броня",
+    "slot_icon": "🛡️",
+    "rarity": "common",
+    "price_gold": 140,
+    "price_gems": 0,
+    "base_def": 10,
+    "base_hp": 40,
+    "bonus": {},
+    "bonus_desc": "🛡️ +10 Броня | ❤️ +40 HP"
+  },
+  {
+    "id": "shop_a_spiked_armor",
+    "name": "Шипастый Доспех",
+    "icon": "🦔",
+    "type": "armor",
+    "slot": "armor",
+    "slot_name": "Броня",
+    "slot_icon": "🛡️",
+    "rarity": "rare",
+    "price_gold": 480,
+    "price_gems": 0,
+    "base_def": 14,
+    "base_hp": 70,
+    "bonus": {
+      "reflect": 35,
+      "atk": 10
+    },
+    "bonus_desc": "🛡️ +14 Броня | ❤️ +70 HP | 🦔 Отражение 35%"
+  },
+  {
+    "id": "shop_a_golden_avatar",
+    "name": "Золотой Аватар",
+    "icon": "🟡",
+    "type": "armor",
+    "slot": "armor",
+    "slot_name": "Броня",
+    "slot_icon": "🛡️",
+    "rarity": "epic",
+    "price_gold": 1100,
+    "price_gems": 0,
+    "base_def": 18,
+    "base_hp": 160,
+    "bonus": {
+      "magic_resist": 35,
+      "str": 10
+    },
+    "bonus_desc": "🛡️ +18 Броня | ❤️ +160 HP | 🔮 +35% Защита от магии"
+  },
+  {
+    "id": "shop_a_crimson_guard",
+    "name": "Багровый Оплот",
+    "icon": "🛡️",
+    "type": "armor",
+    "slot": "armor",
+    "slot_name": "Броня",
+    "slot_icon": "🛡️",
+    "rarity": "epic",
+    "price_gold": 1350,
+    "price_gems": 0,
+    "base_def": 22,
+    "base_hp": 170,
+    "bonus": {
+      "block": 35
+    },
+    "bonus_desc": "🛡️ +22 Броня | ❤️ +170 HP | 🛡️ Блок 35 урона"
+  },
+  {
+    "id": "shop_a_assault_cuirass",
+    "name": "Кираса Штурма",
+    "icon": "🛡️",
+    "type": "armor",
+    "slot": "armor",
+    "slot_name": "Броня",
+    "slot_icon": "🛡️",
+    "rarity": "legendary",
+    "price_gold": 2700,
+    "price_gems": 25,
+    "base_def": 28,
+    "base_hp": 130,
+    "bonus": {
+      "atk_speed": 30,
+      "aura_armor": 6
+    },
+    "bonus_desc": "🛡️ +28 Броня | ❤️ +130 HP | ⚡ +30% Скор. атаки"
+  },
+  {
+    "id": "shop_r_energy_talisman",
+    "name": "Талисман Энергии",
+    "icon": "🌿",
+    "type": "relic",
+    "slot": "relic",
+    "slot_name": "Реликвия",
+    "slot_icon": "💍",
+    "rarity": "common",
+    "price_gold": 120,
+    "price_gems": 0,
+    "bonus": {
+      "hp": 50,
+      "mp": 40
+    },
+    "bonus_desc": "❤️ +50 HP | 🔮 +40 MP"
+  },
+  {
+    "id": "shop_r_blink_dagger",
+    "name": "Кинжал Мерцания",
+    "icon": "🗡️",
+    "type": "relic",
+    "slot": "relic",
+    "slot_name": "Реликвия",
+    "slot_icon": "💍",
+    "rarity": "rare",
+    "price_gold": 500,
+    "price_gems": 0,
+    "bonus": {
+      "crit": 15,
+      "dodge": 15
+    },
+    "bonus_desc": "💥 +15% Крит | 💨 +15% Уворот"
+  },
+  {
+    "id": "shop_r_eye_skadi",
+    "name": "Око Вечной Мерзлоты",
+    "icon": "❄️",
+    "type": "relic",
+    "slot": "relic",
+    "slot_name": "Реликвия",
+    "slot_icon": "💍",
+    "rarity": "legendary",
+    "price_gold": 2500,
+    "price_gems": 20,
+    "bonus": {
+      "hp": 160,
+      "mp": 100,
+      "atk": 25,
+      "slow": 30
+    },
+    "bonus_desc": "❤️ +160 HP | 🔮 +100 MP | ⚔️ +25 Урон | ❄️ Заморозка"
+  },
+  {
+    "id": "shop_r_satanic_totem",
+    "name": "Демонический Тотем",
+    "icon": "🩸",
+    "type": "relic",
+    "slot": "relic",
+    "slot_name": "Реликвия",
+    "slot_icon": "💍",
+    "rarity": "legendary",
+    "price_gold": 2900,
+    "price_gems": 25,
+    "bonus": {
+      "lifesteal": 28,
+      "hp": 150,
+      "str": 20
+    },
+    "bonus_desc": "🩸 +28% Вампиризм | ❤️ +150 HP | 🥩 +20 Сила"
+  },
+  {
+    "id": "shop_p_healing",
+    "name": "Зелье Исцеления",
+    "icon": "🧴",
+    "type": "potion",
+    "slot": "consumable",
+    "slot_name": "Зелье",
+    "slot_icon": "🧪",
+    "rarity": "common",
+    "price_gold": 50,
+    "price_gems": 0,
+    "heal_amount": 120,
+    "count": 3,
+    "bonus_desc": "❤️ Восстанавливает 120 HP (3 шт.)"
+  },
+  {
+    "id": "shop_p_mana",
+    "name": "Эликсир Маны",
+    "icon": "🧪",
+    "type": "potion",
+    "slot": "consumable",
+    "slot_name": "Зелье",
+    "slot_icon": "🧪",
+    "rarity": "common",
+    "price_gold": 40,
+    "price_gems": 0,
+    "mp_amount": 100,
+    "count": 3,
+    "bonus_desc": "🔮 Восстанавливает 100 MP (3 шт.)"
+  },
+  {
+    "id": "shop_p_cheese",
+    "name": "Сыр Силы Катакомб",
+    "icon": "🧀",
+    "type": "potion",
+    "slot": "consumable",
+    "slot_name": "Зелье",
+    "slot_icon": "🧪",
+    "rarity": "immortal",
+    "price_gold": 400,
+    "price_gems": 5,
+    "heal_amount": 500,
+    "mp_amount": 350,
+    "count": 1,
+    "bonus_desc": "👑 Восстанавливает 500 HP и 350 MP!"
+  }
+];
+
+
+  function triggerHaptic(type = "light") {
+    if (window.Telegram?.WebApp?.HapticFeedback) {
+      if (type === "success" || type === "warning" || type === "error") {
+        window.Telegram.WebApp.HapticFeedback.notificationOccurred(type);
+      } else {
+        window.Telegram.WebApp.HapticFeedback.impactOccurred(type);
+      }
+    }
+  }
+
+  // ===========================================================================
+  // INITIALIZATION & PROFILE
+  // ===========================================================================
+
+  async function initRPG() {
+    try {
+      RPG_STATE.loading = true;
+      renderRoot();
+
+      const [prof, heroes, shop] = await Promise.all([
+        api.getRpgProfile().catch(() => null),
+        api.getRpgHeroes().catch(() => []),
+        api.getRpgShop().catch(() => null)
+      ]);
+
+      RPG_STATE.profile = prof;
+      RPG_STATE.heroesList = heroes || [];
+      if (Array.isArray(shop) && shop.length > 0) {
+        RPG_STATE.shopCatalog = shop;
+      } else if (!RPG_STATE.shopCatalog || RPG_STATE.shopCatalog.length === 0) {
+        RPG_STATE.shopCatalog = [...FALLBACK_SHOP_CATALOG];
+      }
+
+      if (!prof || !prof.hero_class) {
+        RPG_STATE.activeTab = "hero";
+      }
+    } catch (err) {
+      console.error("Failed to init natarGRP:", err);
+      RPG_STATE.errorMessage = err.message || "Ошибка загрузки natarGRP";
+    } finally {
+      RPG_STATE.loading = false;
+      renderRoot();
+      if (RPG_STATE.activeTab === "farm" && RPG_STATE.farmMode === "arena") {
+        startArenaLoop();
+      }
+    }
+  }
+
+  async function loadProfile() {
+    try {
+      const prof = await api.getRpgProfile();
+      RPG_STATE.profile = prof;
+      renderRoot();
+    } catch (e) {
+      console.error("Error refreshing profile:", e);
+    }
+  }
+
+  function setSubTab(tab) {
+    if (RPG_STATE.activeTab === "farm" && tab !== "farm") {
+      stopArenaLoop();
+      if (RPG_STATE.autoFarm) toggleAutoFarm(false);
+    }
+    RPG_STATE.activeTab = tab;
+    RPG_STATE.inspectedItem = null;
+    RPG_STATE.forgeItem = null;
+
+    if (tab === "coop") {
+      loadCoopBosses();
+    } else if (tab === "pvp") {
+      stopArenaLoop();
+      if (RPG_STATE.autoFarm) toggleAutoFarm(false);
+      ARENA.player.autoAttack = false;
+      loadClassmates();
+    } else if (tab === "leaderboard") {
+      loadLeaderboard();
+    }
+    renderRoot();
+
+    if (tab === "farm" && RPG_STATE.farmMode === "arena") {
+      startArenaLoop();
+    }
+  }
+
+  function setFarmMode(mode) {
+    RPG_STATE.farmMode = mode;
+    if (mode === "arena") {
+      const currentSavedWave = ((RPG_STATE.profile?.dungeon_cleared || 0) % 20) + 1;
+      ARENA.waveNumber = currentSavedWave;
+      ARENA.creepsNeededForWave = Math.min(32, 14 + Math.floor((ARENA.waveNumber - 1) * 1.0));
+      ARENA.creepsKilledInWave = 0;
+      ARENA.totalCreepsSpawned = 0;
+      ARENA.creeps = [];
+      ARENA.isBossActive = (ARENA.waveNumber === 20);
+      renderRoot();
+      startArenaLoop();
+    } else {
+      stopArenaLoop();
+      renderRoot();
+    }
+  }
+
+  // ===========================================================================
+  // ADMIN DEV PANEL & TEST ACCOUNT SWITCHER (Admin only: 1053722876)
+  // ===========================================================================
+
+  function isUserAdmin() {
+    if (localStorage.getItem("admin_test_tg_uid")) return true;
+    if (localStorage.getItem("is_admin_verified") === "true") return true;
+    const p = RPG_STATE.profile;
+    if (p && (p.is_admin || String(p.tg_id) === "1053722876" || String(p.user_id) === "1053722876")) {
+      localStorage.setItem("is_admin_verified", "true");
+      return true;
+    }
+    return false;
+  }
+
+  function toggleAdminModal(open) {
+    RPG_STATE.adminModalOpen = (open !== undefined) ? open : !RPG_STATE.adminModalOpen;
+    renderRoot();
+  }
+
+  function switchAdminTestAccount(tgId) {
+    if (tgId && tgId !== "main") {
+      localStorage.setItem("admin_test_tg_uid", String(tgId));
+    } else {
+      localStorage.removeItem("admin_test_tg_uid");
+    }
+    RPG_STATE.adminModalOpen = false;
+    window.location.reload();
+  }
+
+  function createCustomAdminTestAccount() {
+    const customNum = prompt("Введите номер или ID нового тестового аккаунта (например: 999005):", "999" + Math.floor(100 + Math.random() * 899));
+    if (!customNum) return;
+    const cleanId = customNum.replace(/[^0-9]/g, "");
+    if (!cleanId) {
+      alert("ID должен состоять только из цифр!");
+      return;
+    }
+    switchAdminTestAccount(cleanId);
+  }
+
+  async function resetCurrentTestAccount() {
+    if (!confirm("Вы уверены, что хотите ПОЛНОСТЬЮ СБРОСИТЬ текущий аккаунт до 1 уровня с пустым инвентарем?")) return;
+    try {
+      await api.resetRpgCharacter();
+      alert("Аккаунт успешно сброшен с нуля!");
+      RPG_STATE.adminModalOpen = false;
+      window.location.reload();
+    } catch (e) {
+      alert("Ошибка сброса: " + (e.message || e));
+    }
+  }
+
+  // ===========================================================================
+  // HERO & STAT LOGIC
+  // ===========================================================================
+
+  async function selectHero(heroClass) {
+    try {
+      triggerHaptic("medium");
+      RPG_STATE.loading = true;
+      renderRoot();
+      const res = await api.selectRpgHero(heroClass);
+      RPG_STATE.profile = res;
+      RPG_STATE.activeTab = "farm";
+      triggerHaptic("success");
+    } catch (err) {
+      alert(err.message || "Не удалось выбрать героя");
+    } finally {
+      RPG_STATE.loading = false;
+      renderRoot();
+      if (RPG_STATE.farmMode === "arena") startArenaLoop();
+    }
+  }
+
+  function syncArenaPlayerStats() {
+    if (!ARENA.player) return;
+    const stats = RPG_STATE.profile?.stats || {};
+    const oldMaxHp = ARENA.player.maxHp || 450;
+    const newMaxHp = Math.max(450, stats.hp_max || 450);
+    const newMaxMp = Math.max(80, stats.mp_max || 80);
+
+    if (newMaxHp > oldMaxHp) {
+      ARENA.player.currentHp = Math.min(newMaxHp, (ARENA.player.currentHp || oldMaxHp) + (newMaxHp - oldMaxHp));
+    } else {
+      ARENA.player.currentHp = Math.min(newMaxHp, ARENA.player.currentHp || newMaxHp);
+    }
+    ARENA.player.maxHp = newMaxHp;
+    ARENA.player.maxMp = newMaxMp;
+    ARENA.player.currentMp = Math.min(newMaxMp, ARENA.player.currentMp || newMaxMp);
+  }
+
+  let isUpgradingStat = false;
+
+  async function upgradeStat(statName) {
+    if (isUpgradingStat) return;
+    const p = RPG_STATE.profile || {};
+    const points = p.stat_points || 0;
+    const statVal = (statName === "str" ? p.strength : (statName === "agi" ? p.agility : p.intelligence)) || 10;
+    const cost = statVal * 20;
+
+    if (points <= 0 && (p.gold || 0) < cost) {
+      triggerHaptic("error");
+      return;
+    }
+
+    isUpgradingStat = true;
+    try {
+      triggerHaptic("light");
+      // Optimistic update so UI decrements points/gold and increments stat immediately
+      if (points > 0) {
+        p.stat_points = Math.max(0, points - 1);
+      } else {
+        p.gold = Math.max(0, (p.gold || 0) - cost);
+      }
+      if (statName === "str") p.strength = statVal + 1;
+      else if (statName === "agi") p.agility = statVal + 1;
+      else if (statName === "int") p.intelligence = statVal + 1;
+      renderRoot();
+
+      const res = await api.upgradeRpgStat(statName);
+      if (res.profile) {
+        RPG_STATE.profile = res.profile;
+        syncArenaPlayerStats();
+        triggerHaptic("success");
+      }
+    } catch (err) {
+      console.warn("Upgrade stat error:", err);
+      alert(err.message || "Не удалось повысить характеристику");
+      await loadProfile();
+    } finally {
+      isUpgradingStat = false;
+      renderRoot();
+    }
+  }
+
+  function openItemModal(itemUid) {
+    if (!RPG_STATE.profile) return;
+    const inv = RPG_STATE.profile.inventory || [];
+    const eq = RPG_STATE.profile.equipment || {};
+    let item = inv.find((i) => i.uid === itemUid);
+    if (!item) {
+      if (eq.weapon?.uid === itemUid) item = eq.weapon;
+      else if (eq.armor?.uid === itemUid) item = eq.armor;
+      else if (eq.relic?.uid === itemUid) item = eq.relic;
+    }
+    if (item) {
+      RPG_STATE.inspectedItem = item;
+      triggerHaptic("light");
+      renderRoot();
+    }
+  }
+
+  function closeItemModal() {
+    RPG_STATE.inspectedItem = null;
+    renderRoot();
+  }
+
+  async function equipItem(itemUid) {
+    try {
+      triggerHaptic("medium");
+      const res = await api.equipRpgItem(itemUid);
+      if (res.profile) {
+        RPG_STATE.profile = res.profile;
+        syncArenaPlayerStats();
+        RPG_STATE.inspectedItem = null;
+        RPG_STATE.slotFilterModal = null;
+        triggerHaptic("success");
+        if (window.showToast) {
+          window.showToast(res.message || "Предмет успешно экипирован!", "success");
+        }
+      }
+    } catch (err) {
+      triggerHaptic("error");
+      alert(err.message || "Не удалось экипировать предмет");
+    } finally {
+      renderRoot();
+    }
+  }
+
+  async function unequipItem(slotOrUid) {
+    try {
+      triggerHaptic("medium");
+      const res = await api.unequipRpgItem(slotOrUid);
+      if (res.profile) {
+        RPG_STATE.profile = res.profile;
+        syncArenaPlayerStats();
+        RPG_STATE.inspectedItem = null;
+        RPG_STATE.slotFilterModal = null;
+        triggerHaptic("success");
+        if (window.showToast) {
+          window.showToast(res.message || "Предмет снят в рюкзак", "info");
+        }
+      }
+    } catch (err) {
+      triggerHaptic("error");
+      alert(err.message || "Не удалось снять предмет");
+    } finally {
+      renderRoot();
+    }
+  }
+
+  async function useConsumable(itemUid) {
+    try {
+      triggerHaptic("medium");
+      const res = await api.useRpgItem(itemUid);
+      if (res.profile) {
+        RPG_STATE.profile = res.profile;
+        const pot = res.potion_result || {};
+        if (pot.heal_hp > 0 && ARENA.player) {
+          ARENA.player.currentHp = Math.min(ARENA.player.maxHp, ARENA.player.currentHp + pot.heal_hp);
+          spawnFloatingText(ARENA.player.x, ARENA.player.y - 25, `+${pot.heal_hp} HP ❤️`, "#22c55e");
+        }
+        if (pot.heal_mp > 0 && ARENA.player) {
+          ARENA.player.currentMp = Math.min(ARENA.player.maxMp, ARENA.player.currentMp + pot.heal_mp);
+          spawnFloatingText(ARENA.player.x, ARENA.player.y - 35, `+${pot.heal_mp} MP 🔮`, "#38bdf8");
+        }
+        if (pot.remaining_count <= 0) {
+          RPG_STATE.inspectedItem = null;
+        } else if (RPG_STATE.inspectedItem) {
+          RPG_STATE.inspectedItem.count = pot.remaining_count;
+        }
+        triggerHaptic("success");
+      }
+    } catch (err) {
+      alert(err.message || "Не удалось использовать зелье");
+    } finally {
+      renderRoot();
+    }
+  }
+
+  async function openShopModal() {
+    try {
+      triggerHaptic("light");
+      RPG_STATE.shopModalOpen = true;
+      if (!RPG_STATE.shopCatalog || RPG_STATE.shopCatalog.length === 0) {
+        RPG_STATE.shopLoading = true;
+        renderRoot();
+        try {
+          const catalog = await api.getRpgShop();
+          if (Array.isArray(catalog) && catalog.length > 0) {
+            RPG_STATE.shopCatalog = catalog;
+          } else {
+            RPG_STATE.shopCatalog = [...FALLBACK_SHOP_CATALOG];
+          }
+        } catch (e) {
+          console.warn("Could not fetch shop catalog, using fallback:", e);
+          RPG_STATE.shopCatalog = [...FALLBACK_SHOP_CATALOG];
+        } finally {
+          RPG_STATE.shopLoading = false;
+        }
+      }
+    } catch (err) {
+      console.error("Failed to open shop:", err);
+      if (!RPG_STATE.shopCatalog || RPG_STATE.shopCatalog.length === 0) {
+        RPG_STATE.shopCatalog = [...FALLBACK_SHOP_CATALOG];
+      }
+    } finally {
+      renderRoot();
+    }
+  }
+
+  async function reloadShopCatalog() {
+    try {
+      triggerHaptic("light");
+      RPG_STATE.shopLoading = true;
+      renderRoot();
+      const catalog = await api.getRpgShop();
+      if (Array.isArray(catalog) && catalog.length > 0) {
+        RPG_STATE.shopCatalog = catalog;
+      } else {
+        RPG_STATE.shopCatalog = [...FALLBACK_SHOP_CATALOG];
+      }
+    } catch (err) {
+      console.warn("Could not reload shop catalog, using fallback:", err);
+      RPG_STATE.shopCatalog = [...FALLBACK_SHOP_CATALOG];
+    } finally {
+      RPG_STATE.shopLoading = false;
+      renderRoot();
+    }
+  }
+
+  function closeShopModal() {
+    RPG_STATE.shopModalOpen = false;
+    renderRoot();
+  }
+
+  function setShopFilter(filter) {
+    RPG_STATE.shopFilter = filter;
+    renderRoot();
+  }
+
+  async function buyShopItem(itemId) {
+    if (RPG_STATE.buyingItemId) return;
+    try {
+      RPG_STATE.buyingItemId = itemId;
+      triggerHaptic("medium");
+      const res = await api.buyRpgShopItem(itemId);
+      if (res.profile) {
+        RPG_STATE.profile = res.profile;
+        triggerHaptic("success");
+        if (window.showToast) {
+          window.showToast(res.message || "Товар приобретен!", "success");
+        } else {
+          alert(res.message || "Товар успешно куплен!");
+        }
+      }
+    } catch (err) {
+      triggerHaptic("error");
+      alert(err.message || "Не удалось совершить покупку");
+    } finally {
+      RPG_STATE.buyingItemId = null;
+      renderRoot();
+    }
+  }
+
+  function openSlotFilterModal(slotKey) {
+    RPG_STATE.inspectedItem = null;
+    RPG_STATE.slotFilterModal = slotKey;
+    triggerHaptic("light");
+    renderRoot();
+  }
+
+  function closeSlotFilterModal() {
+    RPG_STATE.slotFilterModal = null;
+    renderRoot();
+  }
+
+  function openForge(itemUid) {
+    if (!RPG_STATE.profile) return;
+    const inv = RPG_STATE.profile.inventory || [];
+    const eq = RPG_STATE.profile.equipment || {};
+    let item = inv.find((i) => i.uid === itemUid);
+    if (!item) {
+      if (eq.weapon?.uid === itemUid) item = eq.weapon;
+      else if (eq.armor?.uid === itemUid) item = eq.armor;
+      else if (eq.relic?.uid === itemUid) item = eq.relic;
+    }
+    if (item) {
+      RPG_STATE.inspectedItem = null;
+      RPG_STATE.forgeItem = item;
+      RPG_STATE.forgeSuccessAnimation = false;
+      triggerHaptic("light");
+      renderRoot();
+    }
+  }
+
+  function closeForgeModal() {
+    RPG_STATE.forgeItem = null;
+    renderRoot();
+  }
+
+  async function forgeCurrentItem() {
+    if (!RPG_STATE.forgeItem) return;
+    try {
+      triggerHaptic("heavy");
+      const res = await api.forgeRpgItem(RPG_STATE.forgeItem.uid);
+      if (res.profile) {
+        RPG_STATE.profile = res.profile;
+        syncArenaPlayerStats();
+        RPG_STATE.forgeItem = res.item || RPG_STATE.forgeItem;
+        RPG_STATE.forgeSuccessAnimation = true;
+        triggerHaptic("success");
+        setTimeout(() => {
+          RPG_STATE.forgeSuccessAnimation = false;
+          renderRoot();
+        }, 1200);
+      }
+    } catch (err) {
+      triggerHaptic("error");
+      alert(err.message || "Не удалось заточить предмет");
+    } finally {
+      renderRoot();
+    }
+  }
+
+  async function sellItem(itemUid) {
+    if (!confirm("Продать этот предмет за золото?")) return;
+    try {
+      triggerHaptic("light");
+      const res = await api.sellRpgItem(itemUid);
+      if (res.profile) {
+        RPG_STATE.profile = res.profile;
+        RPG_STATE.inspectedItem = null;
+        if (RPG_STATE.selectedItemUids) RPG_STATE.selectedItemUids.delete(itemUid);
+        triggerHaptic("success");
+      }
+    } catch (err) {
+      alert(err.message || "Не удалось продать предмет");
+    } finally {
+      renderRoot();
+    }
+  }
+
+  function getItemSellPrice(item) {
+    if (!item) return 0;
+    const rarity = (item.rarity || "common").toLowerCase();
+    const prices = { common: 40, uncommon: 75, rare: 120, epic: 320, legendary: 850, immortal: 2500 };
+    const base = prices[rarity] || 40;
+    const upg = item.upgrade || item.forge_level || 0;
+    return base + (upg * 35);
+  }
+
+  function getSelectedItemsTotalPrice() {
+    if (!RPG_STATE.selectedItemUids || RPG_STATE.selectedItemUids.size === 0) return 0;
+    const inv = RPG_STATE.profile?.inventory || [];
+    let sum = 0;
+    for (const it of inv) {
+      if (RPG_STATE.selectedItemUids.has(it.uid)) {
+        sum += getItemSellPrice(it);
+      }
+    }
+    return sum;
+  }
+
+  function toggleItemSelectionMode(forced) {
+    RPG_STATE.isSelectionMode = (forced !== undefined) ? forced : !RPG_STATE.isSelectionMode;
+    if (!RPG_STATE.isSelectionMode && RPG_STATE.selectedItemUids) {
+      RPG_STATE.selectedItemUids.clear();
+    }
+    triggerHaptic("medium");
+    renderRoot();
+  }
+
+  function toggleItemSelection(itemUid) {
+    if (!RPG_STATE.selectedItemUids) {
+      RPG_STATE.selectedItemUids = new Set();
+    }
+    if (RPG_STATE.selectedItemUids.has(itemUid)) {
+      RPG_STATE.selectedItemUids.delete(itemUid);
+      if (RPG_STATE.selectedItemUids.size === 0) {
+        // keep selection mode active for easy continued picking
+      }
+    } else {
+      RPG_STATE.selectedItemUids.add(itemUid);
+      RPG_STATE.isSelectionMode = true; // Auto-activate selection mode on first item check!
+    }
+    triggerHaptic("light");
+    renderRoot();
+  }
+
+  function selectAllByRarity(rarity) {
+    const inv = RPG_STATE.profile?.inventory || [];
+    if (!RPG_STATE.selectedItemUids) {
+      RPG_STATE.selectedItemUids = new Set();
+    }
+    RPG_STATE.isSelectionMode = true;
+    for (const item of inv) {
+      if (!rarity || item.rarity === rarity) {
+        RPG_STATE.selectedItemUids.add(item.uid);
+      }
+    }
+    triggerHaptic("medium");
+    renderRoot();
+  }
+
+  function clearItemSelection() {
+    if (RPG_STATE.selectedItemUids) {
+      RPG_STATE.selectedItemUids.clear();
+    }
+    triggerHaptic("light");
+    renderRoot();
+  }
+
+  function handleInventoryItemClick(itemUid) {
+    if (RPG_STATE.isSelectionMode || (RPG_STATE.selectedItemUids && RPG_STATE.selectedItemUids.size > 0)) {
+      toggleItemSelection(itemUid);
+    } else {
+      openItemModal(itemUid);
+    }
+  }
+
+  async function sellSelectedItems() {
+    const uids = Array.from(RPG_STATE.selectedItemUids || []);
+    if (uids.length === 0) {
+      alert("Не выбрано ни одного предмета для продажи!");
+      return;
+    }
+    if (!confirm(`Продать выбранные ${uids.length} предметов за золото?`)) {
+      return;
+    }
+
+    try {
+      triggerHaptic("medium");
+      const res = await api.sellMultipleRpgItems(uids);
+      if (res.profile) {
+        RPG_STATE.profile = res.profile;
+        RPG_STATE.selectedItemUids.clear();
+        RPG_STATE.isSelectionMode = false;
+        triggerHaptic("success");
+        if (window.showToast) {
+          window.showToast(res.message || `Продано ${res.items_sold} предметов за +${res.gold_earned} 🪙!`, "success");
+        } else {
+          alert(res.message);
+        }
+      }
+    } catch (err) {
+      triggerHaptic("error");
+      alert(err.message || "Не удалось продать предметы");
+    } finally {
+      renderRoot();
+    }
+  }
+
+  async function resetCharacter() {
+    if (!confirm("⚠️ ВНИМАНИЕ: Сбросить персонажа до 1 уровня?\n\nВсе уровни, золото и предметы будут обнулены, и начнётся чистое хардкорное приключение с 1 этажа!")) {
+      return;
+    }
+    try {
+      triggerHaptic("heavy");
+      const res = await api.resetRpgCharacter();
+      if (res.profile) {
+        RPG_STATE.profile = res.profile;
+        if (RPG_STATE.selectedItemUids) RPG_STATE.selectedItemUids.clear();
+        syncArenaPlayerStats();
+        retryCurrentFloor();
+        triggerHaptic("success");
+        if (window.showToast) {
+          window.showToast("Персонаж успешно сброшен до 1 уровня!", "info");
+        } else {
+          alert("Персонаж успешно сброшен до 1 уровня!");
+        }
+      }
+    } catch (err) {
+      triggerHaptic("error");
+      alert(err.message || "Не удалось сбросить персонажа");
+    } finally {
+      renderRoot();
+    }
+  }
+
+  // ===========================================================================
+  // CHEST SYSTEM (СУНДУКИ НАГРАДЫ)
+  // ===========================================================================
+
+  function openChestModal(chestData) {
+    if (!chestData) return;
+    if (RPG_STATE.activeChestModal) return; // Prevent double modal open!
+    RPG_STATE.activeChestModal = { ...chestData, opened: false };
+    triggerHaptic("medium");
+    renderRoot();
+  }
+
+  function closeChestModal() {
+    RPG_STATE.activeChestModal = null;
+    if (ARENA.isRaidBossBattle) {
+      exitRaidBossBattle();
+      return;
+    }
+    renderRoot();
+    if (ARENA.autoAdvanceWaves && ARENA.waveState === "prompt") {
+      confirmNextWave();
+    }
+  }
+
+  async function claimChestReward() {
+    if (!RPG_STATE.activeChestModal) return;
+    RPG_STATE.activeChestModal.opened = true;
+    triggerHaptic("success");
+    renderRoot();
+  }
+
+  // ===========================================================================
+  // FAST SIMULATION SLAUGHTER (БЫСТРАЯ ЗАРУБКА)
+  // ===========================================================================
+
+  async function slashWave() {
+    if (RPG_STATE.isFighting) return;
+    try {
+      RPG_STATE.isFighting = true;
+      triggerHaptic("medium");
+      renderRoot();
+
+      const res = await api.slashCreepWave();
+      RPG_STATE.lastBattle = res;
+      if (res.profile) {
+        RPG_STATE.profile = res.profile;
+      }
+      if (res.victory) {
+        RPG_STATE.killsSession++;
+        triggerHaptic(res.is_boss ? "success" : "light");
+      } else {
+        triggerHaptic("error");
+      }
+      if (res.leveled_up) {
+        showLevelUpToast(res.profile?.level || 2);
+      }
+      if (res.chest_reward) {
+        openChestModal(res.chest_reward);
+      }
+      if (res.combat_log && res.combat_log.length > 0) {
+        RPG_STATE.combatLog = res.combat_log;
+      }
+    } catch (err) {
+      console.error("Slash wave error:", err);
+      alert(err.message || "Ошибка боя с волной крипов");
+      if (RPG_STATE.autoFarm) toggleAutoFarm(false);
+    } finally {
+      RPG_STATE.isFighting = false;
+      renderRoot();
+    }
+  }
+
+  function toggleAutoFarm(forcedState) {
+    const newState = forcedState !== undefined ? forcedState : !RPG_STATE.autoFarm;
+    RPG_STATE.autoFarm = newState;
+
+    if (RPG_STATE.autoFarmTimer) {
+      clearInterval(RPG_STATE.autoFarmTimer);
+      RPG_STATE.autoFarmTimer = null;
+    }
+
+    if (newState) {
+      triggerHaptic("medium");
+      slashWave();
+      RPG_STATE.autoFarmTimer = setInterval(() => {
+        if (!RPG_STATE.isFighting && RPG_STATE.activeTab === "farm") {
+          slashWave();
+        }
+      }, 2500);
+    } else {
+      triggerHaptic("light");
+    }
+    renderRoot();
+  }
+
+  function showLevelUpToast(newLevel) {
+    RPG_STATE.levelUpNotification = newLevel;
+    triggerHaptic("success");
+    setTimeout(() => {
+      RPG_STATE.levelUpNotification = null;
+      renderRoot();
+    }, 3500);
+  }
+
+  // ===========================================================================
+  // 2D ACTION ARENA ENGINE (<canvas>) — GROW CASTLE DOTA 2 STYLE
+  // Герой стоит слева на тропе, крипы из Доты бегут справа.
+  // 20 волн = 1 этаж (босс на 20-й волне).
+  // У каждого героя уникальная атака (дальняя/ближняя), Скилл 1 и Ультимейт.
+  // ===========================================================================
+
+  const ARENA = {
+    canvas: null,
+    ctx: null,
+    animId: null,
+    width: 360,
+    height: 320,
+    running: false,
+
+    // Landscape
+    roadY: 225,
+
+    // Player Entity (STATIONARY — no movement!)
+    player: {
+      x: 65,
+      y: 200,
+      radius: 20,
+      currentHp: 200,
+      maxHp: 200,
+      currentMp: 60,
+      maxMp: 60,
+      attackCooldown: 0,
+      attackQueued: false,
+      attackRange: 270,
+      isRanged: false,
+      slashAnimation: null,
+      autoAttack: true,
+      // Active skill timers
+      fleshHeapActive: 0,      // Pudge -40% damage
+      bladeDanceActive: 0,     // Juggernaut +50% attack speed
+      rotActive: 0,            // Pudge rot poison
+      counterspellActive: 0    // Anti-Mage shield
+    },
+
+    // Cooldowns
+    skill1Cooldown: 0,
+    skill1CooldownMax: 480, // default 8s
+    ultCooldown: 0,
+    ultCooldownMax: 900,    // default 15s
+
+    // Projectiles & Minions
+    playerProjectiles: [],
+    alliedMinions: [],
+    specialEffects: [],
+
+    // Creeps (come from right only)
+    creeps: [],
+    creepSpawnTimer: 0,
+    totalCreepsSpawned: 0,
+    waveNumber: 1,
+    waveMax: 20, // Boss every 20 waves
+    creepsKilledInWave: 0,
+    creepsNeededForWave: 5,
+
+    // Boss
+    isBossActive: false,
+    bossEntity: null,
+    bossPhase: 0,
+    bossSpecialTimer: 0,
+    bossProjectiles: [],
+    bossPartyMode: (() => {
+      try {
+        return localStorage.getItem("rpg_boss_party_mode") || "trio";
+      } catch (e) {
+        return "trio";
+      }
+    })(),
+    bossCompanions: [],
+    _partyBtnBounds: null,
+
+    // Boss Arena 2D Combat Mode (free player movement)
+    bossArenaMode: false,
+    moveInput: { left: false, right: false },
+    dodgeCooldown: 0,
+    dodgeActive: 0,      // frames remaining of dodge i-frame
+    dodgeDir: 1,          // direction of dodge roll
+    dangerZones: [],
+    joystick: { active: false, touchId: null, baseX: 0, baseY: 0, curX: 0, curY: 0, dx: 0, dy: 0, power: 0 },
+    topDownMode: false,
+    dashGhosts: [],
+    keysPressed: {},      // boss attack telegraphs on arena floor
+    bossAttackPattern: null, // current boss attack being executed
+    bossPatternTimer: 0,     // timer for current pattern phase
+    bossPatternPhase: "idle", // idle | telegraph | execute | recover
+    _touchMoveId: null,   // active touch for movement
+
+    // Boss interaction windows & Polish
+    blockWindowActive: false,
+    blockWindowTimer: 0,
+    blockWindowMax: 120,
+    qteActive: false,
+    qteTimer: 0,
+    qteMaxTimer: 90,
+
+    // Wave Combat & Style Engine (Hades / DMC)
+    enemyProjectiles: [],
+    dashGhosts: [],
+    combo: { count: 0, timer: 0, step: 0, maxCombo: 0 },
+    styleMeter: { score: 0, rank: "D", progress: 0, decayTimer: 0, maxRank: "D" },
+
+    // Advanced Boss Combat Engine (Sekiro/Hollow Knight/Dota 2)
+    cameraTrauma: 0,
+    hitstop: 0,
+    parryWindow: 0,
+    shockwaves: [],
+    telegraphs: [],
+    physicalCoins: [],
+    fallingChest: null,
+
+    // Wave state machine
+    // 'fighting' | 'wave_clear' | 'prompt' | 'boss_intro' | 'floor_clear' | 'retry_prompt'
+    waveState: "fighting",
+    waveTransitionTimer: 0,
+    _promptBtnBounds: null,
+    _promptDisableBtnBounds: null,
+    autoAdvanceWaves: (() => {
+      try {
+        const val = localStorage.getItem("rpg_arena_auto_advance_waves");
+        return val !== null ? val === "true" : true;
+      } catch (e) {
+        return true;
+      }
+    })(),
+
+    // Effects & Pickups
+    floatingTexts: [],
+    pickups: [],
+
+    // Background
+    clouds: [],
+    bgInit: false
+  };
+
+  // ---------------------------------------------------------------------------
+  // DOTA 2 HERO SKILL CONFIGS
+  // ---------------------------------------------------------------------------
+
+  function getHeroSkillConfig() {
+    const hClass = (RPG_STATE.profile?.hero_class || "pudge").toLowerCase();
+    const configs = {
+      invoker: {
+        isRanged: true,
+        attackRange: 380,
+        skill1Name: "Санстрайк",
+        skill1Icon: "☀️",
+        skill1Cd: 420, // 7 sec
+        skill1Desc: "Ослепительный луч солнца бьет с неба, нанося чистый урон и ломая щиты!",
+        ultName: "Хаос Метеор (Котлета)",
+        ultIcon: "☄️",
+        ultCd: 840, // 14 sec
+        ultDesc: "С неба обрушивается пылающий метеор («котлета»), катится по всей линии и сжигает всё на пути!"
+      },
+      pudge: {
+        isRanged: false,
+        attackRange: 270,
+        skill1Name: "Защитная Плоть",
+        skill1Icon: "🥩",
+        skill1Cd: 840, // 14 sec
+        skill1Desc: "Блокирует 40% всего входящего урона на 8 секунд!",
+        ultName: "Чумная Гниль",
+        ultIcon: "☣️",
+        ultCd: 720, // 12 sec
+        ultDesc: "Вонь на всю карту 2.5 сек, наносящая урон всем крипам!"
+      },
+      juggernaut: {
+        isRanged: false,
+        attackRange: 275,
+        skill1Name: "Танец Клинка",
+        skill1Icon: "💨",
+        skill1Cd: 600, // 10 sec
+        skill1Desc: "Увеличивает скорость атаки на +50% на 6 секунд!",
+        ultName: "Омнислеш",
+        ultIcon: "⚔️",
+        ultCd: 900, // 15 sec
+        ultDesc: "Вихрь рассекающих ударов по всей карте!"
+      },
+      phantom_assassin: {
+        isRanged: false,
+        attackRange: 270,
+        skill1Name: "Кинжал Тени",
+        skill1Icon: "🗡️",
+        skill1Cd: 360, // 6 sec
+        skill1Desc: "Бросок отравленного кинжала с критом и замедлением!",
+        ultName: "Coup de Grace",
+        ultIcon: "🩸",
+        ultCd: 720, // 12 sec
+        ultDesc: "Сокрушительный выпад с критическим уроном x5.0!"
+      },
+      shadow_fiend: {
+        isRanged: true,
+        attackRange: 360,
+        skill1Name: "Тройной Койл",
+        skill1Icon: "🌑",
+        skill1Cd: 420, // 7 sec
+        skill1Desc: "Три мощных взрыва душ в ряд перед собой!",
+        ultName: "Реквием Душ",
+        ultIcon: "🌪️",
+        ultCd: 960, // 16 sec
+        ultDesc: "Адские волны темных душ во все стороны!"
+      },
+      wraith_king: {
+        isRanged: false,
+        attackRange: 280,
+        skill1Name: "Огненный Стан",
+        skill1Icon: "💀",
+        skill1Cd: 480, // 8 sec
+        skill1Desc: "Огненный череп оглушает крипов по площади!",
+        ultName: "Армия Скелетов",
+        ultIcon: "👑",
+        ultCd: 960, // 16 sec
+        ultDesc: "Призывает отряд скелетов-воинов + 100% вампиризм!"
+      },
+      anti_mage: {
+        isRanged: false,
+        attackRange: 270,
+        skill1Name: "Щит Магии",
+        skill1Icon: "🛡️",
+        skill1Cd: 420, // 7 sec
+        skill1Desc: "Магический щит отражения + мгновенный выпад!",
+        ultName: "Взрыв Маны",
+        ultIcon: "💥",
+        ultCd: 840, // 14 sec
+        ultDesc: "Колоссальный взрыв маны по скоплению врагов!"
+      }
+    };
+    return configs[hClass] || configs.pudge;
+  }
+
+  // ---------------------------------------------------------------------------
+  // INITIALIZATION
+  // ---------------------------------------------------------------------------
+
+  function bindArenaCanvas(canvas) {
+    if (!canvas) canvas = document.getElementById("rpg-action-canvas");
+    if (!canvas) return;
+
+    // If canvas has no rendered size yet (DOM not laid out), defer until next frame
+    const earlyRect = canvas.getBoundingClientRect();
+    if (earlyRect.width < 10 && canvas.clientWidth < 10) {
+      requestAnimationFrame(() => bindArenaCanvas(canvas));
+      return;
+    }
+
+    ARENA.canvas = canvas;
+    ARENA.ctx = canvas.getContext("2d");
+    if (ARENA.ctx) {
+      const h = ARENA.height || 320;
+      ARENA.cachedSkyGrad = ARENA.ctx.createLinearGradient(0, -24, 0, h * 0.55);
+      ARENA.cachedSkyGrad.addColorStop(0, "#2563eb");
+      ARENA.cachedSkyGrad.addColorStop(1, "#93c5fd");
+      ARENA.cachedGroundGrad = ARENA.ctx.createLinearGradient(0, h * 0.55 - 4, 0, h + 24);
+      ARENA.cachedGroundGrad.addColorStop(0, "#16a34a");
+      ARENA.cachedGroundGrad.addColorStop(0.4, "#15803d");
+      ARENA.cachedGroundGrad.addColorStop(1, "#14532d");
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    const dpr = (typeof window !== "undefined" && window.devicePixelRatio && window.devicePixelRatio > 0) ? window.devicePixelRatio : 1;
+    const isTopDown = !!(ARENA.topDownMode || ARENA.isRaidBossBattle);
+    const clientW = rect.width > 50 ? rect.width : (canvas.clientWidth > 50 ? canvas.clientWidth : 360);
+    const clientH = isTopDown ? 520 : (rect.height > 50 ? rect.height : 320);
+    // In Top-Down Brawl mode, arena logical space is a spacious 520x720 battlefield!
+    ARENA.width = isTopDown ? 520 : clientW;
+    ARENA.height = isTopDown ? 720 : clientH;
+    canvas.width = Math.round(clientW * dpr);
+    canvas.height = Math.round(clientH * dpr);
+    if (ARENA.ctx) {
+      ARENA.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    setupArenaListeners(canvas);
+    bindVirtualJoystick();
+  }
+
+  function initArenaCanvas() {
+    const canvas = document.getElementById("rpg-action-canvas");
+    if (!canvas) return;
+    bindArenaCanvas(canvas);
+
+    // CRITICAL: NEVER wipe out an active Raid Boss Battle!
+    if (ARENA.isRaidBossBattle) {
+      if (ARENA.bossEntity && !ARENA.creeps.includes(ARENA.bossEntity)) {
+        ARENA.creeps = [ARENA.bossEntity];
+      }
+      ARENA.isBossActive = true;
+      return;
+    }
+
+    const p = RPG_STATE.profile;
+    const stats = p?.stats || {};
+    const skillCfg = getHeroSkillConfig();
+
+    ARENA.player.x = 65;
+    ARENA.player.y = ARENA.roadY - 18;
+    ARENA.player.radius = 20;
+    ARENA.player.maxHp = Math.max(450, stats.hp_max || 450);
+    ARENA.player.currentHp = ARENA.player.maxHp;
+    ARENA.player.maxMp = Math.max(80, stats.mp_max || 80);
+    ARENA.player.currentMp = ARENA.player.maxMp;
+    ARENA.player.isRanged = skillCfg.isRanged;
+    ARENA.player.attackRange = skillCfg.attackRange;
+    ARENA.player.fleshHeapActive = 0;
+    ARENA.player.bladeDanceActive = 0;
+    ARENA.player.rotActive = 0;
+    ARENA.player.counterspellActive = 0;
+
+    ARENA.skill1Cooldown = 0;
+    ARENA.skill1CooldownMax = skillCfg.skill1Cd;
+    ARENA.ultCooldown = 0;
+    ARENA.ultCooldownMax = skillCfg.ultCd;
+
+    ARENA.creeps = [];
+    ARENA.pickups = [];
+    ARENA.floatingTexts = [];
+    ARENA.bossProjectiles = [];
+    ARENA.playerProjectiles = [];
+    ARENA.alliedMinions = [];
+    ARENA.specialEffects = [];
+
+    // Always synchronize active wave with database progress from profile
+    const currentSavedWave = ((RPG_STATE.profile?.dungeon_cleared || 0) % 20) + 1;
+    if (!ARENA.waveNumber || ARENA.waveNumber < 1 || ARENA.waveNumber !== currentSavedWave) {
+      ARENA.waveNumber = currentSavedWave;
+    }
+    ARENA.waveMax = 20;
+    ARENA.creepsKilledInWave = 0;
+    ARENA.totalCreepsSpawned = 0;
+    ARENA.creepsNeededForWave = Math.min(32, 14 + Math.floor((ARENA.waveNumber - 1) * 1.0));
+    ARENA.isBossActive = false;
+    ARENA.bossEntity = null;
+    ARENA.bossPhase = 0;
+    ARENA.bossCompanions = [];
+    ARENA._partyBtnBounds = null;
+    ARENA.bossArenaMode = false;
+    ARENA.moveInput = { left: false, right: false };
+    ARENA.dodgeCooldown = 0;
+    ARENA.dodgeActive = 0;
+    ARENA.dodgeDir = 1;
+    ARENA.dangerZones = [];
+    ARENA.bossAttackPattern = null;
+    ARENA.bossPatternTimer = 0;
+    ARENA.bossPatternPhase = "idle";
+    ARENA._touchMoveId = null;
+    ARENA.waveState = "fighting";
+    ARENA.blockWindowActive = false;
+    ARENA.qteActive = false;
+    ARENA.cameraTrauma = 0;
+    ARENA.hitstop = 0;
+    ARENA.parryWindow = 0;
+    ARENA.shockwaves = [];
+    ARENA.telegraphs = [];
+    ARENA.physicalCoins = [];
+    ARENA.fallingChest = null;
+    ARENA._promptBtnBounds = null;
+    ARENA.enemyProjectiles = [];
+    ARENA.dashGhosts = [];
+    ARENA.combo = { count: 0, timer: 0, step: 0, maxCombo: 0 };
+    ARENA.styleMeter = { score: 0, rank: "D", progress: 0, decayTimer: 0, maxRank: "D" };
+    ARENA.player.isDashing = false;
+    ARENA.player.dashCooldown = 0;
+    ARENA.player.isInvulnerable = 0;
+    ARENA.player.critBuff = false;
+    ARENA.player.isBlocking = 0;
+
+    if (!ARENA.bgInit) {
+      ARENA.clouds = [];
+      for (let i = 0; i < 5; i++) {
+        ARENA.clouds.push({
+          x: Math.random() * ARENA.width,
+          y: 18 + Math.random() * 45,
+          speed: 0.12 + Math.random() * 0.18
+        });
+      }
+      ARENA.bgInit = true;
+    }
+  }
+
+
+  // ===========================================================================
+  // ARCHERO-STYLE TOP-DOWN JOYSTICK & STUTTER-STEP SYSTEM
+  // ===========================================================================
+
+  function playerPerformDashRoll() {
+    const p = ARENA.player;
+    if (ARENA.dodgeCooldown > 0) return;
+
+    let dirX = ARENA.joystick.dx;
+    let dirY = ARENA.joystick.dy;
+
+    // If standing still, dash in current facing direction
+    if (Math.abs(dirX) < 0.05 && Math.abs(dirY) < 0.05) {
+      const fa = p.facingAngle !== undefined ? p.facingAngle : (p.facing === -1 ? Math.PI : 0);
+      dirX = Math.cos(fa);
+      dirY = Math.sin(fa);
+    }
+    const mag = Math.hypot(dirX, dirY) || 1;
+    dirX /= mag;
+    dirY /= mag;
+
+    const dashDist = 88;
+    p.x = Math.max(28, Math.min(ARENA.width - 28, p.x + dirX * dashDist));
+    p.y = Math.max(38, Math.min(ARENA.height - 38, p.y + dirY * dashDist));
+
+    p.isInvulnerable = 26; // 26 frames of invincibility (~430ms)
+    ARENA.dodgeCooldown = 90; // 1.5s cooldown
+    ARENA.cameraTrauma = Math.min(1.0, (ARENA.cameraTrauma || 0) + 0.15);
+
+    if (!ARENA.dashGhosts) ARENA.dashGhosts = [];
+    const hClass = (RPG_STATE.profile?.hero_class || "pudge").toLowerCase();
+    for (let g = 0; g < 4; g++) {
+      ARENA.dashGhosts.push({
+        x: p.x - dirX * (g * 22),
+        y: p.y - dirY * (g * 22),
+        radius: p.radius || 22,
+        alpha: 0.65 - g * 0.14,
+        heroClass: hClass
+      });
+    }
+
+    spawnFloatingText(p.x, p.y - 25, "🌀 РЫВОК! (I-FRAMES)", "#38bdf8");
+    triggerHaptic("heavy");
+  }
+
+  function toggleTopDownArenaMode() {
+    ARENA.topDownMode = !ARENA.topDownMode;
+    const canvas = document.getElementById("rpg-action-canvas");
+    if (canvas) {
+      bindArenaCanvas(canvas);
+    }
+    renderRoot();
+  }
+
+  function bindVirtualJoystick() {
+    const zone = document.getElementById("rpg-virtual-joystick-zone");
+    const knob = document.getElementById("rpg-joystick-knob");
+    if (!zone || !knob) return;
+
+    const maxRadius = 46;
+    const deadzone = 12;
+
+    function handleStart(clientX, clientY, touchId) {
+      ARENA.joystick.active = true;
+      ARENA.joystick.touchId = touchId;
+      const rect = zone.getBoundingClientRect();
+      ARENA.joystick.baseX = rect.left + rect.width / 2;
+      ARENA.joystick.baseY = rect.top + rect.height / 2;
+      handleMove(clientX, clientY);
+    }
+
+    function handleMove(clientX, clientY) {
+      if (!ARENA.joystick.active) return;
+      let dx = clientX - ARENA.joystick.baseX;
+      let dy = clientY - ARENA.joystick.baseY;
+      const dist = Math.hypot(dx, dy);
+
+      // Clamp knob visually inside joystick boundary
+      let knobX = dx;
+      let knobY = dy;
+      if (dist > maxRadius) {
+        knobX = (dx / dist) * maxRadius;
+        knobY = (dy / dist) * maxRadius;
+      }
+      knob.style.transform = `translate(${knobX}px, ${knobY}px)`;
+
+      ARENA.joystick.curX = knobX;
+      ARENA.joystick.curY = knobY;
+
+      // Soft deadzone and smoothed progressive sensitivity
+      if (dist < deadzone) {
+        ARENA.joystick.dx = 0;
+        ARENA.joystick.dy = 0;
+        ARENA.joystick.power = 0;
+        ARENA.player.isMoving = false;
+        return;
+      }
+
+      const ratio = Math.min(1.0, (dist - deadzone) / (maxRadius - deadzone));
+      const smoothPower = Math.pow(ratio, 1.35) * 0.90;
+      const angle = Math.atan2(dy, dx);
+
+      ARENA.joystick.dx = Math.cos(angle) * smoothPower;
+      ARENA.joystick.dy = Math.sin(angle) * smoothPower;
+      ARENA.joystick.power = smoothPower;
+
+      if (smoothPower > 0.18) {
+        ARENA.player.isMoving = true;
+        ARENA.player.facingAngle = angle;
+      } else {
+        ARENA.player.isMoving = false;
+      }
+    }
+
+    function handleEnd() {
+      ARENA.joystick.active = false;
+      ARENA.joystick.touchId = null;
+      ARENA.joystick.dx = 0;
+      ARENA.joystick.dy = 0;
+      ARENA.joystick.power = 0;
+      ARENA.player.isMoving = false;
+      knob.style.transform = "translate(0px, 0px)";
+    }
+
+    // Pointer / Touch Events on Joystick
+    zone.ontouchstart = (e) => {
+      e.preventDefault();
+      const t = e.changedTouches[0];
+      handleStart(t.clientX, t.clientY, t.identifier);
+    };
+
+    zone.ontouchmove = (e) => {
+      e.preventDefault();
+      if (!ARENA.joystick.active) return;
+      const t = Array.from(e.changedTouches).find(touch => touch.identifier === ARENA.joystick.touchId);
+      if (t) handleMove(t.clientX, t.clientY);
+    };
+
+    zone.ontouchend = (e) => {
+      e.preventDefault();
+      handleEnd();
+    };
+    zone.ontouchcancel = (e) => {
+      handleEnd();
+    };
+
+    // Desktop Mouse Fallback
+    zone.onmousedown = (e) => {
+      e.preventDefault();
+      handleStart(e.clientX, e.clientY, "mouse");
+      const onMouseMove = (ev) => handleMove(ev.clientX, ev.clientY);
+      const onMouseUp = () => {
+        handleEnd();
+        window.removeEventListener("mousemove", onMouseMove);
+        window.removeEventListener("mouseup", onMouseUp);
+      };
+      window.addEventListener("mousemove", onMouseMove);
+      window.addEventListener("mouseup", onMouseUp);
+    };
+  }
+
+
+  // Anti-one-shot protection and calibrated damage applier for Epic Boss Battles
+  function applyDamageToBoss(boss, rawDmg, isCrit) {
+    if (!boss || boss.hp <= 0) return 0;
+
+    // TIER-BASED DAMAGE SCALING: Every boss tier has an exact mathematically calibrated duration!
+    //   Tier 1 (Golem / Floor 1): ~75-85 sec  (intense, strategic battle)
+    //   Tier 2 (Lich):           ~85-95 sec
+    //   Tier 3 (Tormentor):      ~95-110 sec
+    //   Tier 4 (Dragon):         ~110-125 sec
+    //   Tier 5 (Roshan):         ~125-145 sec
+    //   Tier 10 (CK):            ~175-200 sec
+    //   Tier 15 (Enigma):        ~240-270 sec (~4.5 minutes of bullet hell mastery!)
+    const BOSS_TIER_MAP = {
+      golem: 1, lich: 2, tormentor: 3, dragon: 4, roshan: 5,
+      tidehunter: 6, sf_boss: 7, necrophos: 8, invoker_boss: 9, chaos_knight: 10,
+      dark_tormentor: 11, doom: 12, primal_beast: 13, phantom_roshan: 14, enigma: 15
+    };
+    const bId = ((boss.bossType || boss.id || boss.name) || "golem").toLowerCase();
+    let tier = 1;
+    for (const [k, v] of Object.entries(BOSS_TIER_MAP)) {
+      if (bId.includes(k)) { tier = v; break; }
+    }
+
+    // Target duration scales strictly with tier: 75s (Tier 1) up to ~4.5 minutes (Tier 15)
+    const targetSeconds = 75 + (tier - 1) * 12;
+    // Calibrated for realistic multi-character hit density (~18 damage events/sec from player, companions, skills, dots)
+    const targetHits = Math.floor(targetSeconds * 18);
+
+    // Baseline damage per normal auto-attack hit (% of boss maxHp)
+    const basePctPerHit = 1.0 / targetHits;
+    const baseHitDmg = Math.max(1, Math.floor(boss.maxHp * basePctPerHit));
+
+    // Player base attack reference
+    const stats = RPG_STATE.profile?.stats || {};
+    const playerAtk = Math.max(30, Math.floor(((stats.min_atk || 30) + (stats.max_atk || 50)) / 2));
+
+    // Hit ratio: skills deal 1.5x - 2.8x, companion/DOT ticks deal 0.04x - 0.45x
+    const hitRatio = Math.max(0.04, Math.min(2.8, rawDmg / playerAtk));
+
+    // Stagger bonus (+50% damage when boss is staggered / poise broken)
+    const staggerMult = boss.isStaggered ? 1.5 : 1.0;
+
+    // Crit multiplier
+    const critMult = isCrit ? 1.3 : 1.0;
+
+    // Base calculated damage
+    const calculatedDmg = Math.floor(baseHitDmg * hitRatio * staggerMult * critMult);
+    const maxAllowedHitDmg = Math.floor(baseHitDmg * 2.5 * (boss.isStaggered ? 1.5 : 1.0));
+    let finalDmg = Math.max(1, Math.min(calculatedDmg, maxAllowedHitDmg));
+
+    // DPS THROTTLE (CEILING PER SECOND):
+    // Prevents autoclickers, rapid taps, Rot ticks, and companion spam from melting boss in seconds!
+    // Normal phase: max 1.35% HP / sec (~74s min TTK under continuous party onslaught)
+    // Staggered phase: max 2.50% HP / sec (~40s min during burst window)
+    const curSec = Math.floor((ARENA.frameCount || 0) / 60);
+    if (boss._dmgWindowSec !== curSec) {
+      boss._dmgWindowSec = curSec;
+      boss._dmgTakenThisSec = 0;
+    }
+
+    const secCapPct = boss.isStaggered ? 0.025 : 0.0135;
+    const maxSecDmg = Math.floor(boss.maxHp * secCapPct);
+    const roomLeft = Math.max(0, maxSecDmg - (boss._dmgTakenThisSec || 0));
+
+    if (roomLeft <= 0) {
+      // Ironclad resistance: chips minimum damage so visual clicks, audio, and floating texts still trigger
+      finalDmg = Math.max(1, Math.floor(finalDmg * 0.05));
+    } else if (finalDmg > roomLeft) {
+      const excess = finalDmg - roomLeft;
+      finalDmg = roomLeft + Math.floor(excess * 0.08);
+    }
+
+    boss._dmgTakenThisSec = (boss._dmgTakenThisSec || 0) + finalDmg;
+    boss.hp = Math.max(0, boss.hp - finalDmg);
+
+    // BOSS PHASES (Epic Boss Phase Transitions):
+    // Phase 2 at 66% HP: Boss Enrages, gains speed and a radial shockwave!
+    const hpRatio = boss.hp / boss.maxHp;
+    if (hpRatio <= 0.66 && !boss._phase2Triggered) {
+      boss._phase2Triggered = true;
+      boss.enrageStage = "angry";
+      boss.speed = (boss.speed || 0.6) * 1.15;
+      spawnFloatingText(boss.x, boss.y - 45, "🔥 БОСС ВПАДАЕТ В ЯРОСТЬ! ФАЗА 2!", "#ea580c");
+      triggerHaptic("heavy");
+      if (ARENA.cameraTrauma !== undefined) ARENA.cameraTrauma = 0.65;
+      if (!ARENA.shockwaves) ARENA.shockwaves = [];
+      ARENA.shockwaves.push({ x: boss.x, y: boss.y, radius: 10, maxRadius: 90, alpha: 1.0, color: "#ea580c" });
+    }
+    // Phase 3 at 33% HP: Desperation Frenzy!
+    if (hpRatio <= 0.33 && !boss._phase3Triggered) {
+      boss._phase3Triggered = true;
+      boss.enrageStage = "enraged";
+      boss.speed = (boss.speed || 0.6) * 1.20;
+      spawnFloatingText(boss.x, boss.y - 45, "⚡ СМЕРТЕЛЬНАЯ ФАЗА! БОСС БЕЗУМЕН!", "#ef4444");
+      triggerHaptic("heavy");
+      if (ARENA.cameraTrauma !== undefined) ARENA.cameraTrauma = 0.85;
+      if (!ARENA.shockwaves) ARENA.shockwaves = [];
+      ARENA.shockwaves.push({ x: boss.x, y: boss.y, radius: 10, maxRadius: 120, alpha: 1.0, color: "#ef4444" });
+    }
+
+    if (boss.hp <= 0 && ARENA.isRaidBossBattle && ARENA.waveState !== "boss_victory") {
+      handleRaidBossDefeat();
+    }
+
+    return finalDmg;
+  }
+
+  // UNIVERSAL SAFE DAMAGE: Routes all damage through applyDamageToBoss if target is a boss!
+  function safeDamageCreep(c, rawDmg, isCrit) {
+    if (!c || c.hp <= 0) return 0;
+    if (c.isBoss) {
+      return applyDamageToBoss(c, rawDmg, isCrit);
+    }
+    const dmg = Math.max(1, rawDmg);
+    c.hp -= dmg;
+    return dmg;
+  }
+
+  function calculateBossAttackDamage(boss, baseMult = 1.0) {
+    if (!boss) return 20;
+    const p = ARENA.player;
+    const pMax = Math.max(100, p.maxHp || 500);
+    const stats = RPG_STATE.profile?.stats || {};
+    const def = Math.max(0, stats.defense || 5);
+
+    const BOSS_TIERS = {
+      golem: 1, lich: 2, tormentor: 3, dragon: 4, roshan: 5,
+      tidehunter: 6, sf_boss: 7, necrophos: 8, invoker_boss: 9, chaos_knight: 10,
+      dark_tormentor: 11, doom: 12, primal_beast: 13, phantom_roshan: 14, enigma: 15
+    };
+    const bId = ((boss && (boss.id || boss.bossType || boss.name)) || "golem").toLowerCase();
+    let tier = 1;
+    for (const [k, v] of Object.entries(BOSS_TIERS)) {
+      if (bId.includes(k)) { tier = v; break; }
+    }
+
+    // THREATENING BOSS DAMAGE SCALING PER HIT (% of player max HP):
+    // Golem (tier 1): 8% HP per normal hit
+    // Lich (tier 2): 10% HP
+    // Tormentor (tier 3): 12% HP
+    // Dragon (tier 4): 14% HP
+    // Roshan (tier 5): 16% HP (Smashes/Charges deal 24-35%)
+    // Enigma (tier 15): 28% HP
+    const basePct = (0.07 + Math.min(tier, 15) * 0.014) * baseMult;
+    let rawDmg = Math.floor(pMax * basePct);
+
+    // Defense reduction: player armor mitigates up to 45% of damage
+    const dr = Math.min(0.45, (def * 0.025) / (1.0 + def * 0.025));
+    let finalDmg = Math.max(15, Math.floor(rawDmg * (1.0 - dr)));
+
+    if (p.isBlocking) {
+      finalDmg = Math.floor(finalDmg * 0.40);
+    }
+
+    return finalDmg;
+  }
+
+  function applyDamageToPlayer(rawDmg, attackType = "normal") {
+    const p = ARENA.player;
+    if (!p || (p.isInvulnerable && p.isInvulnerable > 0)) return 0;
+
+    const pMax = Math.max(100, p.maxHp || 500);
+    const boss = ARENA.bossEntity;
+    const BOSS_TIERS = {
+      golem: 1, lich: 2, tormentor: 3, dragon: 4, roshan: 5,
+      tidehunter: 6, sf_boss: 7, necrophos: 8, invoker_boss: 9, chaos_knight: 10,
+      dark_tormentor: 11, doom: 12, primal_beast: 13, phantom_roshan: 14, enigma: 15
+    };
+    const bId = ((boss && (boss.id || boss.bossType || boss.name)) || "golem").toLowerCase();
+    let tier = 1;
+    for (const [k, v] of Object.entries(BOSS_TIERS)) {
+      if (bId.includes(k)) { tier = v; break; }
+    }
+
+    // FAIR ANTI-ONE-SHOT CEILING per single hit:
+    // Golem: max 25% player max HP
+    // Roshan: max 38% player max HP
+    // Enigma: max 48% player max HP
+    const maxHitPct = 0.22 + Math.min(tier, 15) * 0.018;
+    const maxDmg = Math.max(25, Math.floor(pMax * maxHitPct));
+    let finalDmg = Math.min(Math.max(1, rawDmg), maxDmg);
+
+    // HEALTH GATE PROTECTION:
+    // If ANY hit would kill player from > 1 HP, save player at 1 HP and grant 1.5s (90 frames) invulnerability!
+    if (p.currentHp > 1 && finalDmg >= p.currentHp && !p._healthGateActive) {
+      p._healthGateActive = true;
+      finalDmg = Math.max(0, p.currentHp - 1);
+      p.currentHp = 1;
+      p.isInvulnerable = 90;
+      spawnFloatingText(p.x, p.y - 30, "🛡️ СПАСЕНИЕ ОТ ВАНШОТА!", "#38bdf8");
+      return finalDmg;
+    }
+    if (p.currentHp > pMax * 0.25) {
+      p._healthGateActive = false;
+    }
+
+    p.currentHp = Math.max(0, p.currentHp - finalDmg);
+    return finalDmg;
+  }
+
+  function setupArenaListeners(canvas) {
+    function handleCanvasTap(cx, cy) {
+      if (ARENA.waveState === "boss_victory") {
+        if (RPG_STATE.lastBossChestReward) {
+          openChestModal(RPG_STATE.lastBossChestReward);
+        } else {
+          ARENA.isRaidBossBattle = false;
+          RPG_STATE.activeTab = "coop";
+          renderRoot();
+        }
+        return;
+      }
+      if (ARENA.fallingChest && ARENA.fallingChest.landed && !ARENA.fallingChest.opened) {
+        const fc = ARENA.fallingChest;
+        if (Math.hypot(cx - fc.x, cy - fc.y) < 65) {
+          fc.opened = true;
+          if (RPG_STATE.lastBossChestReward) {
+            openChestModal(RPG_STATE.lastBossChestReward);
+          }
+          return;
+        }
+      }
+      if (ARENA.waveState === "prompt" || ARENA.waveState === "retry_prompt") {
+        if (ARENA.waveState === "retry_prompt") {
+          retryCurrentFloor();
+        } else {
+          if (ARENA._promptDisableBtnBounds) {
+            const db = ARENA._promptDisableBtnBounds;
+            if (cx >= db.x && cx <= db.x + db.w && cy >= db.y && cy <= db.y + db.h) {
+              if (window.RPG && window.RPG.toggleArenaWaveConfirm) {
+                if (!ARENA.autoAdvanceWaves) {
+                  window.RPG.toggleArenaWaveConfirm();
+                } else {
+                  confirmNextWave();
+                }
+                return;
+              }
+            }
+          }
+          confirmNextWave();
+        }
+        return;
+      }
+      if (ARENA.isBossActive && ARENA._partyBtnBounds) {
+        const pb = ARENA._partyBtnBounds;
+        if (cx >= pb.x && cx <= pb.x + pb.w && cy >= pb.y && cy <= pb.y + pb.h) {
+          window.RPG.toggleBossPartyMode();
+          return;
+        }
+      }
+      if (ARENA.blockWindowActive) {
+        playerBlock();
+        return;
+      }
+      if (ARENA.qteActive) {
+        hitQTE();
+        return;
+      }
+      if (ARENA.waveState === "fighting") {
+        if (ARENA.topDownMode || ARENA.isRaidBossBattle) {
+          fireTopDownAttack({ cx, cy });
+        } else {
+          playerSlashAttack();
+        }
+      }
+    }
+
+    function getEventArenaCoords(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      if (ARENA.topDownMode || ARENA.isRaidBossBattle) {
+        const clientW = rect.width || canvas.clientWidth || 360;
+        const clientH = rect.height || canvas.clientHeight || 520;
+        const zoom = Math.min(clientW / 520, clientH / 720);
+        const offX = (clientW - 520 * zoom) / 2;
+        const offY = (clientH - 720 * zoom) / 2;
+        return {
+          cx: Math.max(0, Math.min(520, (clientX - rect.left - offX) / zoom)),
+          cy: Math.max(0, Math.min(720, (clientY - rect.top - offY) / zoom))
+        };
+      }
+      return {
+        cx: (clientX - rect.left) * (ARENA.width / (rect.width || 360)),
+        cy: (clientY - rect.top) * (ARENA.height / (rect.height || 320))
+      };
+    }
+
+    canvas.onclick = (e) => {
+      const { cx, cy } = getEventArenaCoords(e.clientX, e.clientY);
+      handleCanvasTap(cx, cy);
+    };
+
+    canvas.ontouchstart = (e) => {
+      e.preventDefault();
+      const touch = e.changedTouches[0];
+      const { cx, cy } = getEventArenaCoords(touch.clientX, touch.clientY);
+
+      // Only in legacy side-scroller boss mode, bottom 40% moves left/right
+      if (!ARENA.topDownMode && !ARENA.isRaidBossBattle && ARENA.bossArenaMode && ARENA.waveState === "fighting" && cy > ARENA.height * 0.55) {
+        ARENA._touchMoveId = touch.identifier;
+        ARENA.moveInput.left = cx < ARENA.width * 0.38;
+        ARENA.moveInput.right = cx > ARENA.width * 0.62;
+        if (!ARENA.moveInput.left && !ARENA.moveInput.right) {
+          playerSlashAttack();
+        }
+        return;
+      }
+
+      handleCanvasTap(cx, cy);
+    };
+
+    // Boss arena movement: touchmove for continuous direction
+    canvas.ontouchmove = (e) => {
+      e.preventDefault();
+      if (!ARENA.bossArenaMode || !ARENA._touchMoveId) return;
+      const touch = Array.from(e.changedTouches).find(t => t.identifier === ARENA._touchMoveId);
+      if (!touch) return;
+      const rect = canvas.getBoundingClientRect();
+      const cx = (touch.clientX - rect.left) * (ARENA.width / rect.width);
+      ARENA.moveInput.left = cx < ARENA.width * 0.38;
+      ARENA.moveInput.right = cx > ARENA.width * 0.62;
+    };
+
+    canvas.ontouchend = (e) => {
+      e.preventDefault();
+      if (ARENA.bossArenaMode) {
+        const touch = Array.from(e.changedTouches).find(t => t.identifier === ARENA._touchMoveId);
+        if (touch) {
+          ARENA.moveInput.left = false;
+          ARENA.moveInput.right = false;
+          ARENA._touchMoveId = null;
+        }
+      }
+    };
+
+    window.onkeyup = (e) => {
+      const k = e.key.toLowerCase();
+      if (ARENA.keysPressed) {
+        delete ARENA.keysPressed[k];
+        if (ARENA.topDownMode || ARENA.isRaidBossBattle) {
+          let kx = 0, ky = 0;
+          if (ARENA.keysPressed["w"] || ARENA.keysPressed["arrowup"]) ky -= 1;
+          if (ARENA.keysPressed["s"] || ARENA.keysPressed["arrowdown"]) ky += 1;
+          if (ARENA.keysPressed["a"] || ARENA.keysPressed["arrowleft"]) kx -= 1;
+          if (ARENA.keysPressed["d"] || ARENA.keysPressed["arrowright"]) kx += 1;
+          const kmag = Math.hypot(kx, ky);
+          if (kmag > 0) {
+            ARENA.joystick.dx = kx / kmag;
+            ARENA.joystick.dy = ky / kmag;
+            ARENA.player.isMoving = true;
+            ARENA.player.facingAngle = Math.atan2(ky, kx);
+          } else {
+            ARENA.joystick.dx = 0;
+            ARENA.joystick.dy = 0;
+            ARENA.player.isMoving = false;
+          }
+        }
+      }
+      if (!ARENA.bossArenaMode) return;
+      if (k === "a" || k === "arrowleft") ARENA.moveInput.left = false;
+      if (k === "d" || k === "arrowright") ARENA.moveInput.right = false;
+    };
+
+    window.onkeydown = (e) => {
+      if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable)) return;
+      if (RPG_STATE.activeTab !== "farm" || RPG_STATE.farmMode !== "arena") return;
+      const k = e.key.toLowerCase();
+
+      // WASD / Arrow keys for Top-Down free movement
+      if (ARENA.topDownMode || ARENA.isRaidBossBattle) {
+        if (!ARENA.keysPressed) ARENA.keysPressed = {};
+        if (["w", "arrowup", "s", "arrowdown", "a", "arrowleft", "d", "arrowright"].includes(k)) {
+          ARENA.keysPressed[k] = true;
+          let kx = 0, ky = 0;
+          if (ARENA.keysPressed["w"] || ARENA.keysPressed["arrowup"]) ky -= 1;
+          if (ARENA.keysPressed["s"] || ARENA.keysPressed["arrowdown"]) ky += 1;
+          if (ARENA.keysPressed["a"] || ARENA.keysPressed["arrowleft"]) kx -= 1;
+          if (ARENA.keysPressed["d"] || ARENA.keysPressed["arrowright"]) kx += 1;
+
+          const kmag = Math.hypot(kx, ky);
+          if (kmag > 0) {
+            ARENA.joystick.dx = kx / kmag;
+            ARENA.joystick.dy = ky / kmag;
+            ARENA.joystick.power = 1.0;
+            ARENA.player.isMoving = true;
+            ARENA.player.facingAngle = Math.atan2(ky, kx);
+          } else {
+            ARENA.joystick.dx = 0;
+            ARENA.joystick.dy = 0;
+            ARENA.player.isMoving = false;
+          }
+          e.preventDefault();
+          return;
+        }
+        if (k === "shift" || k === "c") {
+          playerPerformDashRoll();
+          e.preventDefault();
+          return;
+        }
+      }
+      // Boss Arena Movement (A/D or Arrows)
+      if (ARENA.bossArenaMode) {
+        if (k === "a" || k === "arrowleft") { ARENA.moveInput.left = true; e.preventDefault(); return; }
+        if (k === "d" || k === "arrowright") { ARENA.moveInput.right = true; e.preventDefault(); return; }
+        if (k === "shift" || k === "c") { playerBossArenaDodge(); e.preventDefault(); return; }
+      }
+      if (k === " " || k === "spacebar" || k === "enter") {
+        e.preventDefault();
+        if (ARENA.waveState === "prompt") {
+          confirmNextWave();
+        } else if (ARENA.waveState === "retry_prompt") {
+          retryCurrentFloor();
+        } else if (ARENA.blockWindowActive) {
+          playerBlock();
+        } else if (ARENA.qteActive) {
+          hitQTE();
+        } else {
+          playerSlashAttack();
+        }
+      } else if (k === "e") {
+        castPlayerSkill1();
+      } else if (k === "q") {
+        castPlayerUltimate();
+      } else if (k === "f") {
+        usePlayerPotion();
+      } else if (k === "r" || k === "1") {
+        useActiveItemAction(0);
+      } else if (k === "t" || k === "2") {
+        useActiveItemAction(1);
+      } else if (k === "shift" || k === "c") {
+        playerPerformDash();
+      } else if (k === "b") {
+        playerBlock();
+      }
+    };
+  }
+
+  function startArenaLoop() {
+    stopArenaLoop();
+    if (ARENA.startLoopTimeout) {
+      clearTimeout(ARENA.startLoopTimeout);
+      ARENA.startLoopTimeout = null;
+    }
+    ARENA.startLoopTimeout = setTimeout(() => {
+      // Ensure canvas has real pixel dimensions before starting the loop
+      const canvas = document.getElementById("rpg-action-canvas");
+      if (canvas) {
+        const r = canvas.getBoundingClientRect();
+        const hasSize = (r.width > 50) || (canvas.clientWidth > 50);
+        if (!hasSize) {
+          // Canvas not laid out yet — retry after one more frame
+          ARENA.startLoopTimeout = null;
+          requestAnimationFrame(() => startArenaLoop());
+          return;
+        }
+        if (!ARENA.isRaidBossBattle || !ARENA.bossEntity) {
+          initArenaCanvas();
+        }
+      }
+      ARENA.running = true;
+      function loop() {
+        if (!ARENA.running) return;
+        try {
+          updateArena();
+          renderArena();
+        } catch (err) {
+          console.error("Arena animation frame error:", err);
+        }
+        ARENA.animId = requestAnimationFrame(loop);
+      }
+      ARENA.animId = requestAnimationFrame(loop);
+    }, 80);
+  }
+
+  function stopArenaLoop() {
+    ARENA.running = false;
+    if (ARENA.animId) {
+      cancelAnimationFrame(ARENA.animId);
+      ARENA.animId = null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // MAIN GAME LOOP UPDATE
+  // ---------------------------------------------------------------------------
+
+  function updateArena() {
+    ARENA.frameCount = (ARENA.frameCount || 0) + 1;
+
+    // Hitstop freeze (Sekiro/Hollow Knight impact pause)
+    if (ARENA.hitstop > 0) {
+      ARENA.hitstop--;
+      updateFloatingTexts();
+      return;
+    }
+
+    // Decrement parry & block timers
+    if (ARENA.parryWindow > 0) ARENA.parryWindow--;
+    if (ARENA.player.blockTimer > 0) {
+      ARENA.player.blockTimer--;
+      if (ARENA.player.blockTimer <= 0) ARENA.player.isBlocking = false;
+    }
+
+    // Always update physical loot coins & falling legendary chest
+    updatePhysicalCoins();
+    updateFallingChest();
+
+    // Sync DOM action buttons smoothly (cooldowns & block alert)
+    if (ARENA.frameCount % 6 === 0) {
+      const s1El = document.getElementById("rpg-cd-skill1");
+      if (s1El) {
+        const s1Sec = ARENA.skill1Cooldown > 0 ? Math.ceil(ARENA.skill1Cooldown / 60) : 0;
+        const txt = s1Sec > 0 ? `${s1Sec}с` : "Скилл 1";
+        if (s1El.textContent !== txt) s1El.textContent = txt;
+        const btn1 = document.getElementById("rpg-btn-skill1");
+        if (btn1) btn1.style.opacity = s1Sec > 0 ? "0.6" : "1";
+      }
+      const ultEl = document.getElementById("rpg-cd-ult");
+      if (ultEl) {
+        const ultSec = ARENA.ultCooldown > 0 ? Math.ceil(ARENA.ultCooldown / 60) : 0;
+        const txt = ultSec > 0 ? `${ultSec}с` : "Ульта";
+        if (ultEl.textContent !== txt) ultEl.textContent = txt;
+        const btnUlt = document.getElementById("rpg-btn-ult");
+        if (btnUlt) btnUlt.style.opacity = ultSec > 0 ? "0.6" : "1";
+      }
+
+      // Sync Active Item Cooldowns
+      const activeItems = getEquippedActiveItems();
+      activeItems.forEach((act, idx) => {
+        const cdEl = document.getElementById(`rpg-cd-item-${idx}`);
+        const btnEl = document.getElementById(`rpg-btn-item-${idx}`);
+        const cdFrames = ARENA.itemCooldowns?.[act.key] || 0;
+        const cdSec = cdFrames > 0 ? Math.ceil(cdFrames / 60) : 0;
+        const hotkey = idx === 0 ? "R" : idx === 1 ? "T" : `${idx + 1}`;
+        if (cdEl) {
+          const txt = cdSec > 0 ? `КД ${cdSec}с` : `[${hotkey}] Готов ⚡`;
+          if (cdEl.textContent !== txt) cdEl.textContent = txt;
+        }
+        if (btnEl) {
+          btnEl.style.opacity = cdSec > 0 ? "0.6" : "1";
+        }
+      });
+      const blockBtn = document.getElementById("rpg-btn-block");
+      if (blockBtn) {
+        if (ARENA.blockWindowActive) {
+          blockBtn.className = "w-11 h-11 rounded-2xl bg-blue-500 border-2 border-white animate-bounce shadow-blue-500/50 text-white font-black text-sm flex flex-col items-center justify-center shadow-lg active:scale-90 transition-all";
+        } else {
+          blockBtn.className = "w-11 h-11 rounded-2xl bg-slate-800/90 border border-slate-600 text-white font-black text-sm flex flex-col items-center justify-center shadow-lg active:scale-90 transition-all";
+        }
+      }
+    }
+    // Non-fighting state handling
+    if (ARENA.waveState !== "fighting") {
+      if (ARENA.waveState === "wave_clear" || ARENA.waveState === "boss_intro") {
+        ARENA.waveTransitionTimer--;
+        if (ARENA.waveTransitionTimer <= 0) {
+          if (ARENA.waveState === "wave_clear") {
+            if (ARENA.autoAdvanceWaves && !RPG_STATE.activeChestModal) {
+              ARENA.waveState = "prompt";
+              confirmNextWave();
+            } else {
+              ARENA.waveState = "prompt";
+            }
+          } else {
+            ARENA.waveState = "fighting";
+          }
+        }
+      }
+      updatePickups();
+      updateFloatingTexts();
+      updateClouds();
+      return;
+    }
+
+    const p = ARENA.player;
+    const stats = RPG_STATE.profile?.stats || {};
+
+    // =========================================================================
+    // TOP-DOWN ARCHERO-STYLE UPDATE LOOP
+    // =========================================================================
+    if (ARENA.topDownMode || ARENA.isRaidBossBattle) {
+      // 1. Calm, controllable walking speed in 520x720 arena (~70 px/sec)
+      const moveSpeed = 1.15 * (1.0 + Math.min(0.20, (stats.agility || 10) * 0.0015));
+
+      if (ARENA.player.isMoving && (Math.abs(ARENA.joystick.dx) > 0.06 || Math.abs(ARENA.joystick.dy) > 0.06)) {
+        p.x += ARENA.joystick.dx * moveSpeed;
+        p.y += ARENA.joystick.dy * moveSpeed;
+        p.x = Math.max(30, Math.min(490, p.x));
+        p.y = Math.max(40, Math.min(680, p.y));
+      }
+
+      // Continuous Auto-Fire (Run & Gun) — Continuous fire directly at the boss even while moving!
+      const target = (ARENA.bossEntity && ARENA.bossEntity.hp > 0) ? ARENA.bossEntity : (ARENA.creeps.find(c => c.hp > 0) || null);
+      if (target && target.hp > 0) {
+        // Hero faces the boss in combat
+        const toTargetAngle = Math.atan2(target.y - p.y, target.x - p.x);
+        p.facingAngle = toTargetAngle;
+        p.facing = target.x >= p.x ? 1 : -1;
+        p.shootCooldown = (p.shootCooldown || 0) - 1;
+
+        if (p.shootCooldown <= 0) {
+          fireTopDownAttack(null);
+        }
+      }
+
+      // 2. Dash Cooldown & Invulnerability
+      if (ARENA.dodgeCooldown > 0) ARENA.dodgeCooldown--;
+      if (p.isInvulnerable > 0) p.isInvulnerable--;
+
+      // 3. Update Top-Down Projectiles with Magnetic Tracking (Never misses moving boss!)
+      for (let pi = ARENA.playerProjectiles.length - 1; pi >= 0; pi--) {
+        const proj = ARENA.playerProjectiles[pi];
+        if (proj.type === "topdown_shot") {
+          // Magnetic guidance towards target so shots curve slightly and hit reliably!
+          if (proj.target && proj.target.hp > 0) {
+            const idealAng = Math.atan2(proj.target.y - proj.y, proj.target.x - proj.x);
+            const curAng = Math.atan2(proj.vy, proj.vx);
+            let dAng = idealAng - curAng;
+            while (dAng < -Math.PI) dAng += Math.PI * 2;
+            while (dAng > Math.PI) dAng -= Math.PI * 2;
+            const steer = curAng + dAng * 0.38;
+            proj.vx = Math.cos(steer) * proj.speed;
+            proj.vy = Math.sin(steer) * proj.speed;
+          }
+
+          proj.x += proj.vx;
+          proj.y += proj.vy;
+          proj.distTraveled += proj.speed;
+
+          // Generous hit check against boss (+20px buffer ensures zero whiffs)
+          const boss = ARENA.bossEntity;
+          if (boss && boss.hp > 0 && Math.hypot(proj.x - boss.x, proj.y - boss.y) < (boss.radius + proj.radius + 20)) {
+            const actualDmg = applyDamageToBoss(boss, proj.dmg, proj.isCrit);
+            if (boss.poise !== undefined) boss.poise = Math.max(0, boss.poise - (proj.isCrit ? 15 : 8));
+            spawnFloatingText(boss.x + (Math.random() * 24 - 12), boss.y - 20, `${proj.isCrit ? "💥 КРИТ! " : ""}-${actualDmg}`, proj.isCrit ? "#ef4444" : "#facc15");
+            ARENA.cameraTrauma = Math.min(1.0, (ARENA.cameraTrauma || 0) + (proj.isCrit ? 0.16 : 0.05));
+            triggerHaptic(proj.isCrit ? "heavy" : "light");
+            ARENA.playerProjectiles.splice(pi, 1);
+            continue;
+          }
+
+          // Check hit against other creeps
+          let hitCreep = false;
+          for (const c of ARENA.creeps) {
+            if (c !== boss && c.hp > 0 && Math.hypot(proj.x - c.x, proj.y - c.y) < (c.radius + proj.radius + 12)) {
+              if (c.isBoss) {
+                applyDamageToBoss(c, proj.dmg, proj.isCrit);
+              } else {
+                safeDamageCreep(c, proj.dmg, false);
+              }
+              spawnFloatingText(c.x, c.y - 15, `-${proj.dmg}`, "#facc15");
+              hitCreep = true;
+              break;
+            }
+          }
+          if (hitCreep || proj.distTraveled > proj.maxDist || proj.x < -40 || proj.x > ARENA.width + 40 || proj.y < -40 || proj.y > ARENA.height + 40) {
+            ARENA.playerProjectiles.splice(pi, 1);
+          }
+        }
+      }
+
+      // 4. BRAWL STARS BOSS FIGHT AI (Chase, Stomp, Charge Rush, Rocket Barrage, Enrage)
+      const boss = ARENA.bossEntity;
+      if (boss && boss.hp > 0) {
+        // Enrage Timer progression
+        boss.enrageTimer = (boss.enrageTimer || 0) + 1;
+        if (boss.enrageTimer > 5400) {
+          boss.enrageStage = "enraged";
+          boss.enraged = true;
+        } else if (boss.enrageTimer > 3600) {
+          boss.enrageStage = "furious";
+        } else if (boss.enrageTimer > 2000) {
+          boss.enrageStage = "angry";
+        }
+
+        // Find closest target (player or active companion)
+        let closestTarget = p;
+        let minDist = Math.hypot(p.x - boss.x, p.y - boss.y);
+        for (const comp of (ARENA.bossCompanions || [])) {
+          if (comp.hp > 0) {
+            const d = Math.hypot(comp.x - boss.x, comp.y - boss.y);
+            if (d < minDist) { minDist = d; closestTarget = comp; }
+          }
+        }
+
+        // Decrement cooldowns
+        boss.meleeCooldown = Math.max(0, (boss.meleeCooldown || 0) - 1);
+        boss.chargeCooldown = Math.max(0, (boss.chargeCooldown || 0) - 1);
+        boss.barrageCooldown = Math.max(0, (boss.barrageCooldown || 0) - 1);
+
+        const bSpeedMult = boss.enrageStage === "enraged" ? 1.25 : boss.enrageStage === "furious" ? 1.15 : boss.enrageStage === "angry" ? 1.08 : 1.0;
+
+        // BOSS STATE MACHINE (SLOW, DELIBERATE, READABLE PACING)
+        if (boss.state === "chase" || !boss.state) {
+          boss.state = "chase";
+          // 1. SLOW HEAVY MARCH (speed 0.42 - easily outmaneuvered!)
+          const bAng = Math.atan2(closestTarget.y - boss.y, closestTarget.x - boss.x);
+          const moveSpd = (boss.speed || 0.42) * bSpeedMult;
+          boss.x += Math.cos(bAng) * moveSpd;
+          boss.y += Math.sin(bAng) * moveSpd;
+          boss.facing = Math.cos(bAng) >= 0 ? 1 : -1;
+
+          // Footstep smoke particles
+          if (ARENA.frameCount % 28 === 0) {
+            ARENA.specialEffects.push({
+              x: boss.x + (Math.random() * 20 - 10),
+              y: boss.y + boss.radius * 0.7,
+              timer: 18,
+              type: "smoke"
+            });
+          }
+
+          // Trigger Charge / Таран (Every ~8 sec, 1.1s clear warning beam!)
+          if (boss.chargeCooldown <= 0 && minDist > 80) {
+            boss.state = "telegraph_charge";
+            boss.stateTimer = 68; // ~1.1 seconds warning beam
+            boss.chargeAngle = Math.atan2(p.y - boss.y, p.x - boss.x);
+            // Menacing charge rush: 3.2 px/frame
+            boss.chargeVx = Math.cos(boss.chargeAngle) * 3.2;
+            boss.chargeVy = Math.sin(boss.chargeAngle) * 3.2;
+            boss.chargeCooldown = 480; // 8s cooldown
+            spawnFloatingText(boss.x, boss.y - 35, "⚠️ ТАРАН! РЫВОК В СТОРОНУ!", "#ef4444");
+            triggerHaptic("heavy");
+          }
+          // Trigger Barrage / Ракеты (Every ~6 sec)
+          else if (boss.barrageCooldown <= 0 && minDist > 75) {
+            boss.state = "barrage";
+            boss.stateTimer = 35;
+            boss.barrageCooldown = 360; // 6s cooldown
+            spawnFloatingText(boss.x, boss.y - 30, "🚀 ЗАЛП РАКЕТ!", "#f59e0b");
+            const pAng = Math.atan2(p.y - boss.y, p.x - boss.x);
+            const numRockets = boss.enrageStage === "enraged" ? 5 : 3;
+            for (let r = 0; r < numRockets; r++) {
+              const spread = (r - (numRockets - 1) / 2) * 0.26;
+              const rAng = pAng + spread;
+              ARENA.bossProjectiles.push({
+                x: boss.x + Math.cos(rAng) * (boss.radius + 8),
+                y: boss.y + Math.sin(rAng) * (boss.radius + 8),
+                vx: Math.cos(rAng) * 2.2,
+                vy: Math.sin(rAng) * 2.2,
+                radius: 8.0,
+                color: "#ef4444",
+                timer: 260,
+                dmg: calculateBossAttackDamage(boss, 0.85)
+              });
+            }
+          }
+          // Trigger Melee Strike if close (0.85s windup warning circle)
+          else if (minDist < 60 && boss.meleeCooldown <= 0) {
+            boss.state = "telegraph_melee";
+            boss.stateTimer = 52; // ~0.85s telegraph windup
+            boss.meleeCooldown = 150; // 2.5 seconds between melee attacks
+            spawnFloatingText(boss.x, boss.y - 30, "⚠️ ЗАМАХ!", "#f59e0b");
+          }
+        }
+        else if (boss.state === "telegraph_melee") {
+          boss.stateTimer--;
+          if (boss.stateTimer <= 0) {
+            boss.state = "melee_smash";
+            boss.stateTimer = 22;
+            ARENA.cameraTrauma = Math.min(1.0, (ARENA.cameraTrauma || 0) + 0.35);
+            triggerHaptic("heavy");
+            spawnFloatingText(boss.x, boss.y - 30, "💥 УДАР!", "#ef4444");
+
+            // Damage player if in range (anti-one-shot protected!)
+            if (Math.hypot(p.x - boss.x, p.y - boss.y) < (boss.radius + p.radius + 20) && !p.isInvulnerable) {
+              const rawDmg = calculateBossAttackDamage(boss, 1.0);
+              const actualDmg = applyDamageToPlayer(rawDmg, "melee");
+              spawnFloatingText(p.x, p.y - 20, `💥 -${actualDmg}`, "#ef4444");
+              if (p.currentHp <= 0) { handlePlayerArenaDeath(); return; }
+            }
+            // Damage companions if in range
+            for (const comp of (ARENA.bossCompanions || [])) {
+              if (comp.hp > 0 && Math.hypot(comp.x - boss.x, comp.y - boss.y) < (boss.radius + 32)) {
+                comp.hp = Math.max(0, comp.hp - calculateBossAttackDamage(boss, 0.8));
+              }
+            }
+          }
+        }
+        else if (boss.state === "melee_smash") {
+          boss.stateTimer--;
+          if (boss.stateTimer <= 0) boss.state = "chase";
+        }
+        else if (boss.state === "telegraph_charge") {
+          boss.stateTimer--;
+          if (boss.stateTimer <= 0) {
+            boss.state = "charging";
+            boss.stateTimer = 90; // Slower rush duration
+          }
+        }
+        else if (boss.state === "charging") {
+          boss.stateTimer--;
+          boss.x += boss.chargeVx;
+          boss.y += boss.chargeVy;
+
+          // Charge speed trail
+          if (ARENA.frameCount % 4 === 0 && ARENA.dashGhosts) {
+            ARENA.dashGhosts.push({
+              x: boss.x,
+              y: boss.y,
+              radius: boss.radius,
+              alpha: 0.4,
+              color: "#ef4444"
+            });
+          }
+
+          // Hit player during charge!
+          if (Math.hypot(p.x - boss.x, p.y - boss.y) < (boss.radius + p.radius + 10) && !p.isInvulnerable) {
+            const rawDmg = calculateBossAttackDamage(boss, 1.35);
+            const actualDmg = applyDamageToPlayer(rawDmg, "charge");
+            // Gentle knockback player away
+            p.x += Math.cos(boss.chargeAngle) * 20;
+            p.y += Math.sin(boss.chargeAngle) * 20;
+            spawnFloatingText(p.x, p.y - 25, `💥 ТАРАН! -${actualDmg}`, "#ef4444");
+            ARENA.cameraTrauma = 0.4;
+            triggerHaptic("heavy");
+            if (p.currentHp <= 0) { handlePlayerArenaDeath(); return; }
+          }
+
+          // Hit arena wall -> STUNNED for 1.5 seconds! (Reward player for baiting charge into wall)
+          if (boss.x <= 32 || boss.x >= ARENA.width - 32 || boss.y <= 40 || boss.y >= ARENA.height - 40) {
+            boss.state = "stunned";
+            boss.stateTimer = 90; // ~1.5s stun
+            ARENA.cameraTrauma = 0.5;
+            triggerHaptic("heavy");
+            spawnFloatingText(boss.x, boss.y - 35, "💫 БОСС ВРЕЗАЛСЯ В СТЕНУ! ОШЕЛОМЛЕН!", "#facc15");
+          } else if (boss.stateTimer <= 0) {
+            boss.state = "chase";
+          }
+        }
+        else if (boss.state === "stunned") {
+          boss.stateTimer--;
+          if (boss.stateTimer <= 0) boss.state = "chase";
+        }
+        else if (boss.state === "barrage") {
+          boss.stateTimer--;
+          if (boss.stateTimer <= 0) boss.state = "chase";
+        }
+
+        // Clamp boss inside 520x720 arena
+        boss.x = Math.max(35, Math.min(485, boss.x));
+        boss.y = Math.max(45, Math.min(675, boss.y));
+
+        // Direct contact damage if player touches boss while standing
+        if (Math.hypot(p.x - boss.x, p.y - boss.y) < (boss.radius + p.radius) && !p.isInvulnerable) {
+          if ((ARENA.frameCount % 55) === 0) {
+            const rawDmg = calculateBossAttackDamage(boss, 0.40);
+            const actualDmg = applyDamageToPlayer(rawDmg, "contact");
+            spawnFloatingText(p.x, p.y - 20, `💥 -${actualDmg}`, "#ef4444");
+            triggerHaptic("medium");
+            if (p.currentHp <= 0) { handlePlayerArenaDeath(); return; }
+          }
+        }
+      }
+
+      // Update Boss Projectiles (Slow Floating Rockets)
+      for (let bpi = ARENA.bossProjectiles.length - 1; bpi >= 0; bpi--) {
+        const bp = ARENA.bossProjectiles[bpi];
+        bp.x += (bp.vx || 0);
+        bp.y += (bp.vy || 0);
+        bp.timer = (bp.timer || 240) - 1;
+
+        // Hit player (anti-one-shot protected!)
+        if (Math.hypot(p.x - bp.x, p.y - bp.y) < (p.radius + bp.radius) && !p.isInvulnerable) {
+          const dmg = bp.dmg || 25;
+          const actualDmg = applyDamageToPlayer(dmg, "rocket");
+          spawnFloatingText(p.x, p.y - 20, `💥 РАКЕТА -${actualDmg}`, "#ef4444");
+          triggerHaptic("heavy");
+          ARENA.cameraTrauma = Math.min(1.0, (ARENA.cameraTrauma || 0) + 0.2);
+          ARENA.bossProjectiles.splice(bpi, 1);
+          if (p.currentHp <= 0) { handlePlayerArenaDeath(); return; }
+          continue;
+        }
+
+        // Hit companions
+        for (const comp of (ARENA.bossCompanions || [])) {
+          if (comp.hp > 0 && Math.hypot(comp.x - bp.x, comp.y - bp.y) < (comp.radius + bp.radius)) {
+            comp.hp = Math.max(0, comp.hp - (bp.dmg || 40));
+            ARENA.bossProjectiles.splice(bpi, 1);
+            break;
+          }
+        }
+
+        // Out of bounds or expired
+        if (bp.timer <= 0 || bp.x < 0 || bp.x > ARENA.width || bp.y < 0 || bp.y > ARENA.height) {
+          ARENA.bossProjectiles.splice(bpi, 1);
+        }
+      }
+
+      // 5. Update Dash Ghost Trails
+      if (ARENA.dashGhosts) {
+        for (let gi = ARENA.dashGhosts.length - 1; gi >= 0; gi--) {
+          const g = ARENA.dashGhosts[gi];
+          g.alpha -= 0.045;
+          if (g.alpha <= 0) ARENA.dashGhosts.splice(gi, 1);
+        }
+      }
+    }
+
+    // ===== BOSS ARENA: Player Free Movement =====
+    if (ARENA.bossArenaMode) {
+      const moveSpeed = 3.2;
+      if (ARENA.dodgeActive > 0) {
+        // Dodge roll: fast movement + i-frame
+        ARENA.dodgeActive--;
+        p.x += ARENA.dodgeDir * 7.5;
+        p.isInvulnerable = 1;
+        // Spawn after-images
+        if (ARENA.dodgeActive % 3 === 0 && ARENA.dashGhosts) {
+          ARENA.dashGhosts.push({ x: p.x, y: p.y, radius: p.radius, alpha: 0.45, heroClass: (RPG_STATE.profile?.hero_class || "pudge").toLowerCase() });
+        }
+        if (ARENA.dodgeActive <= 0) {
+          p.isInvulnerable = 0;
+        }
+      } else {
+        if (ARENA.moveInput.left) { p.x -= moveSpeed; p.facing = -1; }
+        if (ARENA.moveInput.right) { p.x += moveSpeed; p.facing = 1; }
+      }
+      // Clamp to arena bounds
+      p.x = Math.max(25, Math.min(ARENA.width - 25, p.x));
+      // Dodge cooldown
+      if (ARENA.dodgeCooldown > 0) ARENA.dodgeCooldown--;
+      // Update danger zones
+      for (let dz = ARENA.dangerZones.length - 1; dz >= 0; dz--) {
+        const zone = ARENA.dangerZones[dz];
+        zone.timer--;
+        if (zone.timer <= 0) {
+          // Zone expired -> deal damage if player inside
+          if (zone.phase === "telegraph") {
+            zone.phase = "active";
+            zone.timer = zone.activeFrames || 8;
+          } else {
+            ARENA.dangerZones.splice(dz, 1);
+          }
+        }
+        // Active damage zone
+        if (zone.phase === "active") {
+          let inZone = false;
+          if (zone.type === "rect") {
+            inZone = p.x > zone.x && p.x < zone.x + zone.w && p.y > zone.y - 30 && p.y < zone.y + zone.h + 30;
+          } else if (zone.type === "circle") {
+            inZone = Math.hypot(p.x - zone.cx, p.y - zone.cy) < zone.r + p.radius;
+          }
+          if (inZone && !p.isInvulnerable && !zone.hitPlayer) {
+            zone.hitPlayer = true;
+            const rawDmg = Math.floor(zone.damage || (ARENA.bossEntity?.atk || 30));
+            p.currentHp = Math.max(0, p.currentHp - rawDmg);
+            spawnFloatingText(p.x, p.y - 25, "-" + rawDmg, "#ef4444");
+            ARENA.cameraTrauma = 0.5;
+            triggerHaptic("heavy");
+            if (p.currentHp <= 0) { handlePlayerArenaDeath(); return; }
+          }
+        }
+      }
+    }
+
+    // Passive Regen
+    p.currentHp = Math.min(p.maxHp, p.currentHp + (stats.hp_regen || 1) / 60);
+    p.currentMp = Math.min(p.maxMp, p.currentMp + (stats.mp_regen || 1) / 60);
+
+    // Passive Items Update (Radiance, Heart of Tarrasque)
+    if (ARENA.frameCount % 30 === 0) {
+      const eq = RPG_STATE.profile?.equipment || {};
+      const hasRadiance = Object.values(eq).some(it => it && (it.name?.includes("Radiance") || it.name?.includes("Сияние") || it.bonus?.radiance_burn));
+      if (hasRadiance) {
+        const radDmg = Math.floor((stats.max_atk || 30) * 0.45 + 50);
+        for (const c of ARENA.creeps) {
+          if (c.isBoss) {
+            const rd = applyDamageToBoss(c, radDmg);
+            spawnFloatingText(c.x, c.y - 18, `🔥 РАДИАНС -${rd}`, "#ea580c");
+          } else {
+            c.hp -= radDmg;
+            spawnFloatingText(c.x, c.y - 18, `🔥 РАДИАНС -${radDmg}`, "#ea580c");
+          }
+        }
+      }
+      if (ARENA.frameCount % 60 === 0) {
+        const hasTarrasque = Object.values(eq).some(it => it && (it.name?.includes("Tarrasque") || it.name?.includes("Тарраск") || it.bonus?.pct_hp_regen));
+        if (hasTarrasque) {
+          const heal = Math.floor(p.maxHp * 0.025);
+          p.currentHp = Math.min(p.maxHp, p.currentHp + heal);
+          spawnFloatingText(p.x, p.y - 30, `+${heal} HP (ТАРАСКА) ❤️`, "#22c55e");
+        }
+      }
+    }
+
+    // Cooldown timers
+    if (p.attackCooldown > 0) {
+      p.attackCooldown--;
+      if (p.attackCooldown <= 0 && p.attackQueued) {
+        p.attackQueued = false;
+        playerSlashAttack();
+      }
+    }
+    if (ARENA.skill1Cooldown > 0) ARENA.skill1Cooldown--;
+    if (ARENA.ultCooldown > 0) ARENA.ultCooldown--;
+
+    // Decrement item cooldowns
+    if (ARENA.itemCooldowns) {
+      for (const k in ARENA.itemCooldowns) {
+        if (ARENA.itemCooldowns[k] > 0) ARENA.itemCooldowns[k]--;
+      }
+    }
+    // Active item buff timers
+    if (ARENA.player.bkbActive > 0) ARENA.player.bkbActive--;
+    if (ARENA.player.satanicActive > 0) ARENA.player.satanicActive--;
+    if (ARENA.player.eulActive > 0) ARENA.player.eulActive--;
+    if (p.slashAnimation) {
+      p.slashAnimation.timer--;
+      if (p.slashAnimation.timer <= 0) p.slashAnimation = null;
+    }
+
+    // Active buffs/effects timers
+    if (p.fleshHeapActive > 0) p.fleshHeapActive--;
+    if (p.bladeDanceActive > 0) p.bladeDanceActive--;
+    if (p.counterspellActive > 0) p.counterspellActive--;
+
+    // Pudge Rot effect: ticks every 15 frames while active
+    if (p.rotActive > 0) {
+      p.rotActive--;
+      if (p.rotActive % 15 === 0) {
+        const rotDmg = Math.floor((stats.max_atk || 25) * 0.9 * (p.rotDmgMult || 1.0));
+        for (const c of ARENA.creeps) {
+          if (c.isBoss) {
+            const rd = applyDamageToBoss(c, rotDmg);
+            spawnFloatingText(c.x, c.y - 12, `☣️ -${rd}`, "#22c55e");
+          } else {
+            c.hp -= rotDmg;
+            spawnFloatingText(c.x, c.y - 12, `☣️ -${rotDmg}`, "#22c55e");
+          }
+        }
+      }
+    }
+
+    // Special effects animation timers
+    for (let i = ARENA.specialEffects.length - 1; i >= 0; i--) {
+      const fx = ARENA.specialEffects[i];
+      fx.timer--;
+      if (fx.type === "omnislash" && fx.timer % 7 === 0 && fx.slashes > 0) {
+        fx.slashes--;
+        if (ARENA.creeps.length > 0) {
+          const target = ARENA.creeps[Math.floor(Math.random() * ARENA.creeps.length)];
+          const dmg = Math.floor((stats.max_atk || 30) * 2.2 * (fx.mult || 1.0));
+          if (target.archetype === "defender") {
+            target.shieldBrokenTimer = 240;
+            target.state = "stagger";
+            target.staggerTimer = 80;
+            target.stateTimer = 80;
+            spawnFloatingText(target.x, target.y - 25, "💥 GUARD BREAK ОМНИСЛЕШЕМ!", "#facc15");
+          }
+          if (target.isBoss) {
+            dmg = applyDamageToBoss(target, dmg, true);
+          } else {
+            safeDamageCreep(target, dmg, false);
+          }
+          spawnFloatingText(target.x, target.y - 20, `⚔️ КРИТ! -${dmg}`, "#facc15");
+          triggerHaptic("heavy");
+        }
+      }
+      if (fx.timer <= 0) ARENA.specialEffects.splice(i, 1);
+    }
+
+    // Boss block-window timer
+    if (ARENA.blockWindowActive) {
+      ARENA.blockWindowTimer--;
+      if (ARENA.blockWindowTimer <= 0) {
+        ARENA.blockWindowActive = false;
+        let dmg = Math.floor((ARENA.bossEntity?.atk || 30) * 2);
+        if (p.fleshHeapActive > 0) dmg = Math.floor(dmg * 0.6);
+        p.currentHp = Math.max(0, p.currentHp - dmg);
+        spawnFloatingText(p.x, p.y - 25, `💥 -${dmg} ПРОПУЩЕН!`, "#ef4444");
+        triggerHaptic("error");
+        if (p.currentHp <= 0) { handlePlayerArenaDeath(); return; }
+      }
+    }
+
+    // QTE timer
+    if (ARENA.qteActive) {
+      ARENA.qteTimer--;
+      if (ARENA.qteTimer <= 0) ARENA.qteActive = false;
+    }
+
+    // Auto-attack
+    if (p.autoAttack && p.attackCooldown <= 0) {
+      let nearest = null;
+      let nearestDist = Math.max(320, p.attackRange + 50);
+      for (const c of ARENA.creeps) {
+        const d = c.x - p.x;
+        if (d > 0 && d < nearestDist) {
+          nearest = c;
+          nearestDist = d;
+        }
+      }
+      if (nearest) {
+        playerSlashAttack();
+      }
+    }
+
+    // Update Telegraphs (Ground warnings)
+    if (ARENA.telegraphs) {
+      for (let i = ARENA.telegraphs.length - 1; i >= 0; i--) {
+        const tg = ARENA.telegraphs[i];
+        tg.timer--;
+        if (tg.timer <= 0) {
+          ARENA.telegraphs.splice(i, 1);
+        }
+      }
+    }
+
+    // Update Shockwaves (Radial expanding rings)
+    if (ARENA.shockwaves) {
+      for (let i = ARENA.shockwaves.length - 1; i >= 0; i--) {
+        const sw = ARENA.shockwaves[i];
+        sw.radius += sw.speed;
+
+        const waveFrontX = sw.x - sw.radius;
+        if (!sw.hitPlayer && Math.abs(waveFrontX - p.x) < 22) {
+          // Check Perfect Parry
+          if (ARENA.parryWindow > 0) {
+            sw.hitPlayer = true;
+            triggerPerfectParry();
+          } else if (p.counterspellActive > 0 || p.isBlocking) {
+            sw.hitPlayer = true;
+            const blkDmg = Math.max(5, Math.floor(sw.damage * 0.3));
+            p.currentHp = Math.max(0, p.currentHp - blkDmg);
+            spawnFloatingText(p.x, p.y - 25, `🛡️ БЛОК -${blkDmg}`, "#38bdf8");
+            triggerHaptic("medium");
+          } else {
+            sw.hitPlayer = true;
+            const effDef = stats.defense || 6;
+            const floor = RPG_STATE.profile?.dungeon_floor || 1;
+            const dr = Math.min(0.82, (effDef * 0.05) / (1 + effDef * 0.05 + floor * 0.4));
+            let finalDmg = Math.max(Math.floor(sw.damage * 0.2), Math.floor(sw.damage * (1 - dr)));
+            if (p.fleshHeapActive > 0) finalDmg = Math.floor(finalDmg * 0.6);
+            p.currentHp = Math.max(0, p.currentHp - finalDmg);
+            ARENA.cameraTrauma = Math.min(1.0, ARENA.cameraTrauma + 0.45);
+            spawnFloatingText(p.x, p.y - 25, `💥 -${finalDmg} УДАРНАЯ ВОЛНА!`, "#ef4444");
+            triggerHaptic("error");
+            if (p.currentHp <= 0) { handlePlayerArenaDeath(); return; }
+          }
+        }
+
+        if (sw.radius > sw.maxRadius) {
+          ARENA.shockwaves.splice(i, 1);
+        }
+      }
+    }
+
+    // Guarantee Raid Boss remains in creeps array during boss fight!
+    if (ARENA.isRaidBossBattle && ARENA.bossEntity) {
+      ARENA.isBossActive = true;
+      if (!ARENA.creeps.includes(ARENA.bossEntity)) {
+        ARENA.creeps = [ARENA.bossEntity];
+      }
+    }
+
+    // Creep Spawning (waves 1 to 19 only, NEVER during a Raid Boss Battle!)
+    ARENA.creepSpawnTimer++;
+    if (!ARENA.isRaidBossBattle && !ARENA.isBossActive && ARENA.creepSpawnTimer % 45 === 0 &&
+        ARENA.totalCreepsSpawned < ARENA.creepsNeededForWave && ARENA.creeps.length < 14) {
+      spawnArenaCreep();
+    }
+
+    // Boss phase logic & companion squad updates
+    if (ARENA.isBossActive && ARENA.bossEntity) {
+      updateBossPhase();
+      updateBossCompanions();
+    }
+
+    // Boss Projectiles (Side-Scroller Waves only — Top-Down mode has its own dedicated 360 projectile loop!)
+    if (!ARENA.topDownMode && !ARENA.isRaidBossBattle) {
+      for (let i = ARENA.bossProjectiles.length - 1; i >= 0; i--) {
+        const proj = ARENA.bossProjectiles[i];
+        proj.x -= proj.speed;
+      if (proj.x < p.x + 65 && !proj.warned) {
+        proj.warned = true;
+        ARENA.blockWindowActive = true;
+        ARENA.blockWindowTimer = ARENA.blockWindowMax;
+        triggerHaptic("warning");
+      }
+      if (proj.x < p.x - 20) {
+        ARENA.bossProjectiles.splice(i, 1);
+      }
+    }
+
+    // Player Projectiles
+    for (let i = ARENA.playerProjectiles.length - 1; i >= 0; i--) {
+      const proj = ARENA.playerProjectiles[i];
+
+      // Companion Dagger (Phantom Assassin / Anti-Mage squad companion)
+      if (proj.type === "companion_dagger") {
+        proj.x += proj.speed;
+        const boss = ARENA.bossEntity;
+        if (boss && Math.abs(proj.x - boss.x) < 25) {
+          const dmgTaken = applyDamageToBoss(boss, proj.dmg, proj.isCrit);
+          if (boss.poise !== undefined) boss.poise = Math.max(0, boss.poise - (proj.isCrit ? 12 : 6));
+          if (proj.isCrit) {
+            spawnFloatingText(boss.x - 10 + Math.random() * 20, boss.y - 25 - Math.random() * 15, `💥 КРИТ! -${proj.dmg}`, "#ef4444");
+            ARENA.cameraTrauma = Math.min(1.0, ARENA.cameraTrauma + 0.2);
+            triggerHaptic("heavy");
+          } else {
+            spawnFloatingText(boss.x - 10 + Math.random() * 20, boss.y - 20 - Math.random() * 12, `🗡️ КИНЖАЛ -${proj.dmg}`, "#38bdf8");
+          }
+          if (ARENA.combo) {
+            ARENA.combo.count++;
+            ARENA.combo.timer = 120;
+          }
+          ARENA.playerProjectiles.splice(i, 1);
+          continue;
+        }
+        if (proj.x > ARENA.width + 40) {
+          ARENA.playerProjectiles.splice(i, 1);
+          continue;
+        }
+      }
+
+      // Wind Blade / Cleave Wave (Melee heroes cutting wave that slices through ranged creeps)
+      if (proj.type === "wind_blade") {
+        proj.x += proj.speed;
+        for (const c of ARENA.creeps) {
+          if (!proj.hitCreepIds) proj.hitCreepIds = new Set();
+          const creepKey = c.id || c.uid || c.name; // Stable key! Never hit the same creep twice in one projectile!
+          if (!proj.hitCreepIds.has(creepKey) && Math.abs(c.x - proj.x) < (c.radius + proj.radius)) {
+            proj.hitCreepIds.add(creepKey);
+            let finalDmg = proj.dmg;
+            if (c.archetype === "defender") {
+              c.shieldHits = (c.shieldHits || 0) + 1;
+              if (c.shieldHits >= 3 || proj.isHeavy) {
+                c.shieldBrokenTimer = 240;
+                c.state = "stagger";
+                c.staggerTimer = 80;
+                c.stateTimer = 80;
+                spawnFloatingText(c.x, c.y - 25, "💥 GUARD BREAK! (+100% УРОНА)", "#facc15");
+                finalDmg = Math.floor(finalDmg * 1.5);
+              } else if (c.shieldBrokenTimer <= 0) {
+                finalDmg = Math.max(8, Math.floor(finalDmg * 0.5));
+                spawnFloatingText(c.x, c.y - 20, `🛡️ БЛОК (-50%) [${3 - c.shieldHits} уд.]`, "#94a3b8");
+              }
+            }
+
+            if (c.isBoss) {
+              finalDmg = applyDamageToBoss(c, finalDmg, proj.isCrit);
+            } else {
+              safeDamageCreep(c, finalDmg, false);
+            }
+            spawnFloatingText(c.x, c.y - 18, `${proj.isCrit ? "⚡ КРИТ! " : ""}-${finalDmg}`, proj.isCrit ? "#f59e0b" : "#facc15");
+          }
+        }
+        if (proj.x > ARENA.width + 40) {
+          ARENA.playerProjectiles.splice(i, 1);
+        }
+        continue;
+      }
+
+      // Chaos Meteor («Котлета» Инвокера, падающая с неба и катящаяся по линии)
+      if (proj.type === "meteor") {
+        if (proj.falling) {
+          proj.x += proj.vx;
+          proj.y += proj.vy;
+          proj.angle += 0.2;
+
+          // Impact on ground!
+          if (proj.y >= proj.targetY) {
+            proj.y = proj.targetY;
+            proj.falling = false;
+            ARENA.cameraTrauma = Math.min(1.0, ARENA.cameraTrauma + 0.65);
+            ARENA.hitstop = 8;
+            triggerHaptic("heavy");
+
+            // Ground impact shockwave & crater
+            if (!ARENA.shockwaves) ARENA.shockwaves = [];
+            ARENA.shockwaves.push({
+              x: proj.x,
+              y: proj.y + 12,
+              radius: 12,
+              maxRadius: 85,
+              alpha: 1.0,
+              color: "#ea580c"
+            });
+            spawnFloatingText(proj.x, proj.y - 35, "💥 БАБАХ! МЕТЕОР ПРИЗЕМЛИЛСЯ!", "#f97316");
+
+            // Massive impact damage in landing zone
+            for (const c of ARENA.creeps) {
+              if (Math.abs(c.x - proj.x) < 85) {
+                safeDamageCreep(c, Math.floor(proj.dmg * 0.8), false);
+                c.x += 45; // knockback
+                if (c.isBoss) {
+                  c.poise = Math.max(0, (c.poise !== undefined ? c.poise : 300) - 80);
+                  if (c.poise <= 0 && !c.isStaggered) {
+                    c.isStaggered = true;
+                    c.staggerTimer = 210;
+                    ARENA.hitstop = 12;
+                    ARENA.cameraTrauma = 0.8;
+                    spawnFloatingText(c.x, c.y - 35, "💫 ОШЕЛОМЛЕН МЕТЕОРОМ!", "#facc15");
+                  }
+                }
+                if (c.archetype === "defender") {
+                  c.shieldBrokenTimer = 240;
+                  c.state = "stagger";
+                  c.staggerTimer = 90;
+                  c.stateTimer = 90;
+                  spawnFloatingText(c.x, c.y - 25, "💥 GUARD BREAK МЕТЕОРОМ!", "#facc15");
+                }
+              }
+            }
+          }
+        } else {
+          // Rolling along the lane
+          proj.x += proj.speed;
+          proj.angle += 0.15;
+
+          // Leaves burning magma trail
+          if (!proj.burnTrail) proj.burnTrail = [];
+          if ((ARENA.frameCount || 0) % 5 === 0) {
+            proj.burnTrail.push({
+              x: proj.x - 16,
+              y: proj.y + 12,
+              timer: 130
+            });
+          }
+
+          // Damage creeps in its path
+          for (const c of ARENA.creeps) {
+            if (!proj.hitCreepIds) proj.hitCreepIds = new Set();
+            const creepKey = c.id || c.uid || c.name; // Stable key!
+            if (!proj.hitCreepIds.has(creepKey) && Math.abs(c.x - proj.x) < (c.radius + proj.radius)) {
+              proj.hitCreepIds.add(creepKey);
+              let finalDmg = proj.dmg;
+              if (c.isBoss) {
+                c.poise = Math.max(0, (c.poise !== undefined ? c.poise : 300) - 45);
+                if (c.poise <= 0 && !c.isStaggered) {
+                  c.isStaggered = true;
+                  c.staggerTimer = 210;
+                  ARENA.hitstop = 10;
+                  ARENA.cameraTrauma = 0.7;
+                  spawnFloatingText(c.x, c.y - 35, "💫 ОШЕЛОМЛЕН МЕТЕОРОМ!", "#facc15");
+                }
+                finalDmg = applyDamageToBoss(c, finalDmg, true);
+              } else {
+                safeDamageCreep(c, finalDmg, false);
+                c.x += 40; // knockback
+              }
+              if (c.archetype === "defender") {
+                c.shieldBrokenTimer = 240;
+                c.state = "stagger";
+                c.staggerTimer = 90;
+                c.stateTimer = 90;
+                spawnFloatingText(c.x, c.y - 25, "💥 GUARD BREAK МЕТЕОРОМ!", "#facc15");
+              }
+              spawnFloatingText(c.x, c.y - 20, `☄️ -${finalDmg} ОЖОГ!`, "#ea580c");
+            }
+          }
+        }
+
+        // Update ground burn trail
+        if (proj.burnTrail) {
+          for (let b = proj.burnTrail.length - 1; b >= 0; b--) {
+            proj.burnTrail[b].timer--;
+            // Ticking burn damage on creeps walking over magma
+            if (proj.burnTrail[b].timer % 18 === 0) {
+              const tx = proj.burnTrail[b].x;
+              for (const c of ARENA.creeps) {
+                if (Math.abs(c.x - tx) < 32) {
+                  const tick = Math.max(10, Math.floor(proj.dmg * 0.12));
+                  safeDamageCreep(c, tick, false);
+                  spawnFloatingText(c.x, c.y - 12, `🔥 -${tick}`, "#f97316");
+                }
+              }
+            }
+            if (proj.burnTrail[b].timer <= 0) proj.burnTrail.splice(b, 1);
+          }
+        }
+
+        if (proj.x > ARENA.width + 60 && (!proj.burnTrail || proj.burnTrail.length === 0)) {
+          ARENA.playerProjectiles.splice(i, 1);
+        }
+        continue;
+      }
+
+      // Targeted magic orb or dagger
+      proj.x += proj.speed;
+      let hit = false;
+      for (const c of ARENA.creeps) {
+        if (Math.abs(c.x - proj.x) < c.radius + 10) {
+          let finalDmg = proj.dmg;
+          if (c.isBoss) {
+            if (c.tormentorShield) {
+              const reflectDmg = Math.max(4, Math.floor(finalDmg * 0.5));
+              p.currentHp = Math.max(0, p.currentHp - reflectDmg);
+              spawnFloatingText(p.x, p.y - 22, `🪞 ОТРАЖЕНИЕ -${reflectDmg}!`, "#c084fc");
+              if (p.currentHp <= 0) { handlePlayerArenaDeath(); return; }
+            }
+            if (c.isStaggered) {
+              finalDmg = Math.floor(finalDmg * 2.5);
+              ARENA.cameraTrauma = Math.min(1.0, ARENA.cameraTrauma + 0.25);
+            } else {
+              c.poise = Math.max(0, (c.poise !== undefined ? c.poise : 300) - (proj.isCrit ? 35 : 18));
+              if (c.poise <= 0) {
+                c.isStaggered = true;
+                c.staggerTimer = 210;
+                ARENA.hitstop = 10;
+                ARENA.cameraTrauma = 0.7;
+                spawnFloatingText(c.x, c.y - 35, "💫 ОШЕЛОМЛЕН! (+150% УРОНА)", "#facc15");
+                triggerHaptic("heavy");
+              }
+            }
+
+            // MAGIC ATTACK: Bypasses heavy physical defense armor!
+            if (proj.isMagic) {
+              const magicDr = 0.12;
+              finalDmg = Math.max(12, Math.floor(finalDmg * (1 - magicDr)));
+            } else {
+              const bDef = c.defense || 14;
+              const dr = (bDef * 0.05) / (1 + bDef * 0.05);
+              finalDmg = Math.max(6, Math.floor(finalDmg * (1 - dr)));
+            }
+            finalDmg = applyDamageToBoss(c, finalDmg, proj.isCrit);
+          } else {
+            safeDamageCreep(c, finalDmg, false);
+          }
+
+          if (c.archetype === "defender" && proj.isMagic) {
+            c.shieldHits = (c.shieldHits || 0) + 1;
+            if (c.shieldHits >= 3 || proj.isHeavy) {
+              c.shieldBrokenTimer = 240;
+              c.state = "stagger";
+              c.staggerTimer = 80;
+              c.stateTimer = 80;
+              spawnFloatingText(c.x, c.y - 25, "💥 GUARD BREAK МАГИЕЙ!", "#38bdf8");
+            }
+          }
+          const col = proj.isMagic ? (proj.isCrit ? "#c084fc" : "#38bdf8") : (proj.isCrit ? "#facc15" : "#f87171");
+          const prefix = proj.isMagic ? (proj.isCrit ? "🔮 МАГ КРИТ! " : "✨ МАГ ") : (proj.isCrit ? "💥 КРИТ! " : "");
+          const txt = (c.isBoss && c.isStaggered) ? `💥 STAGGER! -${finalDmg}` : `${prefix}-${finalDmg}`;
+          spawnFloatingText(c.x, c.y - 18, txt, col);
+          if (proj.slow) c.speed = Math.max(0.5, c.speed * 0.5);
+          hit = true;
+          triggerHaptic("light");
+          break;
+        }
+      }
+      if (hit || proj.x > ARENA.width + 40) {
+        ARENA.playerProjectiles.splice(i, 1);
+      }
+    }
+
+    // Allied Minions (Wraith King skeletons)
+    for (let i = ARENA.alliedMinions.length - 1; i >= 0; i--) {
+      const m = ARENA.alliedMinions[i];
+      m.x += m.speed;
+      // Attack nearest creep
+      for (const c of ARENA.creeps) {
+        if (c.x - m.x < 30 && c.x > m.x) {
+          safeDamageCreep(c, m.atk, false);
+          spawnFloatingText(c.x, c.y - 15, `☠️ -${m.atk}`, "#e2e8f0");
+          m.hp -= c.atk;
+          break;
+        }
+      }
+      if (m.hp <= 0 || m.x > ARENA.width + 30) {
+        ARENA.alliedMinions.splice(i, 1);
+      }
+    }
+
+    // Update Player Dash & Timers
+    if (p.dashCooldown > 0) p.dashCooldown--;
+    if (p.isInvulnerable > 0) p.isInvulnerable--;
+    if (p.dashTimer > 0) {
+      p.dashTimer--;
+      if (p.dashTimer <= 0) p.isDashing = false;
+    }
+    if (ARENA.combo && ARENA.combo.timer > 0) {
+      ARENA.combo.timer--;
+      if (ARENA.combo.timer <= 0) {
+        ARENA.combo.count = 0;
+        ARENA.combo.step = 0;
+      }
+    }
+    if (ARENA.styleMeter) {
+      if (ARENA.styleMeter.decayTimer > 0) {
+        ARENA.styleMeter.decayTimer--;
+      } else if (ARENA.styleMeter.score > 0) {
+        ARENA.styleMeter.score = Math.max(0, ARENA.styleMeter.score - 3);
+        addStylePoints(0, "decay");
+      }
+    }
+    // Dash Ghosts decay
+    if (ARENA.dashGhosts) {
+      for (let g = ARENA.dashGhosts.length - 1; g >= 0; g--) {
+        ARENA.dashGhosts[g].alpha -= 0.05;
+        if (ARENA.dashGhosts[g].alpha <= 0) ARENA.dashGhosts.splice(g, 1);
+      }
+    }
+
+    // Witch-Time Slow Motion Timer
+    if (ARENA.sloMoTimer > 0) {
+      ARENA.sloMoTimer--;
+      if (ARENA.sloMoTimer <= 0) {
+        ARENA.timeScale = 1.0;
+      }
+    }
+
+    // Update Enemy Projectiles (Ranged Mages, Archers, Catapults & Reflected Bolts)
+    if (ARENA.enemyProjectiles) {
+      for (let j = ARENA.enemyProjectiles.length - 1; j >= 0; j--) {
+        const proj = ARENA.enemyProjectiles[j];
+
+        if (proj.reflected) {
+          // Reflected bolt flying towards enemies!
+          proj.x -= proj.speed; // speed is negative, moves right
+          let hitCreep = false;
+          for (const c of ARENA.creeps) {
+            if (Math.abs(c.x - proj.x) < c.radius + 14) {
+              safeDamageCreep(c, proj.dmg, false);
+              spawnFloatingText(c.x, c.y - 24, `💥 ОТРАЖЕН! -${proj.dmg}`, "#facc15");
+              ARENA.hitstop = 4;
+              hitCreep = true;
+              break;
+            }
+          }
+          if (hitCreep || proj.x > ARENA.width + 60) {
+            ARENA.enemyProjectiles.splice(j, 1);
+          }
+        } else {
+          // Hostile projectile flying towards player
+          proj.x -= proj.speed;
+
+          if (Math.abs(proj.x - p.x) < 22) {
+            if (p.isInvulnerable > 0) {
+              spawnFloatingText(p.x, p.y - 20, "УВОРОТ! (I-FRAMES)", "#38bdf8");
+              ARENA.enemyProjectiles.splice(j, 1);
+            } else if (ARENA.parryWindow > 0) {
+              proj.reflected = true;
+              proj.speed = -Math.abs(proj.speed || 3.5) * 2.0;
+              proj.dmg = Math.floor((proj.dmg || 20) * 2.5);
+              proj.color = "#facc15";
+              addStylePoints(300, "DEFLECT");
+              spawnFloatingText(p.x + 15, p.y - 28, "🪞 ОТРАЖЕНО!", "#facc15");
+              triggerHaptic("heavy");
+            } else if (p.isBlocking || p.counterspellActive > 0) {
+              const bDmg = Math.max(3, Math.floor(proj.dmg * 0.25));
+              p.currentHp = Math.max(0, p.currentHp - bDmg);
+              spawnFloatingText(p.x, p.y - 20, `🛡️ БЛОК -${bDmg}`, "#38bdf8");
+              triggerHaptic("medium");
+              ARENA.enemyProjectiles.splice(j, 1);
+            } else {
+              const def = Math.max(0, stats.defense || 5);
+              const floor = RPG_STATE.profile?.dungeon_floor || 1;
+              const armorDr = Math.min(0.82, (def * 0.05) / (1.0 + def * 0.05 + floor * 0.4));
+              let rawDmg = Math.max(Math.floor(proj.dmg * 0.15), Math.floor(proj.dmg * (1.0 - armorDr)));
+              if (p.pipeShield && p.pipeShield > 0) {
+                const absorbed = Math.min(p.pipeShield, rawDmg);
+                p.pipeShield -= absorbed;
+                rawDmg -= absorbed;
+                spawnFloatingText(p.x, p.y - 30, `🛡️ ПАЙП -${absorbed}`, "#a855f7");
+              }
+              if (p.fleshHeapActive > 0) rawDmg = Math.floor(rawDmg * 0.6);
+              if (p.crimsonActive > 0) rawDmg = Math.max(4, rawDmg - (p.crimsonBlock || 85));
+              p.currentHp = Math.max(0, p.currentHp - rawDmg);
+              if (p.blademailActive > 0) {
+                spawnFloatingText(p.x, p.y - 25, `🪞 ВОЗВРАТКА -${rawDmg}`, "#facc15");
+              }
+              spawnFloatingText(p.x + 10, p.y - 20, `💥 -${rawDmg}`, "#ef4444");
+              triggerHaptic("light");
+              if (ARENA.styleMeter) ARENA.styleMeter.score = Math.max(0, ARENA.styleMeter.score - 120);
+              ARENA.enemyProjectiles.splice(j, 1);
+              if (p.currentHp <= 0) { handlePlayerArenaDeath(); return; }
+            }
+          } else if (proj.x < -20) {
+            ARENA.enemyProjectiles.splice(j, 1);
+          }
+        }
+      }
+    }
+    } // End of Side-Scroller Projectiles Guard
+
+    // Check Captain Presence for Squad Buffs
+    const activeCaptain = ARENA.creeps.find(c => c.archetype === "captain" || c.isCaptain);
+
+    // Update Creeps — Tactical FSM (Approach, Telegraph, Attack, Recovery, Panic)
+    for (let i = ARENA.creeps.length - 1; i >= 0; i--) {
+      const c = ARENA.creeps[i];
+
+      // 1. Creep Death Check FIRST!
+      if (c.hp <= 0) {
+        if (c.archetype === "captain" || c.isCaptain) {
+          addStylePoints(220, "CAPTAIN DOWN");
+          for (const remaining of ARENA.creeps) {
+            if (remaining !== c && !remaining.isBoss) {
+              remaining.state = "panic";
+              remaining.stateTimer = 150; // 2.5s panic
+              spawnFloatingText(remaining.x, remaining.y - 25, "😱 ПАНИКА ОТРЯДА!", "#38bdf8");
+            }
+          }
+        }
+        ARENA.creeps.splice(i, 1);
+        handleCreepDeath(c);
+        continue;
+      }
+
+      // Recovery of broken shield
+      if (c.shieldBrokenTimer > 0) c.shieldBrokenTimer--;
+
+      // Captain aura check
+      c.hasCaptainBuff = !!(activeCaptain && activeCaptain !== c && Math.abs(activeCaptain.x - c.x) < 80);
+
+      // Stagger / Stun state (checks both staggerTimer and stateTimer to prevent infinite loop)
+      if (c.state === "stagger" || (c.staggerTimer && c.staggerTimer > 0) || (c.stateTimer && c.stateTimer > 0 && c.state === "stagger")) {
+        if (c.staggerTimer > 0) c.staggerTimer--;
+        if (c.stateTimer > 0) c.stateTimer--;
+        if ((!c.staggerTimer || c.staggerTimer <= 0) && (!c.stateTimer || c.stateTimer <= 0)) {
+          c.state = "approach";
+          c.staggerTimer = 0;
+          c.stateTimer = 0;
+        }
+        continue;
+      }
+
+      // Squad Panic State (triggers when Captain dies)
+      if (c.state === "panic") {
+        c.x += 1.4; // Run backwards away from player
+        c.stateTimer--;
+        if (c.stateTimer <= 0) c.state = "approach";
+        continue;
+      }
+
+      // Tactical Distance & FSM
+      const targetDist = c.range || 38;
+
+      if (c.isBoss) {
+        // Boss movement & attacks are fully driven by updateBossPhase roaming FSM!
+      } else if (c.x > p.x + targetDist) {
+        c.state = "approach";
+        const spd = c.speed * (c.hasCaptainBuff ? 1.3 : 1.0);
+        c.x -= spd;
+      } else {
+        // In Attack Range!
+        c.attackCooldown = (c.attackCooldown || 0) + 1;
+
+        if (c.state !== "telegraph" && c.attackCooldown >= (c.hasCaptainBuff ? 32 : 45)) {
+          c.state = "telegraph";
+          c.stateTimer = 22; // 22 frames telegraph warning
+        }
+
+        if (c.state === "telegraph") {
+          c.stateTimer--;
+          if (c.stateTimer <= 0) {
+            // EXECUTE ATTACK!
+            c.state = "recovery";
+            c.attackCooldown = 0;
+
+            if (c.range && c.range > 100) {
+              // Ranged Caster / Archer / Catapult fires projectile!
+              if (!ARENA.enemyProjectiles) ARENA.enemyProjectiles = [];
+              const isRadiant = (c.archetype || "").includes("radiant");
+              const isCatapult = c.archetype === "catapult";
+              ARENA.enemyProjectiles.push({
+                x: c.x - 14,
+                y: c.y - 4,
+                speed: isCatapult ? 3.0 : 3.8,
+                dmg: c.atk,
+                color: isCatapult ? "#f97316" : (isRadiant ? "#38bdf8" : "#c084fc"),
+                isBossFireball: isCatapult,
+                reflected: false
+              });
+            } else {
+              // Melee Strike on Player!
+              if (p.isInvulnerable > 0) {
+                spawnFloatingText(p.x, p.y - 20, "УВОРОТ! (I-FRAMES)", "#38bdf8");
+              } else {
+                const isDodge = Math.random() * 100 < (stats.dodge_chance || 10);
+                if (isDodge) {
+                  spawnFloatingText(p.x, p.y - 20, "УВОРОТ!", "#38bdf8");
+                } else if (ARENA.parryWindow > 0) {
+                  c.state = "stagger";
+                  c.staggerTimer = 110;
+                  c.attackCooldown = -30;
+                  c.x += 40;
+                  ARENA.hitstop = 8;
+                  ARENA.cameraTrauma = Math.min(1.0, ARENA.cameraTrauma + 0.3);
+                  addStylePoints(260, "PERFECT PARRY");
+                  spawnFloatingText(c.x, c.y - 25, "💫 ПАРИРОВАНО! (+150% УРОНА)", "#facc15");
+                  triggerHaptic("heavy");
+                } else if (p.isBlocking || p.counterspellActive > 0) {
+                  const bDmg = Math.max(2, Math.floor(c.atk * 0.25));
+                  p.currentHp = Math.max(0, p.currentHp - bDmg);
+                  spawnFloatingText(p.x, p.y - 20, `🛡️ БЛОК -${bDmg}`, "#38bdf8");
+                  triggerHaptic("medium");
+                  if (p.currentHp <= 0) { handlePlayerArenaDeath(); return; }
+                } else {
+                  const def = Math.max(0, stats.defense || 5);
+                  const floor = RPG_STATE.profile?.dungeon_floor || 1;
+                  // Diminishing returns formula with floor scaling and 82% hard-cap (prevents 99.9% godmode)
+                  const armorDr = Math.min(0.82, (def * 0.05) / (1.0 + def * 0.05 + floor * 0.4));
+                  let rawDmg = Math.max(Math.floor(c.atk * 0.15), Math.floor(c.atk * 0.85 * (1.0 - armorDr)));
+                  if (c.pureDamage) rawDmg = Math.floor(c.atk * 0.85); // Pure damage ignores armor!
+                  if (p.fleshHeapActive > 0) rawDmg = Math.floor(rawDmg * 0.6);
+                  if (p.crimsonActive > 0) rawDmg = Math.max(4, rawDmg - (p.crimsonBlock || 85));
+                  p.currentHp = Math.max(0, p.currentHp - rawDmg);
+                  if (p.blademailActive > 0) {
+                    safeDamageCreep(c, rawDmg, false);
+                    spawnFloatingText(c.x, c.y - 30, `🪞 ВОЗВРАТКА -${rawDmg}`, "#facc15");
+                  }
+                  spawnFloatingText(p.x + 10, p.y - 15 - Math.random() * 15, `-${rawDmg}`, "#ef4444");
+                  triggerHaptic("light");
+                  if (ARENA.styleMeter) ARENA.styleMeter.score = Math.max(0, ARENA.styleMeter.score - 80);
+                  if (p.currentHp <= 0) { handlePlayerArenaDeath(); return; }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Creep Death Check
+      if (c.hp <= 0) {
+        if (c.archetype === "captain" || c.isCaptain) {
+          addStylePoints(220, "CAPTAIN DOWN");
+          for (const remaining of ARENA.creeps) {
+            if (remaining !== c && !remaining.isBoss) {
+              remaining.state = "panic";
+              remaining.stateTimer = 150; // 2.5s panic
+              spawnFloatingText(remaining.x, remaining.y - 25, "😱 ПАНИКА ОТРЯДА!", "#38bdf8");
+            }
+          }
+        }
+        ARENA.creeps.splice(i, 1);
+        handleCreepDeath(c);
+      }
+    }
+
+    updatePickups();
+    updateFloatingTexts();
+    updateClouds();
+  }
+
+  function updatePickups() {
+    const p = ARENA.player;
+    if (!ARENA.pickups) return;
+    for (let i = ARENA.pickups.length - 1; i >= 0; i--) {
+      const it = ARENA.pickups[i];
+      it.x -= 3.5;
+      it.y -= 0.4;
+      if (it.x < p.x + 30) {
+        ARENA.pickups.splice(i, 1);
+        if (it.type === "gold") {
+          const g = it.value || 10;
+          if (RPG_STATE.profile) RPG_STATE.profile.gold = (RPG_STATE.profile.gold || 0) + g;
+          spawnFloatingText(p.x + 20, p.y - 25, `+${g} 🪙`, "#facc15");
+        } else if (it.type === "xp") {
+          const x = it.value || 15;
+          if (RPG_STATE.profile) {
+            RPG_STATE.profile.xp = (RPG_STATE.profile.xp || 0) + x;
+            checkLevelUpInArena();
+          }
+          spawnFloatingText(p.x + 20, p.y - 35, `+${x} XP`, "#38bdf8");
+        } else if (it.type === "loot") {
+          spawnFloatingText(p.x + 20, p.y - 35, "🎁 ТРОФЕЙНЫЙ СУНДУК!", "#a855f7");
+          triggerHaptic("heavy");
+          api.openRpgChest(RPG_STATE.profile?.dungeon_cleared || 10)
+            .then((res) => {
+              if (res.profile) RPG_STATE.profile = res.profile;
+              openChestModal(res);
+            })
+            .catch((err) => console.warn("Loot chest drop error:", err));
+        }
+        triggerHaptic("light");
+      }
+    }
+  }
+
+  function updatePhysicalCoins() {
+    if (!ARENA.physicalCoins || ARENA.physicalCoins.length === 0) return;
+    const p = ARENA.player;
+    const gravity = 0.38;
+
+    for (let i = ARENA.physicalCoins.length - 1; i >= 0; i--) {
+      const c = ARENA.physicalCoins[i];
+      c.age++;
+
+      if (c.age > c.magnetDelay) {
+        const dx = p.x - c.x;
+        const dy = (p.y - 8) - c.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 22) {
+          c.collected = true;
+          ARENA.physicalCoins.splice(i, 1);
+          triggerHaptic("light");
+          if (c.type === "gem") {
+            if (RPG_STATE.profile) RPG_STATE.profile.gems = (RPG_STATE.profile.gems || 0) + 1;
+            spawnFloatingText(p.x, p.y - 20, "+1 💎", "#38bdf8");
+          } else {
+            if (RPG_STATE.profile) RPG_STATE.profile.gold = (RPG_STATE.profile.gold || 0) + 15;
+            spawnFloatingText(p.x, p.y - 20, "+15 🪙", "#facc15");
+          }
+          continue;
+        }
+        const pullSpeed = Math.min(12, 2.5 + (c.age - c.magnetDelay) * 0.28);
+        c.x += (dx / dist) * pullSpeed;
+        c.y += (dy / dist) * pullSpeed;
+        c.z = Math.max(0, c.z - 0.45);
+      } else {
+        c.x += c.vx;
+        c.y += c.vy;
+        c.z += c.vz;
+        c.vz -= gravity;
+
+        if (c.z <= 0) {
+          c.z = 0;
+          c.vz = -c.vz * 0.52;
+          c.vx *= 0.75;
+          c.vy *= 0.75;
+          c.bounces++;
+        }
+      }
+    }
+  }
+
+  function updateFallingChest() {
+    const fc = ARENA.fallingChest;
+    if (!fc) return;
+
+    if (!fc.landed) {
+      fc.vy += 0.45;
+      fc.y += fc.vy;
+      if (fc.y >= fc.targetY) {
+        fc.y = fc.targetY;
+        fc.landed = true;
+        ARENA.cameraTrauma = 0.75;
+        triggerHaptic("heavy");
+        ARENA.specialEffects.push({
+          type: "stomp_ring",
+          x: fc.x,
+          y: fc.targetY + 14,
+          radius: 12,
+          maxRadius: 60,
+          timer: 25
+        });
+      }
+    } else {
+      fc.beamAlpha = Math.min(0.85, fc.beamAlpha + 0.03);
+      fc.rayAngle += 0.02;
+
+      if (Math.random() < 0.45) {
+        fc.sparkles.push({
+          x: fc.x + (Math.random() * 36 - 18),
+          y: fc.y + 10,
+          vy: -1.2 - Math.random() * 1.8,
+          alpha: 1,
+          size: 2 + Math.random() * 3
+        });
+      }
+      for (let j = fc.sparkles.length - 1; j >= 0; j--) {
+        const s = fc.sparkles[j];
+        s.y += s.vy;
+        s.alpha -= 0.025;
+        if (s.alpha <= 0) fc.sparkles.splice(j, 1);
+      }
+    }
+  }
+
+  function spawnLootExplosion(originX, originY, bossTmpl) {
+    bossTmpl = bossTmpl || {};
+    const count = 36;
+    ARENA.physicalCoins = ARENA.physicalCoins || [];
+    for (let i = 0; i < count; i++) {
+      const isGem = (i % 3 === 0);
+      const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.5;
+      const speed = 2.5 + Math.random() * 5.5;
+      ARENA.physicalCoins.push({
+        x: originX,
+        y: originY,
+        z: 15 + Math.random() * 10,
+        vx: Math.cos(angle) * speed,
+        vy: (Math.random() - 0.5) * 2.2,
+        vz: 4.5 + Math.random() * 6.5,
+        type: isGem ? "gem" : "gold",
+        icon: isGem ? "💎" : "🪙",
+        size: isGem ? 14 : 16,
+        bounces: 0,
+        age: 0,
+        magnetDelay: 45 + Math.floor(Math.random() * 25),
+        collected: false
+      });
+    }
+
+    ARENA.fallingChest = {
+      x: Math.min(ARENA.width - 70, Math.max(130, originX)),
+      y: -60,
+      targetY: ARENA.roadY - 22,
+      vy: 1.2,
+      landed: false,
+      beamAlpha: 0,
+      rayAngle: 0,
+      opened: false,
+      sparkles: []
+    };
+  }
+
+  function updateFloatingTexts() {
+    for (let i = ARENA.floatingTexts.length - 1; i >= 0; i--) {
+      const ft = ARENA.floatingTexts[i];
+      ft.y -= 0.8;
+      ft.opacity -= 0.02;
+      if (ft.opacity <= 0) ARENA.floatingTexts.splice(i, 1);
+    }
+  }
+
+  function updateClouds() {
+    for (const cloud of ARENA.clouds) {
+      cloud.x -= cloud.speed;
+      if (cloud.x < -40) cloud.x = ARENA.width + 40;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // BOSS ARENA: DODGE ROLL
+  // ---------------------------------------------------------------------------
+
+  function playerBossArenaDodge() {
+    if (!ARENA.bossArenaMode) return;
+    if (ARENA.dodgeCooldown > 0 || ARENA.dodgeActive > 0) return;
+    const p = ARENA.player;
+    // Determine dodge direction: away from boss or toward movement input
+    if (ARENA.moveInput.left) {
+      ARENA.dodgeDir = -1;
+    } else if (ARENA.moveInput.right) {
+      ARENA.dodgeDir = 1;
+    } else {
+      // Default: away from boss
+      const boss = ARENA.bossEntity;
+      ARENA.dodgeDir = boss && boss.x > p.x ? -1 : 1;
+    }
+    ARENA.dodgeActive = 12; // ~0.2s of i-frame roll
+    ARENA.dodgeCooldown = 48; // ~0.8s cooldown
+    if (!ARENA.dashGhosts) ARENA.dashGhosts = [];
+    triggerHaptic("medium");
+    spawnFloatingText(p.x, p.y - 20, "УВОРОТ!", "#38bdf8");
+  }
+
+  // ---------------------------------------------------------------------------
+  // BOSS PHASE LOGIC & COMBAT FSM (Poise, Telegraphs, Shockwaves, Stagger)
+  // ---------------------------------------------------------------------------
+
+  function updateBossPhase() {
+    // In Top-Down 360° Brawl Arena, boss AI and movement are handled EXCLUSIVELY by the Top-Down State Machine!
+    // NEVER allow legacy side-scrolling phase shifts, teleports, leap gravity, or horizontal rushes to run!
+    if (ARENA.topDownMode || ARENA.isRaidBossBattle) return;
+
+    const boss = ARENA.bossEntity;
+    if (!boss || boss.hp <= 0) return;
+
+    const p = ARENA.player;
+    if (boss.poise === undefined) {
+      boss.poise = 300;
+      boss.maxPoise = 300;
+      boss.defense = boss.defense || 14;
+    }
+
+    // 1. Stagger Recovery
+    if (boss.isStaggered) {
+      boss.staggerTimer--;
+      boss.jumpY = 0;
+      boss.jumpVY = 0;
+      if (boss.staggerTimer <= 0) {
+        boss.isStaggered = false;
+        boss.poise = boss.maxPoise;
+        boss.actionState = "roam";
+        boss.actionTimer = 0;
+        spawnFloatingText(boss.x, boss.y - 30, "😤 БОСС ВОССТАНОВИЛСЯ!", "#f97316");
+      }
+      return; // Stunned boss cannot move or act!
+    }
+
+    const hpPct = boss.hp / boss.maxHp;
+
+    // 2. Enrage check (HP <= 35%)
+    if (hpPct <= 0.35 && !boss.enraged) {
+      boss.enraged = true;
+      boss.speed = Math.min(1.4, (boss.speed || 0.85) * 1.45);
+      boss.atk = Math.floor(boss.atk * 1.35);
+      ARENA.cameraTrauma = 0.95;
+      ARENA.hitstop = 10;
+      spawnFloatingText(boss.x, boss.y - 45, "🔥 ЯРОСТЬ БОССА (ENRAGE)! 🔥", "#ef4444");
+      triggerHaptic("heavy");
+    }
+
+    // 3. Tormentor Reflective Shield
+    const bId = (boss.bossType || boss.name || "").toLowerCase();
+    const isTormentor = bId.includes("tormentor") || bId.includes("терзатель");
+    if (isTormentor || (hpPct < 0.65 && hpPct > 0.30)) {
+      boss.tormentorTimer = (boss.tormentorTimer || 0) + 1;
+      if (!boss.tormentorShield && boss.tormentorTimer % 240 === 0) {
+        boss.tormentorShield = true;
+        boss.tormentorShieldTimer = 180; // 3 seconds
+        spawnFloatingText(boss.x, boss.y - 35, "🔮 ОТРАЖАЮЩИЙ ПАНЦИРЬ!", "#c084fc");
+        triggerHaptic("warning");
+      }
+    }
+    if (boss.tormentorShield) {
+      boss.tormentorShieldTimer--;
+      if (boss.tormentorShieldTimer <= 0) {
+        boss.tormentorShield = false;
+        spawnFloatingText(boss.x, boss.y - 35, "✨ ПАНЦИРЬ СПАЛ!", "#a855f7");
+      }
+    }
+
+    // 4. Boss Roaming & Action State Machine (Roam, Leap, Charge, Recoil, Teleport)
+    boss.actionState = boss.actionState || "roam";
+    boss.moveDir = boss.moveDir || -1;
+    boss.decisionTimer = (boss.decisionTimer || 110) - 1;
+
+    // A. LEAP WINDUP -> PREPARING JUMP
+    if (boss.actionState === "leap_windup") {
+      boss.actionTimer--;
+      boss.x += (Math.random() - 0.5) * 2;
+      if (boss.actionTimer <= 0) {
+        boss.actionState = "leap";
+        boss.jumpVY = -12.5;
+        boss.targetX = p.x + 45;
+        triggerHaptic("medium");
+      }
+      return;
+    }
+
+    // B. LEAP AIRBORNE
+    if (boss.actionState === "leap") {
+      boss.jumpY = (boss.jumpY || 0) + boss.jumpVY;
+      boss.jumpVY += 0.82; // Gravity
+      boss.x += (boss.targetX - boss.x) * 0.08;
+
+      if (boss.jumpY >= 0) {
+        // Crash landing
+        boss.jumpY = 0;
+        boss.jumpVY = 0;
+        ARENA.cameraTrauma = 0.85;
+        triggerHaptic("heavy");
+
+        ARENA.specialEffects.push({
+          type: "stomp_ring",
+          x: boss.x,
+          y: ARENA.roadY - 14,
+          radius: 12,
+          maxRadius: 75,
+          timer: 24
+        });
+
+        ARENA.shockwaves.push({
+          x: boss.x,
+          y: ARENA.roadY - 14,
+          radius: 15,
+          maxRadius: ARENA.width + 60,
+          speed: boss.enraged ? 6.5 : 4.8,
+          damage: Math.floor(boss.atk * 1.35),
+          hitPlayer: false
+        });
+
+        spawnFloatingText(boss.x, boss.y - 35, "💥 СОКРУШИТЕЛЬНЫЙ УДАР!", "#ef4444");
+
+        if (Math.abs(boss.x - p.x) < 55) {
+          if (ARENA.parryWindow > 0) {
+            boss.isStaggered = true;
+            boss.staggerTimer = 110;
+            boss.actionState = "roam";
+            spawnFloatingText(boss.x, boss.y - 25, "💫 ПАРИРОВАНО! (+150% УРОНА)", "#facc15");
+            return;
+          }
+          if (!p.isInvulnerable && !p.isBlocking) {
+            const rawDmg = calculateBossAttackDamage(boss, 0.95);
+            const actualDmg = applyDamageToPlayer(rawDmg, "melee");
+            spawnFloatingText(p.x, p.y - 25, `-${actualDmg}`, "#ef4444");
+            if (p.currentHp <= 0) { handlePlayerArenaDeath(); return; }
+          }
+        }
+
+        boss.actionState = "recoil";
+        boss.actionTimer = 40;
+      }
+      return;
+    }
+
+    // C. CHARGE WINDUP
+    if (boss.actionState === "charge_windup") {
+      boss.actionTimer--;
+      boss.x += (Math.random() - 0.5) * 1.5;
+      if (boss.actionTimer <= 0) {
+        boss.actionState = "charging";
+        boss.actionTimer = 35;
+        triggerHaptic("heavy");
+        spawnFloatingText(boss.x - 20, boss.y - 25, "💨 ТАРАННЫЙ РЫВОК!", "#f97316");
+      }
+      return;
+    }
+
+    // D. CHARGING
+    if (boss.actionState === "charging") {
+      boss.x -= 4.8;
+      if (ARENA.specialEffects && Math.random() < 0.4) {
+        ARENA.specialEffects.push({
+          type: "blink_poof",
+          x: boss.x + boss.radius,
+          y: ARENA.roadY - 10,
+          timer: 12
+        });
+      }
+
+      if (boss.x <= p.x + 42 || boss.actionTimer-- <= 0) {
+        if (boss.x <= p.x + 48 && !p.isInvulnerable && !p.isBlocking && ARENA.parryWindow <= 0) {
+          const rawDmg = calculateBossAttackDamage(boss, 1.35);
+          const actualDmg = applyDamageToPlayer(rawDmg, "charge");
+          spawnFloatingText(p.x, p.y - 20, `💥 ТАРАН -${actualDmg}`, "#ef4444");
+          ARENA.cameraTrauma = 0.5;
+          if (p.currentHp <= 0) { handlePlayerArenaDeath(); return; }
+        }
+        boss.actionState = "recoil";
+        boss.actionTimer = 45;
+      }
+      return;
+    }
+
+    // E. RECOIL
+    if (boss.actionState === "recoil") {
+      boss.actionTimer--;
+      if (boss.x < ARENA.width - 90) {
+        boss.x += 1.6;
+      }
+      if (boss.actionTimer <= 0) {
+        boss.actionState = "roam";
+        boss.moveDir = -1;
+      }
+      return;
+    }
+
+    // F. ROAM (Active Arena Traversal)
+    if (boss.actionState === "roam") {
+      const minX = p.x + 48;
+      const maxX = ARENA.width - 45;
+
+      if (boss.x <= minX) {
+        boss.moveDir = 1;
+        boss.attackCooldown = (boss.attackCooldown || 0) + 1;
+        if (boss.attackCooldown >= 35) {
+          boss.attackCooldown = 0;
+          if (!p.isInvulnerable && !p.isBlocking && ARENA.parryWindow <= 0) {
+            const rawDmg = calculateBossAttackDamage(boss, 0.85);
+            const actualDmg = applyDamageToPlayer(rawDmg, "roam");
+            spawnFloatingText(p.x, p.y - 20, `-${actualDmg}`, "#ef4444");
+            triggerHaptic("light");
+            if (p.currentHp <= 0) { handlePlayerArenaDeath(); return; }
+          }
+        }
+      } else if (boss.x >= maxX) {
+        boss.moveDir = -1;
+      }
+
+      const spd = (boss.speed || 0.85) * (boss.enraged ? 1.4 : 1.0);
+      boss.x += boss.moveDir * spd;
+
+      // Special Move Decision
+      if (boss.decisionTimer <= 0) {
+        boss.decisionTimer = boss.enraged ? (80 + Math.floor(Math.random() * 50)) : (130 + Math.floor(Math.random() * 70));
+
+        const roll = Math.random();
+        const isCasterBoss = isTormentor || bId.includes("лич") || bId.includes("archlich");
+
+        if (isCasterBoss && roll < 0.25) {
+          // Phase Shift / Teleport
+          const newX = boss.x > 180 ? (p.x + 55) : (ARENA.width - 65);
+          ARENA.specialEffects.push({ type: "blink_poof", x: boss.x, y: boss.y, timer: 18 });
+          boss.x = newX;
+          ARENA.specialEffects.push({ type: "blink_poof", x: boss.x, y: boss.y, timer: 18 });
+          spawnFloatingText(boss.x, boss.y - 35, "🌀 ФАЗОВЫЙ СДВИГ!", "#c084fc");
+          triggerHaptic("medium");
+        } else if (roll < 0.48) {
+          // Attack 1: Ground Slam / Quake (Danger Circle at player pos)
+          const targetX = Math.max(35, Math.min(ARENA.width - 35, p.x));
+          if (!ARENA.dangerZones) ARENA.dangerZones = [];
+          ARENA.dangerZones.push({
+            type: "circle",
+            cx: targetX,
+            cy: ARENA.roadY - 8,
+            r: 46,
+            timer: 48,
+            maxTimer: 48,
+            phase: "telegraph",
+            activeFrames: 14,
+            damage: Math.floor(boss.atk * 1.35),
+            hitPlayer: false
+          });
+          spawnFloatingText(boss.x, boss.y - 35, "⚠️ РАЗЛОМ ЗЕМЛИ!", "#ef4444");
+          triggerHaptic("warning");
+        } else if (roll < 0.74) {
+          // Attack 2: Cleave / Melee Swipe (Wide red rectangle in front of boss)
+          const swipeW = 100;
+          const swipeX = boss.x > p.x ? (boss.x - swipeW) : boss.x;
+          if (!ARENA.dangerZones) ARENA.dangerZones = [];
+          ARENA.dangerZones.push({
+            type: "rect",
+            x: swipeX,
+            y: ARENA.roadY - 26,
+            w: swipeW,
+            h: 38,
+            timer: 42,
+            maxTimer: 42,
+            phase: "telegraph",
+            activeFrames: 12,
+            damage: Math.floor(boss.atk * 1.25),
+            hitPlayer: false
+          });
+          spawnFloatingText(boss.x, boss.y - 35, "⚠️ СОКРУШИТЕЛЬНЫЙ ВЗМАХ!", "#f97316");
+          triggerHaptic("warning");
+        } else if (roll < 0.88) {
+          // Attack 3: Leap Airborne (Drop danger circle where boss will land)
+          boss.actionState = "leap_windup";
+          boss.actionTimer = 26;
+          const landX = Math.max(45, Math.min(ARENA.width - 45, p.x + 25));
+          if (!ARENA.dangerZones) ARENA.dangerZones = [];
+          ARENA.dangerZones.push({
+            type: "circle",
+            cx: landX,
+            cy: ARENA.roadY - 8,
+            r: 52,
+            timer: 45,
+            maxTimer: 45,
+            phase: "telegraph",
+            activeFrames: 14,
+            damage: Math.floor(boss.atk * 1.5),
+            hitPlayer: false
+          });
+          spawnFloatingText(boss.x, boss.y - 35, "⚠️ ПРЫЖОК ОЗЕМЬ!", "#ef4444");
+          triggerHaptic("warning");
+        } else {
+          // Attack 4: Charging Ram
+          boss.actionState = "charge_windup";
+          boss.actionTimer = 30;
+          if (!ARENA.dangerZones) ARENA.dangerZones = [];
+          ARENA.dangerZones.push({
+            type: "rect",
+            x: 0,
+            y: ARENA.roadY - 22,
+            w: boss.x,
+            h: 32,
+            timer: 36,
+            maxTimer: 36,
+            phase: "telegraph",
+            activeFrames: 24,
+            damage: Math.floor(boss.atk * 1.1),
+            hitPlayer: false
+          });
+          spawnFloatingText(boss.x, boss.y - 35, "⚠️ ЗАМАХ ДЛЯ РЫВКА!", "#f97316");
+          triggerHaptic("warning");
+        }
+      }
+    }
+
+    // 5. Periodic Projectile Fireball
+    boss.projectileTimer = (boss.projectileTimer || 0) + 1;
+    const pInterval = boss.enraged ? 120 : 180;
+    if (boss.projectileTimer % pInterval === 0 && boss.actionState !== "leap") {
+      ARENA.bossProjectiles.push({
+        x: boss.x - 20,
+        y: boss.y - 6,
+        speed: boss.enraged ? 4.2 : 2.8,
+        damage: Math.floor(boss.atk * 1.1),
+        warned: false
+      });
+      spawnFloatingText(boss.x - 15, boss.y - 20, "🔥", "#f97316");
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // TRIO SQUAD COMPANIONS & PARTY CONTROLS
+  // ---------------------------------------------------------------------------
+
+  function initBossCompanions() {
+    const p = ARENA.player;
+    const hClass = (RPG_STATE.profile?.hero_class || "pudge").toLowerCase();
+
+    let c1Class = "juggernaut";
+    let c1Name = "Юрнеро";
+    let c2Class = "pa";
+    let c2Name = "Мортред";
+
+    if (hClass.includes("juggernaut")) {
+      c1Class = "wk";
+      c1Name = "Остарион";
+    }
+    if (hClass.includes("pa")) {
+      c2Class = "am";
+      c2Name = "Магина";
+    }
+
+    ARENA.bossCompanions = [
+      {
+        id: "comp1",
+        name: c1Name,
+        heroClass: c1Class,
+        x: p.x + 26,
+        baseX: p.x + 26,
+        y: p.y - 20,
+        baseY: p.y - 20,
+        radius: 17,
+        attackCooldown: 25,
+        attackPeriod: 46,
+        slashAnimation: null
+      },
+      {
+        id: "comp2",
+        name: c2Name,
+        heroClass: c2Class,
+        x: p.x + 22,
+        baseX: p.x + 22,
+        y: p.y + 20,
+        baseY: p.y + 20,
+        radius: 17,
+        attackCooldown: 48,
+        attackPeriod: 60,
+        slashAnimation: null
+      }
+    ];
+  }
+
+  function updateBossCompanions() {
+    if (!ARENA.isBossActive || (ARENA.bossPartyMode || "trio") !== "trio") {
+      ARENA.bossCompanions = [];
+      return;
+    }
+
+    if (!ARENA.bossCompanions || ARENA.bossCompanions.length === 0) {
+      initBossCompanions();
+    }
+
+    const boss = ARENA.bossEntity;
+    if (!boss || boss.hp <= 0) return;
+
+    const p = ARENA.player;
+    const stats = RPG_STATE.profile?.stats || {};
+    const baseAtk = Math.max(30, Math.floor(((stats.min_atk || 30) + (stats.max_atk || 50)) / 2));
+
+    for (let ci = 0; ci < ARENA.bossCompanions.length; ci++) {
+      const comp = ARENA.bossCompanions[ci];
+      if (comp.slashAnimation) {
+        comp.slashAnimation.timer--;
+        if (comp.slashAnimation.timer <= 0) comp.slashAnimation = null;
+      }
+
+      // TOP-DOWN 3-HERO SQUAD MOVEMENT & FORMATION
+      if (ARENA.topDownMode || ARENA.isRaidBossBattle) {
+        // Formation: Companion 1 to the left flank, Companion 2 to the right flank
+        const offsetX = ci === 0 ? -34 : 34;
+        const offsetY = 14;
+        const targetX = Math.max(28, Math.min(ARENA.width - 28, p.x + offsetX));
+        const targetY = Math.max(38, Math.min(ARENA.height - 38, p.y + offsetY));
+
+        // Smooth follower lerp so friends run right alongside player!
+        comp.x += (targetX - comp.x) * 0.14;
+        comp.y += (targetY - comp.y) * 0.14;
+        comp.facing = boss.x >= comp.x ? 1 : -1;
+      }
+
+      comp.attackCooldown = (comp.attackCooldown || 0) - 1;
+      if (comp.attackCooldown <= 0) {
+        comp.attackCooldown = (comp.attackPeriod || 45) + Math.floor(Math.random() * 15);
+
+        if (comp.heroClass === "juggernaut" || comp.heroClass === "wk") {
+          // Warrior Companion Slash
+          comp.slashAnimation = { radius: 28, timer: 12, isMagic: false };
+          const dmg = applyDamageToBoss(boss, Math.floor(baseAtk * 0.38));
+          if (boss.poise !== undefined) boss.poise = Math.max(0, boss.poise - 5);
+          spawnFloatingText(boss.x - 12 + Math.random() * 24, boss.y - 20 - Math.random() * 10, `⚔️ ${comp.name} -${dmg}`, "#fbbf24");
+        } else {
+          // Ranger / Assassin Companion Projectile
+          const isCrit = Math.random() < 0.30;
+          const dmg = Math.floor(baseAtk * (isCrit ? 0.75 : 0.35));
+          const pAngle = Math.atan2(boss.y - comp.y, boss.x - comp.x);
+          ARENA.playerProjectiles.push({
+            type: "topdown_shot",
+            x: comp.x + Math.cos(pAngle) * 12,
+            y: comp.y + Math.sin(pAngle) * 12,
+            vx: Math.cos(pAngle) * 8.5,
+            vy: Math.sin(pAngle) * 8.5,
+            speed: 8.5,
+            target: boss,
+            dmg: dmg,
+            isCrit: isCrit,
+            radius: 5.0,
+            color: isCrit ? "#f59e0b" : "#38bdf8",
+            distTraveled: 0,
+            maxDist: 850
+          });
+        }
+      }
+    }
+  }
+
+  function toggleBossPartyMode() {
+    const cur = ARENA.bossPartyMode || "trio";
+    const next = cur === "trio" ? "solo" : "trio";
+    ARENA.bossPartyMode = next;
+    try {
+      localStorage.setItem("rpg_boss_party_mode", next);
+    } catch (e) {}
+
+    if (next === "trio") {
+      initBossCompanions();
+      spawnFloatingText(ARENA.player.x + 30, ARENA.player.y - 45, "👥 ОТРЯД: 3 ГЕРОЯ В БОЮ!", "#10b981");
+    } else {
+      ARENA.bossCompanions = [];
+      spawnFloatingText(ARENA.player.x + 30, ARENA.player.y - 45, "👤 РЕЖИМ: СОЛО ДУЭЛЬ!", "#c084fc");
+    }
+    triggerHaptic("medium");
+  }
+
+  function spawnBossMinions() {
+    const floor = RPG_STATE.profile?.dungeon_floor || 1;
+    const scale = 1.0 + floor * 0.15;
+    for (let i = 0; i < 4; i++) {
+      ARENA.creeps.push({
+        name: "Миньон Рошана",
+        icon: "👻",
+        team: "dire",
+        badgeBg: "#4a044e",
+        badgeBorder: "#c084fc",
+        x: ARENA.width + 30 + i * 50,
+        y: ARENA.roadY - 15 + (Math.random() * 20 - 10),
+        radius: 13,
+        speed: 1.8,
+        hp: Math.floor(45 * scale),
+        maxHp: Math.floor(45 * scale),
+        atk: Math.floor(9 * scale),
+        isBoss: false,
+        isMinion: true,
+        attackCooldown: 0
+      });
+    }
+  }
+
+  // ===========================================================================
+  // COMBAT ENGINE HELPERS: STYLE METER, DASH & DEFLECTION
+  // ===========================================================================
+
+  function addStylePoints(pts, reason) {
+    if (!ARENA.styleMeter) ARENA.styleMeter = { score: 0, rank: "D", progress: 0, decayTimer: 0, maxRank: "D" };
+    const sm = ARENA.styleMeter;
+    sm.score += pts;
+    sm.decayTimer = 120; // 2 seconds before decay begins
+
+    const thresholds = [
+      { rank: "D", min: 0, max: 300 },
+      { rank: "C", min: 300, max: 750 },
+      { rank: "B", min: 750, max: 1400 },
+      { rank: "A", min: 1400, max: 2200 },
+      { rank: "S", min: 2200, max: 3200 },
+      { rank: "SS", min: 3200, max: 4500 },
+      { rank: "SSS", min: 4500, max: 99999 }
+    ];
+
+    let currentRank = "D";
+    let progress = 0;
+    for (let i = 0; i < thresholds.length; i++) {
+      const t = thresholds[i];
+      if (sm.score >= t.min) {
+        currentRank = t.rank;
+        if (t.max === 99999) {
+          progress = 1.0;
+        } else {
+          progress = (sm.score - t.min) / (t.max - t.min);
+        }
+      }
+    }
+
+    if (currentRank !== sm.rank) {
+      sm.rank = currentRank;
+      triggerHaptic("heavy");
+      if (currentRank === "S" || currentRank === "SS" || currentRank === "SSS") {
+        spawnFloatingText(ARENA.player.x + 10, ARENA.player.y - 38, `🔥 STYLE RANK [${currentRank}]!`, "#f43f5e");
+      }
+    }
+    sm.progress = progress;
+  }
+
+  function playerPerformDash() {
+    const p = ARENA.player;
+    if (p.dashCooldown > 0) return;
+
+    p.dashCooldown = 32;
+    p.isInvulnerable = 14;
+    p.isDashing = true;
+    p.dashTimer = 10;
+
+    // Check for Perfect Dodge (Witch-Time)
+    let perfectDodge = false;
+    if (ARENA.enemyProjectiles) {
+      for (const proj of ARENA.enemyProjectiles) {
+        if (!proj.reflected && Math.abs(proj.x - p.x) < 65) {
+          perfectDodge = true;
+          break;
+        }
+      }
+    }
+    if (!perfectDodge && ARENA.bossProjectiles) {
+      for (const bp of ARENA.bossProjectiles) {
+        if (Math.abs(bp.x - p.x) < 65) {
+          perfectDodge = true;
+          break;
+        }
+      }
+    }
+    if (!perfectDodge && ARENA.creeps) {
+      for (const c of ARENA.creeps) {
+        if (c.state === "telegraph" && Math.abs(c.x - p.x) < 55) {
+          perfectDodge = true;
+          break;
+        }
+      }
+    }
+
+    if (perfectDodge) {
+      ARENA.timeScale = 0.2;
+      ARENA.sloMoTimer = 26;
+      p.critBuff = true;
+      ARENA.cameraTrauma = Math.min(1.0, ARENA.cameraTrauma + 0.35);
+      addStylePoints(260, "PERFECT DODGE");
+      spawnFloatingText(p.x + 15, p.y - 30, "⚡ PERFECT DODGE! (WITCH-TIME)", "#38bdf8");
+      triggerHaptic("heavy");
+    } else {
+      triggerHaptic("light");
+    }
+
+    // Spawn 3 Ghost Afterimages
+    if (!ARENA.dashGhosts) ARENA.dashGhosts = [];
+    const heroClass = (RPG_STATE.profile?.hero_class || "pudge").toLowerCase();
+    for (let g = 0; g < 3; g++) {
+      ARENA.dashGhosts.push({
+        x: p.x - (g * 14),
+        y: p.y,
+        radius: p.radius,
+        heroClass: heroClass,
+        alpha: 0.65 - (g * 0.18),
+        decay: 0.05
+      });
+    }
+  }
+
+  function playerBlock() {
+    const p = ARENA.player;
+    ARENA.parryWindow = 16; // 16 frames perfect parry window
+    ARENA.player.isBlocking = true;
+    ARENA.player.blockTimer = 22;
+
+    ARENA.specialEffects.push({
+      type: "block_flash",
+      x: p.x + 10,
+      y: p.y,
+      radius: 38,
+      timer: 15
+    });
+
+    // DEFLECT ENEMY PROJECTILES (Reflect magic bolts and arrows back at enemies!)
+    let deflectedAny = false;
+    if (ARENA.enemyProjectiles) {
+      for (const proj of ARENA.enemyProjectiles) {
+        if (!proj.reflected && Math.abs(proj.x - p.x) < 65) {
+          proj.reflected = true;
+          proj.speed = -Math.abs(proj.speed || 3.5) * 2.0; // Fly right towards enemies at high speed
+          proj.dmg = Math.floor((proj.dmg || 22) * 2.5);  // 2.5x critical reflection damage
+          proj.color = "#facc15";
+          ARENA.hitstop = 8;
+          ARENA.cameraTrauma = Math.min(1.0, ARENA.cameraTrauma + 0.35);
+          addStylePoints(300, "DEFLECT");
+          spawnFloatingText(p.x + 15, p.y - 28, "🪞 ОТРАЖЕНИЕ! (2.5x УРОН)", "#facc15");
+          triggerHaptic("heavy");
+          deflectedAny = true;
+          break;
+        }
+      }
+    }
+
+    if (ARENA.blockWindowActive) {
+      triggerPerfectParry();
+      ARENA.blockWindowActive = false;
+    } else if (!deflectedAny) {
+      // Active Melee Parry on attacking creeps
+      let parriedMelee = false;
+      if (ARENA.creeps) {
+        for (const c of ARENA.creeps) {
+          if (!c.isBoss && Math.abs(c.x - p.x) < 55 && (c.state === "telegraph" || c.attackCooldown > 0)) {
+            c.state = "stagger";
+            c.staggerTimer = 110;
+            c.attackCooldown = 0;
+            ARENA.hitstop = 10;
+            ARENA.cameraTrauma = Math.min(1.0, ARENA.cameraTrauma + 0.35);
+            addStylePoints(220, "PARRY");
+            spawnFloatingText(c.x, c.y - 25, "⚡ ПАРИРОВАНИЕ! СТАН!", "#facc15");
+            triggerHaptic("heavy");
+            parriedMelee = true;
+            break;
+          }
+        }
+      }
+      if (!parriedMelee) {
+        spawnFloatingText(p.x + 15, p.y - 25, "🛡️ БЛОК / ПАРИРОВАНИЕ!", "#38bdf8");
+        triggerHaptic("medium");
+      }
+    }
+  }
+
+  function triggerPerfectParry() {
+    const boss = ARENA.bossEntity;
+    ARENA.hitstop = 12; // 12-frame hitstop freeze
+    ARENA.cameraTrauma = 0.8;
+    ARENA.bossProjectiles = [];
+    ARENA.shockwaves = [];
+    triggerHaptic("heavy");
+
+    if (boss) {
+      const parryDmg = Math.floor((ARENA.player.attackRange || 25) * 2.2);
+      boss.poise = Math.max(0, (boss.poise || 300) - 80);
+      parryDmg = applyDamageToBoss(boss, parryDmg, true);
+      spawnFloatingText(boss.x, boss.y - 30, `⚡ PERFECT PARRY! -${parryDmg} ⚡`, "#facc15");
+
+      if (boss.poise <= 0 && !boss.isStaggered) {
+        boss.isStaggered = true;
+        boss.staggerTimer = 210;
+        spawnFloatingText(boss.x, boss.y - 45, "💫 ОШЕЛОМЛЕН! (+150% УРОНА)", "#facc15");
+      }
+
+      if (boss.hp <= 0) {
+        const idx = ARENA.creeps.indexOf(boss);
+        if (idx !== -1) ARENA.creeps.splice(idx, 1);
+        handleCreepDeath(boss);
+      }
+    }
+  }
+
+  function hitQTE() {
+    if (!ARENA.qteActive) return;
+    ARENA.qteActive = false;
+    if (ARENA.bossEntity) {
+      const stats = RPG_STATE.profile?.stats || {};
+      const megaDmg = Math.floor((stats.max_atk || 30) * 5.0);
+      const qDmg = applyDamageToBoss(ARENA.bossEntity, megaDmg, true);
+      spawnFloatingText(ARENA.bossEntity.x, ARENA.bossEntity.y - 25, `⚡ МЕГА КРИТ! -${qDmg}`, "#facc15");
+      triggerHaptic("heavy");
+      if (ARENA.bossEntity.hp <= 0) {
+        const idx = ARENA.creeps.indexOf(ARENA.bossEntity);
+        if (idx !== -1) ARENA.creeps.splice(idx, 1);
+        handleCreepDeath(ARENA.bossEntity);
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // DOTA 2 CREEP SPAWNING (Waves 1-19)
+  // ---------------------------------------------------------------------------
+
+  function spawnArenaCreep() {
+    const floor = RPG_STATE.profile?.dungeon_floor || 1;
+    const wave = ARENA.waveNumber || 1;
+    // Balanced Exponential Scaling: HP scales with 1.28^floor, ATK scales with 1.23^floor
+    const scaleHp = Math.pow(1.28, Math.max(0, floor - 1)) * (1.0 + (wave - 1) * 0.05);
+    const scaleAtk = Math.pow(1.23, Math.max(0, floor - 1)) * (1.0 + (wave - 1) * 0.04);
+
+    let pool = [];
+    // Dynamic Creep Hierarchy based on Dungeon Floor
+    if (floor >= 200) {
+      pool = [
+        { name: "Страж Апокалипсиса", archetype: "apocalypse_doomguard", radius: 24, speed: 0.75, baseHp: 5500, baseAtk: 250, range: 48, pureDamage: true },
+        { name: "Астральный Призрак", archetype: "astral_phantom", radius: 18, speed: 1.15, baseHp: 4800, baseAtk: 300, range: 42, pureDamage: true },
+        { name: "Космический Разрушитель", archetype: "cosmic_annihilator", radius: 22, speed: 0.70, baseHp: 6200, baseAtk: 340, range: 190 }
+      ];
+    } else if (floor >= 100) {
+      pool = [
+        { name: "Древний Титан Скал", archetype: "ancient_titan", radius: 24, speed: 0.50, baseHp: 2800, baseAtk: 140, range: 48, earthquake: true },
+        { name: "Архимаг Хаоса", archetype: "chaos_harbinger", radius: 17, speed: 0.75, baseHp: 2200, baseAtk: 160, range: 190 },
+        { name: "Паладин Падших", archetype: "fallen_paladin", radius: 19, speed: 0.80, baseHp: 2500, baseAtk: 130, range: 44 },
+        { name: "Повелитель Пустоты", archetype: "void_terror", radius: 19, speed: 0.70, baseHp: 1200, baseAtk: 90, range: 180 }
+      ];
+    } else if (floor >= 80) {
+      pool = [
+        { name: "Повелитель Пустоты", archetype: "void_terror", radius: 19, speed: 0.70, baseHp: 1200, baseAtk: 90, range: 180, timeDilation: true },
+        { name: "Абиссальный Бегемот", archetype: "abyssal_behemoth", radius: 22, speed: 0.65, baseHp: 1600, baseAtk: 110, range: 46 },
+        { name: "Вестник Разлома", archetype: "rift_stalker", radius: 16, speed: 1.20, baseHp: 1100, baseAtk: 125, range: 40 },
+        { name: "Кентавр-Завоеватель", archetype: "centaur_conqueror", radius: 20, speed: 0.75, baseHp: 900, baseAtk: 60, range: 44, retaliate: 25 }
+      ];
+    } else if (floor >= 50) {
+      pool = [
+        { name: "Кентавр-Завоеватель", archetype: "centaur_conqueror", radius: 20, speed: 0.75, baseHp: 900, baseAtk: 60, range: 44, retaliate: 25 },
+        { name: "Инфернальный Дракон", archetype: "drake", radius: 20, speed: 0.85, baseHp: 850, baseAtk: 75, range: 180, fireBreath: true },
+        { name: "Пламенный Маг", archetype: "pyro_magus", radius: 15, speed: 0.75, baseHp: 720, baseAtk: 82, range: 185 },
+        { name: "Некромант Катакомб", archetype: "necromancer", radius: 16, speed: 0.70, baseHp: 480, baseAtk: 52, range: 175, canSummon: true }
+      ];
+    } else if (floor >= 40) {
+      pool = [
+        { name: "Некромант Катакомб", archetype: "necromancer", radius: 16, speed: 0.70, baseHp: 480, baseAtk: 52, range: 175, canSummon: true },
+        { name: "Теневой Ассасин", archetype: "assassin", radius: 15, speed: 1.25, baseHp: 380, baseAtk: 65, range: 38, critChance: 35 },
+        { name: "Костяной Страж", archetype: "bone_guardian", radius: 18, speed: 0.65, baseHp: 650, baseAtk: 48, range: 44 },
+        { name: "Варлок Легиона", archetype: "warlock", radius: 16, speed: 0.72, baseHp: 320, baseAtk: 38, range: 180 }
+      ];
+    } else if (floor >= 20) {
+      pool = [
+        { name: "Варлок Легиона", archetype: "warlock", radius: 16, speed: 0.72, baseHp: 320, baseAtk: 38, range: 180 },
+        { name: "Железный Голем", archetype: "irongolem", radius: 20, speed: 0.55, baseHp: 550, baseAtk: 42, range: 42, physResist: 0.5 },
+        { name: "Адская Гончая", archetype: "hound", radius: 14, speed: 1.35, baseHp: 260, baseAtk: 45, range: 36 },
+        { name: "Броне-Защитник", archetype: "defender", radius: 17, speed: 0.7, baseHp: 260, baseAtk: 24, range: 44 }
+      ];
+    } else if (wave <= 3) {
+      pool = [
+        { name: "Мечник Света", archetype: "melee_radiant", radius: 15, speed: 0.85, baseHp: 135, baseAtk: 12, range: 38 },
+        { name: "Вурдалак Тьмы", archetype: "melee_dire", radius: 15, speed: 0.88, baseHp: 145, baseAtk: 14, range: 38 }
+      ];
+    } else if (wave <= 7) {
+      pool = [
+        { name: "Мечник Света", archetype: "melee_radiant", radius: 15, speed: 0.85, baseHp: 140, baseAtk: 13, range: 38 },
+        { name: "Вурдалак Тьмы", archetype: "melee_dire", radius: 15, speed: 0.88, baseHp: 150, baseAtk: 14, range: 38 },
+        { name: "Маг Света", archetype: "ranged_radiant", radius: 14, speed: 0.78, baseHp: 95, baseAtk: 16, range: 170 },
+        { name: "Колдун Тьмы", archetype: "ranged_dire", radius: 14, speed: 0.78, baseHp: 100, baseAtk: 18, range: 175 }
+      ];
+    } else if (wave <= 12) {
+      pool = [
+        { name: "Броне-Защитник", archetype: "defender", radius: 17, speed: 0.68, baseHp: 230, baseAtk: 14, range: 44 },
+        { name: "Вурдалак Тьмы", archetype: "melee_dire", radius: 15, speed: 0.9, baseHp: 160, baseAtk: 16, range: 38 },
+        { name: "Колдун Тьмы", archetype: "ranged_dire", radius: 14, speed: 0.8, baseHp: 110, baseAtk: 20, range: 175 },
+        { name: "Осадная Катапульта", archetype: "catapult", radius: 18, speed: 0.45, baseHp: 300, baseAtk: 26, range: 195 }
+      ];
+    } else {
+      const hasCaptain = ARENA.creeps.some(c => c.archetype === "captain");
+      if (!hasCaptain && Math.random() < 0.35) {
+        pool = [
+          { name: "ЭЛИТНЫЙ КАПИТАН", archetype: "captain", radius: 19, speed: 0.75, baseHp: 380, baseAtk: 26, range: 42, isCaptain: true }
+        ];
+      } else {
+        pool = [
+          { name: "Броне-Защитник", archetype: "defender", radius: 17, speed: 0.7, baseHp: 260, baseAtk: 16, range: 44 },
+          { name: "Колдун Тьмы", archetype: "ranged_dire", radius: 14, speed: 0.82, baseHp: 125, baseAtk: 22, range: 175 },
+          { name: "Вурдалак Тьмы", archetype: "melee_dire", radius: 15, speed: 0.92, baseHp: 180, baseAtk: 18, range: 38 },
+          { name: "Осадная Катапульта", archetype: "catapult", radius: 18, speed: 0.46, baseHp: 340, baseAtk: 28, range: 195 }
+        ];
+      }
+    }
+
+    const t = pool[Math.floor(Math.random() * pool.length)];
+
+    ARENA.creeps.push({
+      name: t.name,
+      archetype: t.archetype,
+      team: t.archetype.includes("radiant") ? "radiant" : (t.archetype.includes("dire") ? "dire" : "neutral"),
+      x: ARENA.width + 22 + Math.random() * 35,
+      y: ARENA.roadY - 16 + (Math.random() * 20 - 10),
+      radius: t.radius,
+      speed: t.speed + (wave - 1) * 0.01,
+      hp: Math.floor(t.baseHp * scaleHp),
+      maxHp: Math.floor(t.baseHp * scaleHp),
+      atk: Math.floor(t.baseAtk * scaleAtk),
+      physResist: t.physResist || 0,
+      retaliate: t.retaliate || 0,
+      critChance: t.critChance || 0,
+      canSummon: !!t.canSummon,
+      fireBreath: !!t.fireBreath,
+      timeDilation: !!t.timeDilation,
+      earthquake: !!t.earthquake,
+      pureDamage: !!t.pureDamage,
+      range: t.range || 38,
+      state: "approach",
+      stateTimer: 0,
+      shieldActive: t.archetype === "defender",
+      shieldBrokenTimer: 0,
+      isCaptain: !!t.isCaptain,
+      isBoss: false,
+      isMinion: false,
+      attackCooldown: 0
+    });
+    ARENA.totalCreepsSpawned++;
+  }
+
+  function spawnBossCreep() {
+    const floor = RPG_STATE.profile?.dungeon_floor || 1;
+    const floorScale = Math.pow(1.22, Math.max(0, floor - 1));
+
+    const bossTypes = [
+      { name: "РОШАН СВИРЕПЫЙ (Roshan)", icon: "🐲", baseHp: 1500000, baseAtk: 50, badgeBg: "#7f1d1d", badgeBorder: "#facc15" },
+      { name: "ДРЕВНИЙ ТЕРЗАТЕЛЬ (Tormentor)", icon: "💎", baseHp: 1400000, baseAtk: 55, badgeBg: "#4a044e", badgeBorder: "#c084fc" },
+      { name: "ЧЕРНЫЙ ДРАКОН ИНФЕРНО", icon: "🌋", baseHp: 1600000, baseAtk: 48, badgeBg: "#7c2d12", badgeBorder: "#ea580c" },
+      { name: "АРХИЛИЧ НЕКРОПОЛЯ", icon: "💀", baseHp: 1300000, baseAtk: 58, badgeBg: "#18181b", badgeBorder: "#e4e4e7" }
+    ];
+    const bt = bossTypes[Math.floor(Math.random() * bossTypes.length)];
+
+    const stats = RPG_STATE.profile?.stats || {};
+    const playerAtk = Math.max(30, Math.floor(((stats.min_atk || 30) + (stats.max_atk || 50)) / 2));
+    const playerHp = Math.max(400, stats.hp_max || 400);
+
+    const calculatedHp = Math.floor(bt.baseHp * floorScale);
+    const calculatedAtk = Math.max(
+      Math.floor(bt.baseAtk * Math.pow(1.20, Math.max(0, floor - 1))),
+      Math.floor(playerHp * 0.10)
+    );
+
+    const boss = {
+      name: bt.name + (floor > 1 ? ` [Этаж ${floor}]` : ""),
+      icon: bt.icon,
+      team: "boss",
+      badgeBg: bt.badgeBg,
+      badgeBorder: bt.badgeBorder,
+      x: (ARENA.width || 360) / 2,
+      y: 95,
+      radius: 30, // Scaled down for comfortable arena space
+      speed: 0.65, // Active, menacing movement speed
+      hp: calculatedHp,
+      maxHp: calculatedHp,
+      atk: calculatedAtk,
+      isBoss: true,
+      isMinion: false,
+      shielded: false,
+      attackCooldown: 0,
+      state: "chase",
+      stateTimer: 0,
+      meleeCooldown: 60,
+      chargeCooldown: 220,
+      barrageCooldown: 140,
+      chargeAngle: 0,
+      chargeVx: 0,
+      chargeVy: 0,
+      facing: 1,
+      enrageTimer: 0,
+      enrageStage: "normal",
+      poise: 800,
+      maxPoise: 800,
+      isStaggered: false,
+      staggerTimer: 0,
+      bossType: (bt.name.toLowerCase().includes("терзатель") || bt.name.toLowerCase().includes("tormentor")) ? "tormentor" :
+                (bt.name.toLowerCase().includes("лич") || bt.name.toLowerCase().includes("archlich")) ? "lich" :
+                (bt.name.toLowerCase().includes("дракон") || bt.name.toLowerCase().includes("dragon")) ? "dragon" : "roshan"
+    };
+
+    ARENA.bossEntity = boss;
+    ARENA.isBossActive = true;
+    ARENA.bossPhase = 1;
+    ARENA.topDownMode = true;
+    ARENA.player.x = (ARENA.width || 360) / 2;
+    ARENA.player.y = (ARENA.height || 460) - 75;
+    ARENA.player.isMoving = false;
+    ARENA.dashGhosts = [];
+
+    ARENA.bossSpecialTimer = 0;
+    ARENA.bossProjectiles = [];
+    ARENA.creeps.push(boss);
+
+    if ((ARENA.bossPartyMode || "trio") === "trio") {
+      initBossCompanions();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // PLAYER ATTACK (MELEE & RANGED)
+  // ---------------------------------------------------------------------------
+
+  function fireTopDownAttack(targetPoint) {
+    const p = ARENA.player;
+    if (ARENA.waveState !== "fighting") return;
+    const stats = RPG_STATE.profile?.stats || {};
+    const boss = (ARENA.bossEntity && ARENA.bossEntity.hp > 0) ? ARENA.bossEntity : (ARENA.creeps.find(c => c.hp > 0) || null);
+
+    let fireAngle = p.facingAngle !== undefined ? p.facingAngle : -Math.PI / 2;
+    let explicitTarget = boss;
+
+    if (targetPoint && targetPoint.cx !== undefined) {
+      fireAngle = Math.atan2(targetPoint.cy - p.y, targetPoint.cx - p.x);
+      if (boss) {
+        const toBoss = Math.atan2(boss.y - p.y, boss.x - p.x);
+        let diff = Math.abs(toBoss - fireAngle);
+        while (diff > Math.PI) diff = Math.PI * 2 - diff;
+        if (diff < 1.1) explicitTarget = boss;
+      }
+    } else if (boss) {
+      fireAngle = Math.atan2(boss.y - p.y, boss.x - p.x);
+      explicitTarget = boss;
+    }
+
+    p.facingAngle = fireAngle;
+    p.facing = Math.cos(fireAngle) >= 0 ? 1 : -1;
+
+    const isCrit = Math.random() * 100 < (stats.crit_chance || 15);
+    const baseDmg = Math.floor(((stats.min_atk || 25) + (stats.max_atk || 35)) * 0.7);
+    const finalDmg = isCrit ? Math.floor(baseDmg * 2.2) : baseDmg;
+
+    if (!ARENA.playerProjectiles) ARENA.playerProjectiles = [];
+    ARENA.playerProjectiles.push({
+      x: p.x + Math.cos(fireAngle) * 14,
+      y: p.y + Math.sin(fireAngle) * 14,
+      vx: Math.cos(fireAngle) * 10.5,
+      vy: Math.sin(fireAngle) * 10.5,
+      speed: 10.5,
+      target: explicitTarget,
+      dmg: finalDmg,
+      type: "topdown_shot",
+      isCrit: isCrit,
+      radius: 6.5,
+      color: isCrit ? "#f59e0b" : "#38bdf8",
+      distTraveled: 0,
+      maxDist: 850
+    });
+
+    const agi = stats.agility || 15;
+    p.shootCooldown = Math.max(14, Math.floor(26 - Math.min(10, agi * 0.18)));
+    triggerHaptic(isCrit ? "medium" : "light");
+  }
+
+  function playerSlashAttack() {
+    const p = ARENA.player;
+    if (ARENA.topDownMode || ARENA.isRaidBossBattle) {
+      fireTopDownAttack(null);
+      return;
+    }
+    if (p.attackCooldown > 0) {
+      if (p.attackCooldown <= 8) {
+        p.attackQueued = true;
+      }
+      return;
+    }
+    const stats = RPG_STATE.profile?.stats || {};
+
+    // 3-HIT COMBO CHAIN (Light 1 -> Light 2 -> Heavy Finisher)
+    if (!ARENA.combo) ARENA.combo = { count: 0, timer: 0, step: 0, maxCombo: 0 };
+    if (ARENA.combo.timer > 0) {
+      ARENA.combo.step = (ARENA.combo.step + 1) % 3;
+    } else {
+      ARENA.combo.step = 0;
+    }
+    ARENA.combo.count++;
+    ARENA.combo.timer = 135; // ~2.25s generous combo window for comfortable manual chaining
+    ARENA.combo.maxCombo = Math.max(ARENA.combo.maxCombo, ARENA.combo.count);
+
+    let stepMult = 2.4;
+    let cdFrames = 38;
+    let isHeavyFinisher = false;
+
+    // Slower, tactile and weighty attack rate: ~1.2 to 1.6 attacks/sec (humanly clickable and readable)
+    if (ARENA.combo.step === 0) {
+      stepMult = 2.4;
+      cdFrames = 38; // ~0.63s at 60 FPS (~1.58 atk/sec)
+      addStylePoints(30, "LIGHT 1");
+    } else if (ARENA.combo.step === 1) {
+      stepMult = 3.2;
+      cdFrames = 40; // ~0.67s at 60 FPS (~1.50 atk/sec)
+      addStylePoints(55, "LIGHT 2");
+    } else {
+      stepMult = 5.8;
+      cdFrames = 58; // ~0.97s at 60 FPS (~1.03 atk/sec heavy smash)
+      isHeavyFinisher = true;
+      addStylePoints(145, "HEAVY FINISHER");
+    }
+
+    // Accelerate Ultimate Cooldown on Combo Hits!
+    if (ARENA.ultCooldown > 0) {
+      ARENA.ultCooldown = Math.max(0, ARENA.ultCooldown - 40);
+    }
+
+    let speedRate = Math.max(0.7, stats.attack_speed || 1.0);
+    if (p.bladeDanceActive > 0) speedRate *= 1.5; // +50% attack speed buff
+
+    // Base attack speed formula: cdFrames / speedRate, with floor of 18 frames (~3.3 attacks/s max)
+    p.attackCooldown = Math.max(18, Math.floor(cdFrames / speedRate));
+    triggerHaptic(isHeavyFinisher ? "heavy" : "medium");
+
+    let isCrit = Math.random() * 100 < (stats.crit_chance || 15);
+    if (p.critBuff) {
+      isCrit = true;
+      p.critBuff = false;
+    }
+
+    let baseDmg = Math.floor((stats.min_atk || 20) + Math.random() * ((stats.max_atk || 30) - (stats.min_atk || 20)));
+    let dmg = Math.floor(baseDmg * stepMult);
+    if (isCrit) dmg = Math.floor(dmg * 2.2);
+
+    // RANGED HERO (Invoker, Shadow Fiend) — fires flying magic orb projectile
+    if (p.isRanged) {
+      const hClass = (RPG_STATE.profile?.hero_class || "").toLowerCase();
+      const isMage = hClass === "invoker" || hClass === "mage";
+      const orbCol = hClass === "shadow_fiend" ? "#c084fc" : "#38bdf8";
+
+      // Mana empowerment for basic attacks: higher mana grants bonus magic damage!
+      const spellAmpPct = (stats.spell_amp !== undefined ? stats.spell_amp : ((p.maxMp || 100) * 0.2));
+      const manaMultiplier = 1.0 + ((spellAmpPct / 100) * (isMage ? 0.6 : 0.25));
+      const orbDmg = Math.floor(dmg * manaMultiplier);
+
+      ARENA.playerProjectiles.push({
+        type: "magic_orb",
+        x: p.x + 20,
+        y: p.y - 4,
+        speed: 8.8,
+        dmg: orbDmg,
+        isCrit: isCrit,
+        isHeavy: isHeavyFinisher,
+        color: orbCol,
+        isMagic: true, // Tags basic attack as MAGIC DAMAGE!
+        isMage: isMage
+      });
+
+      p.slashAnimation = { radius: 35, timer: 14, isMagic: true, step: ARENA.combo.step };
+      return;
+    }
+
+    // MELEE HERO (Pudge, Juggernaut, PA, WK, AM) — cleave attack + wind blade wave!
+    p.slashAnimation = {
+      radius: isHeavyFinisher ? 85 : 65,
+      timer: isHeavyFinisher ? 22 : 15,
+      isMagic: false,
+      step: ARENA.combo.step
+    };
+
+    if (isHeavyFinisher) {
+      ARENA.cameraTrauma = Math.min(1.0, ARENA.cameraTrauma + 0.25);
+    }
+
+    // Unleash Crescent Wind Blade Projectile in player facing direction
+    const pFacing = (p.facing !== undefined) ? p.facing : 1;
+    if (!ARENA.playerProjectiles) ARENA.playerProjectiles = [];
+    ARENA.playerProjectiles.push({
+      type: "wind_blade",
+      x: p.x + pFacing * 35,
+      y: p.y - 6,
+      speed: 10.0 * pFacing,
+      dmg: Math.floor(dmg * 0.9),
+      isCrit: isCrit,
+      isHeavy: isHeavyFinisher,
+      color: isHeavyFinisher ? "#f59e0b" : "#facc15",
+      radius: isHeavyFinisher ? 28 : 20,
+      hitCreepIds: new Set()
+    });
+
+    // Check direct melee hit against all creeps (direction-aware + close-quarters 360 body check)
+    for (const c of ARENA.creeps) {
+      // In Top-Down / Boss Fight mode, melee hit MUST be within true 2D distance!
+      if (ARENA.topDownMode || ARENA.isRaidBossBattle) {
+        const dist2d = Math.hypot(c.x - p.x, c.y - p.y);
+        if (dist2d > (p.radius + c.radius + (isHeavyFinisher ? 50 : 32))) {
+          continue; // Too far away in 2D top-down arena!
+        }
+      } else {
+        const dx = c.x - p.x;
+        const inFront = (pFacing === 1 && dx > -20 && dx < (p.attackRange + (isHeavyFinisher ? 40 : 15))) ||
+                       (pFacing === -1 && dx < 20 && -dx < (p.attackRange + (isHeavyFinisher ? 40 : 15))) ||
+                       (Math.abs(dx) < 45);
+        if (!inFront) continue;
+      }
+      if (true) {
+        let finalDmg = dmg;
+
+        // Shielded Defender Guard Break Mechanics
+        if (c.archetype === "defender") {
+          c.shieldHits = (c.shieldHits || 0) + 1;
+          if (c.shieldBrokenTimer <= 0) {
+            if (isHeavyFinisher || c.shieldHits >= 3) {
+              c.shieldBrokenTimer = 240;
+              c.state = "stagger";
+              c.staggerTimer = 80;
+              c.stateTimer = 80;
+              c.x += 35;
+              ARENA.hitstop = 10;
+              ARENA.cameraTrauma = Math.min(1.0, ARENA.cameraTrauma + 0.35);
+              spawnFloatingText(c.x, c.y - 25, "💥 GUARD BREAK! (+100% УРОНА)", "#facc15");
+              addStylePoints(160, "GUARD BREAK");
+              triggerHaptic("heavy");
+              finalDmg = Math.floor(finalDmg * 1.5);
+            } else {
+              finalDmg = Math.max(8, Math.floor(finalDmg * 0.5));
+              spawnFloatingText(c.x, c.y - 20, `🛡️ БЛОК (-50%) [${3 - c.shieldHits} уд.]`, "#94a3b8");
+              triggerHaptic("light");
+            }
+          }
+        }
+
+        // Check Item Passives: Desolator, Skadi, Battle Fury
+        const eq = RPG_STATE.profile?.equipment || {};
+        const hasBF = Object.values(eq).some(it => it && (it.name?.includes("Battle Fury") || it.name?.includes("Боевой Топор") || it.bonus?.cleave));
+        const hasDeso = Object.values(eq).some(it => it && (it.name?.includes("Desolator") || it.name?.includes("Опустошитель") || it.bonus?.minus_armor));
+        const hasSkadi = Object.values(eq).some(it => it && (it.name?.includes("Skadi") || it.name?.includes("Скади") || it.bonus?.frost_slow));
+
+        if (hasDeso) {
+          finalDmg = Math.floor(finalDmg * 1.24);
+          if (!c.desoDebuff) {
+            c.desoDebuff = 300;
+            spawnFloatingText(c.x, c.y - 32, "🩸 -8 БРОНИ", "#dc2626");
+          }
+        }
+        if (hasSkadi) {
+          c.speed = Math.max(0.3, (c.speed || 0.8) * 0.55);
+          spawnFloatingText(c.x, c.y - 32, "❄️ СКАДИ", "#38bdf8");
+        }
+        if (hasBF) {
+          const cleaveDmg = Math.floor(finalDmg * 0.65);
+          for (const other of ARENA.creeps) {
+            if (other !== c && Math.abs(other.x - c.x) < 95) {
+              safeDamageCreep(other, cleaveDmg, false);
+              spawnFloatingText(other.x, other.y - 20, `🪓 КЛИВ -${cleaveDmg}`, "#f97316");
+            }
+          }
+        }
+
+        if (c.isBoss) {
+          if (c.tormentorShield) {
+            const reflectDmg = Math.max(5, Math.floor(finalDmg * 0.5));
+            p.currentHp = Math.max(0, p.currentHp - reflectDmg);
+            spawnFloatingText(p.x, p.y - 25, `🪞 ОТРАЖЕНИЕ -${reflectDmg}!`, "#c084fc");
+            if (p.currentHp <= 0) { handlePlayerArenaDeath(); return; }
+          }
+          if (c.isStaggered) {
+            finalDmg = Math.floor(finalDmg * 2.5);
+            ARENA.cameraTrauma = Math.min(1.0, ARENA.cameraTrauma + 0.3);
+            ARENA.hitstop = 4;
+          } else {
+            const poiseDmg = isCrit ? 28 : (isHeavyFinisher ? 35 : 14);
+            c.poise = Math.max(0, (c.poise !== undefined ? c.poise : 300) - poiseDmg);
+            if (c.poise <= 0) {
+              c.isStaggered = true;
+              c.staggerTimer = 210;
+              ARENA.cameraTrauma = 0.7;
+              ARENA.hitstop = 10;
+              spawnFloatingText(c.x, c.y - 35, "💫 ОШЕЛОМЛЕН! (+150% УРОНА)", "#facc15");
+              triggerHaptic("heavy");
+            }
+          }
+          const bDef = c.defense || 14;
+          const dr = (bDef * 0.05) / (1 + bDef * 0.05);
+          finalDmg = Math.max(8, Math.floor(finalDmg * (1 - dr)));
+          finalDmg = applyDamageToBoss(c, finalDmg, isCrit);
+        } else {
+          if (isHeavyFinisher && c.archetype !== "defender") {
+            c.x += 30;
+          }
+          safeDamageCreep(c, finalDmg, false);
+        }
+
+        // Lifesteal
+        if (stats.lifesteal > 0) {
+          const heal = Math.floor(finalDmg * (stats.lifesteal / 100));
+          p.currentHp = Math.min(p.maxHp, p.currentHp + heal);
+        }
+
+        const col = (c.isBoss && c.isStaggered) ? "#fbbf24" : (isCrit ? "#facc15" : (isHeavyFinisher ? "#f97316" : "#f87171"));
+        const prefix = isHeavyFinisher ? "💥 СЛЭМ! " : (isCrit ? "⚡ КРИТ! " : "");
+        const txt = (c.isBoss && c.isStaggered) ? `💥 STAGGER! -${finalDmg}` : `${prefix}-${finalDmg}`;
+        spawnFloatingText(c.x, c.y - 15 - Math.random() * 10, txt, col);
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // SKILL 1 (SPECIFIC FOR EACH DOTA HERO)
+  // ---------------------------------------------------------------------------
+
+  function castPlayerSkill1() {
+    const p = ARENA.player;
+    const stats = RPG_STATE.profile?.stats || {};
+    const skillCfg = getHeroSkillConfig();
+    const hClass = (RPG_STATE.profile?.hero_class || "pudge").toLowerCase();
+    const cost = 20;
+
+    if (ARENA.skill1Cooldown > 0) {
+      const sec = Math.ceil(ARENA.skill1Cooldown / 60);
+      spawnFloatingText(p.x, p.y - 25, `${skillCfg.skill1Name}: КД ${sec}с`, "#94a3b8");
+      triggerHaptic("error");
+      return;
+    }
+    if (p.currentMp < cost) {
+      spawnFloatingText(p.x, p.y - 25, "Мало маны (нужно 20 MP)!", "#94a3b8");
+      triggerHaptic("error");
+      return;
+    }
+
+    p.currentMp -= cost;
+    ARENA.skill1Cooldown = skillCfg.skill1Cd;
+    triggerHaptic("heavy");
+
+    // TOP-DOWN 360° BOSS TARGETING FOR ALL SKILLS
+    if (ARENA.topDownMode || ARENA.isRaidBossBattle) {
+      const boss = ARENA.bossEntity;
+      if (boss && boss.hp > 0) {
+        const toBossAngle = Math.atan2(boss.y - p.y, boss.x - p.x);
+
+        if (hClass === "invoker") {
+          // Sunstrike: drops blazing solar burst directly on boss!
+          ARENA.specialEffects.push({ type: "sunstrike", x: boss.x, y: boss.y, radius: 90, timer: 36, maxTimer: 36 });
+          const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 3.8));
+          spawnFloatingText(boss.x, boss.y - 35, `☀️ САНСТРАЙК! -${dmg}`, "#facc15");
+          ARENA.cameraTrauma = 0.5;
+          return;
+        } else if (hClass === "phantom_assassin") {
+          // Stifling Dagger: flies directly at boss with critical tracking!
+          const dmg = Math.floor((stats.max_atk || 30) * 3.4);
+          ARENA.playerProjectiles.push({
+            type: "topdown_shot",
+            x: p.x,
+            y: p.y,
+            vx: Math.cos(toBossAngle) * 12,
+            vy: Math.sin(toBossAngle) * 12,
+            speed: 12,
+            target: boss,
+            dmg: dmg,
+            isCrit: true,
+            radius: 8,
+            color: "#f43f5e",
+            distTraveled: 0,
+            maxDist: 750
+          });
+          spawnFloatingText(p.x, p.y - 25, "🗡️ КИНЖАЛ ТЕНИ!", "#f43f5e");
+          return;
+        } else if (hClass === "shadow_fiend") {
+          // Triple Shadowraze: erupts in line towards boss!
+          const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 2.6));
+          for (let r = 1; r <= 3; r++) {
+            const rx = p.x + Math.cos(toBossAngle) * (r * 65);
+            const ry = p.y + Math.sin(toBossAngle) * (r * 65);
+            ARENA.specialEffects.push({ type: "shadowraze", x: rx, y: ry, radius: 50, timer: 28 });
+          }
+          spawnFloatingText(boss.x, boss.y - 30, `🌑 КОЙЛ! -${dmg}`, "#c084fc");
+          return;
+        } else if (hClass === "pudge") {
+          // Flesh Heap: Defense shield + Hook pull damage!
+          p.fleshHeapActive = 480;
+          const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 2.8));
+          spawnFloatingText(boss.x, boss.y - 30, `🥩 МЯСНОЙ КРЮК! -${dmg}`, "#ef4444");
+          return;
+        } else if (hClass === "juggernaut") {
+          // Blade Dance: attack speed + immediate heavy slash
+          p.bladeDanceActive = 360;
+          const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 3.0));
+          spawnFloatingText(boss.x, boss.y - 30, `💨 ТАНЕЦ КЛИНКА! -${dmg}`, "#f59e0b");
+          return;
+        } else if (hClass === "wraith_king") {
+          // Wraithfire Blast: guided skull stuns boss
+          const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 2.8));
+          boss.poise = Math.max(0, (boss.poise || 400) - 80);
+          spawnFloatingText(boss.x, boss.y - 30, `💀 ПРИЗРАЧНЫЙ СТАН! -${dmg}`, "#10b981");
+          return;
+        } else if (hClass === "anti_mage") {
+          // Blink strike behind boss
+          p.x = Math.max(40, Math.min(480, boss.x - Math.cos(toBossAngle) * 50));
+          p.y = Math.max(50, Math.min(670, boss.y - Math.sin(toBossAngle) * 50));
+          p.counterspellActive = 240;
+          const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 3.2));
+          spawnFloatingText(boss.x, boss.y - 30, `⚡ ВЫПАД ИЗ ТЕНИ! -${dmg}`, "#38bdf8");
+          return;
+        }
+      }
+    }
+
+    // 1. INVOKER: Sun Strike (Солнечный луч с неба с чистым уроном)
+    if (hClass === "invoker") {
+      let targetX = ARENA.width * 0.54;
+      if (ARENA.creeps.length > 0) {
+        let maxHpCreep = ARENA.creeps[0];
+        for (const c of ARENA.creeps) {
+          if (c.hp > maxHpCreep.hp) maxHpCreep = c;
+        }
+        targetX = maxHpCreep.x;
+      }
+
+      const strikeY = ARENA.roadY - 12;
+      const radius = 110;
+      const spellAmpPct = (stats.spell_amp !== undefined ? stats.spell_amp : ((p.maxMp || 100) * 0.2));
+      const manaBonus = 1.0 + (spellAmpPct / 100) + (p.currentMp ? (p.currentMp / p.maxMp) * 0.25 : 0);
+      const dmg = Math.floor((stats.max_atk || 30) * 3.6 * manaBonus);
+
+      ARENA.specialEffects.push({
+        type: "sunstrike",
+        x: targetX,
+        y: strikeY,
+        radius: radius,
+        timer: 42,
+        maxTimer: 42
+      });
+      ARENA.cameraTrauma = Math.min(1.0, ARENA.cameraTrauma + 0.35);
+      ARENA.hitstop = 4;
+      spawnFloatingText(targetX, strikeY - 48, "☀️ САНСТРАЙК! (ЧИСТЫЙ УРОН)", "#facc15");
+
+      for (const c of ARENA.creeps) {
+        if (Math.abs(c.x - targetX) < radius) {
+          if (c.archetype === "defender") {
+            c.shieldBrokenTimer = 240;
+            c.state = "stagger";
+            c.staggerTimer = 85;
+            c.stateTimer = 85;
+            spawnFloatingText(c.x, c.y - 25, "💥 GUARD BREAK САНСТРАЙКОМ!", "#facc15");
+          }
+          safeDamageCreep(c, dmg, false);
+          c.attackCooldown = -60; // stunned by intense solar burst
+          spawnFloatingText(c.x, c.y - 20, `☀️ -${dmg} ЧИСТЫЙ!`, "#facc15");
+        }
+      }
+      return;
+    }
+
+    // 2. PUDGE: Flesh Heap (-40% damage for 8 sec)
+    if (hClass === "pudge") {
+      p.fleshHeapActive = 480; // 8 sec
+      spawnFloatingText(p.x + 20, p.y - 35, "🥩 ЗАЩИТНАЯ ПЛОТЬ (-40% урона)!", "#ef4444");
+      return;
+    }
+
+    // 3. JUGGERNAUT: Blade Dance (+50% attack speed for 6 sec)
+    if (hClass === "juggernaut") {
+      p.bladeDanceActive = 360; // 6 sec
+      spawnFloatingText(p.x + 20, p.y - 35, "💨 ТАНЕЦ КЛИНКА (+50% ск. атаки)!", "#f59e0b");
+      return;
+    }
+
+    // 4. PHANTOM ASSASSIN: Stifling Dagger
+    if (hClass === "phantom_assassin") {
+      let target = null;
+      let maxDist = 0;
+      for (const c of ARENA.creeps) {
+        if (c.x > maxDist) { maxDist = c.x; target = c; }
+      }
+      const daggerDmg = Math.floor((stats.max_atk || 30) * 3.2);
+      ARENA.playerProjectiles.push({
+        type: "dagger",
+        x: p.x + 25,
+        y: p.y - 5,
+        speed: 12,
+        dmg: daggerDmg,
+        isCrit: true,
+        slow: true,
+        icon: "🗡️",
+        color: "#f43f5e"
+      });
+      spawnFloatingText(p.x + 20, p.y - 35, "🗡️ КИНЖАЛ ТЕНИ!", "#f43f5e");
+      return;
+    }
+
+    // 5. SHADOW FIEND: Triple Shadowraze
+    if (hClass === "shadow_fiend") {
+      const razes = [p.x + 90, p.x + 180, p.x + 270];
+      const dmg = Math.floor((stats.max_atk || 30) * 2.2);
+      for (const rx of razes) {
+        ARENA.specialEffects.push({ type: "shadowraze", x: rx, y: ARENA.roadY - 15, radius: 50, timer: 30 });
+        for (const c of ARENA.creeps) {
+          if (Math.abs(c.x - rx) < 55) {
+            safeDamageCreep(c, dmg, false);
+            spawnFloatingText(c.x, c.y - 20, `🌑 -${dmg}`, "#c084fc");
+          }
+        }
+      }
+      spawnFloatingText(p.x + 30, p.y - 40, "🌑 ТРОЙНОЙ КОЙЛ!", "#a855f7");
+      return;
+    }
+
+    // 6. WRAITH KING: Wraithfire Blast
+    if (hClass === "wraith_king") {
+      const dmg = Math.floor((stats.max_atk || 30) * 2.4);
+      ARENA.playerProjectiles.push({
+        type: "dagger",
+        x: p.x + 25,
+        y: p.y - 5,
+        speed: 9,
+        dmg: dmg,
+        isCrit: false,
+        slow: true,
+        icon: "💀",
+        color: "#10b981"
+      });
+      spawnFloatingText(p.x + 20, p.y - 35, "💀 ПРИЗРАЧНЫЙ СТАН!", "#10b981");
+      return;
+    }
+
+    // 7. ANTI-MAGE: Counterspell Shield
+    if (hClass === "anti_mage") {
+      p.counterspellActive = 240; // 4 sec
+      spawnFloatingText(p.x + 20, p.y - 35, "🛡️ ЩИТ МАГИИ!", "#38bdf8");
+      // Blink strike nearest creep
+      if (ARENA.creeps.length > 0) {
+        const c = ARENA.creeps[0];
+        const dmg = Math.floor((stats.max_atk || 30) * 2.5);
+        safeDamageCreep(c, dmg, false);
+        spawnFloatingText(c.x, c.y - 20, `⚡ ВЫПАД! -${dmg}`, "#a855f7");
+      }
+      return;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // ULTIMATE ABILITY (SPECIFIC FOR EACH DOTA HERO)
+  // ---------------------------------------------------------------------------
+
+  function castPlayerUltimate() {
+    const p = ARENA.player;
+    const stats = RPG_STATE.profile?.stats || {};
+    const skillCfg = getHeroSkillConfig();
+    const hClass = (RPG_STATE.profile?.hero_class || "pudge").toLowerCase();
+    const cost = 35;
+
+    if (ARENA.ultCooldown > 0) {
+      const sec = Math.ceil(ARENA.ultCooldown / 60);
+      spawnFloatingText(p.x, p.y - 25, `Ульта: КД ${sec}с`, "#94a3b8");
+      triggerHaptic("error");
+      return;
+    }
+    if (p.currentMp < cost) {
+      spawnFloatingText(p.x, p.y - 25, "Мало маны (нужно 35 MP)!", "#94a3b8");
+      triggerHaptic("error");
+      return;
+    }
+
+    p.currentMp -= cost;
+    const ultCdReduct = Math.min(60, stats.ult_cd_reduct || 0);
+    ARENA.ultCooldown = Math.max(60, Math.floor(skillCfg.ultCd * (1.0 - ultCdReduct / 100.0)));
+    triggerHaptic("heavy");
+
+    const ultMultiplier = 1.0 + ((stats.ult_boost || 0) / 100.0);
+
+    // TOP-DOWN 360° BOSS ULTIMATES
+    if (ARENA.topDownMode || ARENA.isRaidBossBattle) {
+      const boss = ARENA.bossEntity;
+      if (boss && boss.hp > 0) {
+        if (hClass === "invoker") {
+          // Chaos Meteor falls from sky directly on boss!
+          const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 5.5 * ultMultiplier));
+          ARENA.specialEffects.push({ type: "sunstrike", x: boss.x, y: boss.y, radius: 120, timer: 45, maxTimer: 45 });
+          ARENA.cameraTrauma = 0.8;
+          triggerHaptic("heavy");
+          spawnFloatingText(boss.x, boss.y - 45, `☄️ ХАОС МЕТЕОР! -${dmg}`, "#ea580c");
+          return;
+        } else if (hClass === "juggernaut") {
+          // Omnislash: rapid slashes around the boss!
+          const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 6.0 * ultMultiplier));
+          ARENA.cameraTrauma = 0.9;
+          triggerHaptic("heavy");
+          spawnFloatingText(boss.x, boss.y - 45, `⚔️ ОМНИСЛЕШ ПО БОССУ! -${dmg}`, "#facc15");
+          return;
+        } else if (hClass === "phantom_assassin") {
+          // Coup de Grace: blood critical strike!
+          const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 6.5 * ultMultiplier));
+          ARENA.specialEffects.push({ type: "blood_flash", timer: 25 });
+          ARENA.cameraTrauma = 1.0;
+          triggerHaptic("heavy");
+          spawnFloatingText(boss.x, boss.y - 45, `🩸 COUP DE GRACE x6.5! -${dmg}`, "#dc2626");
+          return;
+        } else if (hClass === "shadow_fiend") {
+          // Requiem of Souls: blast of souls across the arena!
+          const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 5.8 * ultMultiplier));
+          ARENA.cameraTrauma = 0.85;
+          triggerHaptic("heavy");
+          spawnFloatingText(boss.x, boss.y - 45, `🌪️ РЕКВИЕМ ДУШ! -${dmg}`, "#a855f7");
+          return;
+        } else if (hClass === "wraith_king") {
+          // Skeleton Army: massive critical strike + life steal
+          const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 5.2 * ultMultiplier));
+          p.currentHp = Math.min(p.maxHp, p.currentHp + Math.floor(dmg * 0.4));
+          spawnFloatingText(boss.x, boss.y - 45, `👑 АРМИЯ СКЕЛЕТОВ! -${dmg}`, "#10b981");
+          return;
+        } else if (hClass === "pudge") {
+          // Rot: Choking Poison AoE on boss
+          const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 4.8 * ultMultiplier));
+          p.rotActive = 180;
+          spawnFloatingText(boss.x, boss.y - 45, `☣️ ЧУМНАЯ ГНИЛЬ! -${dmg}`, "#22c55e");
+          return;
+        } else if (hClass === "anti_mage") {
+          // Mana Void: Arcane implosion on boss!
+          const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 5.6 * ultMultiplier));
+          ARENA.cameraTrauma = 0.9;
+          spawnFloatingText(boss.x, boss.y - 45, `💥 ВЗРЫВ МАНЫ! -${dmg}`, "#38bdf8");
+          return;
+        }
+      }
+    }
+
+    // 1. INVOKER: Chaos Meteor («Котлета» Инвокера, падающая с неба и катящаяся по всей линии)
+    if (hClass === "invoker") {
+      const spellAmpPct = (stats.spell_amp !== undefined ? stats.spell_amp : ((p.maxMp || 100) * 0.2));
+      const manaBonus = 1.0 + (spellAmpPct / 100) + (p.currentMp ? (p.currentMp / p.maxMp) * 0.3 : 0);
+      const meteorDmg = Math.floor((stats.max_atk || 30) * 4.8 * manaBonus * ultMultiplier);
+      if (!ARENA.playerProjectiles) ARENA.playerProjectiles = [];
+
+      ARENA.playerProjectiles.push({
+        type: "meteor",
+        x: p.x + 15,
+        y: -50,
+        targetY: ARENA.roadY - 16,
+        vx: 2.0,
+        vy: 9.5,
+        falling: true,
+        speed: 5.2,
+        radius: 36,
+        angle: 0,
+        dmg: meteorDmg,
+        hitCreepIds: new Set(),
+        burnTrail: []
+      });
+
+      spawnFloatingText(p.x + 40, p.y - 45, `☄️ ХАОС МЕТЕОР ПАДАЕТ С НЕБА!${stats.ult_boost ? ` (+${stats.ult_boost}% Ульта)` : ""}`, "#ea580c");
+      triggerHaptic("heavy");
+      return;
+    }
+
+    // 2. PUDGE: Rot (Choking Poison Cloud for 2.5s across the whole map)
+    if (hClass === "pudge") {
+      p.rotActive = 150; // 2.5 sec
+      p.rotDmgMult = ultMultiplier;
+      ARENA.specialEffects.push({ type: "rot", timer: 150, maxTimer: 150 });
+      spawnFloatingText(p.x + 30, p.y - 45, `☣️ ЧУМНАЯ ГНИЛЬ!${stats.ult_boost ? ` (+${stats.ult_boost}% Ульта)` : ""}`, "#22c55e");
+      return;
+    }
+
+    // 3. JUGGERNAUT: Omnislash (8 golden slashing strikes across the field)
+    if (hClass === "juggernaut") {
+      ARENA.specialEffects.push({ type: "omnislash", slashes: 8, timer: 65, currentSlash: 0, mult: ultMultiplier });
+      spawnFloatingText(p.x + 30, p.y - 45, `⚔️ ОМНИСЛЕШ ПО ВСЕЙ КАРТЕ!${stats.ult_boost ? ` (+${stats.ult_boost}% Ульта)` : ""}`, "#facc15");
+      return;
+    }
+
+    // 4. PHANTOM ASSASSIN: Coup de Grace (Screen Blood Flash + x5.5 Crit)
+    if (hClass === "phantom_assassin") {
+      ARENA.specialEffects.push({ type: "blood_flash", timer: 20 });
+      const critDmg = Math.floor((stats.max_atk || 30) * 5.5 * ultMultiplier);
+      for (const c of ARENA.creeps) {
+        if (c.archetype === "defender") {
+          c.shieldBrokenTimer = 240;
+          c.state = "stagger";
+          c.staggerTimer = 80;
+          c.stateTimer = 80;
+        }
+        safeDamageCreep(c, critDmg, false);
+        spawnFloatingText(c.x, c.y - 25, `🩸 КРИТ x5.5! -${critDmg}`, "#dc2626");
+      }
+      spawnFloatingText(p.x + 30, p.y - 45, `🩸 COUP DE GRACE!${stats.ult_boost ? ` (+${stats.ult_boost}% Ульта)` : ""}`, "#dc2626");
+      return;
+    }
+
+    // 5. SHADOW FIEND: Requiem of Souls (Waves of souls across all lanes)
+    if (hClass === "shadow_fiend") {
+      const dmg = Math.floor((stats.max_atk || 30) * 4.5 * ultMultiplier);
+      for (let i = 0; i < 8; i++) {
+        ARENA.playerProjectiles.push({
+          type: "dagger",
+          x: p.x + 20,
+          y: p.y - 25 + i * 8,
+          speed: 6.5 + i * 0.5,
+          dmg: dmg,
+          icon: "🌑",
+          color: "#c084fc"
+        });
+      }
+      spawnFloatingText(p.x + 30, p.y - 45, `🌪️ РЕКВИЕМ ДУШ!${stats.ult_boost ? ` (+${stats.ult_boost}% Ульта)` : ""}`, "#a855f7");
+      return;
+    }
+
+    // 6. WRAITH KING: Vampiric Skeleton Army (Summons 3 skeletons + full lifesteal)
+    if (hClass === "wraith_king") {
+      for (let i = 0; i < 3; i++) {
+        ARENA.alliedMinions.push({
+          x: p.x + 30 + i * 20,
+          y: ARENA.roadY - 14 + (i * 12 - 12),
+          speed: 2.2,
+          hp: Math.floor(90 * ultMultiplier),
+          maxHp: Math.floor(90 * ultMultiplier),
+          atk: Math.floor((stats.max_atk || 25) * 1.4 * ultMultiplier),
+          radius: 14,
+          icon: "☠️"
+        });
+      }
+      p.currentHp = Math.min(p.maxHp, p.currentHp + Math.floor(p.maxHp * 0.5 * ultMultiplier));
+      spawnFloatingText(p.x + 30, p.y - 45, `👑 АРМИЯ СКЕЛЕТОВ + ИСЦЕЛЕНИЕ!${stats.ult_boost ? ` (+${stats.ult_boost}% Ульта)` : ""}`, "#10b981");
+      return;
+    }
+
+    // 7. ANTI-MAGE: Mana Void
+    if (hClass === "anti_mage") {
+      const dmg = Math.floor((stats.max_atk || 30) * 4.8 * ultMultiplier);
+      const targetX = ARENA.width * 0.6;
+      ARENA.specialEffects.push({ type: "lightning", x: targetX, y: ARENA.roadY - 15, radius: 130, timer: 30 });
+      for (const c of ARENA.creeps) {
+        if (c.archetype === "defender") {
+          c.shieldBrokenTimer = 240;
+          c.state = "stagger";
+          c.staggerTimer = 80;
+          c.stateTimer = 80;
+        }
+        safeDamageCreep(c, dmg, false);
+        spawnFloatingText(c.x, c.y - 20, `💥 ВЗРЫВ МАНЫ! -${dmg}`, "#8b5cf6");
+      }
+      spawnFloatingText(p.x + 30, p.y - 45, `💥 ВЗРЫВ МАНЫ (MANA VOID)!${stats.ult_boost ? ` (+${stats.ult_boost}% Ульта)` : ""}`, "#8b5cf6");
+      return;
+    }
+  }
+
+
+  // ===========================================================================
+  // ACTIVE ITEMS SYSTEM (Refresher Orb, Dagon, Blink, BKB, Eul, Shiva, Satanic)
+  // ===========================================================================
+
+  const ACTIVE_ITEM_DEFINITIONS = {
+    refresher: {
+      match: (it) => it && (it.name?.toLowerCase().includes("refresher") || it.name?.toLowerCase().includes("обновлен") || it.bonus?.refresh),
+      name: "Сфера Обновления (Refresher Orb)",
+      shortName: "Рефрешер",
+      icon: "🟢",
+      cdFrames: 1500, // 25s
+      cdSec: 25,
+      mpCost: 40,
+      description: "Мгновенно сбрасывает время перезарядки всех скиллов!",
+      execute: (p, stats) => {
+        ARENA.skill1Cooldown = 0;
+        ARENA.ultCooldown = 0;
+        p.attackCooldown = 0;
+        if (p.dashCooldown) p.dashCooldown = 0;
+        if (p.isBlocking) p.isBlocking = 0;
+        
+        // Reset any other active items except refresher itself
+        if (ARENA.itemCooldowns) {
+          for (const k in ARENA.itemCooldowns) {
+            if (k !== "refresher") ARENA.itemCooldowns[k] = 0;
+          }
+        }
+
+        // Sync DOM immediately
+        const s1El = document.getElementById("rpg-cd-skill1");
+        if (s1El) s1El.textContent = "Скилл 1";
+        const btn1 = document.getElementById("rpg-btn-skill1");
+        if (btn1) btn1.style.opacity = "1";
+
+        const ultEl = document.getElementById("rpg-cd-ult");
+        if (ultEl) ultEl.textContent = "Ульта";
+        const btnUlt = document.getElementById("rpg-btn-ult");
+        if (btnUlt) btnUlt.style.opacity = "1";
+
+        // Green energy burst expanding from hero
+        ARENA.specialEffects.push({
+          type: "refresher_burst",
+          x: p.x,
+          y: p.y,
+          radius: 10,
+          maxRadius: 75,
+          timer: 35
+        });
+
+        spawnFloatingText(p.x + 30, p.y - 45, "🟢 РЕФРЕШЕР! ВСЕ СКИЛЛЫ ГОТОВЫ! ⚡", "#22c55e");
+        triggerHaptic("heavy");
+        return true;
+      }
+    },
+    dagon: {
+      match: (it) => it && (it.name?.toLowerCase().includes("dagon") || it.name?.toLowerCase().includes("дагон") || it.bonus?.burst_magic),
+      name: "Дагон (Dagon)",
+      shortName: "Дагон",
+      icon: "⚡",
+      cdFrames: 720, // 12s
+      cdSec: 12,
+      mpCost: 25,
+      description: "Мощный разряд молнии в ближайшего врага",
+      execute: (p, stats, item) => {
+        const baseBurst = item?.bonus?.burst_magic || 150;
+        const spellAmp = stats.spell_amp || 0;
+        const totalInt = stats.total_intelligence || (stats.gear_int || 0) + (p.intelligence || 10);
+        const dmg = Math.floor(baseBurst * (1 + spellAmp / 100) * (1 + totalInt / 80));
+
+        let target = null;
+        let minX = 9999;
+        for (const c of ARENA.creeps) {
+          if (c.hp > 0 && c.x < minX) {
+            minX = c.x;
+            target = c;
+          }
+        }
+        if (!target && ARENA.bossEntity && ARENA.bossEntity.hp > 0) {
+          target = ARENA.bossEntity;
+        }
+        if (!target) {
+          spawnFloatingText(p.x, p.y - 25, "Нет целей в радиусе!", "#94a3b8");
+          return false;
+        }
+
+        safeDamageCreep(target, dmg, false);
+        ARENA.specialEffects.push({
+          type: "dagon_beam",
+          fromX: p.x + 20,
+          fromY: p.y - 12,
+          toX: target.x,
+          toY: target.y,
+          timer: 18,
+          color: "#ef4444"
+        });
+
+        spawnFloatingText(target.x, target.y - 30, `⚡ ДАГОН! -${dmg.toLocaleString()}`, "#ef4444");
+        triggerHaptic("heavy");
+        return true;
+      }
+    },
+    blink: {
+      match: (it) => it && (it.name?.toLowerCase().includes("blink") || it.name?.toLowerCase().includes("скачка") || it.bonus?.blink),
+      name: "Кинжал Скачка (Blink Dagger)",
+      shortName: "Блинк",
+      icon: "🗡️",
+      cdFrames: 480, // 8s
+      cdSec: 8,
+      mpCost: 0,
+      description: "Мгновенный скачок со станом врагов вокруг",
+      execute: (p, stats) => {
+        ARENA.specialEffects.push({
+          type: "blink_poof",
+          x: p.x,
+          y: p.y,
+          timer: 20
+        });
+        for (const c of ARENA.creeps) {
+          if (Math.abs(c.x - (p.x + 80)) < 70) {
+            c.state = "stagger";
+            c.staggerTimer = 90;
+            safeDamageCreep(c, Math.floor((stats.max_atk || 30) * 1.5), false);
+          }
+        }
+        spawnFloatingText(p.x + 30, p.y - 35, "🗡️ БЛИНК!", "#38bdf8");
+        triggerHaptic("medium");
+        return true;
+      }
+    },
+    bkb: {
+      match: (it) => it && (it.name?.toLowerCase().includes("black king bar") || it.name?.toLowerCase().includes("королевский бар") || it.bonus?.magic_immune),
+      name: "Черный Королевский Бар (BKB)",
+      shortName: "БКБ",
+      icon: "🟡",
+      cdFrames: 1500, // 25s
+      cdSec: 25,
+      mpCost: 0,
+      description: "Золотой Аватар: 6 секунд полной неуязвимости!",
+      execute: (p) => {
+        p.bkbActive = 360; // 6s
+        spawnFloatingText(p.x + 30, p.y - 45, "🟡 БКБ! 100% НЕУЯЗВИМОСТЬ 6 СЕК! 👑", "#eab308");
+        triggerHaptic("heavy");
+        return true;
+      }
+    },
+    satanic: {
+      match: (it) => it && (it.name?.toLowerCase().includes("satanic") || it.name?.toLowerCase().includes("сатаник")),
+      name: "Сатаник (Satanic)",
+      shortName: "Сатаник",
+      icon: "🩸",
+      cdFrames: 1500, // 25s
+      cdSec: 25,
+      mpCost: 0,
+      description: "Нечестивая Ярость: 100% вампиризм на 6 секунд",
+      execute: (p) => {
+        p.satanicActive = 360; // 6s
+        spawnFloatingText(p.x + 30, p.y - 45, "🩸 САТАНИК! 100% ВАМПИРИЗМ! 🧛", "#dc2626");
+        triggerHaptic("heavy");
+        return true;
+      }
+    },
+    eul: {
+      match: (it) => it && (it.name?.toLowerCase().includes("eul") || it.name?.toLowerCase().includes("эул") || it.bonus?.tornado),
+      name: "Скипетр Эула (Eul's Scepter)",
+      shortName: "Эул",
+      icon: "🌪️",
+      cdFrames: 840, // 14s
+      cdSec: 14,
+      mpCost: 25,
+      description: "Торнадо: неуязвимость на 2.5 секунды",
+      execute: (p) => {
+        p.eulActive = 150; // 2.5s
+        spawnFloatingText(p.x + 30, p.y - 45, "🌪️ ЭУЛ! В ТОРНАДО! 💨", "#06b6d4");
+        triggerHaptic("medium");
+        return true;
+      }
+    },
+    shiva: {
+      match: (it) => it && (it.name?.toLowerCase().includes("shiva") || it.name?.toLowerCase().includes("шива")),
+      name: "Шива (Shiva's Guard)",
+      shortName: "Шива",
+      icon: "❄️",
+      cdFrames: 960, // 16s
+      cdSec: 16,
+      mpCost: 35,
+      description: "Арктический взрыв: заморозка и урон по всей арене",
+      execute: (p, stats) => {
+        const dmg = Math.floor((stats.max_atk || 30) * 2.6 * (1 + (stats.spell_amp || 0) / 100));
+        ARENA.specialEffects.push({
+          type: "shiva_blast",
+          x: p.x,
+          y: p.y,
+          radius: 20,
+          maxRadius: 280,
+          timer: 45
+        });
+        for (const c of ARENA.creeps) {
+          safeDamageCreep(c, dmg, false);
+          c.state = "stagger";
+          c.staggerTimer = 180;
+          spawnFloatingText(c.x, c.y - 25, `❄️ -${dmg}`, "#38bdf8");
+        }
+        spawnFloatingText(p.x + 30, p.y - 45, "❄️ ШИВА! АРКТИЧЕСКИЙ ВЗРЫВ!", "#38bdf8");
+        triggerHaptic("heavy");
+        return true;
+      }
+    },
+    meteor: {
+      match: (it) => it && (it.name?.toLowerCase().includes("meteor") || it.name?.toLowerCase().includes("метеор") || it.name?.toLowerCase().includes("fallen sky")),
+      name: "Метеоритный Молот (Meteor Hammer)",
+      shortName: "Метеор",
+      icon: "☄️",
+      cdFrames: 1080, // 18s
+      cdSec: 18,
+      mpCost: 45,
+      description: "Призывает сокрушительный метеорит со станом",
+      execute: (p, stats) => {
+        const meteorDmg = Math.floor((stats.max_atk || 30) * 4.2 * (1 + (stats.spell_amp || 0) / 100));
+        ARENA.playerProjectiles.push({
+          type: "meteor",
+          x: p.x + 15,
+          y: -50,
+          targetY: ARENA.roadY - 16,
+          vx: 2.0,
+          vy: 9.5,
+          falling: true,
+          speed: 5.2,
+          radius: 38,
+          angle: 0,
+          dmg: meteorDmg,
+          hitCreepIds: new Set(),
+          burnTrail: []
+        });
+        spawnFloatingText(p.x + 30, p.y - 45, "☄️ ПАДЕНИЕ МЕТЕОРА!", "#ea580c");
+        triggerHaptic("heavy");
+        return true;
+      }
+    },
+    ethereal: {
+      match: (it) => it && (it.name?.toLowerCase().includes("ethereal") || it.name?.toLowerCase().includes("эфирн")),
+      name: "Эфирный Клинок (Ethereal Blade)",
+      shortName: "Эзернал",
+      icon: "🪄",
+      cdFrames: 840, // 14s
+      cdSec: 14,
+      mpCost: 35,
+      description: "Астральный выстрел: урон от Интеллекта",
+      execute: (p, stats) => {
+        const target = ARENA.creeps[0] || ARENA.bossEntity;
+        if (!target) return false;
+        const totalInt = stats.total_intelligence || (stats.gear_int || 0) + (p.intelligence || 10);
+        const dmg = Math.floor(totalInt * 2.8 * (1 + (stats.spell_amp || 0) / 100) + 200);
+        safeDamageCreep(target, dmg, false);
+        spawnFloatingText(target.x, target.y - 30, `🪄 ЭФИРНЫЙ ВЗРЫВ! -${dmg}`, "#22c55e");
+        triggerHaptic("heavy");
+        return true;
+      }
+    },
+    manta: {
+      match: (it) => it && (it.name?.toLowerCase().includes("manta") || it.name?.toLowerCase().includes("манта")),
+      name: "Манта Стайл (Manta Style)",
+      shortName: "Манта",
+      icon: "👥",
+      cdFrames: 1200, // 20s
+      cdSec: 20,
+      mpCost: 30,
+      description: "Создает 2 иллюзии героя в бою на 7 секунд",
+      execute: (p) => {
+        p.mantaIllusionsTimer = 420; // 7 sec
+        spawnFloatingText(p.x + 30, p.y - 45, "👥 МАНТА! ИЛЛЮЗИИ В БОЮ!", "#38bdf8");
+        triggerHaptic("heavy");
+        return true;
+      }
+    },
+    abyssal: {
+      match: (it) => it && (it.name?.toLowerCase().includes("abyssal") || it.name?.toLowerCase().includes("бездн") || it.bonus?.abyssal_stun),
+      name: "Клинок Бездны (Abyssal Blade)",
+      shortName: "Абиссал",
+      icon: "🗡️",
+      cdFrames: 720, // 12s
+      cdSec: 12,
+      mpCost: 35,
+      description: "Оглушает цель на 2.5с сокрушительным ударом",
+      execute: (p, stats) => {
+        let target = ARENA.creeps[0] || ARENA.bossEntity;
+        if (!target) return false;
+        const stunDmg = Math.floor((stats.max_atk || 40) * 3.2);
+        safeDamageCreep(target, stunDmg, false);
+        target.state = "stagger";
+        target.staggerTimer = 150;
+        target.stateTimer = 150;
+        ARENA.cameraTrauma = 0.8;
+        ARENA.hitstop = 10;
+        spawnFloatingText(target.x, target.y - 30, `⚡ АБИССАЛ СТАН! -${stunDmg}`, "#facc15");
+        triggerHaptic("heavy");
+        return true;
+      }
+    },
+    hex: {
+      match: (it) => it && (it.name?.toLowerCase().includes("hex") || it.name?.toLowerCase().includes("вайс") || it.name?.toLowerCase().includes("хекс") || it.bonus?.hex),
+      name: "Хекс (Scythe of Vyse)",
+      shortName: "Хекс",
+      icon: "🐑",
+      cdFrames: 900, // 15s
+      cdSec: 15,
+      mpCost: 50,
+      description: "Превращает врага в безобидную свинку на 3.5 секунды",
+      execute: (p) => {
+        let target = ARENA.creeps[0] || ARENA.bossEntity;
+        if (!target) return false;
+        target.state = "stagger";
+        target.staggerTimer = 210; // 3.5s
+        target.stateTimer = 210;
+        spawnFloatingText(target.x, target.y - 30, "🐑 ХЕКС! ПРЕВРАЩЕНИЕ В СВИНКУ!", "#a855f7");
+        triggerHaptic("heavy");
+        return true;
+      }
+    },
+    bloodthorn: {
+      match: (it) => it && (it.name?.toLowerCase().includes("bloodthorn") || it.name?.toLowerCase().includes("шип") || it.bonus?.bloodthorn_silence),
+      name: "Кровавый Шип (Bloodthorn)",
+      shortName: "Бладторн",
+      icon: "🌹",
+      cdFrames: 840, // 14s
+      cdSec: 14,
+      mpCost: 40,
+      description: "Безмолвие цели + 100% критические удары на 4.5с",
+      execute: (p) => {
+        p.bloodthornActive = 270;
+        spawnFloatingText(p.x + 30, p.y - 45, "🌹 БЛАДТОРН! 100% КРИТЫ! 🩸", "#ef4444");
+        triggerHaptic("heavy");
+        return true;
+      }
+    },
+    gleipnir: {
+      match: (it) => it && (it.name?.toLowerCase().includes("gleipnir") || it.name?.toLowerCase().includes("глейпнир") || it.bonus?.gleipnir_root),
+      name: "Глейпнир (Gleipnir)",
+      shortName: "Глейпнир",
+      icon: "⛓️",
+      cdFrames: 960, // 16s
+      cdSec: 16,
+      mpCost: 45,
+      description: "Оцепенение всех врагов на арене на 2.5с + молнии",
+      execute: (p, stats) => {
+        const dmg = Math.floor((stats.max_atk || 30) * 2.2);
+        for (const c of ARENA.creeps) {
+          c.state = "stagger";
+          c.staggerTimer = 150;
+          safeDamageCreep(c, dmg, false);
+          spawnFloatingText(c.x, c.y - 20, `⛓️ КОРНИ! -${dmg}`, "#38bdf8");
+        }
+        spawnFloatingText(p.x + 30, p.y - 45, "⛓️ ГЛЕЙПНИР! ВСЯ АРЕНА СКОВАНА!", "#38bdf8");
+        triggerHaptic("heavy");
+        return true;
+      }
+    },
+    blademail: {
+      match: (it) => it && (it.name?.toLowerCase().includes("blade mail") || it.name?.toLowerCase().includes("возврат") || it.name?.toLowerCase().includes("шипаст") || it.bonus?.active_blademail),
+      name: "Возвратка (Blade Mail)",
+      shortName: "БМ",
+      icon: "🛡️",
+      cdFrames: 720, // 12s
+      cdSec: 12,
+      mpCost: 20,
+      description: "Возвращает 100% урона обратно всем атакующим на 4.5с",
+      execute: (p) => {
+        p.blademailActive = 270;
+        spawnFloatingText(p.x + 30, p.y - 45, "🛡️ БЛЕЙДМЕЙЛ АКТИВИРОВАН! 🪞", "#facc15");
+        triggerHaptic("heavy");
+        return true;
+      }
+    },
+    crimson: {
+      match: (it) => it && (it.name?.toLowerCase().includes("crimson") || it.name?.toLowerCase().includes("багров") || it.bonus?.active_crimson),
+      name: "Багровая Защита (Crimson Guard)",
+      shortName: "Кримсон",
+      icon: "🔴",
+      cdFrames: 1200, // 20s
+      cdSec: 20,
+      mpCost: 35,
+      description: "Купол защиты: блокирует 85 урона от каждого удара на 8с",
+      execute: (p) => {
+        p.crimsonActive = 480;
+        p.crimsonBlock = 85;
+        spawnFloatingText(p.x + 30, p.y - 45, "🔴 КРИМСОН ГВАРД! БРОНЕКУПОЛ!", "#dc2626");
+        triggerHaptic("heavy");
+        return true;
+      }
+    },
+    pipe: {
+      match: (it) => it && (it.name?.toLowerCase().includes("pipe") || it.name?.toLowerCase().includes("трубк") || it.bonus?.active_pipe),
+      name: "Трубка Прозрения (Pipe of Insight)",
+      shortName: "Пайп",
+      icon: "📯",
+      cdFrames: 1080, // 18s
+      cdSec: 18,
+      mpCost: 40,
+      description: "Магический барьер на 650 урона от снарядов и заклинаний",
+      execute: (p) => {
+        p.pipeShield = 650;
+        spawnFloatingText(p.x + 30, p.y - 45, "📯 ПАЙП! МАГИЧЕСКИЙ ЩИТ 650!", "#a855f7");
+        triggerHaptic("heavy");
+        return true;
+      }
+    },
+    armlet: {
+      match: (it) => it && (it.name?.toLowerCase().includes("armlet") || it.name?.toLowerCase().includes("арматур") || it.bonus?.unholy_strength),
+      name: "Арматура (Armlet of Mordiggian)",
+      shortName: "Армлет",
+      icon: "🧤",
+      cdFrames: 120, // 2s toggle
+      cdSec: 2,
+      mpCost: 0,
+      description: "Нечестивая сила: +40 Сила, +65 Урон, +15 Броня",
+      execute: (p) => {
+        p.armletActive = !p.armletActive;
+        if (p.armletActive) {
+          spawnFloatingText(p.x + 30, p.y - 45, "😈 АРМЛЕТ ВКЛ! +СИЛА И УРОН!", "#ef4444");
+        } else {
+          spawnFloatingText(p.x + 30, p.y - 45, "💤 АРМЛЕТ ВЫКЛЮЧЕН", "#94a3b8");
+        }
+        triggerHaptic("medium");
+        return true;
+      }
+    },
+    hurricane: {
+      match: (it) => it && (it.name?.toLowerCase().includes("hurricane") || it.name?.toLowerCase().includes("force staff") || it.name?.toLowerCase().includes("ураган") || it.bonus?.active_pike),
+      name: "Пика Урагана (Hurricane Pike)",
+      shortName: "Пика",
+      icon: "🔱",
+      cdFrames: 720, // 12s
+      cdSec: 12,
+      mpCost: 30,
+      description: "Отталкивает врагов назад на 130px",
+      execute: (p) => {
+        for (const c of ARENA.creeps) {
+          c.x += 130;
+          c.state = "stagger";
+          c.staggerTimer = 60;
+        }
+        spawnFloatingText(p.x + 30, p.y - 45, "💨 ПИКА! ОТТАЛКИВАНИЕ ВРАГОВ!", "#38bdf8");
+        triggerHaptic("heavy");
+        return true;
+      }
+    },
+    silver_edge: {
+      match: (it) => it && (it.name?.toLowerCase().includes("silver") || it.name?.toLowerCase().includes("серебрян") || it.name?.toLowerCase().includes("shadow blade") || it.bonus?.active_invis),
+      name: "Серебряный Клинок (Silver Edge)",
+      shortName: "Сильвер",
+      icon: "🗡️",
+      cdFrames: 840, // 14s
+      cdSec: 14,
+      mpCost: 35,
+      description: "Уход в невидимость: следующий удар наносит 250% урона",
+      execute: (p) => {
+        p.shadowWalk = 300; // 5s
+        spawnFloatingText(p.x + 30, p.y - 45, "👻 ТЕНЕВОЙ ШАГ! СЛЕДУЮЩИЙ УДАР 250%!", "#94a3b8");
+        triggerHaptic("heavy");
+        return true;
+      }
+    },
+  };
+
+  function getEquippedActiveItems() {
+    const eq = RPG_STATE.profile?.equipment || {};
+    const result = [];
+    const seenKeys = new Set();
+    for (const slot of ["relic", "weapon", "armor"]) {
+      const it = eq[slot];
+      if (!it) continue;
+      for (const [key, def] of Object.entries(ACTIVE_ITEM_DEFINITIONS)) {
+        if (!seenKeys.has(key) && def.match(it)) {
+          seenKeys.add(key);
+          result.push({ slot, key, item: it, def });
+          break;
+        }
+      }
+    }
+    return result;
+  }
+
+  function useActiveItemAction(idx = 0) {
+    const activeItems = getEquippedActiveItems();
+    if (!activeItems || !activeItems[idx]) {
+      spawnFloatingText(ARENA.player.x, ARENA.player.y - 25, "Нет активного предмета!", "#94a3b8");
+      triggerHaptic("error");
+      return;
+    }
+
+    const act = activeItems[idx];
+    if (!ARENA.itemCooldowns) ARENA.itemCooldowns = {};
+
+    const currentCd = ARENA.itemCooldowns[act.key] || 0;
+    if (currentCd > 0) {
+      const sec = Math.ceil(currentCd / 60);
+      spawnFloatingText(ARENA.player.x, ARENA.player.y - 25, `${act.def.shortName}: КД ${sec}с`, "#94a3b8");
+      triggerHaptic("error");
+      return;
+    }
+
+    const p = ARENA.player;
+    const stats = RPG_STATE.profile?.stats || {};
+    const cost = act.def.mpCost || 0;
+
+    if (cost > 0 && p.currentMp < cost) {
+      spawnFloatingText(p.x, p.y - 25, `Нужно ${cost} MP!`, "#94a3b8");
+      triggerHaptic("error");
+      return;
+    }
+
+    if (cost > 0) {
+      p.currentMp -= cost;
+    }
+
+    const ok = act.def.execute(p, stats, act.item);
+    if (ok !== false) {
+      ARENA.itemCooldowns[act.key] = act.def.cdFrames;
+      const cdEl = document.getElementById(`rpg-cd-item-${idx}`);
+      if (cdEl) cdEl.textContent = `${act.def.cdSec}с`;
+      const btnEl = document.getElementById(`rpg-btn-item-${idx}`);
+      if (btnEl) btnEl.style.opacity = "0.6";
+    }
+  }
+
+  function usePlayerPotion() {
+    const p = ARENA.player;
+    const heal = 120;
+    if (p.currentHp >= p.maxHp) return;
+    p.currentHp = Math.min(p.maxHp, p.currentHp + heal);
+    spawnFloatingText(p.x, p.y - 25, `+${heal} HP ❤️`, "#22c55e");
+    triggerHaptic("success");
+  }
+
+  // ---------------------------------------------------------------------------
+  // WAVE PROGRESSION & DEATH HANDLING
+  // ---------------------------------------------------------------------------
+
+  function handleCreepDeath(c) {
+    ARENA.pickups.push({
+      type: "gold",
+      x: c.x + (Math.random() * 12 - 6),
+      y: c.y + (Math.random() * 12 - 6),
+      value: c.isBoss ? 150 : (c.isMinion ? 3 : 10)
+    });
+    ARENA.pickups.push({
+      type: "xp",
+      x: c.x + (Math.random() * 12 - 6),
+      y: c.y + (Math.random() * 12 - 6),
+      value: c.isBoss ? 80 : (c.isMinion ? 2 : 4)
+    });
+
+    // Chest drops strictly from Bosses (Wave 10 mini-boss and Wave 20 floor boss)
+    if (!c.isMinion && c.isBoss) {
+      ARENA.pickups.push({
+        type: "loot",
+        x: c.x,
+        y: c.y,
+        value: 1
+      });
+    }
+
+    if (c.isBoss) {
+      handleBossDefeat();
+      return;
+    }
+
+    if (!c.isMinion) {
+      ARENA.creepsKilledInWave++;
+      if (ARENA.creepsKilledInWave >= ARENA.creepsNeededForWave) {
+        advanceArenaWave();
+      }
+    }
+  }
+
+  async function advanceArenaWave() {
+    ARENA.waveState = "wave_clear";
+    ARENA.waveTransitionTimer = ARENA.autoAdvanceWaves ? 45 : 70;
+    spawnFloatingText(ARENA.width / 2, 90, `✅ ВОЛНА ${ARENA.waveNumber}/${ARENA.waveMax} ЗАЧИЩЕНА!`, "#22c55e");
+    triggerHaptic("medium");
+
+    // Sync accumulated wave, gold and XP to backend database immediately!
+    try {
+      const currentFloor = RPG_STATE.profile?.dungeon_floor || 1;
+      const totalWaveCleared = (currentFloor - 1) * 20 + ARENA.waveNumber;
+      const baseGold = 20 + Math.floor(ARENA.waveNumber * 8);
+      const baseXp = 12 + Math.floor(ARENA.waveNumber * 6);
+
+      // DMC Style Meter Reward Multiplier (D..SSS)
+      const rank = ARENA.styleMeter?.rank || "D";
+      const styleMultipliers = { D: 1.0, C: 1.15, B: 1.30, A: 1.50, S: 1.70, SS: 1.95, SSS: 2.30 };
+      const mult = styleMultipliers[rank] || 1.0;
+      const goldGain = Math.floor(baseGold * mult);
+      const xpGain = Math.floor(baseXp * mult);
+      const bonusGold = goldGain - baseGold;
+
+      if (bonusGold > 0) {
+        spawnFloatingText(ARENA.width / 2, 115, `🔥 СТИЛЬ [${rank}]: +${bonusGold} 🪙 БОНУС!`, "#facc15");
+      }
+
+      const res = await api.slashCreepWave({
+        wave_cleared: totalWaveCleared,
+        earned_gold: goldGain,
+        earned_xp: xpGain,
+        style_rank: rank,
+        combo_max: ARENA.combo?.maxCombo || 0
+      });
+      if (res.profile) {
+        RPG_STATE.profile = res.profile;
+      }
+      if (res.leveled_up) {
+        showLevelUpToast(res.profile?.level || 2);
+      }
+      if (res.chest_reward && (ARENA.waveNumber === 10 || ARENA.waveNumber === 20)) {
+        openChestModal(res.chest_reward);
+      }
+    } catch (e) {
+      console.warn("Wave sync warning:", e);
+    }
+  }
+
+  function confirmNextWave() {
+    if (ARENA.waveState !== "prompt") return;
+
+    ARENA.waveNumber++;
+    ARENA.creepsKilledInWave = 0;
+    ARENA.totalCreepsSpawned = 0;
+    ARENA.creeps = [];
+    ARENA.pickups = [];
+    ARENA.bossProjectiles = [];
+    ARENA.playerProjectiles = [];
+
+    // Boss on wave 20!
+    if (ARENA.waveNumber === ARENA.waveMax) {
+      // Wave 20: BOSS FIGHT! Switch to 2D Boss Arena Combat!
+      ARENA.waveState = "boss_intro";
+      ARENA.waveTransitionTimer = 120;
+      ARENA.bossArenaMode = true;
+      ARENA.moveInput = { left: false, right: false };
+      ARENA.dodgeCooldown = 0;
+      ARENA.dodgeActive = 0;
+      ARENA.dangerZones = [];
+      ARENA.bossPatternPhase = "idle";
+      ARENA.bossPatternTimer = 0;
+      spawnBossCreep();
+      triggerHaptic("heavy");
+    } else if (ARENA.waveNumber > ARENA.waveMax) {
+      // Completed all 20 waves and killed the boss!
+      handleFloorCleared();
+    } else {
+      ARENA.creepsNeededForWave = Math.min(32, 14 + Math.floor((ARENA.waveNumber - 1) * 1.0));
+      ARENA.waveState = "fighting";
+      triggerHaptic("medium");
+    }
+  }
+
+  function retryCurrentFloor() {
+    // Restart from wave 1 on death
+    const stats = RPG_STATE.profile?.stats || {};
+    ARENA.player.maxHp = Math.max(450, stats.hp_max || 450);
+    ARENA.player.currentHp = ARENA.player.maxHp;
+    ARENA.player.maxMp = Math.max(80, stats.mp_max || 80);
+    ARENA.player.currentMp = ARENA.player.maxMp;
+    ARENA.waveNumber = 1;
+    ARENA.creepsKilledInWave = 0;
+    ARENA.totalCreepsSpawned = 0;
+    ARENA.creepsNeededForWave = 10;
+    ARENA.creeps = [];
+    ARENA.pickups = [];
+    ARENA.bossProjectiles = [];
+    ARENA.playerProjectiles = [];
+    ARENA.alliedMinions = [];
+    ARENA.specialEffects = [];
+    ARENA.isBossActive = false;
+    ARENA.bossEntity = null;
+    ARENA.bossPhase = 0;
+    ARENA.blockWindowActive = false;
+    ARENA.qteActive = false;
+    ARENA.bossArenaMode = false;
+    ARENA.moveInput = { left: false, right: false };
+    ARENA.dangerZones = [];
+    ARENA.player.x = 65;
+    ARENA.player.isInvulnerable = 0;
+    ARENA.waveState = "fighting";
+    triggerHaptic("medium");
+  }
+
+  async function handleFloorCleared() {
+    if (ARENA.player.currentHp <= 0 || ARENA.waveState === "retry_prompt") {
+      return;
+    }
+    ARENA.waveState = "floor_clear";
+    triggerHaptic("success");
+    const currentFloor = RPG_STATE.profile?.dungeon_floor || 1;
+    spawnFloatingText(ARENA.width / 2, 100, `👑 ЭТАЖ ${currentFloor} ЗАЧИЩЕН!`, "#22c55e");
+
+    try {
+      const totalFloorCleared = currentFloor * 20;
+      const goldGain = 350 + currentFloor * 50;
+      const xpGain = 250 + currentFloor * 40;
+      const res = await api.slashCreepWave({
+        wave_cleared: totalFloorCleared,
+        earned_gold: goldGain,
+        earned_xp: xpGain
+      });
+      if (res.profile) RPG_STATE.profile = res.profile;
+      if (res.chest_reward) {
+        RPG_STATE.lastBossChestReward = res.chest_reward;
+        openChestModal(res.chest_reward);
+      }
+      if (res.leveled_up) showLevelUpToast(res.profile?.level || 2);
+    } catch (e) {
+      console.error("Failed to sync floor clear:", e);
+    }
+
+    setTimeout(() => {
+      retryCurrentFloor();
+      ARENA.waveNumber = 0;
+      if (ARENA.autoAdvanceWaves && !RPG_STATE.activeChestModal) {
+        ARENA.waveState = "prompt";
+        confirmNextWave();
+      } else {
+        ARENA.waveState = "prompt";
+      }
+    }, 4500); // 4.5s to enjoy loot explosion & falling chest
+  }
+
+  async function handleRaidBossDefeat() {
+    ARENA.waveState = "boss_victory";
+    ARENA.hitstop = 15;
+    ARENA.cameraTrauma = 1.0;
+    triggerHaptic("success");
+    const bossTmpl = ARENA.currentRaidBoss || { name: "Рейд-Босс", id: "golem", gold: 600, xp: 400 };
+    spawnFloatingText(ARENA.width / 2, 80, `👑 ${bossTmpl.name} ПОВЕРЖЕН! 🏆`, "#eab308");
+
+    spawnLootExplosion(ARENA.bossEntity?.x || ARENA.width * 0.7, ARENA.roadY - 20, bossTmpl);
+
+    try {
+      const res = await api.slashCreepWave({
+        is_raid_boss: true,
+        boss_id: bossTmpl.id,
+        earned_gold: bossTmpl.gold || 600,
+        earned_xp: bossTmpl.xp || 400
+      });
+      if (res.profile) RPG_STATE.profile = res.profile;
+      if (res.chest_reward) {
+        RPG_STATE.lastBossChestReward = res.chest_reward;
+      }
+      if (res.leveled_up) showLevelUpToast(res.profile?.level || 2);
+    } catch (e) {
+      console.warn("Could not sync raid boss defeat:", e);
+    }
+  }
+
+  function handleBossDefeat() {
+    if (ARENA.player.currentHp <= 0 || ARENA.waveState === "retry_prompt") {
+      return;
+    }
+    ARENA.hitstop = 15;
+    ARENA.cameraTrauma = 1.0;
+    triggerHaptic("heavy");
+
+    // Disable Boss Arena Mode — restore player position
+    ARENA.bossArenaMode = false;
+    ARENA.moveInput = { left: false, right: false };
+    ARENA.dangerZones = [];
+    ARENA.player.x = 65; // Reset to default stationary position
+    ARENA.player.isInvulnerable = 0;
+
+    if (ARENA.isRaidBossBattle) {
+      handleRaidBossDefeat();
+      return;
+    }
+    spawnLootExplosion(ARENA.bossEntity?.x || ARENA.width * 0.7, ARENA.roadY - 20, { name: "Босс этажа", gold: 350, xp: 250 });
+    ARENA.isBossActive = false;
+    ARENA.bossEntity = null;
+    ARENA.bossPhase = 0;
+    ARENA.blockWindowActive = false;
+    ARENA.qteActive = false;
+    ARENA.bossProjectiles = [];
+    handleFloorCleared();
+  }
+
+
+  function exitRaidBossBattle() {
+    ARENA.isRaidBossBattle = false;
+    ARENA.topDownMode = false;
+    ARENA.bossEntity = null;
+    ARENA.isBossActive = false;
+    ARENA.bossProjectiles = [];
+    ARENA.creeps = [];
+    ARENA.dangerZones = [];
+    RPG_STATE.activeTab = "coop";
+    renderRoot();
+  }
+
+  function startRaidBossActionBattle(bossId) {
+    stopCoopPolling();
+    stopArenaLoop();
+    if (ARENA.startLoopTimeout) {
+      clearTimeout(ARENA.startLoopTimeout);
+      ARENA.startLoopTimeout = null;
+    }
+
+    RPG_STATE.coopRoomId = null;
+    RPG_STATE.coopRoomData = null;
+
+    const bossTmpls = {
+      golem: { id: "golem", name: "Древний Гранитный Голем", icon: "🗿", baseHp: 1500000, baseAtk: 110, scale: 1.35, atkPercent: 0.07, gold: 1200, xp: 900, desc: "Каменный колосс глубин" },
+      lich: { id: "lich", name: "Архилич Некрополя", icon: "☠️", baseHp: 3000000, baseAtk: 160, scale: 1.30, atkPercent: 0.08, gold: 1800, xp: 1400, desc: "Владыка темных заклятий" },
+      tormentor: { id: "tormentor", name: "Древний Терзатель (Tormentor)", icon: "🔮", baseHp: 6000000, baseAtk: 230, scale: 1.30, atkPercent: 0.09, gold: 2600, xp: 2000, desc: "Отражающий монолит" },
+      dragon: { id: "dragon", name: "Дракон Инферно", icon: "🌋", baseHp: 10000000, baseAtk: 330, scale: 1.50, atkPercent: 0.10, gold: 3500, xp: 2700, desc: "Огнедышащий титан" },
+      roshan: { id: "roshan", name: "Рошан (Roshan)", icon: "🐲", baseHp: 15000000, baseAtk: 450, scale: 1.45, atkPercent: 0.11, gold: 4800, xp: 3600, desc: "Хозяин Ямы" },
+      tidehunter: { id: "tidehunter", name: "Левиафан Бездны (Tidehunter)", icon: "🐙", baseHp: 20000000, baseAtk: 540, scale: 1.40, atkPercent: 0.12, gold: 6000, xp: 4600, desc: "[СИЛЬНЕЕ РОШАНА!] Владыка пучин с якорным ударом и Раважем" },
+      sf_boss: { id: "sf_boss", name: "Архидемон Nevermore", icon: "💀", baseHp: 26000000, baseAtk: 640, scale: 1.35, atkPercent: 0.13, gold: 7500, xp: 5800, desc: "[СИЛЬНЕЕ РОШАНА!] Пожиратель душ с черными коилами и Реквиемом" },
+      necrophos: { id: "necrophos", name: "Чумной Владыка (Necrophos)", icon: "🧟", baseHp: 33000000, baseAtk: 740, scale: 1.30, atkPercent: 0.14, gold: 9200, xp: 7000, desc: "[СИЛЬНЕЕ РОШАНА!] Аура мора истощает HP, Коса Смерти рубит" },
+      invoker_boss: { id: "invoker_boss", name: "Демиург Арсенала (Invoker)", icon: "🧙‍♂️", baseHp: 42000000, baseAtk: 860, scale: 1.25, atkPercent: 0.15, gold: 11000, xp: 8500, desc: "[СИЛЬНЕЕ РОШАНА!] Повелитель стихий, хаос-метеоров и ЭМИ" },
+      chaos_knight: { id: "chaos_knight", name: "Всадник Хаоса (Chaos Knight)", icon: "🐎", baseHp: 52000000, baseAtk: 990, scale: 1.45, atkPercent: 0.16, gold: 13500, xp: 10200, desc: "[СИЛЬНЕЕ РОШАНА!] Фантомы параллельных миров и криты" },
+      dark_tormentor: { id: "dark_tormentor", name: "Тёмный Терзатель Бездны", icon: "💎", baseHp: 65000000, baseAtk: 1150, scale: 1.40, atkPercent: 0.17, gold: 16500, xp: 12500, desc: "[СИЛЬНЕЕ РОШАНА!] Отражает 45% урона и стреляет шипами тьмы" },
+      doom: { id: "doom", name: "Вестник Апокалипсиса (Lord Doom)", icon: "👹", baseHp: 80000000, baseAtk: 1320, scale: 1.45, atkPercent: 0.18, gold: 20000, xp: 15000, desc: "[СИЛЬНЕЕ РОШАНА!] Владыка Преисподней с чистым уроном и роком" },
+      primal_beast: { id: "primal_beast", name: "Первобытный Титан (Primal Beast)", icon: "🦣", baseHp: 100000000, baseAtk: 1520, scale: 1.60, atkPercent: 0.19, gold: 25000, xp: 18500, desc: "[СИЛЬНЕЕ РОШАНА!] Сокрушитель материков с диким топотом" },
+      phantom_roshan: { id: "phantom_roshan", name: "Призрачный Рошан Хаоса", icon: "👻", baseHp: 125000000, baseAtk: 1750, scale: 1.55, atkPercent: 0.20, gold: 32000, xp: 23000, desc: "[СИЛЬНЕЕ РОШАНА!] Восставший призрак Рошана с астральным Slam" },
+      enigma: { id: "enigma", name: "Пожиратель Миров (Enigma Cosmic)", icon: "🌌", baseHp: 160000000, baseAtk: 2050, scale: 1.35, atkPercent: 0.22, gold: 40000, xp: 29000, desc: "[ФИНАЛЬНЫЙ СВЕРХ-БОСС!] Схлопывает пространство в Черную Дыру" }
+    };
+
+    const b = bossTmpls[bossId] || bossTmpls.golem;
+    RPG_STATE.activeTab = "farm";
+    RPG_STATE.farmMode = "arena";
+    ARENA.isRaidBossBattle = true;
+    ARENA.topDownMode = true;
+    ARENA.currentRaidBoss = b;
+
+    const stats = RPG_STATE.profile?.stats || {};
+    const playerAtk = Math.max(30, Math.floor(((stats.min_atk || 30) + (stats.max_atk || 50)) / 2));
+    const playerHp = Math.max(400, stats.hp_max || 400);
+
+    // PROPER BOSS HP SCALING:
+    // Boss HP = baseHp from template (already tier-scaled from 1.5M to 160M)
+    // applyDamageToBoss handles per-tier damage caps so:
+    //   Golem dies in ~30s, Enigma survives ~4 minutes
+    const finalHp = b.baseHp;
+
+    // 1. CREATE BOSS ENTITY (Slow, heavy, deliberate boss pacing)
+    const raidBoss = {
+      id: `raid_${b.id}_${Date.now()}`,
+      name: b.name,
+      icon: b.icon,
+      x: 180,
+      y: 95,
+      radius: Math.floor(30 * (b.scale || 1.15)),
+      speed: 0.65, // Menacing, active movement speed
+      hp: finalHp,
+      maxHp: finalHp,
+      atk: b.baseAtk || 50,
+      defense: Math.max(25, Math.floor((stats.defense || 10) * 0.65)),
+      isBoss: true,
+      isRaidBoss: true,
+      bossType: b.id,
+      isMinion: false,
+      shielded: false,
+      attackCooldown: 0,
+      poise: 1600,
+      maxPoise: 1600,
+      state: "chase",
+      stateTimer: 0,
+      meleeCooldown: 60, // 1s initial wait
+      chargeCooldown: 220, // 3.6s initial wait before first charge
+      barrageCooldown: 140, // 2.3s initial wait before first barrage
+      chargeAngle: 0,
+      chargeVx: 0,
+      chargeVy: 0,
+      facing: 1,
+      enrageTimer: 0,
+      enrageStage: "normal",
+      jumpY: 0,
+      jumpVY: 0
+    };
+
+    ARENA.bossEntity = raidBoss;
+    ARENA.isBossActive = true;
+    ARENA.bossPhase = 1;
+    ARENA.creeps = [raidBoss]; // ONLY THE BOSS! NO CREEPS!
+    ARENA.waveNumber = 20;
+    ARENA.totalCreepsSpawned = 999;
+    ARENA.creepsNeededForWave = 1;
+    ARENA.creepsKilledInWave = 0;
+
+    ARENA.playerProjectiles = [];
+    ARENA.bossProjectiles = [];
+    ARENA.dangerZones = [];
+    ARENA.specialEffects = [];
+    ARENA.floatingTexts = [];
+    ARENA.dashGhosts = [];
+    ARENA.waveState = "fighting";
+    ARENA.bossArenaMode = true;
+    ARENA.moveInput = { left: false, right: false };
+    ARENA.dodgeCooldown = 0;
+    ARENA.dodgeActive = 0;
+
+    syncArenaPlayerStats();
+    ARENA.player.currentHp = ARENA.player.maxHp;
+    ARENA.player.currentMp = ARENA.player.maxMp;
+    ARENA.player.isMoving = false;
+    ARENA.player.isInvulnerable = 0;
+    ARENA.player.shootCooldown = 0;
+    ARENA.player.facingAngle = -Math.PI / 2;
+    ARENA.player.facing = 1;
+    // 520 x 720 Spacious Arena Spawns
+    ARENA.width = 520;
+    ARENA.height = 720;
+    ARENA.player.x = 260;
+    ARENA.player.y = 620;
+    ARENA.player.radius = 14;
+
+    raidBoss.x = 260;
+    raidBoss.y = 140;
+    raidBoss.radius = 32;
+
+    if ((ARENA.bossPartyMode || "trio") === "trio") {
+      initBossCompanions();
+      if (ARENA.bossCompanions[0]) {
+        ARENA.bossCompanions[0].x = 220;
+        ARENA.bossCompanions[0].y = 636;
+        ARENA.bossCompanions[0].radius = 13;
+      }
+      if (ARENA.bossCompanions[1]) {
+        ARENA.bossCompanions[1].x = 300;
+        ARENA.bossCompanions[1].y = 636;
+        ARENA.bossCompanions[1].radius = 13;
+      }
+    }
+
+    // 2. Force full render of the DOM to show the Boss Fight header!
+    RPG_STATE._forceFullRender = true;
+    renderRoot();
+    RPG_STATE._forceFullRender = false;
+
+    const canvas = document.getElementById("rpg-action-canvas");
+    if (canvas) {
+      bindArenaCanvas(canvas);
+      ARENA.width = 520;
+      ARENA.height = 720;
+      raidBoss.x = 260;
+      raidBoss.y = 140;
+      ARENA.player.x = 260;
+      ARENA.player.y = 620;
+    }
+
+    // 3. Start loop immediately with zero delay!
+    ARENA.running = true;
+    function loop() {
+      if (!ARENA.running) return;
+      try {
+        updateArena();
+        renderArena();
+      } catch (err) {
+        console.error("Arena animation frame error:", err);
+      }
+      ARENA.animId = requestAnimationFrame(loop);
+    }
+    ARENA.animId = requestAnimationFrame(loop);
+
+    spawnFloatingText(ARENA.width / 2, 75, `👑 БОЙ С БОССОМ: ${b.name}! 👑`, "#ef4444");
+    triggerHaptic("heavy");
+  }
+
+  function handlePlayerArenaDeath() {
+    ARENA.waveState = "retry_prompt"; // NEVER floor_clear!
+    triggerHaptic("error");
+    spawnFloatingText(ARENA.width / 2, 100, "💀 ВАШ ГЕРОЙ ПАЛ!", "#ef4444");
+
+    setTimeout(() => {
+      const stats = RPG_STATE.profile?.stats || {};
+      ARENA.player.maxHp = Math.max(450, stats.hp_max || 450);
+      ARENA.player.currentHp = ARENA.player.maxHp;
+      ARENA.player.maxMp = Math.max(80, stats.mp_max || 80);
+      ARENA.player.currentMp = ARENA.player.maxMp;
+      ARENA.creeps = [];
+      ARENA.pickups = [];
+      ARENA.bossProjectiles = [];
+      ARENA.playerProjectiles = [];
+      ARENA.alliedMinions = [];
+      ARENA.specialEffects = [];
+      ARENA.isBossActive = false;
+      ARENA.bossEntity = null;
+      ARENA.bossPhase = 0;
+      ARENA.blockWindowActive = false;
+      ARENA.qteActive = false;
+      ARENA.creepsKilledInWave = 0;
+      ARENA.totalCreepsSpawned = 0;
+      ARENA.waveNumber = 1;
+      ARENA.waveState = "retry_prompt";
+    }, 1200);
+  }
+
+  function checkLevelUpInArena() {
+    const p = RPG_STATE.profile;
+    if (!p) return;
+    const needed = 120 + ((p.level || 1) - 1) * 160;
+    if (p.xp >= needed) {
+      p.xp -= needed;
+      p.level = (p.level || 1) + 1;
+      p.stat_points = (p.stat_points || 0) + 1;
+      showLevelUpToast(p.level);
+      spawnFloatingText(ARENA.player.x + 30, ARENA.player.y - 45, `🎉 УРОВЕНЬ ${p.level}! (+1 очко)`, "#facc15");
+    }
+  }
+
+  function spawnFloatingText(x, y, text, color = "#ffffff") {
+    if (!ARENA.floatingTexts) ARENA.floatingTexts = [];
+    if (ARENA.floatingTexts.length >= 24) {
+      ARENA.floatingTexts.shift(); // Drop oldest text to avoid canvas lag
+    }
+    ARENA.floatingTexts.push({ x, y, text, color, opacity: 1.0 });
+  }
+
+  // ===========================================================================
+  // CANVAS RENDERING — SOLID TOKENS, CLEAR SPRITES & VIBRANT EFFECTS
+  // ===========================================================================
+
+
+  // ===========================================================================
+  // NATARGRP PROCEDURAL VECTOR SPRITE & VFX ENGINE (ZERO EMOJIS ON CANVAS)
+  // ===========================================================================
+
+  function drawProceduralHero(ctx, p, heroClass, time = (ARENA.frameCount || 0), isAttacking, comboStep) {
+    time = (time != null ? time : (ARENA.frameCount || 0));
+    const hClass = (heroClass || "pudge").toLowerCase();
+    const bob = Math.sin(time * 0.14) * 2;
+    const facing = (p && p.facing !== undefined) ? p.facing : 1;
+
+    ctx.save();
+    ctx.translate(p.x, p.y + bob);
+    if (facing === -1) {
+      ctx.scale(-1, 1);
+    }
+
+    // 1. Soft Oval Ground Shadow
+    ctx.fillStyle = "rgba(0, 0, 0, 0.38)";
+    ctx.beginPath();
+    ctx.ellipse(0, p.radius + 3 - bob, p.radius * 0.95, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Invulnerability / Dash Ghost Aura
+    if (p.isInvulnerable > 0) {
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.85)";
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.arc(0, 0, p.radius + 6, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Crit Buff Glow
+    if (p.critBuff) {
+      ctx.fillStyle = "rgba(250, 204, 21, 0.25)";
+      ctx.beginPath();
+      ctx.arc(0, 0, p.radius + 8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Class-specific Procedural Vector Geometry
+    if (hClass.includes("pudge")) {
+      // --- PUDGE (Мясник) ---
+      // Rot gas wisps
+      if (p.rotActive > 0 || (time % 20 < 10)) {
+        ctx.fillStyle = "rgba(34, 197, 94, 0.22)";
+        for (let i = 0; i < 3; i++) {
+          const rx = Math.sin(time * 0.1 + i * 2) * 16;
+          const ry = -18 - (time * 0.4 + i * 8) % 18;
+          ctx.beginPath();
+          ctx.arc(rx, ry, 5 + i, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      // Big round body (decaying greenish flesh)
+      ctx.fillStyle = "#3d4b35";
+      ctx.beginPath();
+      ctx.ellipse(0, 2, 17, 18, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#1e2619";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Stitches across belly
+      ctx.strokeStyle = "#141c10";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(-6, -4); ctx.lineTo(4, 8);
+      ctx.moveTo(-7, 2); ctx.lineTo(-1, -2);
+      ctx.moveTo(0, 7); ctx.lineTo(6, 3);
+      ctx.stroke();
+
+      // Blood-stained butcher apron
+      ctx.fillStyle = "#7f1d1d";
+      ctx.beginPath();
+      ctx.moveTo(-8, -4);
+      ctx.lineTo(8, -4);
+      ctx.lineTo(10, 16);
+      ctx.lineTo(-10, 16);
+      ctx.closePath();
+      ctx.fill();
+
+      // Apron blood splatters
+      ctx.fillStyle = "#450a0a";
+      ctx.beginPath();
+      ctx.arc(-2, 4, 3, 0, Math.PI * 2);
+      ctx.arc(4, 10, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Head
+      ctx.fillStyle = "#4a5940";
+      ctx.beginPath();
+      ctx.arc(2, -13, 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Glowing yellow sinister eye
+      ctx.fillStyle = "#facc15";
+      ctx.shadowColor = "#facc15";
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.arc(5, -14, 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Heavy Iron Cleaver (in right hand)
+      const cleaverAngle = isAttacking ? (comboStep === 2 ? 1.4 : 0.8) : 0.15;
+      ctx.save();
+      ctx.translate(8, 2);
+      ctx.rotate(cleaverAngle);
+      // Cleaver blade
+      ctx.fillStyle = "#1e293b";
+      ctx.strokeStyle = "#94a3b8";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.rect(0, -18, 14, 12);
+      ctx.fill();
+      ctx.stroke();
+      // Sharp cutting edge
+      ctx.fillStyle = "#e2e8f0";
+      ctx.fillRect(12, -18, 2.5, 12);
+      // Wooden handle
+      ctx.fillStyle = "#78350f";
+      ctx.fillRect(-2, -6, 4, 10);
+      ctx.restore();
+
+      // Hook chain (left hand)
+      ctx.strokeStyle = "#64748b";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-10, 4);
+      ctx.quadraticCurveTo(-16, 12, -12, 16);
+      ctx.stroke();
+      // Hook curve
+      ctx.strokeStyle = "#cbd5e1";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(-13, 17, 4, 0, Math.PI * 1.5, false);
+      ctx.stroke();
+
+    } else if (hClass.includes("juggernaut")) {
+      // --- JUGGERNAUT (Юрнеро) ---
+      // Flowing red/orange samurai hakama
+      ctx.fillStyle = "#b91c1c";
+      ctx.beginPath();
+      ctx.moveTo(-8, 0);
+      ctx.lineTo(8, 0);
+      ctx.lineTo(11, 17);
+      ctx.lineTo(-11, 17);
+      ctx.closePath();
+      ctx.fill();
+
+      // Gold obi sash
+      ctx.fillStyle = "#f59e0b";
+      ctx.fillRect(-9, 0, 18, 4);
+
+      // Emerald green vest
+      ctx.fillStyle = "#047857";
+      ctx.beginPath();
+      ctx.moveTo(-7, -10);
+      ctx.lineTo(7, -10);
+      ctx.lineTo(8, 0);
+      ctx.lineTo(-8, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      // White demon ancestral mask
+      ctx.fillStyle = "#fef3c7";
+      ctx.strokeStyle = "#d97706";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.ellipse(3, -12, 7.5, 8.5, 0.1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Red mask warpaint stripes
+      ctx.strokeStyle = "#dc2626";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(1, -16); ctx.lineTo(1, -8);
+      ctx.moveTo(5, -16); ctx.lineTo(5, -8);
+      ctx.stroke();
+
+      // Glowing amber eye slits
+      ctx.fillStyle = "#f59e0b";
+      ctx.shadowColor = "#f59e0b";
+      ctx.shadowBlur = 6;
+      ctx.fillRect(4, -13, 3, 1.5);
+      ctx.shadowBlur = 0;
+
+      // Fluttering samurai ponytail
+      const hairWave = Math.sin(time * 0.2) * 3;
+      ctx.strokeStyle = "#18181b";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(-4, -14);
+      ctx.quadraticCurveTo(-12, -18 + hairWave, -16, -12 + hairWave);
+      ctx.stroke();
+
+      // Curved Katana with glowing edge
+      const swordSwing = isAttacking ? (comboStep === 2 ? 1.6 : 0.9) : -0.3;
+      ctx.save();
+      ctx.translate(6, -2);
+      ctx.rotate(swordSwing);
+      // Tsuba guard
+      ctx.fillStyle = "#d97706";
+      ctx.fillRect(-2, -2, 4, 4);
+      // Blade
+      ctx.strokeStyle = "#f8fafc";
+      ctx.lineWidth = 2;
+      ctx.shadowColor = "#f59e0b";
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(10, -18, 16, -26);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      // Katana hilt
+      ctx.fillStyle = "#451a03";
+      ctx.fillRect(-2, 2, 4, 9);
+      ctx.restore();
+
+    } else if (hClass.includes("invoker")) {
+      // --- INVOKER (Карл) ---
+      // Levitation float
+      const lev = Math.sin(time * 0.1) * 3;
+      ctx.translate(0, -lev);
+
+      // Royal crimson cape with high standing collar
+      ctx.fillStyle = "#881337";
+      ctx.beginPath();
+      ctx.moveTo(-9, -15);
+      ctx.lineTo(4, -15);
+      ctx.lineTo(8, 17);
+      ctx.lineTo(-14, 18);
+      ctx.closePath();
+      ctx.fill();
+      // Gold embroidery border
+      ctx.strokeStyle = "#facc15";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Royal purple & gold robes
+      ctx.fillStyle = "#581c87";
+      ctx.beginPath();
+      ctx.moveTo(-6, -7);
+      ctx.lineTo(6, -7);
+      ctx.lineTo(8, 15);
+      ctx.lineTo(-6, 15);
+      ctx.closePath();
+      ctx.fill();
+
+      // Head & blonde hair
+      ctx.fillStyle = "#fed7aa";
+      ctx.beginPath();
+      ctx.arc(1, -12, 7, 0, Math.PI * 2);
+      ctx.fill();
+      // Flowing platinum blonde hair
+      ctx.fillStyle = "#fef08a";
+      ctx.beginPath();
+      ctx.moveTo(-6, -14);
+      ctx.quadraticCurveTo(-11, -8, -13, 2);
+      ctx.lineTo(-4, -10);
+      ctx.closePath();
+      ctx.fill();
+
+      // Glowing arcane eyes
+      ctx.fillStyle = "#e0e7ff";
+      ctx.shadowColor = "#818cf8";
+      ctx.shadowBlur = 6;
+      ctx.fillRect(3, -13, 2.5, 2);
+      ctx.shadowBlur = 0;
+
+      // Arcane Crystal Staff
+      ctx.save();
+      ctx.translate(9, -2);
+      ctx.strokeStyle = "#eab308";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 15); ctx.lineTo(0, -20);
+      ctx.stroke();
+      // Floating crystal at staff head
+      ctx.fillStyle = "#38bdf8";
+      ctx.shadowColor = "#38bdf8";
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.moveTo(0, -28); ctx.lineTo(4, -22); ctx.lineTo(0, -16); ctx.lineTo(-4, -22);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.restore();
+
+      // 3 REVOLVING ELEMENTAL ORBS IN 3D ORBIT (Quas, Wex, Exort)
+      const orbitR = 21;
+      const orbs = [
+        { name: "Quas", color: "#38bdf8", glow: "#0284c7", angle: time * 0.05 },
+        { name: "Wex", color: "#c084fc", glow: "#9333ea", angle: time * 0.05 + 2.094 },
+        { name: "Exort", color: "#f97316", glow: "#ea580c", angle: time * 0.05 + 4.188 }
+      ];
+      for (const orb of orbs) {
+        const ox = Math.cos(orb.angle) * orbitR;
+        const oy = Math.sin(orb.angle) * (orbitR * 0.42) - 8;
+        ctx.fillStyle = orb.color;
+        ctx.shadowColor = orb.glow;
+        ctx.shadowBlur = 9;
+        ctx.beginPath();
+        ctx.arc(ox, oy, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+        // Bright core
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.arc(ox - 1, oy - 1, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+
+    } else if (hClass.includes("phantom") || hClass.includes("pa")) {
+      // --- PHANTOM ASSASSIN (Мортред) ---
+      // Shadow cloak dissolving into mist
+      ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
+      ctx.beginPath();
+      ctx.moveTo(-6, -10);
+      ctx.lineTo(6, -10);
+      ctx.lineTo(9, 16);
+      ctx.lineTo(-12, 16);
+      ctx.closePath();
+      ctx.fill();
+
+      // Cyan misty trail motes
+      ctx.fillStyle = "rgba(34, 211, 238, 0.45)";
+      for (let i = 0; i < 3; i++) {
+        const mx = -10 - (time * 0.6 + i * 5) % 12;
+        const my = 8 + Math.sin(time * 0.2 + i) * 6;
+        ctx.beginPath();
+        ctx.arc(mx, my, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Torso / armor
+      ctx.fillStyle = "#0e7490";
+      ctx.beginPath();
+      ctx.moveTo(-5, -6); ctx.lineTo(5, -6); ctx.lineTo(6, 6); ctx.lineTo(-5, 6);
+      ctx.closePath();
+      ctx.fill();
+
+      // Assassin Cowl / Hood
+      ctx.fillStyle = "#0f172a";
+      ctx.beginPath();
+      ctx.arc(2, -12, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(-6, -12); ctx.lineTo(8, -12); ctx.lineTo(4, -3);
+      ctx.closePath();
+      ctx.fill();
+
+      // Glowing Cyan Assassin Slit Eyes
+      ctx.fillStyle = "#22d3ee";
+      ctx.shadowColor = "#22d3ee";
+      ctx.shadowBlur = 9;
+      ctx.fillRect(4, -13, 3, 1.5);
+      ctx.shadowBlur = 0;
+
+      // Dual Phantom Daggers with Cyan Poison
+      const dagAngle = isAttacking ? 1.2 : 0.2;
+      ctx.save();
+      ctx.translate(7, 2);
+      ctx.rotate(dagAngle);
+      // Dagger 1
+      ctx.strokeStyle = "#22d3ee";
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = "#22d3ee";
+      ctx.shadowBlur = 7;
+      ctx.beginPath();
+      ctx.moveTo(0, 0); ctx.lineTo(12, -10); ctx.lineTo(15, -9);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      // Dagger 2
+      ctx.strokeStyle = "#67e8f9";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-2, 4); ctx.lineTo(8, -4);
+      ctx.stroke();
+      ctx.restore();
+
+    } else if (hClass.includes("shadow_fiend") || hClass.includes("sf")) {
+      // --- SHADOW FIEND (Невермор) ---
+      // Swirling Demonic Shadow Vortex Base (no feet)
+      const swirl = Math.sin(time * 0.25) * 4;
+      ctx.fillStyle = "#09090b";
+      ctx.beginPath();
+      ctx.moveTo(-10, 0);
+      ctx.quadraticCurveTo(swirl, 16, 2, 22);
+      ctx.quadraticCurveTo(-swirl, 16, 10, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      // Demon Spire Shoulders
+      ctx.fillStyle = "#18181b";
+      ctx.beginPath();
+      ctx.moveTo(-16, -14); ctx.lineTo(-6, -4); ctx.lineTo(0, -6);
+      ctx.lineTo(6, -4); ctx.lineTo(16, -14); ctx.lineTo(8, 2); ctx.lineTo(-8, 2);
+      ctx.closePath();
+      ctx.fill();
+
+      // Roaring Soul-Furnace Chest Core
+      const pulse = 1 + Math.sin(time * 0.2) * 0.25;
+      ctx.fillStyle = "#ea580c";
+      ctx.shadowColor = "#f97316";
+      ctx.shadowBlur = 12 * pulse;
+      ctx.beginPath();
+      ctx.arc(0, -3, 6 * pulse, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#fef08a";
+      ctx.beginPath();
+      ctx.arc(0, -3, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Horned Demon Head
+      ctx.fillStyle = "#09090b";
+      ctx.beginPath();
+      ctx.arc(1, -14, 7, 0, Math.PI * 2);
+      ctx.fill();
+      // Curved ram horns
+      ctx.strokeStyle = "#450a0a";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(-4, -16); ctx.quadraticCurveTo(-11, -24, -8, -26);
+      ctx.moveTo(6, -16); ctx.quadraticCurveTo(13, -24, 10, -26);
+      ctx.stroke();
+
+      // Glowing Crimson Eyes & Fangs
+      ctx.fillStyle = "#ef4444";
+      ctx.shadowColor = "#ef4444";
+      ctx.shadowBlur = 8;
+      ctx.fillRect(2, -15, 3, 1.8);
+      ctx.fillRect(1, -11, 4, 1.2);
+      ctx.shadowBlur = 0;
+
+      // Soul Fire Hands
+      ctx.fillStyle = "#f97316";
+      ctx.shadowColor = "#f97316";
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.arc(12, 0, 4, 0, Math.PI * 2);
+      ctx.arc(-12, 0, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+    } else if (hClass.includes("wraith_king") || hClass.includes("wk")) {
+      // --- WRAITH KING (Остарион) ---
+      // Tattered emerald mantle
+      ctx.fillStyle = "#064e3b";
+      ctx.beginPath();
+      ctx.moveTo(-9, -10); ctx.lineTo(7, -10); ctx.lineTo(10, 18); ctx.lineTo(-13, 18);
+      ctx.closePath();
+      ctx.fill();
+
+      // Spectral Green Plate Armor
+      ctx.fillStyle = "#065f46";
+      ctx.strokeStyle = "#10b981";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.rect(-8, -6, 16, 16);
+      ctx.fill();
+      ctx.stroke();
+
+      // Skeletal Skull Face
+      ctx.fillStyle = "#e2e8f0";
+      ctx.beginPath();
+      ctx.arc(1, -12, 7.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Blazing Emerald Soul Fire in Eye Sockets
+      ctx.fillStyle = "#10b981";
+      ctx.shadowColor = "#10b981";
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.arc(3, -13, 2.2, 0, Math.PI * 2);
+      ctx.arc(-1, -13, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Spiked Golden Bone Crown
+      ctx.fillStyle = "#eab308";
+      ctx.strokeStyle = "#ca8a04";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(-7, -17);
+      ctx.lineTo(-5, -23);
+      ctx.lineTo(-2, -18);
+      ctx.lineTo(1, -26);
+      ctx.lineTo(4, -18);
+      ctx.lineTo(7, -23);
+      ctx.lineTo(9, -17);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Colossal Runic Zweihander Broadsword
+      const swordSwing = isAttacking ? 1.4 : 0.2;
+      ctx.save();
+      ctx.translate(9, 2);
+      ctx.rotate(swordSwing);
+      // Giant blade with green soul edge
+      ctx.fillStyle = "#1e293b";
+      ctx.strokeStyle = "#10b981";
+      ctx.lineWidth = 2;
+      ctx.shadowColor = "#10b981";
+      ctx.shadowBlur = 9;
+      ctx.beginPath();
+      ctx.moveTo(-3, 0); ctx.lineTo(3, 0); ctx.lineTo(4, -28); ctx.lineTo(0, -33); ctx.lineTo(-4, -28);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      // Skull crossguard
+      ctx.fillStyle = "#eab308";
+      ctx.fillRect(-7, 0, 14, 3.5);
+      // Hilt
+      ctx.fillStyle = "#451a03";
+      ctx.fillRect(-1.5, 3.5, 3, 9);
+      ctx.restore();
+
+    } else if (hClass.includes("anti_mage") || hClass.includes("am")) {
+      // --- ANTI-MAGE (Магина) ---
+      // Indigo monk pants
+      ctx.fillStyle = "#312e81";
+      ctx.beginPath();
+      ctx.moveTo(-7, 0); ctx.lineTo(7, 0); ctx.lineTo(9, 17); ctx.lineTo(-9, 17);
+      ctx.closePath();
+      ctx.fill();
+
+      // Gold sash belt
+      ctx.fillStyle = "#f59e0b";
+      ctx.fillRect(-8, 0, 16, 3.5);
+
+      // Muscular torso with purple mana burn tattoos
+      ctx.fillStyle = "#fed7aa";
+      ctx.beginPath();
+      ctx.rect(-6, -9, 12, 9);
+      ctx.fill();
+      // Glowing purple tattoos
+      ctx.strokeStyle = "#c084fc";
+      ctx.lineWidth = 1.5;
+      ctx.shadowColor = "#a855f7";
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.moveTo(-4, -7); ctx.lineTo(-1, -3); ctx.lineTo(3, -7);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // Monk head
+      ctx.fillStyle = "#fed7aa";
+      ctx.beginPath();
+      ctx.arc(0, -13, 7, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Purple Monk Blindfold
+      ctx.fillStyle = "#6b21a8";
+      ctx.fillRect(-6, -15, 13, 4.5);
+      ctx.fillStyle = "#e9d5ff";
+      ctx.fillRect(-2, -14, 5, 2);
+
+      // Twin Crescent Mana Glaives in both hands
+      const glaiveSwing = isAttacking ? 1.3 : 0.1;
+      ctx.save();
+      ctx.translate(6, 0);
+      ctx.rotate(glaiveSwing);
+      // Front Glaive
+      ctx.strokeStyle = "#c084fc";
+      ctx.lineWidth = 3;
+      ctx.shadowColor = "#9333ea";
+      ctx.shadowBlur = 9;
+      ctx.beginPath();
+      ctx.arc(2, -4, 11, -Math.PI * 0.4, Math.PI * 0.6, false);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      // Handle
+      ctx.fillStyle = "#e2e8f0";
+      ctx.fillRect(0, -7, 4, 6);
+      ctx.restore();
+
+      // Back Glaive
+      ctx.save();
+      ctx.translate(-7, 2);
+      ctx.rotate(-glaiveSwing * 0.8);
+      ctx.strokeStyle = "#a855f7";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(-2, -4, 9, -Math.PI * 0.5, Math.PI * 0.5, true);
+      ctx.stroke();
+      ctx.restore();
+
+    } else {
+      // --- DEFAULT WARRIOR / HERO FALLBACK ---
+      ctx.fillStyle = "#1e293b";
+      ctx.beginPath(); ctx.arc(0, 0, 14, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "#facc15"; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = "#facc15";
+      ctx.fillRect(4, -10, 4, 20);
+    }
+
+    ctx.restore();
+  }
+
+  // ===========================================================================
+  // PROCEDURAL CREEP & MONSTER SPRITE RENDERER
+  // ===========================================================================
+
+  function drawProceduralCreep(ctx, c, time = (ARENA.frameCount || 0)) {
+    time = (time != null ? time : (ARENA.frameCount || 0));
+    const bob = Math.sin(time * 0.16 + c.x * 0.05) * 1.8;
+    const type = (c.archetype || c.team || "melee").toLowerCase();
+
+    ctx.save();
+    ctx.translate(c.x, c.y + bob + (c.jumpY || 0));
+
+    // Ground Shadow (pinned to road floor even if boss is leaping high in the air)
+    const shadowScale = c.isBoss ? Math.max(0.35, 1.0 - Math.abs(c.jumpY || 0) / 95) : 1.0;
+    ctx.fillStyle = `rgba(0, 0, 0, ${0.32 * shadowScale})`;
+    ctx.beginPath();
+    ctx.ellipse(0, c.radius + 2 - bob - (c.jumpY || 0), (c.radius * 0.9) * shadowScale, 4.5 * shadowScale, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Stagger / Stun indicator stars
+    if (c.state === "stagger" || c.isStaggered) {
+      ctx.fillStyle = "#facc15";
+      ctx.shadowColor = "#facc15";
+      ctx.shadowBlur = 6;
+      for (let s = 0; s < 3; s++) {
+        const starAng = time * 0.15 + s * 2.09;
+        const sx = Math.cos(starAng) * (c.radius + 6);
+        const sy = Math.sin(starAng) * 4 - c.radius - 8;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.shadowBlur = 0;
+    }
+
+    // Panic sweat drops
+    if (c.state === "panic") {
+      ctx.fillStyle = "#38bdf8";
+      for (let w = 0; w < 2; w++) {
+        const px = (w === 0 ? -6 : 6);
+        const py = -c.radius - 10 + (time * 0.3 + w * 4) % 10;
+        ctx.beginPath();
+        ctx.arc(px, py, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Captain Aura on Ground
+    if (type === "captain" || c.isCaptain) {
+      const auraPulse = 1 + Math.sin(time * 0.1) * 0.12;
+      ctx.strokeStyle = "rgba(250, 204, 21, 0.65)";
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([6, 6]);
+      ctx.beginPath();
+      ctx.ellipse(0, c.radius + 2 - bob, 48 * auraPulse, 16 * auraPulse, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Captain Buff Ring on Minions
+    if (c.hasCaptainBuff) {
+      ctx.strokeStyle = "rgba(234, 179, 8, 0.4)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, c.radius + 4, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // ARCHETYPE RENDERING:
+    if (c.isBoss) {
+      // --- EPIC BOSS SPRITES (Proportional scaling) ---
+      const bScale = (c.radius || 44) / 28;
+      ctx.save();
+      ctx.scale(bScale, bScale);
+
+      const bId = (c.boss_id || c.name || "").toLowerCase();
+            if (bId.includes("dark_tormentor") || bId.includes("тёмный терзатель") || bId.includes("темный терзатель")) {
+        // Dark Void Tormentor
+        const rot = time * 0.04;
+        ctx.save();
+        ctx.rotate(rot);
+        ctx.fillStyle = "#1e1b4b";
+        ctx.strokeStyle = "#a855f7";
+        ctx.lineWidth = 3.5;
+        ctx.shadowColor = "#9333ea";
+        ctx.shadowBlur = 20;
+        ctx.beginPath();
+        ctx.moveTo(0, -30); ctx.lineTo(26, 0); ctx.lineTo(0, 30); ctx.lineTo(-26, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        // Inner void star
+        ctx.fillStyle = "#581c87";
+        ctx.beginPath();
+        ctx.moveTo(0, -18); ctx.lineTo(16, 0); ctx.lineTo(0, 18); ctx.lineTo(-16, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
+        // Orbiting dark shards
+        for (let s = 0; s < 6; s++) {
+          const sAng = -rot * 2.0 + s * (Math.PI / 3);
+          const sx = Math.cos(sAng) * 40;
+          const sy = Math.sin(sAng) * 24;
+          ctx.fillStyle = "#c084fc";
+          ctx.shadowColor = "#c084fc"; ctx.shadowBlur = 10;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy - 8); ctx.lineTo(sx + 6, sy); ctx.lineTo(sx, sy + 8); ctx.lineTo(sx - 6, sy);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.shadowBlur = 0;
+
+      } else if (bId.includes("phantom_roshan") || bId.includes("призрачный рошан")) {
+        // Phantom Roshan (Ethereal Ghost Roshan)
+        ctx.save();
+        ctx.fillStyle = "rgba(6, 78, 59, 0.85)";
+        ctx.strokeStyle = "#34d399";
+        ctx.lineWidth = 3;
+        ctx.shadowColor = "#10b981";
+        ctx.shadowBlur = 22;
+        // Massive ghost body
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 28, 24, 0, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+        // Ethereal glowing cracks
+        ctx.strokeStyle = "#6ee7b7";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(-14, -8); ctx.lineTo(-2, 4); ctx.lineTo(16, -6);
+        ctx.moveTo(-8, 8); ctx.lineTo(8, 14);
+        ctx.stroke();
+        // Ghostly horned head
+        ctx.fillStyle = "#022c22";
+        ctx.beginPath();
+        ctx.arc(-18, -8, 13, 0, Math.PI * 2);
+        ctx.fill();
+        // Spectral curved horns
+        ctx.strokeStyle = "#a7f3d0";
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        ctx.moveTo(-20, -18); ctx.quadraticCurveTo(-30, -32, -16, -34);
+        ctx.stroke();
+        // Glowing cyan spectral eyes
+        ctx.fillStyle = "#67e8f9";
+        ctx.shadowColor = "#67e8f9"; ctx.shadowBlur = 12;
+        ctx.fillRect(-24, -10, 5, 3);
+        ctx.shadowBlur = 0;
+        ctx.restore();
+
+      } else if (bId.includes("tormentor") || bId.includes("терзатель")) {
+        // Tormentor Crystal Polyhedron
+        const rot = time * 0.03;
+        ctx.save();
+        ctx.rotate(rot);
+        ctx.fillStyle = "#701a75";
+        ctx.strokeStyle = "#e879f9";
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = "#c084fc";
+        ctx.shadowBlur = 14;
+        ctx.beginPath();
+        ctx.moveTo(0, -26); ctx.lineTo(22, 0); ctx.lineTo(0, 26); ctx.lineTo(-22, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        // Inner crystal core
+        ctx.fillStyle = "#f5d0fe";
+        ctx.beginPath();
+        ctx.moveTo(0, -14); ctx.lineTo(12, 0); ctx.lineTo(0, 14); ctx.lineTo(-12, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
+        // Orbiting crystal shards
+        for (let s = 0; s < 4; s++) {
+          const sAng = -rot * 1.5 + s * 1.57;
+          const sx = Math.cos(sAng) * 34;
+          const sy = Math.sin(sAng) * 20;
+          ctx.fillStyle = "#d8b4fe";
+          ctx.beginPath();
+          ctx.moveTo(sx, sy - 6); ctx.lineTo(sx + 5, sy); ctx.lineTo(sx, sy + 6); ctx.lineTo(sx - 5, sy);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+      } else if (bId.includes("archlich") || bId.includes("лич") || bId.includes("некропол")) {
+        // --- ARCHLICH OF THE NECROPOLIS ---
+        const floatBob = Math.sin(time * 0.12) * 3;
+        ctx.save();
+        ctx.translate(0, floatBob);
+
+        // Hovering Dark Hooded Robes
+        ctx.fillStyle = "#0f172a";
+        ctx.strokeStyle = "#0284c7";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, -22);
+        ctx.lineTo(16, 18);
+        ctx.lineTo(8, 22);
+        ctx.lineTo(0, 18);
+        ctx.lineTo(-8, 22);
+        ctx.lineTo(-16, 18);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Skeletal Skull Face
+        ctx.fillStyle = "#e2e8f0";
+        ctx.beginPath();
+        ctx.arc(0, -18, 9, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Golden Lich Crown
+        ctx.fillStyle = "#facc15";
+        ctx.beginPath();
+        ctx.moveTo(-8, -24); ctx.lineTo(-4, -30); ctx.lineTo(0, -24); ctx.lineTo(4, -30); ctx.lineTo(8, -24);
+        ctx.closePath();
+        ctx.fill();
+
+        // Cyan Glowing Frost Eyes
+        ctx.fillStyle = "#38bdf8";
+        ctx.shadowColor = "#38bdf8";
+        ctx.shadowBlur = 10;
+        ctx.fillRect(-4, -19, 2.5, 2);
+        ctx.fillRect(2, -19, 2.5, 2);
+        ctx.shadowBlur = 0;
+
+        // Floating Frost Void Orb
+        const orbRot = time * 0.08;
+        const orbX = -18;
+        const orbY = -2;
+        ctx.fillStyle = "#0369a1";
+        ctx.shadowColor = "#38bdf8";
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(orbX, orbY, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        for (let os = 0; os < 3; os++) {
+          const oAng = orbRot + os * 2.09;
+          const ox = orbX + Math.cos(oAng) * 12;
+          const oy = orbY + Math.sin(oAng) * 7;
+          ctx.fillStyle = "#bae6fd";
+          ctx.beginPath();
+          ctx.arc(ox, oy, 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+
+      } else if (bId.includes("dragon") || bId.includes("дракон")) {
+        // Black Dragon
+        ctx.fillStyle = "#18181b";
+        ctx.strokeStyle = "#ea580c";
+        ctx.lineWidth = 2;
+        // Serpentine body
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 24, 16, 0, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+        // Dragon Horned Head
+        ctx.beginPath();
+        ctx.moveTo(-16, -6); ctx.lineTo(-30, -14); ctx.lineTo(-24, -22); ctx.lineTo(-14, -18);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+        // Glowing orange eye
+        ctx.fillStyle = "#f97316";
+        ctx.shadowColor = "#f97316"; ctx.shadowBlur = 8;
+        ctx.fillRect(-24, -15, 3.5, 2);
+        ctx.shadowBlur = 0;
+        // Spiked Bat Wings
+        const wingFlap = Math.sin(time * 0.2) * 8;
+        ctx.fillStyle = "#3f1d0b";
+        ctx.beginPath();
+        ctx.moveTo(-6, -10); ctx.lineTo(6, -34 + wingFlap); ctx.lineTo(18, -20); ctx.lineTo(10, -8);
+        ctx.closePath();
+        ctx.fill();
+
+      } else if (bId.includes("tidehunter") || bId.includes("левиафан")) {
+        // --- TIDEHUNTER (Морской Левиафан) ---
+        ctx.fillStyle = "#0f766e";
+        ctx.strokeStyle = "#14b8a6";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 26, 22, 0, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+        ctx.fillStyle = "#042f2e";
+        ctx.beginPath();
+        ctx.moveTo(-10, -18); ctx.lineTo(-6, -26); ctx.lineTo(-2, -18);
+        ctx.moveTo(2, -18); ctx.lineTo(6, -27); ctx.lineTo(10, -18);
+        ctx.fill();
+        ctx.save();
+        ctx.translate(-16, 2);
+        ctx.rotate(-0.4);
+        ctx.strokeStyle = "#94a3b8";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(0, -22); ctx.lineTo(0, 16);
+        ctx.arc(0, 8, 12, 0, Math.PI, false);
+        ctx.stroke();
+        ctx.restore();
+      } else if (bId.includes("sf_boss") || bId.includes("nevermore") || bId.includes("повелитель душ")) {
+        // --- SHADOW FIEND / NEVERMORE ---
+        ctx.fillStyle = "#09090b";
+        ctx.strokeStyle = "#ef4444";
+        ctx.lineWidth = 2;
+        ctx.shadowColor = "#ef4444";
+        ctx.shadowBlur = 14;
+        ctx.beginPath();
+        ctx.moveTo(0, -26); ctx.lineTo(18, 14); ctx.lineTo(6, 20); ctx.lineTo(0, 16); ctx.lineTo(-6, 20); ctx.lineTo(-18, 14);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+        ctx.fillStyle = "#f97316";
+        ctx.beginPath();
+        ctx.arc(0, -6, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "#dc2626";
+        ctx.beginPath();
+        ctx.moveTo(-6, -22); ctx.lineTo(-14, -34); ctx.lineTo(-2, -26);
+        ctx.moveTo(6, -22); ctx.lineTo(14, -34); ctx.lineTo(2, -26);
+        ctx.fill();
+      } else if (bId.includes("doom") || bId.includes("апокалипсис")) {
+        // --- DOOM (Вестник Апокалипсиса) ---
+        ctx.fillStyle = "#7f1d1d";
+        ctx.strokeStyle = "#ea580c";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 24, 20, 0, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+        ctx.save();
+        ctx.translate(-18, -4);
+        ctx.strokeStyle = "#fbbf24";
+        ctx.lineWidth = 3.5;
+        ctx.shadowColor = "#f59e0b";
+        ctx.shadowBlur = 16;
+        ctx.beginPath();
+        ctx.moveTo(0, 14); ctx.lineTo(0, -32);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+        ctx.fillStyle = "rgba(220, 38, 38, 0.75)";
+        ctx.beginPath();
+        ctx.moveTo(0, -10); ctx.lineTo(24, -30); ctx.lineTo(14, -12); ctx.lineTo(28, -8); ctx.lineTo(8, 6);
+        ctx.fill();
+      } else if (bId.includes("enigma") || bId.includes("пожиратель миров")) {
+        // --- ENIGMA ---
+        const rot = time * 0.05;
+        ctx.save();
+        ctx.rotate(rot);
+        ctx.fillStyle = "#1e1b4b";
+        ctx.strokeStyle = "#818cf8";
+        ctx.lineWidth = 3;
+        ctx.shadowColor = "#6366f1";
+        ctx.shadowBlur = 18;
+        ctx.beginPath();
+        ctx.arc(0, 0, 22, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "#000000";
+        ctx.beginPath();
+        ctx.arc(0, 0, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      } else if (bId.includes("invoker_boss") || bId.includes("магистр")) {
+        // --- INVOKER ARSENAL MAGUS ---
+        ctx.fillStyle = "#451a03";
+        ctx.beginPath();
+        ctx.moveTo(0, -22); ctx.lineTo(16, 18); ctx.lineTo(-16, 18);
+        ctx.closePath(); ctx.fill();
+        const oRot = time * 0.07;
+        const orbCols = ["#38bdf8", "#c084fc", "#f97316"];
+        for (let i = 0; i < 3; i++) {
+          const ang = oRot + (i * Math.PI * 2 / 3);
+          const ox = Math.cos(ang) * 20;
+          const oy = Math.sin(ang) * 12 - 14;
+          ctx.fillStyle = orbCols[i];
+          ctx.shadowColor = orbCols[i];
+          ctx.shadowBlur = 10;
+          ctx.beginPath();
+          ctx.arc(ox, oy, 5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.shadowBlur = 0;
+      } else {
+        // Roshan / Titan / Ancient Golem
+        ctx.fillStyle = "#334155";
+        ctx.strokeStyle = "#ea580c";
+        ctx.lineWidth = 2.5;
+        // Massive hunched stone body
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 26, 22, 0, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+        // Fiery lava cracks
+        ctx.strokeStyle = "#f97316";
+        ctx.lineWidth = 2;
+        ctx.shadowColor = "#f97316"; ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.moveTo(-12, -8); ctx.lineTo(-2, 4); ctx.lineTo(14, -6);
+        ctx.moveTo(-6, 8); ctx.lineTo(6, 12);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        // Heavy horned beast head
+        ctx.fillStyle = "#1e293b";
+        ctx.beginPath();
+        ctx.arc(-16, -8, 12, 0, Math.PI * 2);
+        ctx.fill();
+        // Curved beast horns
+        ctx.strokeStyle = "#d97706";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(-18, -16); ctx.quadraticCurveTo(-26, -28, -14, -30);
+        ctx.stroke();
+        // Burning red eyes
+        ctx.fillStyle = "#ef4444";
+        ctx.shadowColor = "#ef4444"; ctx.shadowBlur = 8;
+        ctx.fillRect(-22, -10, 4, 2.5);
+        ctx.shadowBlur = 0;
+      }
+
+      ctx.restore();
+
+    } else if (type.includes("defender")) {
+      // --- SHIELDED DEFENDER (Пехотинец со щитом) ---
+      // Heavy plate body
+      ctx.fillStyle = "#334155";
+      ctx.beginPath();
+      ctx.rect(-8, -12, 16, 22);
+      ctx.fill();
+      // Helmet with narrow slit
+      ctx.fillStyle = "#1e293b";
+      ctx.beginPath();
+      ctx.arc(0, -14, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#facc15";
+      ctx.fillRect(-4, -15, 6, 1.8);
+
+      // Giant Tower Heater Shield (Facing Left towards player)
+      const shieldBroken = c.shieldBrokenTimer > 0;
+      ctx.save();
+      ctx.translate(-10, 0);
+      if (shieldBroken) {
+        ctx.rotate(-0.4);
+        ctx.strokeStyle = "#ef4444";
+      } else {
+        ctx.strokeStyle = "#38bdf8";
+      }
+      // Shield Face
+      ctx.fillStyle = shieldBroken ? "#475569" : "#1e293b";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, -18);
+      ctx.lineTo(-10, -16);
+      ctx.lineTo(-10, 10);
+      ctx.lineTo(0, 18);
+      ctx.lineTo(6, 10);
+      ctx.lineTo(6, -16);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Shield Cross / Crest
+      ctx.fillStyle = shieldBroken ? "#991b1b" : "#eab308";
+      ctx.fillRect(-6, -6, 8, 3);
+      ctx.fillRect(-4, -10, 4, 11);
+
+      // Guard Shield Sheen
+      if (!shieldBroken) {
+        ctx.fillStyle = "rgba(56, 189, 248, 0.25)";
+        ctx.shadowColor = "#38bdf8";
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(-5, 0, 14, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+      ctx.restore();
+
+      // Spear behind shield
+      ctx.strokeStyle = "#94a3b8";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-16, -4); ctx.lineTo(12, -4);
+      ctx.stroke();
+
+    } else if (type.includes("ranged") || type.includes("mage") || type.includes("маг")) {
+      // --- RANGED MAGE / ARCHER ---
+      const isRadiant = type.includes("radiant") || type.includes("свет");
+      // Robes
+      ctx.fillStyle = isRadiant ? "#15803d" : "#581c87";
+      ctx.beginPath();
+      ctx.moveTo(-6, -10); ctx.lineTo(6, -10); ctx.lineTo(9, 15); ctx.lineTo(-9, 15);
+      ctx.closePath();
+      ctx.fill();
+
+      // Pointed Hood
+      ctx.fillStyle = isRadiant ? "#166534" : "#3b0764";
+      ctx.beginPath();
+      ctx.moveTo(-8, -8); ctx.lineTo(8, -8); ctx.lineTo(0, -22);
+      ctx.closePath();
+      ctx.fill();
+
+      // Glowing Eyes in hood darkness
+      ctx.fillStyle = isRadiant ? "#38bdf8" : "#f43f5e";
+      ctx.shadowColor = ctx.fillStyle;
+      ctx.shadowBlur = 6;
+      ctx.fillRect(-4, -12, 2.5, 1.8);
+      ctx.shadowBlur = 0;
+
+      // Wooden Staff with Pulsing Magic Orb
+      ctx.save();
+      ctx.translate(-9, -2);
+      ctx.strokeStyle = "#78350f";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 16); ctx.lineTo(0, -18);
+      ctx.stroke();
+
+      // Pulsing magic orb at tip
+      const orbPulse = 1 + Math.sin(time * 0.2) * 0.2;
+      ctx.fillStyle = isRadiant ? "#38bdf8" : "#c084fc";
+      ctx.shadowColor = ctx.fillStyle;
+      ctx.shadowBlur = 10 * orbPulse;
+      ctx.beginPath();
+      ctx.arc(0, -22, 4.5 * orbPulse, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.restore();
+
+    } else if (type.includes("catapult") || type.includes("катапульта")) {
+      // --- SIEGE CATAPULT ---
+      // Heavy timber cart chassis
+      ctx.fillStyle = "#78350f";
+      ctx.fillRect(-14, -6, 28, 12);
+
+      // Spiked wheels with spokes
+      ctx.strokeStyle = "#451a03";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(-8, 8, 6.5, 0, Math.PI * 2);
+      ctx.arc(8, 8, 6.5, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Throwing arm with counterweight
+      ctx.strokeStyle = "#92400e";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(8, -4); ctx.lineTo(-14, -18);
+      ctx.stroke();
+
+      // Flaming rock in bucket
+      ctx.fillStyle = "#ea580c";
+      ctx.shadowColor = "#f97316"; ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.arc(-15, -19, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+        } else if (type.includes("warlock")) {
+      // --- WARLOCK: Horned purple cowl, flaming obsidian staff, burning magma eye ---
+      ctx.fillStyle = "#3b0764";
+      ctx.beginPath();
+      ctx.arc(0, -2, c.radius, 0, Math.PI * 2);
+      ctx.fill();
+      // Horns
+      ctx.fillStyle = "#18181b";
+      ctx.beginPath();
+      ctx.moveTo(-c.radius * 0.6, -c.radius * 0.7);
+      ctx.lineTo(-c.radius * 1.1, -c.radius * 1.4);
+      ctx.lineTo(-c.radius * 0.3, -c.radius);
+      ctx.moveTo(c.radius * 0.6, -c.radius * 0.7);
+      ctx.lineTo(c.radius * 1.1, -c.radius * 1.4);
+      ctx.lineTo(c.radius * 0.3, -c.radius);
+      ctx.fill();
+      // Flaming Eye
+      ctx.fillStyle = "#ea580c";
+      ctx.beginPath();
+      ctx.arc(-3, -2, 3, 0, Math.PI * 2);
+      ctx.arc(3, -2, 3, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (type.includes("irongolem")) {
+      // --- IRONCLAD GOLEM: Heavy gunmetal cubic plating with glowing magma core ---
+      ctx.fillStyle = "#1e293b";
+      ctx.fillRect(-c.radius * 0.9, -c.radius * 0.9, c.radius * 1.8, c.radius * 1.8);
+      ctx.fillStyle = "#f97316";
+      ctx.beginPath();
+      ctx.arc(0, 0, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#475569";
+      ctx.lineWidth = 2.5;
+      ctx.strokeRect(-c.radius * 0.9, -c.radius * 0.9, c.radius * 1.8, c.radius * 1.8);
+    } else if (type.includes("hound")) {
+      // --- INFERNAL HOUND: Low feral quadruped, flame teeth ---
+      ctx.fillStyle = "#450a0a";
+      ctx.beginPath();
+      ctx.ellipse(0, 0, c.radius * 1.2, c.radius * 0.7, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#dc2626";
+      ctx.beginPath();
+      ctx.arc(-c.radius * 0.8, -2, 3, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (type.includes("necromancer")) {
+      // --- NECROMANCER: Emerald bone skull mask ---
+      ctx.fillStyle = "#022c22";
+      ctx.beginPath();
+      ctx.arc(0, -2, c.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#10b981";
+      ctx.beginPath();
+      ctx.arc(-3, -3, 2.5, 0, Math.PI * 2);
+      ctx.arc(3, -3, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (type.includes("assassin")) {
+      // --- SHADOW BLADE ASSASSIN: Dark ninja with glowing violet daggers ---
+      ctx.fillStyle = "#0f172a";
+      ctx.beginPath();
+      ctx.arc(0, -3, c.radius * 0.85, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#c084fc";
+      ctx.fillRect(-c.radius - 4, -1, 6, 2);
+      ctx.fillRect(c.radius - 2, -1, 6, 2);
+    } else if (type.includes("centaur_conqueror")) {
+      // --- CENTAUR CONQUEROR: Golden plate, battleaxe ---
+      ctx.fillStyle = "#78350f";
+      ctx.beginPath();
+      ctx.ellipse(0, 2, c.radius * 1.2, c.radius * 0.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#facc15";
+      ctx.fillRect(-c.radius * 0.5, -c.radius - 2, c.radius, 8);
+    } else if (type.includes("drake")) {
+      // --- INFERNAL DRAKE: Wings and fiery snout ---
+      ctx.fillStyle = "#9a3412";
+      ctx.beginPath();
+      ctx.arc(0, -4, c.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ea580c";
+      ctx.beginPath();
+      ctx.moveTo(-c.radius * 1.2, -6);
+      ctx.lineTo(-c.radius * 0.3, -c.radius);
+      ctx.lineTo(-c.radius * 0.3, 0);
+      ctx.moveTo(c.radius * 1.2, -6);
+      ctx.lineTo(c.radius * 0.3, -c.radius);
+      ctx.lineTo(c.radius * 0.3, 0);
+      ctx.fill();
+    } else if (type.includes("void_terror")) {
+      // --- VOID TERROR: Cosmic dark eye with violet rings ---
+      ctx.fillStyle = "#1e1b4b";
+      ctx.beginPath();
+      ctx.arc(0, 0, c.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#818cf8";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, c.radius + 5, c.radius * 0.4, time * 0.05, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (type.includes("ancient_titan")) {
+      // --- ANCIENT EARTH TITAN: Giant granite colossus with cyan runes ---
+      ctx.fillStyle = "#334155";
+      ctx.beginPath();
+      ctx.arc(0, 0, c.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(-c.radius * 0.5, 0);
+      ctx.lineTo(0, -c.radius * 0.6);
+      ctx.lineTo(c.radius * 0.5, 0);
+      ctx.stroke();
+    } else if (type.includes("apocalypse_doomguard")) {
+      // --- APOCALYPSE DOOMGUARD: Towering winged demon lord ---
+      ctx.fillStyle = "#7f1d1d";
+      ctx.beginPath();
+      ctx.arc(0, -4, c.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#dc2626";
+      ctx.beginPath();
+      ctx.moveTo(-c.radius * 1.4, -c.radius);
+      ctx.lineTo(-c.radius * 0.4, 0);
+      ctx.lineTo(-c.radius * 0.4, -c.radius * 0.5);
+      ctx.moveTo(c.radius * 1.4, -c.radius);
+      ctx.lineTo(c.radius * 0.4, 0);
+      ctx.lineTo(c.radius * 0.4, -c.radius * 0.5);
+      ctx.fill();
+    } else if (type.includes("astral_phantom")) {
+      // --- ASTRAL PHANTOM: Cyan translucent luminous ghost ---
+      ctx.fillStyle = "rgba(56, 189, 248, 0.75)";
+      ctx.beginPath();
+      ctx.arc(0, -2, c.radius, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (type.includes("captain") || c.isCaptain) {
+      // --- ELITE CAPTAIN ---
+      // Golden armor
+      ctx.fillStyle = "#b45309";
+      ctx.strokeStyle = "#facc15";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.rect(-9, -10, 18, 20);
+      ctx.fill(); ctx.stroke();
+
+      // Winged Helmet
+      ctx.fillStyle = "#1e293b";
+      ctx.beginPath();
+      ctx.arc(0, -14, 8, 0, Math.PI * 2);
+      ctx.fill();
+      // Wings on helm
+      ctx.fillStyle = "#facc15";
+      ctx.beginPath();
+      ctx.moveTo(-6, -16); ctx.lineTo(-15, -24); ctx.lineTo(-6, -20);
+      ctx.moveTo(6, -16); ctx.lineTo(15, -24); ctx.lineTo(6, -20);
+      ctx.fill();
+
+      // Royal standard / war banner on back
+      ctx.strokeStyle = "#78350f"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(6, 10); ctx.lineTo(6, -30); ctx.stroke();
+      ctx.fillStyle = "#dc2626";
+      ctx.beginPath();
+      ctx.moveTo(6, -30); ctx.lineTo(24, -24); ctx.lineTo(6, -18);
+      ctx.closePath();
+      ctx.fill();
+
+      // Dual swords
+      ctx.strokeStyle = "#f8fafc";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-4, 0); ctx.lineTo(-18, -8);
+      ctx.moveTo(2, 4); ctx.lineTo(-14, 14);
+      ctx.stroke();
+
+    } else {
+      // --- MELEE GRUNTS (Radiant / Dire) ---
+      const isDire = type.includes("dire") || type.includes("тьма");
+      if (isDire) {
+        // Dire Ghoul / Fiend
+        ctx.fillStyle = "#450a0a";
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 11, 14, -0.2, 0, Math.PI * 2);
+        ctx.fill();
+        // Spiked black iron shoulder
+        ctx.fillStyle = "#18181b";
+        ctx.beginPath();
+        ctx.moveTo(2, -12); ctx.lineTo(10, -20); ctx.lineTo(6, -8);
+        ctx.closePath();
+        ctx.fill();
+        // Burning red eye
+        ctx.fillStyle = "#ef4444";
+        ctx.shadowColor = "#ef4444"; ctx.shadowBlur = 6;
+        ctx.fillRect(-7, -8, 3, 2);
+        ctx.shadowBlur = 0;
+        // Dual jagged rusted axes
+        ctx.strokeStyle = "#94a3b8"; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-2, 0); ctx.lineTo(-15, -6);
+        ctx.stroke();
+      } else {
+        // Radiant Swordsman
+        ctx.fillStyle = "#166534";
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 11, 13, 0.1, 0, Math.PI * 2);
+        ctx.fill();
+        // Round oak shield
+        ctx.fillStyle = "#78350f"; ctx.strokeStyle = "#d97706"; ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(-7, 2, 7.5, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+        // Short iron sword
+        ctx.strokeStyle = "#cbd5e1"; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(2, 0); ctx.lineTo(12, -12);
+        ctx.stroke();
+      }
+    }
+
+    // Telegraph indicator (danger icon / raised weapon flash)
+    if (c.state === "telegraph") {
+      ctx.strokeStyle = "#ef4444";
+      ctx.lineWidth = 2;
+      ctx.shadowColor = "#ef4444";
+      ctx.shadowBlur = 9;
+      ctx.beginPath();
+      ctx.arc(0, 0, c.radius + 5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
+    ctx.restore();
+  }
+
+  // ===========================================================================
+  // PROCEDURAL ALLIED MINION (WK Skeleton)
+  // ===========================================================================
+
+  function drawProceduralMinion(ctx, m, time = (ARENA.frameCount || 0)) {
+    time = (time != null ? time : (ARENA.frameCount || 0));
+    const bob = Math.sin(time * 0.2 + m.x * 0.1) * 1.5;
+    ctx.save();
+    ctx.translate(m.x, m.y + bob);
+
+    // Shadow
+    ctx.fillStyle = "rgba(0,0,0,0.28)";
+    ctx.beginPath();
+    ctx.ellipse(0, m.radius + 2, m.radius * 0.8, 3.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Ivory ribcage
+    ctx.strokeStyle = "#e2e8f0";
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(0, -6); ctx.lineTo(0, 6);
+    ctx.moveTo(-5, -3); ctx.lineTo(5, -3);
+    ctx.moveTo(-4, 0); ctx.lineTo(4, 0);
+    ctx.moveTo(-3, 3); ctx.lineTo(3, 3);
+    ctx.stroke();
+
+    // Skull
+    ctx.fillStyle = "#f8fafc";
+    ctx.beginPath();
+    ctx.arc(0, -10, 5.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Glowing turquoise eyes
+    ctx.fillStyle = "#2dd4bf";
+    ctx.shadowColor = "#2dd4bf";
+    ctx.shadowBlur = 6;
+    ctx.fillRect(-2, -11, 1.6, 1.6);
+    ctx.fillRect(1, -11, 1.6, 1.6);
+    ctx.shadowBlur = 0;
+
+    // Rusted blade
+    ctx.strokeStyle = "#94a3b8";
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(4, 0); ctx.lineTo(14, -6);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // ===========================================================================
+  // PROCEDURAL PICKUPS: COINS, GEMS, CHESTS
+  // ===========================================================================
+
+  function drawProceduralCoin(ctx, x, y, radius, time = (ARENA.frameCount || 0)) {
+    time = (time != null ? time : (ARENA.frameCount || 0));
+    ctx.save();
+    ctx.translate(x, y);
+
+    // Beveled 3D Gold Rim
+    ctx.fillStyle = "#b45309";
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Inner Radiant Gold Face
+    ctx.fillStyle = "#facc15";
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.82, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Embossed center star / crest
+    ctx.fillStyle = "#eab308";
+    ctx.beginPath();
+    ctx.moveTo(0, -radius * 0.5);
+    ctx.lineTo(radius * 0.35, 0);
+    ctx.lineTo(0, radius * 0.5);
+    ctx.lineTo(-radius * 0.35, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    // Rotating specular sparkle glint
+    const glintAng = time * 0.08;
+    const gx = Math.cos(glintAng) * (radius * 0.45);
+    const gy = Math.sin(glintAng) * (radius * 0.45);
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(gx, gy, radius * 0.22, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawProceduralGem(ctx, x, y, radius, colorHex, time = (ARENA.frameCount || 0)) {
+    time = (time != null ? time : (ARENA.frameCount || 0));
+    ctx.save();
+    ctx.translate(x, y);
+    const col = colorHex || "#38bdf8";
+
+    // Glowing faceted diamond polygon
+    ctx.fillStyle = col;
+    ctx.shadowColor = col;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.moveTo(0, -radius);
+    ctx.lineTo(radius * 0.85, -radius * 0.35);
+    ctx.lineTo(0, radius);
+    ctx.lineTo(-radius * 0.85, -radius * 0.35);
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Specular facet
+    ctx.fillStyle = "rgba(255, 255, 255, 0.65)";
+    ctx.beginPath();
+    ctx.moveTo(0, -radius);
+    ctx.lineTo(radius * 0.4, -radius * 0.35);
+    ctx.lineTo(0, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawProceduralChest(ctx, x, y, time = (ARENA.frameCount || 0), isLanded, isOpened) {
+    time = (time != null ? time : (ARENA.frameCount || 0));
+    ctx.save();
+    ctx.translate(x, y);
+
+    // God Ray Light Pillar when landed
+    if (isLanded) {
+      const rayAlpha = 0.22 + Math.sin(time * 0.06) * 0.08;
+      const grad = ctx.createLinearGradient(0, 0, 0, -220);
+      grad.addColorStop(0, `rgba(250, 204, 21, ${rayAlpha * 1.5})`);
+      grad.addColorStop(1, "rgba(250, 204, 21, 0)");
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(-24, 0); ctx.lineTo(24, 0); ctx.lineTo(38, -220); ctx.lineTo(-38, -220);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Shadow
+    ctx.fillStyle = "rgba(0,0,0,0.4)";
+    ctx.beginPath();
+    ctx.ellipse(0, 12, 22, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Wooden Chest Base
+    ctx.fillStyle = "#78350f";
+    ctx.strokeStyle = "#b45309";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(-16, -6, 32, 20, 3);
+    ctx.fill();
+    ctx.stroke();
+
+    // Iron Banding & Corner Brackets
+    ctx.fillStyle = "#eab308";
+    ctx.fillRect(-16, -6, 4, 20);
+    ctx.fillRect(12, -6, 4, 20);
+    ctx.fillRect(-2, -6, 4, 20);
+
+    // Lid (Closed or Tilted Open)
+    if (isOpened) {
+      ctx.save();
+      ctx.translate(-16, -6);
+      ctx.rotate(-0.8);
+      ctx.fillStyle = "#92400e";
+      ctx.strokeStyle = "#facc15";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(0, -10, 34, 10, 3);
+      ctx.fill(); ctx.stroke();
+      ctx.restore();
+
+      // Golden Treasure Rays pouring from open chest
+      ctx.fillStyle = "rgba(250, 204, 21, 0.45)";
+      ctx.shadowColor = "#facc15"; ctx.shadowBlur = 12;
+      ctx.beginPath();
+      ctx.arc(0, -4, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    } else {
+      ctx.fillStyle = "#92400e";
+      ctx.strokeStyle = "#eab308";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(-17, -15, 34, 11, [4, 4, 0, 0]);
+      ctx.fill(); ctx.stroke();
+
+      // Brass Keyhole Lock
+      ctx.fillStyle = "#facc15";
+      ctx.beginPath();
+      ctx.arc(0, -4, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#1e293b";
+      ctx.fillRect(-1, -4, 2, 4);
+    }
+
+    ctx.restore();
+  }
+
+  // ===========================================================================
+  // PROCEDURAL ENVIRONMENT: TREES & CLOUDS
+  // ===========================================================================
+
+  function drawProceduralTree(ctx, x, y, time = (ARENA.frameCount || 0)) {
+    time = (time != null ? time : (ARENA.frameCount || 0));
+    ctx.save();
+    ctx.translate(x, y);
+
+    // Gnarled Trunk
+    ctx.fillStyle = "#5c3a21";
+    ctx.beginPath();
+    ctx.moveTo(-5, 0); ctx.lineTo(-3, -22); ctx.lineTo(3, -22); ctx.lineTo(6, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    // Ambient Leaf Sway
+    const sway = Math.sin(time * 0.04 + x * 0.1) * 2;
+
+    // Multi-tiered Lush Foliage Canopies
+    ctx.fillStyle = "#166534";
+    ctx.beginPath();
+    ctx.arc(sway, -34, 16, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "#15803d";
+    ctx.beginPath();
+    ctx.arc(-8 + sway * 0.8, -26, 12, 0, Math.PI * 2);
+    ctx.arc(8 + sway * 0.8, -26, 12, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Sunlit Top Leaf Highlights
+    ctx.fillStyle = "#22c55e";
+    ctx.beginPath();
+    ctx.arc(sway, -40, 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawProceduralCloud(ctx, cloud) {
+    ctx.save();
+    ctx.fillStyle = "rgba(255, 255, 255, 0.42)";
+    ctx.beginPath();
+    ctx.arc(cloud.x, cloud.y, 14, 0, Math.PI * 2);
+    ctx.arc(cloud.x + 12, cloud.y - 5, 17, 0, Math.PI * 2);
+    ctx.arc(cloud.x + 26, cloud.y, 13, 0, Math.PI * 2);
+    ctx.arc(cloud.x + 14, cloud.y + 4, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // ===========================================================================
+  // DEVIL MAY CRY STYLE METER HUD (D, C, B, A, S, SS, SSS)
+  // ===========================================================================
+
+  function drawStyleMeterHUD(ctx, styleMeter, combo, customW) {
+    if (!styleMeter) return;
+    const rank = styleMeter.rank || "D";
+    const w = customW || ARENA.width || 360;
+    const x = Math.round(w / 2);
+    const y = 30;
+
+    const rankColors = {
+      D: { text: "#94a3b8", glow: "#64748b", title: "DISMAL" },
+      C: { text: "#06b6d4", glow: "#0891b2", title: "CRAZY!" },
+      B: { text: "#10b981", glow: "#059669", title: "BADASS!!" },
+      A: { text: "#f59e0b", glow: "#d97706", title: "APOCALYPTIC!!!" },
+      S: { text: "#f97316", glow: "#ea580c", title: "SAVAGE!" },
+      SS: { text: "#ef4444", glow: "#dc2626", title: "SICK SKILLS!!" },
+      SSS: { text: "#f43f5e", glow: "#e11d48", title: "SMOKIN' SEXY STYLE!!!" }
+    };
+    const cfg = rankColors[rank] || rankColors.D;
+
+    ctx.save();
+    // Glass HUD Backplate
+    ctx.fillStyle = "rgba(15, 23, 42, 0.78)";
+    ctx.strokeStyle = cfg.text;
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = cfg.glow;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    safeRoundRect(ctx, x - 42, y - 20, 84, 40, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Glowing Rank Letter
+    ctx.font = "900 24px 'Impact', sans-serif";
+    ctx.fillStyle = cfg.text;
+    ctx.shadowColor = cfg.glow;
+    ctx.shadowBlur = 10;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(rank, x - 16, y - 2);
+    ctx.shadowBlur = 0;
+
+    // Subtitle
+    ctx.font = "bold 7px sans-serif";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(cfg.title, x + 16, y - 8);
+
+    // Style Meter Progress Bar
+    const prog = Math.max(0, Math.min(1, styleMeter.progress || 0));
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fillRect(x - 4, y - 1, 38, 4);
+    ctx.fillStyle = cfg.text;
+    ctx.fillRect(x - 4, y - 1, 38 * prog, 4);
+
+    // Combo Counter (if active)
+    if (combo && combo.count > 1) {
+      ctx.font = "italic 800 8.5px sans-serif";
+      ctx.fillStyle = "#facc15";
+      ctx.fillText(`${combo.count} COMBO!`, x + 14, y + 10);
+    } else {
+      ctx.font = "bold 7px sans-serif";
+      ctx.fillStyle = "#94a3b8";
+      ctx.fillText("STYLE", x + 14, y + 10);
+    }
+
+    ctx.restore();
+  }
+
+  // ===========================================================================
+  // PROCEDURAL PROJECTILES (NO EMOJIS)
+  // ===========================================================================
+
+  function drawProceduralProjectile(ctx, proj, time = (ARENA.frameCount || 0)) {
+    time = (time != null ? time : (ARENA.frameCount || 0));
+    ctx.save();
+    ctx.translate(proj.x, proj.y);
+
+    if (proj.type === "meteor") {
+      // --- INVOKER CHAOS METEOR (Пылающая «Котлета») ---
+      const r = proj.radius || 34;
+
+      // 1. Draw Burn Trail behind in local coords
+      if (proj.burnTrail) {
+        for (const tr of proj.burnTrail) {
+          const relX = tr.x - proj.x;
+          const relY = tr.y - proj.y;
+          const trAlpha = Math.min(1.0, tr.timer / 80);
+          ctx.fillStyle = `rgba(234, 88, 12, ${0.45 * trAlpha})`;
+          ctx.beginPath();
+          ctx.ellipse(relX, relY, 20, 6, 0, 0, Math.PI * 2);
+          ctx.fill();
+          // Inner ember
+          ctx.fillStyle = `rgba(254, 240, 138, ${0.7 * trAlpha})`;
+          ctx.beginPath();
+          ctx.arc(relX + (Math.sin(tr.timer * 0.3) * 6), relY - 2, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      ctx.rotate(proj.angle || (time * 0.12));
+
+      // 2. Fiery Magma Aura / Outer Blaze
+      ctx.fillStyle = "rgba(234, 88, 12, 0.45)";
+      ctx.shadowColor = "#f97316";
+      ctx.shadowBlur = 24;
+      ctx.beginPath();
+      ctx.arc(0, 0, r + 7, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 3. Molten Volcanic Rock Body (Charred dark obsidian stone)
+      ctx.fillStyle = "#1c1917";
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // 4. Glowing Magma Veins & Lava Cracks
+      ctx.strokeStyle = "#f97316";
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.7, -r * 0.3);
+      ctx.lineTo(-r * 0.2, 0);
+      ctx.lineTo(r * 0.3, -r * 0.4);
+      ctx.lineTo(r * 0.8, -r * 0.1);
+      ctx.moveTo(-r * 0.3, r * 0.5);
+      ctx.lineTo(0, r * 0.2);
+      ctx.lineTo(r * 0.4, r * 0.6);
+      ctx.stroke();
+
+      // White-hot inner crack lines
+      ctx.strokeStyle = "#fef08a";
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.2, 0);
+      ctx.lineTo(r * 0.3, -r * 0.4);
+      ctx.stroke();
+
+      // Molten craters
+      ctx.fillStyle = "#ea580c";
+      ctx.beginPath();
+      ctx.arc(-r * 0.35, -r * 0.2, 5, 0, Math.PI * 2);
+      ctx.arc(r * 0.2, r * 0.3, 5.5, 0, Math.PI * 2);
+      ctx.arc(-r * 0.1, r * 0.45, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // White-hot crater centers
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.arc(-r * 0.35, -r * 0.2, 2, 0, Math.PI * 2);
+      ctx.arc(r * 0.2, r * 0.3, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+
+    } else if (proj.type === "wind_blade") {
+      // Crescent Wind Blade / Cleave Wave
+      const col = proj.color || "#facc15";
+      const rad = proj.radius || 20;
+      ctx.shadowColor = col;
+      ctx.shadowBlur = proj.isHeavy ? 16 : 10;
+      ctx.strokeStyle = col;
+      ctx.lineWidth = proj.isHeavy ? 5 : 3.5;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.arc(0, 0, rad, -Math.PI * 0.45, Math.PI * 0.45);
+      ctx.stroke();
+
+      // Bright inner core
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(0, 0, rad - 2, -Math.PI * 0.35, Math.PI * 0.35);
+      ctx.stroke();
+
+      // Trailing wind sparks
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(-rad * 0.4, -rad * 0.3, 2, 0, Math.PI * 2);
+      ctx.arc(-rad * 0.4, rad * 0.3, 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+    } else if (proj.type === "dagger" || proj.type === "companion_dagger") {
+      // Throwing Dagger (PA / Squad Companion)
+      ctx.rotate(Math.atan2(proj.vy || 0, proj.vx || 1) || 0);
+      const isCrit = !!proj.isCrit;
+      // Trail
+      ctx.strokeStyle = isCrit ? "rgba(239, 68, 68, 0.65)" : "rgba(34, 211, 238, 0.5)";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(-16, 0); ctx.lineTo(0, 0);
+      ctx.stroke();
+
+      // Steel blade
+      ctx.fillStyle = "#e2e8f0";
+      ctx.strokeStyle = "#22d3ee";
+      ctx.lineWidth = 1.5;
+      ctx.shadowColor = "#22d3ee";
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.moveTo(8, 0); ctx.lineTo(-4, -4); ctx.lineTo(-4, 4);
+      ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      ctx.shadowBlur = 0;
+
+    } else if (proj.isBossFireball || proj.type === "fireball") {
+      // Blazing Boss Fireball
+      ctx.fillStyle = "#f97316";
+      ctx.shadowColor = "#ea580c";
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.arc(0, 0, 8, 0, Math.PI * 2);
+      ctx.fill();
+      // White hot core
+      ctx.fillStyle = "#fef08a";
+      ctx.beginPath();
+      ctx.arc(0, 0, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Trailing flame wisps
+      ctx.fillStyle = "rgba(234, 88, 12, 0.6)";
+      for (let f = 0; f < 3; f++) {
+        const fx = 8 + (time * 0.5 + f * 4) % 12;
+        const fy = Math.sin(time * 0.3 + f) * 3;
+        ctx.beginPath();
+        ctx.arc(fx, fy, 3.5 - f * 0.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+    } else if (proj.type === "topdown_shot") {
+      const ang = Math.atan2(proj.vy || 0, proj.vx || 1);
+      ctx.rotate(ang);
+      const col = proj.color || (proj.isCrit ? "#f59e0b" : "#38bdf8");
+      ctx.fillStyle = col;
+      ctx.shadowColor = col;
+      ctx.shadowBlur = proj.isCrit ? 16 : 10;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, (proj.radius || 6) * 1.5, (proj.radius || 6) * 0.85, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.ellipse(2, 0, (proj.radius || 6) * 0.75, (proj.radius || 6) * 0.45, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(-8, 0, 3, 0, Math.PI * 2);
+      ctx.arc(-14, 0, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (proj.reflected) {
+      // REFLECTED RADIANT GOLDEN BOLT
+      ctx.fillStyle = "#facc15";
+      ctx.shadowColor = "#facc15";
+      ctx.shadowBlur = 16;
+      ctx.beginPath();
+      ctx.arc(0, 0, 7.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Speed streak
+      ctx.strokeStyle = "rgba(250, 204, 21, 0.75)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(-16, 0); ctx.lineTo(0, 0);
+      ctx.stroke();
+
+    } else {
+      // General Magic Bolt (Player or Enemy Caster)
+      const col = proj.color || "#38bdf8";
+      ctx.fillStyle = col;
+      ctx.shadowColor = col;
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
+      ctx.fill();
+      // Bright center
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.arc(0, 0, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Sparkle tail
+      const dir = (proj.speed && proj.speed < 0) ? -1 : 1;
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(-dir * 7, 0, 3, 0, Math.PI * 2);
+      ctx.arc(-dir * 12, 0, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+
+    function renderGrandBossHUD(ctx, w, h, boss, time) {
+    if (!boss) return;
+
+    const bannerX = 8;
+    const bannerY = 7;
+    const bannerW = w - 16;
+    const bannerH = 48;
+
+    // Background Ornate Slate Box
+    ctx.save();
+    ctx.fillStyle = "rgba(15, 23, 42, 0.94)";
+    ctx.beginPath();
+    safeRoundRect(ctx, bannerX, bannerY, bannerW, bannerH, 12);
+    ctx.fill();
+
+    ctx.strokeStyle = boss.enraged ? "#ef4444" : (boss.isStaggered ? "#ec4899" : "#f59e0b");
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    safeRoundRect(ctx, bannerX, bannerY, bannerW, bannerH, 12);
+    ctx.stroke();
+
+    // 1. Top Row: Title & Party Mode Toggle
+    ctx.font = "bold 10px sans-serif";
+    ctx.fillStyle = boss.enraged ? "#f87171" : "#facc15";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    let enrageLabel = "";
+    const eTimer = boss.enrageTimer || 0;
+    if (boss.enrageStage === "enraged" || boss.enraged) {
+      enrageLabel = "🔥 БЕЗУМИЕ!";
+    } else if (boss.enrageStage === "furious") {
+      enrageLabel = "⚡ ЯРОСТЬ!";
+    } else if (boss.enrageStage === "angry") {
+      enrageLabel = "😡 ЗЛОЙ!";
+    } else {
+      const secLeft = Math.max(0, Math.ceil((2000 - eTimer) / 60));
+      enrageLabel = `⏱️ Злость: ${secLeft}с`;
+    }
+    const bossTitle = `👑 ${boss.name || "БОСС"} • ${enrageLabel}`;
+    ctx.fillText(bossTitle.length > 28 ? bossTitle.slice(0, 27) + "…" : bossTitle, bannerX + 10, bannerY + 11);
+
+    // Party Button on Canvas HUD
+    const btnW = 86;
+    const btnH = 18;
+    const btnX = bannerX + bannerW - btnW - 6;
+    const btnY = bannerY + 3;
+    const isTrio = (ARENA.bossPartyMode || "trio") === "trio";
+
+    ctx.fillStyle = isTrio ? "rgba(16, 185, 129, 0.25)" : "rgba(168, 85, 247, 0.25)";
+    ctx.beginPath();
+    safeRoundRect(ctx, btnX, btnY, btnW, btnH, 6);
+    ctx.fill();
+
+    ctx.strokeStyle = isTrio ? "#10b981" : "#a855f7";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    safeRoundRect(ctx, btnX, btnY, btnW, btnH, 6);
+    ctx.stroke();
+
+    ctx.font = "bold 9px sans-serif";
+    ctx.fillStyle = isTrio ? "#6ee7b7" : "#d8b4fe";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(isTrio ? "👥 Отряд: 3" : "👤 Бой: Соло", btnX + btnW / 2, btnY + btnH / 2);
+    ARENA._partyBtnBounds = { x: btnX, y: btnY, w: btnW, h: btnH };
+
+    // 2. Main Boss HP Bar
+    const hpBarX = bannerX + 10;
+    const hpBarY = bannerY + 22;
+    const hpBarW = bannerW - 20;
+    const hpBarH = 12;
+    const hpPct = Math.max(0, Math.min(1, boss.hp / boss.maxHp));
+
+    ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+    ctx.beginPath();
+    safeRoundRect(ctx, hpBarX, hpBarY, hpBarW, hpBarH, 4);
+    ctx.fill();
+
+    // HP Fill Gradient
+    const hpGrad = ctx.createLinearGradient(hpBarX, 0, hpBarX + hpBarW, 0);
+    if (boss.enraged) {
+      hpGrad.addColorStop(0, "#ea580c");
+      hpGrad.addColorStop(1, "#dc2626");
+    } else {
+      hpGrad.addColorStop(0, "#dc2626");
+      hpGrad.addColorStop(1, "#b91c1c");
+    }
+    ctx.fillStyle = hpGrad;
+    ctx.beginPath();
+    safeRoundRect(ctx, hpBarX, hpBarY, hpBarW * hpPct, hpBarH, 4);
+    ctx.fill();
+
+    // HP Text
+    ctx.font = "bold 8.5px sans-serif";
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.shadowColor = "#000000";
+    ctx.shadowBlur = 4;
+    ctx.fillText(`${formatCompact(boss.hp)} / ${formatCompact(boss.maxHp)} (${Math.ceil(hpPct * 100)}%)`, hpBarX + hpBarW / 2, hpBarY + hpBarH / 2);
+    ctx.shadowBlur = 0;
+
+    // 3. Poise / Stagger Bar & Badges
+    const poiseBarX = hpBarX;
+    const poiseBarY = hpBarY + hpBarH + 3;
+    const poiseBarW = hpBarW - 100;
+    const poiseBarH = 5;
+    const poiseVal = boss.poise !== undefined ? boss.poise : 300;
+    const poiseMax = boss.maxPoise || 300;
+    const poisePct = Math.max(0, Math.min(1, poiseVal / poiseMax));
+
+    ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
+    ctx.beginPath();
+    safeRoundRect(ctx, poiseBarX, poiseBarY, poiseBarW, poiseBarH, 2.5);
+    ctx.fill();
+
+    ctx.fillStyle = boss.isStaggered ? "#ec4899" : "#f59e0b";
+    ctx.beginPath();
+    safeRoundRect(ctx, poiseBarX, poiseBarY, poiseBarW * (boss.isStaggered ? 1.0 : poisePct), poiseBarH, 2.5);
+    ctx.fill();
+
+    // Poise / Stagger Label
+    ctx.font = "bold 7px sans-serif";
+    ctx.fillStyle = boss.isStaggered ? "#f472b6" : "#fde68a";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(boss.isStaggered ? "💫 ОШЕЛОМЛЕН (+150%)!" : `⚡ БАЛАНС ${Math.ceil(poiseVal)}/${poiseMax}`, poiseBarX + 4, poiseBarY + poiseBarH / 2);
+
+    // Badges on the right of poise bar
+    let badgeX = poiseBarX + poiseBarW + 6;
+    if (boss.enraged) {
+      ctx.fillStyle = "#ef4444";
+      ctx.font = "bold 7.5px sans-serif";
+      ctx.fillText("🔥 ЯРОСТЬ", badgeX, poiseBarY + poiseBarH / 2);
+      badgeX += 46;
+    }
+    if (boss.tormentorShield) {
+      ctx.fillStyle = "#c084fc";
+      ctx.font = "bold 7.5px sans-serif";
+      ctx.fillText("🔮 ЩИТ", badgeX, poiseBarY + poiseBarH / 2);
+    }
+
+    ctx.restore();
+  }
+
+  function renderArena() {
+    const canvas = document.getElementById("rpg-action-canvas");
+    if (!canvas) return;
+
+    if (ARENA.canvas !== canvas || !ARENA.ctx) {
+      bindArenaCanvas(canvas);
+    }
+
+    const ctx = ARENA.ctx;
+    if (!ctx) return;
+    const clientW = canvas.clientWidth || (canvas.getBoundingClientRect && canvas.getBoundingClientRect().width) || 360;
+    const clientH = canvas.clientHeight || (canvas.getBoundingClientRect && canvas.getBoundingClientRect().height) || (ARENA.topDownMode || ARENA.isRaidBossBattle ? 520 : 320);
+    const w = ARENA.width || clientW || 360;
+    const h = ARENA.height || clientH || 320;
+    const time = ARENA.frameCount || 0;
+
+    // Camera Trauma Shake (Sekiro / Hollow Knight impact feel)
+    let shakeX = 0, shakeY = 0;
+    if (ARENA.cameraTrauma > 0) {
+      ARENA.cameraTrauma = Math.max(0, ARENA.cameraTrauma - 0.02);
+      const shake = Math.pow(ARENA.cameraTrauma, 2) * 12;
+      shakeX = (Math.random() * 2 - 1) * shake;
+      shakeY = (Math.random() * 2 - 1) * shake;
+    }
+    ctx.save();
+    ctx.translate(shakeX, shakeY);
+
+    // Camera Zoom-Out in Top-Down mode: scale 520x720 arena to fit screen (zoom ~0.69)
+    if (ARENA.topDownMode || ARENA.isRaidBossBattle) {
+      const zoom = Math.min(clientW / 520, clientH / 720);
+      const offX = (clientW - 520 * zoom) / 2;
+      const offY = (clientH - 720 * zoom) / 2;
+
+      ctx.translate(offX, offY);
+      ctx.scale(zoom, zoom);
+
+      // Deep Obsidian Floor filling 520x720 arena
+      ctx.fillStyle = "#09090b";
+      ctx.fillRect(-60, -60, 520 + 120, 720 + 120);
+
+      // 2. Tactical Tile Grid (Spacious Arena)
+      ctx.strokeStyle = "rgba(71, 85, 105, 0.20)";
+      ctx.lineWidth = 1;
+      const tileSize = 44;
+      for (let tx = 0; tx <= 520; tx += tileSize) {
+        ctx.beginPath(); ctx.moveTo(tx, 0); ctx.lineTo(tx, 720); ctx.stroke();
+      }
+      for (let ty = 0; ty <= 720; ty += tileSize) {
+        ctx.beginPath(); ctx.moveTo(0, ty); ctx.lineTo(520, ty); ctx.stroke();
+      }
+
+      // 3. Glowing Perimeter Hazard Walls
+      ctx.strokeStyle = "rgba(234, 179, 8, 0.50)";
+      ctx.lineWidth = 4;
+      ctx.strokeRect(16, 16, 488, 688);
+
+      // Inner danger border
+      ctx.strokeStyle = "rgba(239, 68, 68, 0.35)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([14, 8]);
+      ctx.strokeRect(24, 24, 472, 672);
+      ctx.setLineDash([]);
+
+      // 4. Central Magical Battle Circle
+      ctx.strokeStyle = "rgba(234, 179, 8, 0.38)";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(260, 360, 95, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Outer Rune Octagon
+      ctx.setLineDash([10, 6]);
+      ctx.strokeStyle = "rgba(168, 85, 247, 0.38)";
+      ctx.beginPath();
+      ctx.arc(260, 360, 150, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // 5. 4 Corner Tactical Pillars (Cover Obstacles)
+      const pillars = [
+        { x: 70, y: 90 },
+        { x: 450, y: 90 },
+        { x: 70, y: 630 },
+        { x: 450, y: 630 }
+      ];
+      for (const pil of pillars) {
+        ctx.fillStyle = "rgba(0,0,0,0.45)";
+        ctx.beginPath();
+        ctx.ellipse(pil.x, pil.y + 10, 16, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#1e293b";
+        ctx.strokeStyle = "#64748b";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(pil.x, pil.y, 13, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "#38bdf8";
+        ctx.beginPath();
+        ctx.arc(pil.x, pil.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 6. Boss Charge Telegraph Beam (Bright pulsing warning beam with moving chevrons)
+      const bObj = ARENA.bossEntity;
+      if (bObj && bObj.state === "telegraph_charge") {
+        ctx.save();
+        const cAng = bObj.chargeAngle || 0;
+        const beamL = 440;
+        const cos = Math.cos(cAng);
+        const sin = Math.sin(cAng);
+        const nx = -sin * 24;
+        const ny = cos * 24;
+
+        const pulse = 0.28 + Math.sin((ARENA.frameCount || 0) * 0.18) * 0.12;
+        ctx.fillStyle = `rgba(239, 68, 68, ${pulse})`;
+        ctx.strokeStyle = "#ef4444";
+        ctx.lineWidth = 3;
+        ctx.setLineDash([12, 6]);
+        ctx.beginPath();
+        ctx.moveTo(bObj.x + nx, bObj.y + ny);
+        ctx.lineTo(bObj.x + nx + cos * beamL, bObj.y + ny + sin * beamL);
+        ctx.lineTo(bObj.x - nx + cos * beamL, bObj.y - ny + sin * beamL);
+        ctx.lineTo(bObj.x - nx, bObj.y - ny);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Animated moving chevron markers along the charge beam
+        const animOffset = ((ARENA.frameCount || 0) * 2) % 40;
+        ctx.fillStyle = "#fef08a";
+        for (let st = 35 + animOffset; st < beamL; st += 40) {
+          ctx.beginPath();
+          ctx.arc(bObj.x + cos * st, bObj.y + sin * st, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      // Melee Smash Telegraph Circle (Expanding pulsing red hazard zone)
+      if (bObj && bObj.state === "telegraph_melee") {
+        ctx.save();
+        const pulse = 0.32 + Math.sin((ARENA.frameCount || 0) * 0.2) * 0.15;
+        ctx.fillStyle = `rgba(239, 68, 68, ${pulse})`;
+        ctx.strokeStyle = "#ef4444";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(bObj.x, bObj.y, 65, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+    } else {
+      // CLASSIC SIDE-SCROLLING ROAD (Only when NOT in Top-Down / Boss Fight!)
+      if (ARENA.bossArenaMode) {
+        if (!ARENA.cachedBossSkyGrad) {
+          ARENA.cachedBossSkyGrad = ctx.createLinearGradient(0, -24, 0, h * 0.55);
+          ARENA.cachedBossSkyGrad.addColorStop(0, "#450a0a");
+          ARENA.cachedBossSkyGrad.addColorStop(0.4, "#1c1917");
+          ARENA.cachedBossSkyGrad.addColorStop(1, "#292524");
+        }
+        ctx.fillStyle = ARENA.cachedBossSkyGrad;
+      } else {
+        ctx.fillStyle = ARENA.cachedSkyGrad || "#3b82f6";
+      }
+      ctx.fillRect(-24, -24, w + 48, h * 0.55 + 24);
+
+      // Clouds
+      if (ARENA.bossArenaMode) {
+        ctx.fillStyle = "rgba(249, 115, 22, 0.6)";
+        for (let e = 0; e < 12; e++) {
+          const ex = (e * 31 + time * 1.2) % (w + 20);
+          const ey = (e * 23 + time * 0.8) % (h * 0.7);
+          ctx.beginPath();
+          ctx.arc(ex, ey, (e % 3) + 1, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else {
+        for (const cloud of (ARENA.clouds || [])) {
+          drawProceduralCloud(ctx, cloud);
+        }
+      }
+
+      // Distant Hills
+      ctx.fillStyle = ARENA.bossArenaMode ? "#1c1917" : "#22c55e";
+      ctx.beginPath();
+      ctx.moveTo(-24, h * 0.55);
+      ctx.quadraticCurveTo(60, h * 0.42, 120, h * 0.52);
+      ctx.quadraticCurveTo(180, h * 0.40, 240, h * 0.50);
+      ctx.quadraticCurveTo(310, h * 0.43, w + 24, h * 0.50);
+      ctx.lineTo(w + 24, h * 0.58);
+      ctx.lineTo(-24, h * 0.58);
+      ctx.closePath();
+      ctx.fill();
+
+      // Ground
+      if (ARENA.bossArenaMode) {
+        if (!ARENA.cachedBossGroundGrad) {
+          ARENA.cachedBossGroundGrad = ctx.createLinearGradient(0, h * 0.55 - 4, 0, h + 24);
+          ARENA.cachedBossGroundGrad.addColorStop(0, "#1c1917");
+          ARENA.cachedBossGroundGrad.addColorStop(0.4, "#292524");
+          ARENA.cachedBossGroundGrad.addColorStop(1, "#0c0a09");
+        }
+        ctx.fillStyle = ARENA.cachedBossGroundGrad;
+      } else {
+        ctx.fillStyle = ARENA.cachedGroundGrad || "#15803d";
+      }
+      ctx.fillRect(-24, h * 0.55 - 4, w + 48, h * 0.45 + 32);
+
+      // Grass blades
+      ctx.fillStyle = "#4ade80";
+      for (let gx = 15; gx < w; gx += 40) {
+        const gy = ARENA.roadY + 32 + (gx * 13 % 17);
+        ctx.beginPath();
+        ctx.moveTo(gx, gy);
+        ctx.lineTo(gx - 3, gy - 6);
+        ctx.lineTo(gx + 1, gy - 4);
+        ctx.lineTo(gx + 4, gy - 7);
+        ctx.lineTo(gx + 6, gy);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // Trail
+      ctx.fillStyle = "#927050";
+      ctx.beginPath();
+      ctx.moveTo(0, ARENA.roadY - 14);
+      for (let px = 0; px <= w; px += 20) {
+        ctx.lineTo(px, ARENA.roadY - 14 + Math.sin(px * 0.03) * 3);
+      }
+      ctx.lineTo(w, ARENA.roadY + 30);
+      for (let px = w; px >= 0; px -= 20) {
+        ctx.lineTo(px, ARENA.roadY + 30 + Math.sin(px * 0.04) * 2);
+      }
+      ctx.closePath();
+      ctx.fill();
+
+      // Light strip
+      ctx.fillStyle = "#b89570";
+      ctx.fillRect(0, ARENA.roadY - 2, w, 20);
+
+      // Pebbles
+      ctx.fillStyle = "#6e5238";
+      const pebbles = [30, 85, 145, 210, 275, 335];
+      for (const px of pebbles) {
+        const py = ARENA.roadY + 6 + (px * 7 % 11);
+        ctx.beginPath();
+        ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Trees
+      for (const tr of [{ x: 15 }, { x: 100 }, { x: 210 }, { x: 320 }]) {
+        drawProceduralTree(ctx, tr.x, ARENA.roadY - 14, time);
+      }
+    }
+
+    // ---- 6.0 BOSS ARENA DANGER ZONES (Visual Telegraphs & Impact Flashes) ----
+    if (ARENA.dangerZones && ARENA.dangerZones.length > 0) {
+      for (const dz of ARENA.dangerZones) {
+        ctx.save();
+        const maxT = dz.maxTimer || 45;
+        const progress = Math.min(1, Math.max(0, 1 - (dz.timer / maxT)));
+        const pulse = 0.5 + Math.sin(time * 0.25) * 0.35;
+
+        if (dz.phase === "telegraph") {
+          // Warning red zone with warning border & fill
+          if (dz.type === "rect") {
+            ctx.fillStyle = `rgba(239, 68, 68, ${0.22 + progress * 0.32})`;
+            ctx.fillRect(dz.x, dz.y, dz.w, dz.h);
+            ctx.strokeStyle = `rgba(248, 113, 113, ${0.7 + pulse * 0.3})`;
+            ctx.lineWidth = 2.5;
+            ctx.setLineDash([6, 4]);
+            ctx.strokeRect(dz.x, dz.y, dz.w, dz.h);
+            // Red progress bar at bottom of rectangle
+            ctx.fillStyle = "rgba(220, 38, 38, 0.75)";
+            ctx.fillRect(dz.x, dz.y + dz.h - 4, dz.w * progress, 4);
+          } else if (dz.type === "circle") {
+            ctx.beginPath();
+            ctx.arc(dz.cx, dz.cy, dz.r, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(239, 68, 68, ${0.22 + progress * 0.32})`;
+            ctx.fill();
+            ctx.strokeStyle = `rgba(248, 113, 113, ${0.7 + pulse * 0.3})`;
+            ctx.lineWidth = 2.5;
+            ctx.setLineDash([6, 4]);
+            ctx.stroke();
+            // Expanding inner red circle indicator
+            ctx.beginPath();
+            ctx.arc(dz.cx, dz.cy, dz.r * progress, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(220, 38, 38, 0.4)";
+            ctx.fill();
+          }
+          // Warning Exclamation Marker
+          ctx.font = "bold 13px sans-serif";
+          ctx.fillStyle = "#facc15";
+          ctx.textAlign = "center";
+          const tx = dz.type === "rect" ? (dz.x + dz.w / 2) : dz.cx;
+          const ty = dz.type === "rect" ? (dz.y + dz.h / 2 + 5) : (dz.cy + 5);
+          ctx.fillText("⚠️", tx, ty);
+        } else if (dz.phase === "active") {
+          // Impact detonation flash!
+          ctx.shadowColor = "#ef4444";
+          ctx.shadowBlur = 18;
+          if (dz.type === "rect") {
+            ctx.fillStyle = "rgba(254, 202, 202, 0.85)";
+            ctx.fillRect(dz.x, dz.y, dz.w, dz.h);
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 3;
+            ctx.strokeRect(dz.x, dz.y, dz.w, dz.h);
+          } else if (dz.type === "circle") {
+            ctx.beginPath();
+            ctx.arc(dz.cx, dz.cy, dz.r, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(254, 202, 202, 0.85)";
+            ctx.fill();
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 3;
+            ctx.stroke();
+          }
+          ctx.shadowBlur = 0;
+        }
+        ctx.restore();
+      }
+    }
+
+    // ---- 6. PICKUPS & TELEGRAPHS & SHOCKWAVES ----
+    // Ground Telegraphs (Boss ground attacks)
+    if (ARENA.telegraphs && ARENA.telegraphs.length > 0) {
+      for (const tg of ARENA.telegraphs) {
+        const progress = Math.min(1, 1 - (tg.timer / tg.maxTimer));
+        ctx.save();
+        ctx.strokeStyle = "rgba(239, 68, 68, 0.85)";
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.arc(tg.x, tg.y, tg.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = `rgba(239, 68, 68, ${0.15 + progress * 0.35})`;
+        ctx.beginPath();
+        ctx.arc(tg.x, tg.y, tg.radius * progress, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // Radial Expanding Shockwaves
+    if (ARENA.shockwaves && ARENA.shockwaves.length > 0) {
+      for (const sw of ARENA.shockwaves) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(249, 115, 22, 0.95)";
+        ctx.lineWidth = 4;
+        ctx.shadowColor = "#f97316";
+        ctx.shadowBlur = 12;
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // Standard Pickups
+    for (const it of ARENA.pickups) {
+      if (it.type === "gold") {
+        drawProceduralCoin(ctx, it.x, it.y, 6.5, time);
+      } else if (it.type === "loot") {
+        drawProceduralChest(ctx, it.x, it.y, time, false, false);
+      } else {
+        drawProceduralGem(ctx, it.x, it.y, 6.5, "#38bdf8", time);
+      }
+    }
+
+    // Bouncing Physical Coins & Gems (Loot Explosion)
+    if (ARENA.physicalCoins && ARENA.physicalCoins.length > 0) {
+      for (const c of ARENA.physicalCoins) {
+        ctx.save();
+        const drawY = c.y - c.z;
+        ctx.beginPath();
+        ctx.ellipse(c.x, c.y + 4, 5, 2.5, 0, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
+        ctx.fill();
+        ctx.font = `${c.size}px 'Segoe UI Emoji', 'Apple Color Emoji', sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        if (c.type === "gem") {
+          drawProceduralGem(ctx, c.x, drawY, 6, c.color || "#38bdf8", time);
+        } else {
+          drawProceduralCoin(ctx, c.x, drawY, 6.5, time);
+        }
+        ctx.restore();
+      }
+    }
+
+    // Falling Legendary Chest & Pillar of Light
+    if (ARENA.fallingChest) {
+      const fc = ARENA.fallingChest;
+      ctx.save();
+      if (fc.landed && fc.beamAlpha > 0) {
+        const grad = ctx.createLinearGradient(fc.x, 0, fc.x, fc.targetY);
+        grad.addColorStop(0, "rgba(253, 224, 71, 0)");
+        grad.addColorStop(0.3, `rgba(250, 204, 21, ${fc.beamAlpha * 0.35})`);
+        grad.addColorStop(1, `rgba(245, 158, 11, ${fc.beamAlpha * 0.85})`);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(fc.x - 22, 0);
+        ctx.lineTo(fc.x + 22, 0);
+        ctx.lineTo(fc.x + 34, fc.targetY + 12);
+        ctx.lineTo(fc.x - 34, fc.targetY + 12);
+        ctx.closePath();
+        ctx.fill();
+
+        // Rotating rays
+        ctx.save();
+        ctx.translate(fc.x, fc.targetY);
+        ctx.rotate(fc.rayAngle);
+        ctx.strokeStyle = `rgba(253, 224, 71, ${fc.beamAlpha * 0.4})`;
+        ctx.lineWidth = 1.5;
+        for (let r = 0; r < 8; r++) {
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          const ra = (r * Math.PI) / 4;
+          ctx.lineTo(Math.cos(ra) * 45, Math.sin(ra) * 45);
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        for (const sp of fc.sparkles) {
+          ctx.fillStyle = `rgba(255, 255, 255, ${sp.alpha})`;
+          ctx.beginPath();
+          ctx.arc(sp.x, sp.y, sp.size, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      drawProceduralChest(ctx, fc.x, fc.y, time, fc.landed, fc.opened);
+
+      if (fc.landed) {
+        ctx.font = "bold 9.5px sans-serif";
+        ctx.fillStyle = "#fef08a";
+        ctx.shadowColor = "#000000";
+        ctx.shadowBlur = 4;
+        ctx.fillText("НАЖМИТЕ, ЧТОБЫ ОТКРЫТЬ!", fc.x, fc.targetY + 22);
+      }
+      ctx.restore();
+    }
+
+    // ---- 7. ALLIED MINIONS (WK Skeletons) ----
+    for (const m of ARENA.alliedMinions) {
+      ctx.fillStyle = "#1e293b";
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, m.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#10b981";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      drawProceduralMinion(ctx, m, time);
+    }
+
+    // ---- 8. DOTA CREEPS & BOSSES (SOLID TOKEN SPRITES) ----
+    for (const c of ARENA.creeps) {
+      // Ground Shadow
+      ctx.fillStyle = "rgba(0,0,0,0.3)";
+      ctx.beginPath();
+      ctx.ellipse(c.x, c.y + c.radius * 0.8, c.radius * 0.9, c.radius * 0.35, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Boss shield glow
+      if (c.isBoss && c.shielded) {
+        ctx.strokeStyle = "rgba(168, 85, 247, 0.8)";
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, c.radius + 12, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = "rgba(168, 85, 247, 0.15)";
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, c.radius + 12, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // PROCEDURAL VECTOR CREEP / BOSS SPRITE (ZERO EMOJIS)
+      drawProceduralCreep(ctx, c, time);
+
+      // CREEP NAME TAG
+      ctx.font = c.isBoss ? "bold 9.5px sans-serif" : "bold 7.5px sans-serif";
+      ctx.fillStyle = c.isBoss ? "#facc15" : "#ffffff";
+      ctx.fillText(c.name, c.x, c.y - c.radius - (c.isBoss ? 16 : 10));
+
+      // HP BAR
+      const barW = c.radius * 2.2;
+      const barH = c.isBoss ? 6 : 4;
+      const hpPct = Math.max(0, Math.min(1, c.hp / c.maxHp));
+      ctx.fillStyle = "rgba(0,0,0,0.65)";
+      ctx.fillRect(c.x - barW / 2, c.y - c.radius - 6, barW, barH);
+      ctx.fillStyle = c.isBoss ? "#ef4444" : (c.team === "radiant" ? "#22c55e" : "#f97316");
+      ctx.fillRect(c.x - barW / 2, c.y - c.radius - 6, barW * hpPct, barH);
+
+      // BOSS POISE (STAGGER) BAR & TORMENTOR SHIELD
+      if (c.isBoss) {
+        const poiseBarW = barW;
+        const poiseH = 3;
+        const pPct = Math.max(0, Math.min(1, (c.poise !== undefined ? c.poise : 300) / (c.maxPoise || 300)));
+        ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+        ctx.fillRect(c.x - poiseBarW / 2, c.y - c.radius - 11, poiseBarW, poiseH);
+        ctx.fillStyle = c.isStaggered ? "#ec4899" : "#fbbf24";
+        ctx.fillRect(c.x - poiseBarW / 2, c.y - c.radius - 11, poiseBarW * pPct, poiseH);
+
+        // Stagger / Stunned / Enrage badge & visual indicators
+        if (c.state === "stunned") {
+          ctx.font = "bold 10px sans-serif";
+          ctx.fillStyle = "#facc15";
+          ctx.fillText("💫 В СТЕНЕ! ОШЕЛОМЛЕН! БЕЙ!", c.x, c.y - c.radius - 20);
+          // Rotating stars over boss head
+          const stAngle = (ARENA.frameCount || 0) * 0.08;
+          for (let s = 0; s < 3; s++) {
+            const a = stAngle + (s * Math.PI * 2) / 3;
+            const sx = c.x + Math.cos(a) * (c.radius * 0.75);
+            const sy = c.y - c.radius * 0.9 + Math.sin(a) * 5;
+            ctx.fillStyle = "#facc15";
+            ctx.beginPath();
+            ctx.arc(sx, sy, 4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else if (c.state === "telegraph_charge") {
+          ctx.font = "bold 10px sans-serif";
+          ctx.fillStyle = "#ef4444";
+          ctx.fillText("⚠️ ТАРАН (УЙДИ С ЛИНИИ!)", c.x, c.y - c.radius - 20);
+        } else if (c.state === "telegraph_melee") {
+          ctx.font = "bold 10px sans-serif";
+          ctx.fillStyle = "#f97316";
+          ctx.fillText("⚠️ ЗАМАХ (ОТОЙДИ!)", c.x, c.y - c.radius - 20);
+        } else if (c.isStaggered) {
+          ctx.font = "bold 8.5px sans-serif";
+          ctx.fillStyle = "#fbbf24";
+          ctx.fillText("💫 STAGGER (+150%)", c.x, c.y - c.radius - 18);
+        } else if (c.enraged) {
+          ctx.font = "bold 8.5px sans-serif";
+          ctx.fillStyle = "#ef4444";
+          ctx.fillText("🔥 ENRAGE!", c.x, c.y - c.radius - 18);
+        }
+
+        // Tormentor Reflective Shield Ring
+        if (c.tormentorShield) {
+          ctx.save();
+          ctx.strokeStyle = "rgba(192, 132, 252, 0.95)";
+          ctx.lineWidth = 3.5;
+          ctx.setLineDash([6, 3]);
+          ctx.beginPath();
+          ctx.arc(c.x, c.y, c.radius + 14, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.fillStyle = "rgba(168, 85, 247, 0.18)";
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+    }
+
+    // ---- 8.5 SQUAD COMPANIONS (TRIO SQUAD MODE) ----
+    if (ARENA.isBossActive && (ARENA.bossPartyMode || "trio") === "trio" && ARENA.bossCompanions) {
+      for (const comp of ARENA.bossCompanions) {
+        // Shadow
+        ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
+        ctx.beginPath();
+        ctx.ellipse(comp.x, comp.y + comp.radius + 2, 16, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Procedural Hero Sprite
+        drawProceduralHero(ctx, comp, comp.heroClass, time, !!comp.slashAnimation, 0);
+
+        // Name tag
+        ctx.font = "bold 7.5px sans-serif";
+        ctx.fillStyle = "#38bdf8";
+        ctx.textAlign = "center";
+        ctx.fillText(comp.name, comp.x, comp.y - comp.radius - 6);
+
+        // Slash Arc
+        if (comp.slashAnimation) {
+          const csa = comp.slashAnimation;
+          ctx.save();
+          ctx.translate(comp.x + 18, comp.y);
+          ctx.strokeStyle = "rgba(251, 191, 36, 0.9)";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(0, 0, csa.radius, -Math.PI * 0.35, Math.PI * 0.35);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+    }
+
+    // ---- 9. HERO (STATIONARY TOKEN, LEFT SIDE) ----
+    const p = ARENA.player;
+    const heroProfile = RPG_STATE.profile || {};
+
+    // Hero Platform / Shadow
+    ctx.fillStyle = "rgba(250, 204, 21, 0.2)";
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y + p.radius + 2, 24, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Pudge Flesh Heap Spiked Shield Aura
+    if (p.fleshHeapActive > 0) {
+      ctx.strokeStyle = "rgba(239, 68, 68, 0.7)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius + 8, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Juggernaut Blade Dance Whirlwind
+    if (p.bladeDanceActive > 0) {
+      ctx.strokeStyle = "rgba(245, 158, 11, 0.8)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius + 9, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Anti-Mage Counterspell Shield
+    if (p.counterspellActive > 0) {
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.85)";
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius + 10, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // RENDER DASH GHOST AFTERIMAGES BEHIND PLAYER
+    if (ARENA.dashGhosts) {
+      for (const ghost of ARENA.dashGhosts) {
+        ctx.save();
+        ctx.globalAlpha = ghost.alpha;
+        drawProceduralHero(ctx, ghost, ghost.heroClass, time, false, 0);
+        ctx.restore();
+      }
+    }
+
+    // PROCEDURAL VECTOR HERO SPRITE (ZERO EMOJIS)
+    const hClass = (heroProfile.hero_class || heroProfile.class_id || RPG_STATE.profile?.hero_class || "pudge").toLowerCase();
+    drawProceduralHero(ctx, p, hClass, time, !!p.slashAnimation, ARENA.combo ? ARENA.combo.step : 0);
+
+    // HERO NAME
+    ctx.font = "bold 8.5px sans-serif";
+    ctx.fillStyle = "#facc15";
+    ctx.fillText(heroProfile.class_name ? heroProfile.class_name.split(" ")[0] : "Герой", p.x, p.y - p.radius - 22);
+
+    // HERO HP & MP BARS
+    const pHpPct = Math.max(0, Math.min(1, p.currentHp / p.maxHp));
+    const pMpPct = Math.max(0, Math.min(1, p.currentMp / p.maxMp));
+    const pBarW = 54;
+    ctx.fillStyle = "rgba(0,0,0,0.65)";
+    ctx.fillRect(p.x - pBarW / 2, p.y - p.radius - 15, pBarW, 5);
+    ctx.fillStyle = "#22c55e";
+    ctx.fillRect(p.x - pBarW / 2, p.y - p.radius - 15, pBarW * pHpPct, 5);
+    ctx.fillStyle = "rgba(0,0,0,0.65)";
+    ctx.fillRect(p.x - pBarW / 2, p.y - p.radius - 9, pBarW, 4);
+    ctx.fillStyle = "#38bdf8";
+    ctx.fillRect(p.x - pBarW / 2, p.y - p.radius - 9, pBarW * pMpPct, 4);
+
+    // Melee Slash Arc
+    if (p.slashAnimation) {
+      const sa = p.slashAnimation;
+      ctx.save();
+      ctx.translate(p.x + 24, p.y);
+      ctx.strokeStyle = sa.isMagic ? "rgba(56, 189, 248, 0.9)" : "rgba(250, 204, 21, 0.9)";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(0, 0, sa.radius, -Math.PI * 0.4, Math.PI * 0.4);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // ---- 10. PLAYER PROJECTILES (Snowball, Magic Orbs, Daggers) ----
+    for (const proj of ARENA.playerProjectiles) {
+      drawProceduralProjectile(ctx, proj, time);
+    }
+
+    // ---- 11. SPECIAL EFFECTS (Lightning, Rot, Omnislash, Active Items) ----
+    for (const fx of ARENA.specialEffects) {
+      if (fx.type === "refresher_burst") {
+        ctx.save();
+        const progress = 1 - (fx.timer / 35);
+        const curRadius = fx.radius + (fx.maxRadius - fx.radius) * progress;
+        const alpha = Math.max(0, fx.timer / 35);
+        ctx.shadowColor = "#22c55e";
+        ctx.shadowBlur = 25;
+        ctx.strokeStyle = `rgba(34, 197, 94, ${alpha * 0.9})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.ellipse(fx.x, fx.y, curRadius, curRadius * 0.45, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = `rgba(74, 222, 128, ${alpha * 0.25})`;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        for (let s = 0; s < 6; s++) {
+          const spX = fx.x + Math.sin(progress * 10 + s * 1.2) * (curRadius * 0.8);
+          const spY = fx.y - (progress * 60 + s * 8);
+          ctx.fillStyle = `rgba(187, 247, 208, ${alpha})`;
+          ctx.beginPath();
+          ctx.arc(spX, spY, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      } else if (fx.type === "dagon_beam") {
+        ctx.save();
+        const alpha = Math.max(0, fx.timer / 18);
+        ctx.shadowColor = fx.color || "#ef4444";
+        ctx.shadowBlur = 20;
+        ctx.strokeStyle = `rgba(239, 68, 68, ${alpha})`;
+        ctx.lineWidth = 4.5;
+        ctx.beginPath();
+        ctx.moveTo(fx.fromX, fx.fromY);
+        const midX = (fx.fromX + fx.toX) / 2;
+        const midY = (fx.fromY + fx.toY) / 2 + (Math.random() - 0.5) * 16;
+        ctx.lineTo(midX, midY);
+        ctx.lineTo(fx.toX, fx.toY);
+        ctx.stroke();
+        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.9})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+      } else if (fx.type === "shiva_blast") {
+        ctx.save();
+        const progress = 1 - (fx.timer / 45);
+        const curRadius = fx.radius + (fx.maxRadius - fx.radius) * progress;
+        const alpha = Math.max(0, fx.timer / 45);
+        ctx.shadowColor = "#38bdf8";
+        ctx.shadowBlur = 25;
+        ctx.strokeStyle = `rgba(56, 189, 248, ${alpha * 0.85})`;
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.ellipse(fx.x, fx.y, curRadius, curRadius * 0.4, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = `rgba(186, 230, 253, ${alpha * 0.15})`;
+        ctx.fill();
+        ctx.restore();
+      } else if (fx.type === "blink_poof") {
+        ctx.save();
+        const alpha = Math.max(0, fx.timer / 20);
+        ctx.shadowColor = "#38bdf8";
+        ctx.shadowBlur = 15;
+        ctx.fillStyle = `rgba(56, 189, 248, ${alpha * 0.4})`;
+        ctx.beginPath();
+        ctx.arc(fx.x, fx.y, 25 * (1 - alpha * 0.5), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+      if (fx.type === "sunstrike") {
+        // --- INVOKER SUN STRIKE (Солнечный луч с неба) ---
+        ctx.save();
+        const progress = 1 - (fx.timer / (fx.maxTimer || 42));
+        const alpha = fx.timer < 10 ? (fx.timer / 10) : (progress < 0.2 ? progress / 0.2 : 1.0);
+
+        // 1. Vertical Sun Beam from top of sky to ground
+        const beamGrad = ctx.createLinearGradient(fx.x - 26, 0, fx.x + 26, 0);
+        beamGrad.addColorStop(0, "rgba(250, 204, 21, 0)");
+        beamGrad.addColorStop(0.3, `rgba(250, 204, 21, ${0.45 * alpha})`);
+        beamGrad.addColorStop(0.5, `rgba(255, 255, 255, ${0.95 * alpha})`);
+        beamGrad.addColorStop(0.7, `rgba(250, 204, 21, ${0.45 * alpha})`);
+        beamGrad.addColorStop(1, "rgba(250, 204, 21, 0)");
+
+        ctx.fillStyle = beamGrad;
+        ctx.fillRect(fx.x - 28, 0, 56, fx.y + 12);
+
+        // Core laser white line
+        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.lineWidth = 4.5;
+        ctx.beginPath();
+        ctx.moveTo(fx.x, 0);
+        ctx.lineTo(fx.x, fx.y + 12);
+        ctx.stroke();
+
+        // 2. Expanding Radiant Solar Rings on Ground
+        ctx.shadowColor = "#facc15";
+        ctx.shadowBlur = 20;
+        ctx.strokeStyle = `rgba(251, 191, 36, ${0.9 * alpha})`;
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        ctx.ellipse(fx.x, fx.y + 2, fx.radius * progress, (fx.radius * 0.4) * progress, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Inner glowing disc
+        ctx.fillStyle = `rgba(254, 240, 138, ${0.35 * alpha})`;
+        ctx.beginPath();
+        ctx.ellipse(fx.x, fx.y + 2, (fx.radius * 0.6) * progress, (fx.radius * 0.25) * progress, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Rising solar rays / sparkles
+        for (let s = 0; s < 5; s++) {
+          const spX = fx.x + Math.sin(fx.timer * 0.3 + s * 1.5) * (fx.radius * 0.7);
+          const spY = fx.y - ((fx.timer * 4 + s * 18) % 80);
+          ctx.fillStyle = `rgba(254, 240, 138, ${0.8 * alpha})`;
+          ctx.beginPath();
+          ctx.arc(spX, spY, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+
+      } else if (fx.type === "lightning") {
+        // Vertical Lightning Bolt
+        ctx.save();
+        ctx.strokeStyle = "rgba(186, 230, 253, 0.95)";
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(fx.x, 0);
+        ctx.lineTo(fx.x - 8, fx.y * 0.4);
+        ctx.lineTo(fx.x + 8, fx.y * 0.7);
+        ctx.lineTo(fx.x, fx.y);
+        ctx.stroke();
+
+        ctx.strokeStyle = "rgba(56, 189, 248, 0.7)";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(fx.x, fx.y, fx.radius * (1 - fx.timer / 35), 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      } else if (fx.type === "rot") {
+        // Poison Rot Cloud across entire map
+        ctx.fillStyle = "rgba(34, 197, 94, 0.22)";
+        ctx.fillRect(0, 0, w, h);
+      } else if (fx.type === "blood_flash") {
+        ctx.fillStyle = "rgba(220, 38, 38, 0.25)";
+        ctx.fillRect(0, 0, w, h);
+      } else if (fx.type === "omnislash") {
+        ctx.strokeStyle = "rgba(250, 204, 21, 0.9)";
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        const randX = 60 + Math.sin((ARENA.frameCount || 0) * 1.5 + fx.timer) * 120 + 100;
+        const randY = ARENA.roadY - 30 + Math.cos((ARENA.frameCount || 0) * 2.1 + fx.timer) * 35;
+        ctx.moveTo(randX - 25, randY - 20);
+        ctx.lineTo(randX + 25, randY + 20);
+        ctx.stroke();
+      }
+    }
+
+    // ---- 12. BOSS & ENEMY PROJECTILES ----
+    for (const proj of ARENA.bossProjectiles) {
+      drawProceduralProjectile(ctx, { x: proj.x, y: proj.y, isBossFireball: true }, time);
+    }
+    if (ARENA.enemyProjectiles) {
+      for (const proj of ARENA.enemyProjectiles) {
+        drawProceduralProjectile(ctx, proj, time);
+      }
+    }
+
+    // ---- 13. FLOATING TEXTS ----
+    for (const ft of ARENA.floatingTexts) {
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, ft.opacity);
+      ctx.font = "bold 12px sans-serif";
+      ctx.fillStyle = ft.color;
+      ctx.textAlign = "center";
+      ctx.fillText(ft.text, ft.x, ft.y);
+      ctx.restore();
+    }
+
+    // Close Camera Trauma translate so Top HUD & Overlays remain rock-solid in screen space
+    ctx.restore();
+
+    // ---- 14. TOP HUD (Grand Boss Banner on Boss Wave or Raid Battle) ----
+    if (ARENA.isRaidBossBattle || (ARENA.isBossActive && ARENA.bossEntity)) {
+      const bTarget = ARENA.bossEntity || ARENA.currentRaidBoss;
+      if (bTarget) renderGrandBossHUD(ctx, clientW, clientH, bTarget, time);
+    } else {
+      ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
+      ctx.beginPath();
+      safeRoundRect(ctx, 10, 8, clientW - 20, 28, 12);
+      ctx.fill();
+
+      ctx.font = "bold 11px sans-serif";
+      ctx.fillStyle = "#facc15";
+      ctx.textAlign = "left";
+      ctx.fillText(`Этаж ${RPG_STATE.profile?.dungeon_floor || 1} • Волна ${ARENA.waveNumber}/${ARENA.waveMax}`, 18, 26);
+
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#94a3b8";
+      const killLabel = ARENA.isRaidBossBattle
+        ? `👑 РЕЙД-БОСС: ${ARENA.bossEntity?.name || "БОСС"}`
+        : `Убито: ${ARENA.creepsKilledInWave}/${ARENA.creepsNeededForWave}`;
+      ctx.fillText(killLabel, w - 18, 26);
+    }
+
+    // Skill 1 & Ult CD in HUD
+    let cdHudY = h - 22;
+    if (ARENA.skill1Cooldown > 0) {
+      const sPct = ARENA.skill1Cooldown / ARENA.skill1CooldownMax;
+      ctx.fillStyle = "rgba(0,0,0,0.5)";
+      ctx.fillRect(10, cdHudY, 52, 9);
+      ctx.fillStyle = "#38bdf8";
+      ctx.fillRect(10, cdHudY, 52 * (1 - sPct), 9);
+      ctx.font = "bold 7.5px sans-serif";
+      ctx.fillStyle = "#e0f2fe";
+      ctx.textAlign = "left";
+      ctx.fillText(`Скилл ${Math.ceil(ARENA.skill1Cooldown / 60)}с`, 12, cdHudY + 7);
+      cdHudY -= 11;
+    }
+    if (ARENA.ultCooldown > 0) {
+      const ultPct = ARENA.ultCooldown / ARENA.ultCooldownMax;
+      ctx.fillStyle = "rgba(0,0,0,0.5)";
+      ctx.fillRect(10, cdHudY, 52, 9);
+      ctx.fillStyle = "#a855f7";
+      ctx.fillRect(10, cdHudY, 52 * (1 - ultPct), 9);
+      ctx.font = "bold 7.5px sans-serif";
+      ctx.fillStyle = "#e9d5ff";
+      ctx.textAlign = "left";
+      ctx.fillText(`Ульта ${Math.ceil(ARENA.ultCooldown / 60)}с`, 12, cdHudY + 7);
+    }
+
+    // ---- 15. BLOCK WINDOW (Boss special) ----
+    if (ARENA.blockWindowActive) {
+      const bPct = ARENA.blockWindowTimer / ARENA.blockWindowMax;
+      const pulse = 0.7 + Math.sin(Date.now() / 100) * 0.3;
+      ctx.save();
+      ctx.fillStyle = "rgba(0,0,0,0.55)";
+      ctx.fillRect(w / 2 - 75, h / 2 - 35, 150, 65);
+      ctx.strokeStyle = `rgba(59, 130, 246, ${pulse})`;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(w / 2 - 75, h / 2 - 35, 150, 65);
+
+      ctx.font = "bold 20px sans-serif";
+      ctx.fillStyle = "#3b82f6";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("🛡️ БЛОК!", w / 2, h / 2 - 10);
+
+      ctx.fillStyle = "rgba(0,0,0,0.5)";
+      ctx.fillRect(w / 2 - 55, h / 2 + 14, 110, 7);
+      ctx.fillStyle = "#3b82f6";
+      ctx.fillRect(w / 2 - 55, h / 2 + 14, 110 * bPct, 7);
+      ctx.restore();
+    }
+
+    // ---- 16. QTE WINDOW (Boss rage) ----
+    if (ARENA.qteActive) {
+      const qPct = ARENA.qteTimer / ARENA.qteMaxTimer;
+      const pulse = 0.7 + Math.sin(Date.now() / 80) * 0.3;
+      ctx.save();
+      ctx.fillStyle = "rgba(0,0,0,0.55)";
+      ctx.fillRect(w / 2 - 85, h / 2 - 38, 170, 72);
+      ctx.strokeStyle = `rgba(250, 204, 21, ${pulse})`;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(w / 2 - 85, h / 2 - 38, 170, 72);
+
+      ctx.font = "bold 22px sans-serif";
+      ctx.fillStyle = "#facc15";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("⚡ МЕГА-УДАР!", w / 2, h / 2 - 8);
+
+      ctx.fillStyle = "rgba(0,0,0,0.5)";
+      ctx.fillRect(w / 2 - 65, h / 2 + 18, 130, 7);
+      ctx.fillStyle = "#facc15";
+      ctx.fillRect(w / 2 - 65, h / 2 + 18, 130 * qPct, 7);
+      ctx.restore();
+    }
+
+    // ---- 17. WAVE PROMPT OVERLAY ----
+    if (ARENA.waveState === "prompt") {
+      ctx.save();
+      ctx.fillStyle = "rgba(0,0,0,0.65)";
+      ctx.fillRect(0, 0, w, h);
+
+      const cardW = 270, cardH = 152;
+      const cx = w / 2 - cardW / 2, cy = h / 2 - cardH / 2;
+
+      ctx.fillStyle = "rgba(15, 23, 42, 0.95)";
+      ctx.beginPath();
+      safeRoundRect(ctx, cx, cy, cardW, cardH, 16);
+      ctx.fill();
+      ctx.strokeStyle = "#facc15";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      safeRoundRect(ctx, cx, cy, cardW, cardH, 16);
+      ctx.stroke();
+
+      ctx.font = "bold 15px sans-serif";
+      ctx.fillStyle = "#facc15";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      const nextW = ARENA.waveNumber + 1;
+      const isBossNext = nextW === ARENA.waveMax;
+      if (ARENA.waveNumber === 0) {
+        const flr = RPG_STATE.profile?.dungeon_floor || 1;
+        ctx.fillText(`🏰 Новый этаж ${flr}!`, w / 2, cy + 24);
+        ctx.font = "12px sans-serif";
+        ctx.fillStyle = "#94a3b8";
+        ctx.fillText(`Следующая: Волна 1/${ARENA.waveMax}`, w / 2, cy + 46);
+      } else {
+        ctx.fillText(`✅ Волна ${ARENA.waveNumber}/${ARENA.waveMax} зачищена!`, w / 2, cy + 24);
+        ctx.font = "12px sans-serif";
+        ctx.fillStyle = isBossNext ? "#ef4444" : "#94a3b8";
+        ctx.fillText(isBossNext ? "⚠️ Следующая: БОСС ЭТАЖА!" : `Следующая: Волна ${nextW}/${ARENA.waveMax}`, w / 2, cy + 46);
+      }
+
+      // Main action button
+      const btnX = w / 2 - 95, btnY = cy + 68, btnW = 190, btnH = 34;
+      ctx.fillStyle = "#facc15";
+      ctx.beginPath();
+      safeRoundRect(ctx, btnX, btnY, btnW, btnH, 10);
+      ctx.fill();
+
+      ctx.font = "bold 13px sans-serif";
+      ctx.fillStyle = "#0f172a";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("▶ Перейти дальше", w / 2, btnY + btnH / 2);
+
+      // Disable confirmation button right on overlay
+      const optBtnX = w / 2 - 95, optBtnY = cy + 110, optBtnW = 190, optBtnH = 28;
+      ctx.fillStyle = "rgba(30, 41, 59, 0.95)";
+      ctx.beginPath();
+      safeRoundRect(ctx, optBtnX, optBtnY, optBtnW, optBtnH, 8);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.35)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      safeRoundRect(ctx, optBtnX, optBtnY, optBtnW, optBtnH, 8);
+      ctx.stroke();
+
+      ctx.font = "bold 10px sans-serif";
+      ctx.fillStyle = "#38bdf8";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("⏭️ Отключить подтверждение", w / 2, optBtnY + optBtnH / 2);
+
+      ctx.restore();
+      ARENA._promptBtnBounds = { x: btnX, y: btnY, w: btnW, h: btnH };
+      ARENA._promptDisableBtnBounds = { x: optBtnX, y: optBtnY, w: optBtnW, h: optBtnH };
+    }
+
+    // ---- 18. RETRY PROMPT OVERLAY (On Death — NEVER auto clear!) ----
+    if (ARENA.waveState === "retry_prompt") {
+      ctx.save();
+      ctx.fillStyle = "rgba(0,0,0,0.7)";
+      ctx.fillRect(0, 0, w, h);
+
+      const cardW = 270, cardH = 135;
+      const cx = w / 2 - cardW / 2, cy = h / 2 - cardH / 2;
+
+      ctx.fillStyle = "rgba(15, 23, 42, 0.95)";
+      ctx.beginPath();
+      safeRoundRect(ctx, cx, cy, cardW, cardH, 16);
+      ctx.fill();
+      ctx.strokeStyle = "#ef4444";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      safeRoundRect(ctx, cx, cy, cardW, cardH, 16);
+      ctx.stroke();
+
+      ctx.font = "bold 16px sans-serif";
+      ctx.fillStyle = "#ef4444";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("💀 ВАШ ГЕРОЙ ПАЛ!", w / 2, cy + 28);
+
+      ctx.font = "11.5px sans-serif";
+      ctx.fillStyle = "#94a3b8";
+      ctx.fillText("Этаж не зачищен! Начните заново с 1-й волны.", w / 2, cy + 52);
+
+      const btnX = w / 2 - 95, btnY = cy + 78, btnW = 190, btnH = 38;
+      ctx.fillStyle = "#ef4444";
+      ctx.beginPath();
+      safeRoundRect(ctx, btnX, btnY, btnW, btnH, 12);
+      ctx.fill();
+
+      ctx.font = "bold 13px sans-serif";
+      ctx.fillStyle = "#ffffff";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("🔄 Начать заново (1-я волна)", w / 2, btnY + btnH / 2);
+
+      ctx.restore();
+      ARENA._promptBtnBounds = { x: btnX, y: btnY, w: btnW, h: btnH };
+    }
+
+    // ---- 19. FLOOR CLEAR OVERLAY ----
+    if (ARENA.waveState === "floor_clear") {
+      ctx.save();
+      ctx.fillStyle = "rgba(0,0,0,0.6)";
+      ctx.fillRect(0, 0, w, h);
+      ctx.font = "bold 22px sans-serif";
+      ctx.fillStyle = "#22c55e";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("👑 ЭТАЖ 20/20 ЗАЧИЩЕН!", w / 2, h / 2 - 10);
+      ctx.font = "12px sans-serif";
+      ctx.fillStyle = "#94a3b8";
+      ctx.fillText("Награды начислены! Следующий этаж ждёт...", w / 2, h / 2 + 20);
+      ctx.restore();
+    }
+
+    // ---- 20. BOSS INTRO OVERLAY ----
+    if (ARENA.waveState === "boss_intro") {
+      const pulse = 0.4 + Math.sin(Date.now() / 200) * 0.2;
+      ctx.save();
+      ctx.fillStyle = `rgba(0,0,0,${pulse})`;
+      ctx.fillRect(0, 0, w, h);
+      ctx.font = "bold 24px sans-serif";
+      ctx.fillStyle = "#ef4444";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("⚠️ БОСС ЭТАЖА! (Волна 20/20) ⚠️", w / 2, h / 2 - 15);
+      if (ARENA.bossEntity) {
+        ctx.font = "bold 16px sans-serif";
+        ctx.fillStyle = "#facc15";
+        ctx.fillText(ARENA.bossEntity.name, w / 2, h / 2 + 15);
+      }
+      ctx.restore();
+    }
+
+    // ---- 21. BOSS VICTORY SHOWCASE OVERLAY ----
+    if (ARENA.waveState === "boss_victory") {
+      ctx.save();
+      ctx.fillStyle = "rgba(0,0,0,0.55)";
+      ctx.fillRect(0, 0, w, h);
+      ctx.font = "bold 22px sans-serif";
+      ctx.fillStyle = "#facc15";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("👑 РЕЙД-БОСС ПОВЕРЖЕН! 🏆", w / 2, 45);
+      ctx.font = "bold 11px sans-serif";
+      ctx.fillStyle = "#e2e8f0";
+      ctx.fillText("Нажмите на сундук или кнопку ниже, чтобы забрать награду!", w / 2, 68);
+
+      const btnX = w / 2 - 95, btnY = h - 55, btnW = 190, btnH = 36;
+      ctx.fillStyle = "#eab308";
+      ctx.beginPath();
+      safeRoundRect(ctx, btnX, btnY, btnW, btnH, 12);
+      ctx.fill();
+      ctx.font = "bold 12px sans-serif";
+      ctx.fillStyle = "#0f172a";
+      ctx.fillText("ОТКРЫТЬ СУНДУК 🎁", w / 2, btnY + btnH / 2);
+      ctx.restore();
+      ARENA._promptBtnBounds = { x: btnX, y: btnY, w: btnW, h: btnH };
+    }
+
+    // DMC STYLE METER HUD (D, C, B, A, S, SS, SSS) — perfectly centered in screen space
+    drawStyleMeterHUD(ctx, ARENA.styleMeter, ARENA.combo, w);
+
+    // ---- 22. BOSS ARENA MOBILE MOVEMENT HINTS (Subtle translucent touch guides) ----
+    if (ARENA.bossArenaMode && ARENA.waveState === "fighting") {
+      ctx.save();
+      const hintY = h - 14;
+      ctx.font = "bold 9.5px sans-serif";
+      // Left touch zone guide
+      ctx.fillStyle = ARENA.moveInput.left ? "rgba(56, 189, 248, 0.9)" : "rgba(255, 255, 255, 0.35)";
+      ctx.textAlign = "left";
+      ctx.fillText("◀ БЕГ ВЛЕВО", 14, hintY);
+      // Right touch zone guide
+      ctx.fillStyle = ARENA.moveInput.right ? "rgba(56, 189, 248, 0.9)" : "rgba(255, 255, 255, 0.35)";
+      ctx.textAlign = "right";
+      ctx.fillText("БЕГ ВПРАВО ▶", w - 14, hintY);
+      // Center tap hint
+      ctx.fillStyle = "rgba(250, 204, 21, 0.4)";
+      ctx.textAlign = "center";
+      ctx.fillText("⚔️ ТАП / КНОПКИ — АТАКА", w / 2, hintY);
+      ctx.restore();
+    }
+  }
+
+
+  // ===========================================================================
+  // MULTIPLAYER DUELS & CO-OP (PvP & BOSSES)
+  // ===========================================================================
+
+  async function loadCoopBosses() {
+    try {
+      const bosses = await api.getCoopBosses();
+      RPG_STATE.coopBosses = bosses || [];
+      renderRoot();
+    } catch (e) {
+      console.error("Failed to load co-op bosses:", e);
+    }
+  }
+
+  async function createCoopRaid(bossId, isSolo = false) {
+    try {
+      triggerHaptic("medium");
+      RPG_STATE.selectedBoss = bossId;
+      const myName = RPG_STATE.profile?.user_name || "Герой";
+      const oppLabel = isSolo ? "Соло-рейд" : "Босс-Рейд";
+      const room = await api.inviteGame(0, myName, "rpg_coop", "white", oppLabel, bossId, isSolo, RPG_STATE.profile);
+      RPG_STATE.coopRoomId = room.room_id;
+      RPG_STATE.coopRoomData = room;
+      startCoopPolling();
+      renderRoot();
+    } catch (err) {
+      alert(err.message || "Не удалось создать рейд");
+    }
+  }
+
+  function startCoopPolling() {
+    stopCoopPolling();
+    RPG_STATE.coopPolling = setInterval(async () => {
+      if (!RPG_STATE.coopRoomId) return;
+      try {
+        const updated = await api.getGameRoom(RPG_STATE.coopRoomId);
+        RPG_STATE.coopRoomData = updated;
+        renderRoot();
+      } catch (e) {
+        if (e && (e.status === 404 || (e.message && (e.message.includes("404") || e.message.includes("не найден"))))) {
+          console.warn("[Coop] Room no longer exists (404), stopping polling");
+          stopCoopPolling();
+          RPG_STATE.coopRoomId = null;
+          RPG_STATE.coopRoomData = null;
+          renderRoot();
+        }
+      }
+    }, 1500);
+  }
+
+  function stopCoopPolling() {
+    if (RPG_STATE.coopPolling) {
+      clearInterval(RPG_STATE.coopPolling);
+      RPG_STATE.coopPolling = null;
+    }
+  }
+
+  async function sendCoopAction(actionType) {
+    if (!RPG_STATE.coopRoomId) return;
+    try {
+      triggerHaptic(actionType === "skill" ? "heavy" : "medium");
+      const bossToken = document.getElementById("coop-boss-token");
+      if (bossToken) {
+        bossToken.style.transform = "scale(0.88) rotate(-4deg)";
+        setTimeout(() => {
+          if (bossToken) bossToken.style.transform = "scale(1.08) rotate(4deg)";
+          setTimeout(() => {
+            if (bossToken) bossToken.style.transform = "none";
+          }, 150);
+        }, 100);
+      }
+      const updated = await api.sendGameMove(RPG_STATE.coopRoomId, { action: actionType });
+      RPG_STATE.coopRoomData = updated;
+      renderRoot();
+    } catch (err) {
+      alert(err.message || "Ошибка хода в рейде");
+    }
+  }
+
+  async function addCoopBot() {
+    if (!RPG_STATE.coopRoomId) return;
+    try {
+      triggerHaptic("medium");
+      const updated = await api.addCoopBot(RPG_STATE.coopRoomId);
+      RPG_STATE.coopRoomData = updated;
+      renderRoot();
+    } catch (err) {
+      alert(err.message || "Не удалось добавить бота");
+    }
+  }
+
+  function leaveCoopRoom() {
+    stopCoopPolling();
+    RPG_STATE.coopRoomId = null;
+    RPG_STATE.coopRoomData = null;
+    renderRoot();
+  }
+
+  async function joinCoopRoom(targetRoomId) {
+    const input = document.getElementById("coop-room-code-input");
+    const roomId = targetRoomId || input?.value?.trim();
+    if (!roomId) {
+      alert("Введите код комнаты рейда");
+      return;
+    }
+    try {
+      triggerHaptic("medium");
+      const myName = RPG_STATE.profile?.user_name || "Герой";
+      const room = await api.joinGameRoom(roomId, myName);
+      RPG_STATE.coopRoomId = room.room_id || roomId;
+      RPG_STATE.coopRoomData = room;
+      startCoopPolling();
+      renderRoot();
+    } catch (err) {
+      alert(err.message || "Не удалось подключиться к рейду");
+    }
+  }
+
+  async function loadClassmates() {
+    try {
+      const res = await api.getClassmates();
+      RPG_STATE.classmates = res || [];
+      renderRoot();
+    } catch (e) {
+      console.error("Failed to load classmates:", e);
+    }
+  }
+
+  async function challengeClassmate(tgId, classmateName) {
+    try {
+      triggerHaptic("medium");
+      const myName = RPG_STATE.profile?.user_name || "Дуэлянт";
+      const room = await api.inviteGame(tgId, myName, "rpg_duel", "white", classmateName);
+      RPG_STATE.pvpRoomId = room.room_id;
+      RPG_STATE.pvpRoomData = room;
+      startPvPPolling();
+      renderRoot();
+    } catch (err) {
+      alert(err.message || "Не удалось вызвать на дуэль");
+    }
+  }
+
+  function startPvPPolling() {
+    stopPvPPolling();
+    RPG_STATE.pvpPolling = setInterval(async () => {
+      if (!RPG_STATE.pvpRoomId) return;
+      try {
+        const updated = await api.getGameRoom(RPG_STATE.pvpRoomId);
+        RPG_STATE.pvpRoomData = updated;
+        renderRoot();
+      } catch (e) {
+        if (e && (e.status === 404 || (e.message && (e.message.includes("404") || e.message.includes("не найден"))))) {
+          console.warn("[PvP] Room no longer exists (404), stopping polling");
+          stopPvPPolling();
+          RPG_STATE.pvpRoomId = null;
+          RPG_STATE.pvpRoomData = null;
+          renderRoot();
+        }
+      }
+    }, 1500);
+  }
+
+  function stopPvPPolling() {
+    if (RPG_STATE.pvpPolling) {
+      clearInterval(RPG_STATE.pvpPolling);
+      RPG_STATE.pvpPolling = null;
+    }
+  }
+
+  async function sendPvPAction(actionType) {
+    if (!RPG_STATE.pvpRoomId) return;
+    try {
+      triggerHaptic("light");
+      const updated = await api.sendGameMove(RPG_STATE.pvpRoomId, { action: actionType });
+      RPG_STATE.pvpRoomData = updated;
+      renderRoot();
+    } catch (err) {
+      alert(err.message || "Ошибка хода в дуэли");
+    }
+  }
+
+  function leavePvPRoom() {
+    stopPvPPolling();
+    RPG_STATE.pvpRoomId = null;
+    RPG_STATE.pvpRoomData = null;
+    renderRoot();
+  }
+
+  async function loadLeaderboard() {
+    try {
+      const list = await api.getRpgLeaderboard();
+      RPG_STATE.leaderboard = list || [];
+      renderRoot();
+    } catch (e) {
+      console.error("Failed to load leaderboard:", e);
+    }
+  }
+
+  // ===========================================================================
+  // RENDERING ROOT & SUBTABS
+  // ===========================================================================
+
+  function renderAdminFloatingBadgeHTML() {
+    const activeTestSlot = localStorage.getItem("admin_test_tg_uid");
+    const currentSlotLabel = activeTestSlot ? `🧪 Тест #${activeTestSlot}` : `👑 Админ`;
+
+    return `
+      <div id="rpg-admin-floating-btn" class="fixed bottom-20 left-2.5 z-40">
+        <button onclick="window.RPG.toggleAdminModal(true)"
+          title="Панель тестирования и смены аккаунтов (Только для Админа)"
+          class="px-2.5 py-1.5 rounded-2xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-950 font-black text-[10px] shadow-2xl border-2 border-amber-300 flex items-center gap-1.5 active:scale-95 animate-pulse">
+          <span class="text-xs">🛠️</span>
+          <span>${currentSlotLabel}</span>
+        </button>
+      </div>
+    `;
+  }
+
+  function renderAdminModalHTML() {
+    const activeTestSlot = localStorage.getItem("admin_test_tg_uid");
+    const currentSlotLabel = activeTestSlot ? `🧪 Тест #${activeTestSlot}` : `👑 Админ`;
+
+    return `
+      <div class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="w-full max-w-sm rounded-3xl bg-slate-900 border-2 border-amber-400/80 p-4 shadow-2xl space-y-3.5 text-white animate-scale-up">
+          <div class="flex items-center justify-between border-b border-slate-700/80 pb-2.5">
+            <div class="flex items-center gap-2">
+              <span class="text-xl">🛠️</span>
+              <div>
+                <h3 class="text-xs font-black text-amber-400">ПАНЕЛЬ ТЕСТ-АККАУНТОВ (АДМИН)</h3>
+                <span class="text-[9px] text-slate-400">Быстрое переключение профилей с нуля для поиска багов</span>
+              </div>
+            </div>
+            <button onclick="window.RPG.toggleAdminModal(false)" class="w-7 h-7 rounded-xl bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center font-bold text-xs">
+              ✕
+            </button>
+          </div>
+
+          <!-- Current Slot Info -->
+          <div class="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 flex items-center justify-between text-xs">
+            <span class="text-slate-400 font-bold text-[11px]">Активный аккаунт:</span>
+            <span class="font-black text-amber-300">${currentSlotLabel}</span>
+          </div>
+
+          <!-- Slots List -->
+          <div class="space-y-1.5">
+            <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider block">Выберите профиль:</span>
+            ${RPG_STATE.adminTestSlots.map(s => {
+              const isCur = (!activeTestSlot && s.id === 'main') || (activeTestSlot === s.tg_id);
+              return `
+                <button onclick="window.RPG.switchAdminTestAccount('${s.id}')"
+                  class="w-full p-2 rounded-xl text-left text-xs font-black flex items-center justify-between border transition-all ${
+                    isCur
+                      ? 'bg-amber-500/20 border-amber-400 text-amber-300 shadow-md'
+                      : 'bg-slate-800/60 border-slate-700/60 text-slate-300 hover:bg-slate-700'
+                  }">
+                  <span>${s.name}</span>
+                  <span class="text-[9px] px-1.5 py-0.5 rounded ${isCur ? 'bg-amber-400 text-slate-950 font-extrabold' : 'bg-slate-700 text-slate-400'}">
+                    ${isCur ? 'АКТИВЕН' : 'Войти →'}
+                  </span>
+                </button>
+              `;
+            }).join('')}
+          </div>
+
+          <!-- Custom Account & Reset Buttons -->
+          <div class="pt-1 space-y-1.5">
+            <button onclick="window.RPG.createCustomAdminTestAccount()"
+              class="w-full py-2 rounded-xl bg-gradient-to-r from-sky-600 to-cyan-600 text-white font-black text-xs shadow-md active:scale-95 flex items-center justify-center gap-1.5">
+              <span>➕</span>
+              <span>Создать аккаунт с кастомным ID</span>
+            </button>
+
+            ${activeTestSlot ? `
+              <button onclick="window.RPG.resetCurrentTestAccount()"
+                class="w-full py-2 rounded-xl bg-rose-600/20 border border-rose-500/40 text-rose-300 font-black text-xs shadow-sm active:scale-95 flex items-center justify-center gap-1.5">
+                <span>🔄</span>
+                <span>Сбросить текущий тестовый акк до 1 ур.</span>
+              </button>
+              <button onclick="window.RPG.switchAdminTestAccount('main')"
+                class="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 font-black text-xs shadow-sm active:scale-95 flex items-center justify-center gap-1.5">
+                <span>👑</span>
+                <span>Вернуться на Основной Аккаунт</span>
+              </button>
+            ` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderRoot() {
+    const container = document.getElementById("rpg-root");
+    if (!container) return;
+
+    if (RPG_STATE.loading && !RPG_STATE.profile) {
+      container.innerHTML = `
+        <div class="py-16 text-center space-y-3">
+          <div class="inline-block w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+          <p class="text-sm font-bold text-slate-500">Загрузка natarGRP...</p>
+        </div>
+      `;
+      return;
+    }
+
+    if (!RPG_STATE.profile || !RPG_STATE.profile.hero_class) {
+      container.innerHTML = renderHeroSelectHTML();
+      return;
+    }
+
+    // Fast-path: If user is actively in the Action Arena and canvas already exists,
+    // DO NOT destroy the canvas DOM node! Update header and modals smoothly.
+    const existingCanvas = document.getElementById("rpg-action-canvas");
+    const viewContainer = document.getElementById("rpg-view-container");
+
+    const isRaidState = !!ARENA.isRaidBossBattle;
+    const raidStateChanged = RPG_STATE._lastRenderedRaidBattle !== isRaidState;
+    RPG_STATE._lastRenderedRaidBattle = isRaidState;
+
+    if (!RPG_STATE._forceFullRender && !raidStateChanged && existingCanvas && viewContainer && RPG_STATE.activeTab === "farm" && RPG_STATE.farmMode === "arena") {
+      const topNav = document.getElementById("rpg-top-nav");
+      if (topNav) {
+        topNav.outerHTML = renderTopNavBarHTML();
+      }
+      const toastEl = document.getElementById("rpg-toast-container");
+      if (toastEl) {
+        toastEl.innerHTML = RPG_STATE.levelUpNotification
+          ? `<div class="p-3 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black text-center text-xs shadow-lg animate-bounce">
+              🎉 НОВЫЙ УРОВЕНЬ ${RPG_STATE.levelUpNotification}! Получено +1 очко характеристик!
+            </div>`
+          : "";
+      }
+      const modalsEl = document.getElementById("rpg-modals-container");
+      if (modalsEl) {
+        modalsEl.innerHTML = `
+          ${RPG_STATE.inspectedItem ? renderItemModalHTML(RPG_STATE.inspectedItem) : ""}
+          ${RPG_STATE.forgeItem ? renderForgeModalHTML(RPG_STATE.forgeItem) : ""}
+          ${RPG_STATE.activeChestModal ? renderChestModalHTML(RPG_STATE.activeChestModal) : ""}
+          ${RPG_STATE.shopModalOpen ? renderShopModalHTML() : ""}
+          ${RPG_STATE.slotFilterModal ? renderSlotFilterModalHTML(RPG_STATE.slotFilterModal) : ""}
+        `;
+      }
+      if (ARENA.canvas !== existingCanvas || !ARENA.ctx) {
+        bindArenaCanvas(existingCanvas);
+      }
+      if (!ARENA.running) {
+        startArenaLoop();
+      }
+      return;
+    }
+
+    // Full render when switching tabs or initial load
+    container.innerHTML = `
+      <div class="space-y-3.5 pb-8">
+        <!-- Level Up Toast Notification Container -->
+        <div id="rpg-toast-container">
+          ${
+            RPG_STATE.levelUpNotification
+              ? `
+            <div class="p-3 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black text-center text-xs shadow-lg animate-bounce">
+              🎉 НОВЫЙ УРОВЕНЬ ${RPG_STATE.levelUpNotification}! Получено +1 очко характеристик!
+            </div>
+          `
+              : ""
+          }
+        </div>
+
+        <!-- Top Navigation -->
+        ${renderTopNavBarHTML()}
+
+        <!-- Active Subtab View -->
+        <div id="rpg-view-container">
+          ${renderCurrentViewHTML()}
+        </div>
+      </div>
+
+      <!-- Modals Container -->
+      <div id="rpg-modals-container">
+        <!-- Item Inspection Modal -->
+        ${RPG_STATE.inspectedItem ? renderItemModalHTML(RPG_STATE.inspectedItem) : ""}
+
+        <!-- Forge Modal -->
+        ${RPG_STATE.forgeItem ? renderForgeModalHTML(RPG_STATE.forgeItem) : ""}
+
+        <!-- Chest Opening Modal -->
+        ${RPG_STATE.activeChestModal ? renderChestModalHTML(RPG_STATE.activeChestModal) : ""}
+
+        <!-- Shop Modal -->
+        ${RPG_STATE.shopModalOpen ? renderShopModalHTML() : ""}
+
+        <!-- Slot Quick Equip Modal -->
+        ${RPG_STATE.slotFilterModal ? renderSlotFilterModalHTML(RPG_STATE.slotFilterModal) : ""}
+
+        <!-- Admin Dev Modal -->
+        ${(isUserAdmin() && RPG_STATE.adminModalOpen) ? renderAdminModalHTML() : ""}
+      </div>
+
+      <!-- Admin Floating Pill Badge (Bottom-left) -->
+      ${isUserAdmin() ? renderAdminFloatingBadgeHTML() : ""}
+    `;
+
+    if (RPG_STATE.activeTab === "farm" && RPG_STATE.farmMode === "arena") {
+      const c = document.getElementById("rpg-action-canvas");
+      if (c) {
+        bindArenaCanvas(c);
+        if (!ARENA.running) {
+          startArenaLoop();
+        }
+      }
+    }
+  }
+
+  function renderTopNavBarHTML() {
+    const p = RPG_STATE.profile || {};
+    const tabs = [
+      { id: "farm", name: "Фарм", icon: "⚔️" },
+      { id: "hero", name: "Герой", icon: p.class_icon || "🛡️" },
+      { id: "coop", name: "Боссы", icon: "🐉" },
+      { id: "pvp", name: "Дуэли", icon: "🥊" },
+      { id: "leaderboard", name: "Топ", icon: "🏆" }
+    ];
+
+    const xp = p.xp !== undefined ? p.xp : (p.experience || 0);
+    const xpNeeded = p.xp_needed !== undefined ? p.xp_needed : (p.experience_to_next || 100);
+    const xpPct = Math.min(100, Math.max(0, Math.round((xp / xpNeeded) * 100)));
+
+    return `
+      <div id="rpg-top-nav" class="space-y-2">
+        <!-- Character Summary Card -->
+        <div class="p-3.5 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-amber-950 text-white shadow-md border border-amber-500/30 space-y-2">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <div class="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-2xl shadow-inner">
+                ${p.class_avatar || p.class_icon || "🛡️"}
+              </div>
+              <div>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-xs font-black tracking-wide">${p.class_name || "Герой"}</span>
+                  <span class="text-[10px] px-1.5 py-0.2 rounded-md bg-amber-500 text-slate-950 font-black">Ур. ${p.level || 1}</span>
+                </div>
+                <div class="flex items-center gap-2 text-[11px] text-amber-200/90 font-medium">
+                  <span>🪙 <b>${(p.gold || 0).toLocaleString()}</b></span>
+                  <span>💎 <b>${p.gems || 0}</b></span>
+                  <span>🔥 <b>${p.dungeon_floor || 1}</b> эт.</span>
+                  ${(p.stat_points || 0) > 0 ? `<span class="px-1.5 rounded bg-emerald-500 text-white font-extrabold text-[9px] animate-pulse">+${p.stat_points} очк</span>` : ""}
+                </div>
+              </div>
+            </div>
+
+            <div class="text-right flex items-center gap-1.5">
+              <button onclick="window.RPG.openShopModal()" class="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 active:scale-95 text-white font-black text-[11px] shadow-sm flex items-center gap-1">
+                <span>🏪</span>
+                <span>Лавка</span>
+              </button>
+              <button onclick="window.RPG.openForge()" class="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 active:scale-95 text-slate-950 font-black text-[11px] shadow-sm flex items-center gap-1">
+                <span>⚒️</span>
+                <span>Кузница</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Mini XP Bar in Header -->
+          <div class="w-full h-1.5 rounded-full bg-slate-700/80 overflow-hidden">
+            <div class="h-full bg-gradient-to-r from-amber-400 to-yellow-300 transition-all duration-300" style="width: ${xpPct}%"></div>
+          </div>
+        </div>
+
+        <!-- Navigation Subtabs -->
+        <div class="grid grid-cols-5 gap-1 p-1 rounded-2xl bg-slate-200/80 dark:bg-slate-800/90 text-[11px] font-bold">
+          ${tabs
+            .map(
+              (t) => `
+            <button onclick="window.RPG.setSubTab('${t.id}')" class="py-2 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 ${
+                RPG_STATE.activeTab === t.id
+                  ? "bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-sm"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+              }">
+              <span class="text-sm">${t.icon}</span>
+              <span class="text-[10px] leading-tight">${t.name}</span>
+            </button>
+          `
+            )
+            .join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderCurrentViewHTML() {
+    switch (RPG_STATE.activeTab) {
+      case "farm":
+        return renderFarmTabHTML();
+      case "hero":
+        return renderHeroProfileHTML();
+      case "coop":
+        return renderCoopRaidsHTML();
+      case "pvp":
+        return renderPvPDuelsHTML();
+      case "leaderboard":
+        return renderLeaderboardHTML();
+      default:
+        return renderFarmTabHTML();
+    }
+  }
+
+  // ===========================================================================
+  // 1. HERO PROFILE & 3-ATTRIBUTE SYSTEM HTML
+  // ===========================================================================
+
+  function renderHeroProfileHTML() {
+    const p = RPG_STATE.profile || {};
+    const stats = p.stats || {};
+    const eq = p.equipment || {};
+    const inv = p.inventory || [];
+    const points = p.stat_points || 0;
+
+    const baseStr = (p.base_attributes && p.base_attributes.strength) || p.strength || 10;
+    const gearStr = (p.gear_attributes && p.gear_attributes.strength) || stats.gear_str || 0;
+    const totalStr = (p.total_attributes && p.total_attributes.strength) || (baseStr + gearStr);
+
+    const baseAgi = (p.base_attributes && p.base_attributes.agility) || p.agility || 10;
+    const gearAgi = (p.gear_attributes && p.gear_attributes.agility) || stats.gear_agi || 0;
+    const totalAgi = (p.total_attributes && p.total_attributes.agility) || (baseAgi + gearAgi);
+
+    const baseInt = (p.base_attributes && p.base_attributes.intelligence) || p.intelligence || 10;
+    const gearInt = (p.gear_attributes && p.gear_attributes.intelligence) || stats.gear_int || 0;
+    const totalInt = (p.total_attributes && p.total_attributes.intelligence) || (baseInt + gearInt);
+
+    const xp = p.xp !== undefined ? p.xp : (p.experience || 0);
+    const xpNeeded = p.xp_needed !== undefined ? p.xp_needed : (p.experience_to_next || 100);
+    const xpPct = Math.min(100, Math.max(0, Math.round((xp / xpNeeded) * 100)));
+    const primaryAttr = p.primary_attr || stats.primary_attr || "Сила";
+
+    return `
+      <div class="space-y-4">
+        <!-- Level & EXP progress -->
+        <div class="theme-card p-3.5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm space-y-2">
+          <div class="flex items-center justify-between text-xs font-bold">
+            <span class="text-slate-500 dark:text-slate-400">Прогресс уровня</span>
+            <span class="text-amber-600 dark:text-amber-400 font-extrabold">${xp} / ${xpNeeded} XP (${xpPct}%)</span>
+          </div>
+          <div class="w-full h-2.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+            <div class="h-full bg-gradient-to-r from-amber-500 to-yellow-400 transition-all duration-300" style="width: ${xpPct}%"></div>
+          </div>
+        </div>
+
+        <!-- 3 ATTRIBUTES SYSTEM (СИЛА, ЛОВКОСТЬ, ИНТЕЛЛЕКТ) -->
+        <div class="theme-card p-3.5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+              <span>📊</span> Характеристики
+            </h3>
+            ${
+              points > 0
+                ? `<span class="px-2 py-0.5 rounded-lg bg-emerald-500 text-white font-extrabold text-[10px] animate-pulse">✨ Свободных очков: ${points}</span>`
+                : `<span class="text-[10px] text-slate-400 font-medium">Прокачка за золото</span>`
+            }
+          </div>
+
+          <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900/60 text-xs font-bold border border-slate-200/60 dark:border-slate-700/60">
+            <span class="text-slate-500 dark:text-slate-400">Ваше золото для прокачки:</span>
+            <span class="text-amber-500 font-black">🪙 ${(p.gold || 0).toLocaleString()}</span>
+          </div>
+
+          <div class="space-y-2">
+            <!-- 1. STRENGTH (СИЛА) -->
+            <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border ${primaryAttr === "Сила" ? "border-red-500/50 shadow-sm bg-red-50/20" : "border-slate-200/60 dark:border-slate-700/60"} flex items-center justify-between">
+              <div class="space-y-0.5">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="text-xs font-black text-red-500">🥩 Сила: ${baseStr}${gearStr > 0 ? ` <span class="text-amber-500 font-extrabold">(+${gearStr})</span>` : ""}${gearStr > 0 ? ` <span class="text-slate-800 dark:text-slate-100 font-black">= ${totalStr}</span>` : ""}</span>
+                  ${primaryAttr === "Сила" ? `<span class="px-1.5 py-0.2 rounded bg-red-500/10 text-red-600 border border-red-500/30 text-[9px] font-black">ОСНОВНОЙ (+1 Урон)</span>` : ""}
+                </div>
+                <span class="block text-[10px] text-slate-400">+22 HP за очко | +0.35 HP/сек регенерация</span>
+              </div>
+              <button ${isUpgradingStat ? "disabled" : ""} onclick="window.RPG.upgradeStat('str')" class="px-3.5 py-2 rounded-xl ${isUpgradingStat ? "opacity-50 pointer-events-none" : ""} ${
+                points > 0
+                  ? "bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 animate-pulse ring-2 ring-emerald-400/50"
+                  : (p.gold || 0) >= baseStr * 20
+                    ? "bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500"
+                    : "bg-slate-300 dark:bg-slate-700 opacity-60 cursor-not-allowed"
+              } active:scale-90 text-white font-black text-xs shadow-sm flex items-center gap-1">
+                <span>+</span>
+                <span class="text-[10px]">${points > 0 ? "Очко ✨" : `${baseStr * 20} 🪙`}</span>
+              </button>
+            </div>
+
+            <!-- 2. AGILITY (ЛОВКОСТЬ) -->
+            <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border ${primaryAttr === "Ловкость" ? "border-emerald-500/50 shadow-sm bg-emerald-50/20" : "border-slate-200/60 dark:border-slate-700/60"} flex items-center justify-between">
+              <div class="space-y-0.5">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="text-xs font-black text-emerald-500">🗡️ Ловкость: ${baseAgi}${gearAgi > 0 ? ` <span class="text-amber-500 font-extrabold">(+${gearAgi})</span>` : ""}${gearAgi > 0 ? ` <span class="text-slate-800 dark:text-slate-100 font-black">= ${totalAgi}</span>` : ""}</span>
+                  ${primaryAttr === "Ловкость" ? `<span class="px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/30 text-[9px] font-black">ОСНОВНОЙ (+1 Урон)</span>` : ""}
+                </div>
+                <span class="block text-[10px] text-slate-400">+2.5% Скор. атаки | +0.4 Брони | Крит & Уворот</span>
+              </div>
+              <button ${isUpgradingStat ? "disabled" : ""} onclick="window.RPG.upgradeStat('agi')" class="px-3.5 py-2 rounded-xl ${isUpgradingStat ? "opacity-50 pointer-events-none" : ""} ${
+                points > 0
+                  ? "bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 animate-pulse ring-2 ring-emerald-400/50"
+                  : (p.gold || 0) >= baseAgi * 20
+                    ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500"
+                    : "bg-slate-300 dark:bg-slate-700 opacity-60 cursor-not-allowed"
+              } active:scale-90 text-white font-black text-xs shadow-sm flex items-center gap-1">
+                <span>+</span>
+                <span class="text-[10px]">${points > 0 ? "Очко ✨" : `${baseAgi * 20} 🪙`}</span>
+              </button>
+            </div>
+
+            <!-- 3. INTELLIGENCE (ИНТЕЛЛЕКТ) -->
+            <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border ${primaryAttr === "Интеллект" ? "border-sky-500/50 shadow-sm bg-sky-50/20" : "border-slate-200/60 dark:border-slate-700/60"} flex items-center justify-between">
+              <div class="space-y-0.5">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="text-xs font-black text-sky-500">🧙 Интеллект: ${baseInt}${gearInt > 0 ? ` <span class="text-amber-500 font-extrabold">(+${gearInt})</span>` : ""}${gearInt > 0 ? ` <span class="text-slate-800 dark:text-slate-100 font-black">= ${totalInt}</span>` : ""}</span>
+                  ${primaryAttr === "Интеллект" ? `<span class="px-1.5 py-0.2 rounded bg-sky-500/10 text-sky-600 border border-sky-500/30 text-[9px] font-black">ОСНОВНОЙ (+1 Урон)</span>` : ""}
+                </div>
+                <span class="block text-[10px] text-slate-400">+14 Маны за очко | +0.25 MP/сек | +0.4% Сопр. магии</span>
+              </div>
+              <button ${isUpgradingStat ? "disabled" : ""} onclick="window.RPG.upgradeStat('int')" class="px-3.5 py-2 rounded-xl ${isUpgradingStat ? "opacity-50 pointer-events-none" : ""} ${
+                points > 0
+                  ? "bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 animate-pulse ring-2 ring-emerald-400/50"
+                  : (p.gold || 0) >= baseInt * 20
+                    ? "bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500"
+                    : "bg-slate-300 dark:bg-slate-700 opacity-60 cursor-not-allowed"
+              } active:scale-90 text-white font-black text-xs shadow-sm flex items-center gap-1">
+                <span>+</span>
+                <span class="text-[10px]">${points > 0 ? "Очко ✨" : `${baseInt * 20} 🪙`}</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Combat Summary Badges -->
+          <div class="pt-2 border-t border-slate-100 dark:border-slate-700/80 grid grid-cols-3 gap-1.5 text-center">
+            <div class="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700/40">
+              <span class="block text-[9px] font-bold text-slate-400 uppercase">HP</span>
+              <span class="text-xs font-black text-emerald-600 dark:text-emerald-400">${stats.hp_max || 180} <span class="text-[9px] text-slate-400">(+${stats.hp_regen || 0}/с)</span></span>
+            </div>
+            <div class="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700/40">
+              <span class="block text-[9px] font-bold text-slate-400 uppercase">Мана</span>
+              <span class="text-xs font-black text-sky-600 dark:text-sky-400">${stats.mp_max || 60} <span class="text-[9px] text-slate-400">(+${stats.mp_regen || 0}/с)</span></span>
+            </div>
+            <div class="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700/40">
+              <span class="block text-[9px] font-bold text-slate-400 uppercase">Урон</span>
+              <span class="text-xs font-black text-red-600 dark:text-red-400">${stats.min_atk || 16}-${stats.max_atk || 24}</span>
+            </div>
+            <div class="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700/40">
+              <span class="block text-[9px] font-bold text-slate-400 uppercase">Броня</span>
+              <span class="text-xs font-black text-sky-600 dark:text-sky-400">${stats.defense || 5}</span>
+            </div>
+            <div class="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700/40">
+              <span class="block text-[9px] font-bold text-slate-400 uppercase">Скор. атаки</span>
+              <span class="text-xs font-black text-amber-600 dark:text-amber-400">${stats.attack_speed || 1.0} уд/с</span>
+            </div>
+            <div class="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700/40">
+              <span class="block text-[9px] font-bold text-slate-400 uppercase">Сопр. магии</span>
+              <span class="text-xs font-black text-purple-600 dark:text-purple-400">${stats.magic_resist || 0}%</span>
+            </div>
+            <div class="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700/40">
+              <span class="block text-[9px] font-bold text-slate-400 uppercase">Сила Магии ✨</span>
+              <span class="text-xs font-black text-amber-500">+${stats.spell_amp || Math.round((stats.mp_max || 60) * 0.2)}%</span>
+            </div>
+            <div class="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700/40">
+              <span class="block text-[9px] font-bold text-slate-400 uppercase">Крит</span>
+              <span class="text-xs font-black text-amber-600 dark:text-amber-400">${stats.crit_chance || 5}%</span>
+            </div>
+            <div class="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700/40">
+              <span class="block text-[9px] font-bold text-slate-400 uppercase">Уворот</span>
+              <span class="text-xs font-black text-violet-600 dark:text-violet-400">${stats.dodge_chance || 5}%</span>
+            </div>
+            <div class="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700/40">
+              <span class="block text-[9px] font-bold text-slate-400 uppercase">Вампиризм</span>
+              <span class="text-xs font-black text-rose-600 dark:text-rose-400">${stats.lifesteal || 0}%</span>
+            </div>
+            ${stats.ult_boost > 0 ? `
+            <div class="p-1.5 rounded-lg bg-purple-500/10 border border-purple-500/30">
+              <span class="block text-[9px] font-bold text-purple-400 uppercase">Урон Ульты 💥</span>
+              <span class="text-xs font-black text-purple-500">+${stats.ult_boost}%</span>
+            </div>
+            ` : ""}
+            ${stats.ult_cd_reduct > 0 ? `
+            <div class="p-1.5 rounded-lg bg-sky-500/10 border border-sky-500/30">
+              <span class="block text-[9px] font-bold text-sky-400 uppercase">КД Ульты ⏱️</span>
+              <span class="text-xs font-black text-sky-400">-${stats.ult_cd_reduct}%</span>
+            </div>
+            ` : ""}
+          </div>
+        </div>
+
+        <!-- Equipped Gear Slots (3 slots) -->
+        <div class="theme-card p-3.5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm space-y-2.5">
+          <h3 class="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+            <span>🛡️</span> Экипировка
+          </h3>
+
+          <div class="grid grid-cols-3 gap-2">
+            ${renderEquippedSlotHTML("weapon", "Оружие", "🗡️", eq.weapon)}
+            ${renderEquippedSlotHTML("armor", "Броня", "🛡️", eq.armor)}
+            ${renderEquippedSlotHTML("relic", "Реликвия", "💍", eq.relic)}
+          </div>
+        </div>
+
+        <!-- Inventory Card -->
+        <div class="theme-card p-3.5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="text-base">🎒</span>
+              <h3 class="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-200">
+                Инвентарь
+              </h3>
+              <span class="text-[10px] font-bold text-slate-400">(${inv.length} / 30)</span>
+            </div>
+
+            <!-- Toggle Selection Mode Button -->
+            ${inv.length > 0 ? `
+              <button onclick="window.RPG.toggleItemSelectionMode()" class="px-2.5 py-1 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 ${
+                RPG_STATE.isSelectionMode
+                  ? 'bg-rose-500 text-white shadow-md'
+                  : 'bg-amber-500/15 text-amber-500 border border-amber-500/40 hover:bg-amber-500/25'
+              }">
+                <span>${RPG_STATE.isSelectionMode ? "✕ Отмена" : "☑️ Выбрать для продажи"}</span>
+              </button>
+            ` : ""}
+          </div>
+
+          <!-- Quick Bulk Select Filters -->
+          ${inv.length > 0 ? `
+            <div class="p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between gap-1 flex-wrap text-[10.5px]">
+              <span class="text-slate-400 font-bold">Выбрать:</span>
+              <div class="flex items-center gap-1 flex-wrap font-extrabold">
+                <button onclick="window.RPG.selectAllByRarity('common')" class="px-2 py-0.5 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200">
+                  ⬜ Серые
+                </button>
+                <button onclick="window.RPG.selectAllByRarity('uncommon')" class="px-2 py-0.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-500 border border-emerald-500/30">
+                  🟩 Зеленые
+                </button>
+                <button onclick="window.RPG.selectAllByRarity('rare')" class="px-2 py-0.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 text-sky-500 border border-sky-500/30">
+                  🟦 Синие
+                </button>
+                <button onclick="window.RPG.selectAllByRarity()" class="px-2 py-0.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-500 border border-amber-500/30">
+                  ✨ Выбрать всё
+                </button>
+                ${(RPG_STATE.selectedItemUids && RPG_STATE.selectedItemUids.size > 0) ? `
+                  <button onclick="window.RPG.clearItemSelection()" class="px-2 py-0.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-500 border border-rose-500/30">
+                    Сброс (${RPG_STATE.selectedItemUids.size})
+                  </button>
+                ` : ""}
+              </div>
+            </div>
+          ` : ""}
+
+          ${
+            inv.length === 0
+              ? `
+            <div class="py-6 text-center text-slate-400 text-xs">
+              Инвентарь пуст. Зачищайте этажи, чтобы получать наградные сундуки!
+            </div>
+          `
+              : `
+            <div class="grid grid-cols-3 sm:grid-cols-4 gap-2">
+              ${inv.map((item) => renderInventoryItemTileHTML(item)).join("")}
+            </div>
+          `
+          }
+
+          <!-- Floating Bulk Sell Action Bar -->
+          ${(RPG_STATE.selectedItemUids && RPG_STATE.selectedItemUids.size > 0) ? `
+            <div class="sticky bottom-16 z-30 p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/25 via-yellow-500/20 to-amber-500/25 border-2 border-amber-500 flex items-center justify-between gap-3 shadow-xl backdrop-blur-md animate-scale-up">
+              <div>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-xs font-black text-amber-500 dark:text-amber-400">
+                    Выбрано: ${RPG_STATE.selectedItemUids.size} шт.
+                  </span>
+                </div>
+                <span class="text-[11px] font-black text-emerald-600 dark:text-emerald-400 block">
+                  Вы получите: +${getSelectedItemsTotalPrice()} 🪙
+                </span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <button onclick="window.RPG.clearItemSelection()" class="px-2.5 py-2 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs hover:bg-slate-700">
+                  ✕
+                </button>
+                <button onclick="window.RPG.sellSelectedItems()" class="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 active:scale-95 text-slate-950 font-black text-xs shadow-md flex items-center gap-1">
+                  <span>💰</span>
+                  <span>Продать за +${getSelectedItemsTotalPrice()} 🪙</span>
+                </button>
+              </div>
+            </div>
+          ` : ""}
+        </div>
+
+        <!-- Shop Banner in Hero Tab -->
+        <div class="p-3 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-emerald-950 border border-emerald-500/30 text-white flex items-center justify-between shadow-sm">
+          <div class="flex items-center gap-2.5">
+            <span class="text-2xl">🏪</span>
+            <div>
+              <span class="text-xs font-black block text-emerald-400">Лавка Снаряжения</span>
+              <span class="text-[10px] text-slate-300">Покупка оружия, брони, реликвий и зелий</span>
+            </div>
+          </div>
+          <button onclick="window.RPG.openShopModal()" class="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-black text-xs shadow-md">
+            В лавку →
+          </button>
+        </div>
+
+        <!-- Switch Hero & Hardcore Reset Buttons -->
+        <div class="text-center pt-2 space-y-2">
+          <button onclick="window.RPG.openHeroPicker()" class="text-xs font-bold text-slate-400 hover:text-amber-500 transition-colors block mx-auto">
+            Сменить героя natarGRP 🔄
+          </button>
+          <button onclick="window.RPG.resetCharacter()" class="text-[11px] font-bold text-rose-500/80 hover:text-rose-400 transition-colors block mx-auto underline">
+            Сбросить персонажа (Хардкорный старт с 1 ур.) ⚠️
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderEquippedSlotHTML(slotKey, label, defaultIcon, item) {
+    if (!item) {
+      return `
+        <div onclick="window.RPG.openSlotFilterModal('${slotKey}')" class="cursor-pointer p-2.5 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-amber-500 text-center space-y-1 transition-all active:scale-95">
+          <span class="text-2xl opacity-40">${defaultIcon}</span>
+          <span class="block text-[10px] font-bold text-slate-400">${label}</span>
+          <span class="block text-[9px] text-amber-500 font-bold">+ Надеть</span>
+        </div>
+      `;
+    }
+
+    const rInfo = RARITY_MAP[item.rarity] || RARITY_MAP.common;
+    const forgeTag = item.forge_level > 0 ? `+${item.forge_level}` : "";
+
+    return `
+      <div onclick="window.RPG.openItemModal('${item.uid}')" class="cursor-pointer p-2.5 rounded-2xl border-2 ${rInfo.color} text-center space-y-1 hover:scale-105 transition-transform relative group">
+        <div class="relative inline-block">
+          <span class="text-2xl">${item.icon || defaultIcon}</span>
+          ${
+            forgeTag
+              ? `<span class="absolute -top-1 -right-2 px-1 rounded-md bg-amber-500 text-slate-950 font-black text-[9px] shadow-sm">${forgeTag}</span>`
+              : ""
+          }
+        </div>
+        <span class="block text-[10.5px] font-black truncate">${item.name}</span>
+        <div class="flex items-center justify-center gap-1 flex-wrap">
+          <span class="text-[9px] font-extrabold px-1.5 py-0.2 rounded-md ${rInfo.badge}">${rInfo.name}</span>
+          ${(() => {
+            const activeDef = Object.values(ACTIVE_ITEM_DEFINITIONS).find(d => d.match(item));
+            return activeDef ? `<span class="text-[8px] font-black px-1 py-0.2 rounded bg-amber-500/20 text-amber-400 border border-amber-500/40 animate-pulse">⚡ [${activeDef.shortName}]</span>` : "";
+          })()}
+        </div>
+        <button onclick="event.stopPropagation(); window.RPG.openSlotFilterModal('${slotKey}')" class="w-full mt-1 py-0.5 rounded-lg bg-slate-800/80 hover:bg-amber-500 text-slate-300 hover:text-slate-950 text-[9px] font-bold border border-slate-700 hover:border-amber-400 flex items-center justify-center gap-1 transition-colors">
+          <span>🔄</span>
+          <span>Сменить</span>
+        </button>
+      </div>
+    `;
+  }
+
+  function renderInventoryItemTileHTML(item) {
+    const rInfo = RARITY_MAP[item.rarity] || RARITY_MAP.common;
+    const isSelected = RPG_STATE.selectedItemUids && RPG_STATE.selectedItemUids.has(item.uid);
+    const forgeTag = (item.forge_level || item.upgrade) > 0 ? `+${item.forge_level || item.upgrade}` : "";
+    const slotBadge = item.slot_name || (item.slot === "weapon" ? "Оружие" : item.slot === "armor" ? "Броня" : item.slot === "relic" ? "Реликвия" : "Зелье");
+    const isPotion = item.slot === "consumable" || item.type === "potion";
+    const p = RPG_STATE.profile || {};
+    const eq = p.equipment || {};
+    const targetSlot = (item.slot || item.type || "").toLowerCase();
+    const isEquippable = ["weapon", "armor", "relic"].includes(targetSlot);
+    const currEquipped = isEquippable ? (eq[targetSlot] || eq[item.slot] || eq[item.type]) : null;
+    const sellPrice = getItemSellPrice(item);
+
+    let actionBtnHTML = "";
+    if (!RPG_STATE.isSelectionMode) {
+      if (isPotion) {
+        actionBtnHTML = `
+          <button onclick="event.stopPropagation(); window.RPG.useConsumable('${item.uid}')" class="w-full mt-1.5 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-[9.5px] shadow-sm flex items-center justify-center gap-1 transition-all">
+            <span>🧪</span>
+            <span>Пить ${item.count > 1 ? `(${item.count})` : ""}</span>
+          </button>
+        `;
+      } else if (isEquippable) {
+        if (currEquipped) {
+          actionBtnHTML = `
+            <button onclick="event.stopPropagation(); window.RPG.equipItem('${item.uid}')" class="w-full mt-1.5 py-1 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 active:scale-95 text-white font-black text-[9.5px] shadow-sm flex items-center justify-center gap-1 transition-all">
+              <span>🔄</span>
+              <span>Сменить</span>
+            </button>
+          `;
+        } else {
+          actionBtnHTML = `
+            <button onclick="event.stopPropagation(); window.RPG.equipItem('${item.uid}')" class="w-full mt-1.5 py-1 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 active:scale-95 text-white font-black text-[9.5px] shadow-sm flex items-center justify-center gap-1 transition-all">
+              <span>⚔️</span>
+              <span>Надеть</span>
+            </button>
+          `;
+        }
+      }
+    } else {
+      actionBtnHTML = `
+        <div class="w-full mt-1 py-1 text-center font-black text-[10px] rounded-lg ${isSelected ? 'bg-amber-500 text-slate-950' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}">
+          ${isSelected ? `✓ ВЫБРАНО (+${sellPrice} 🪙)` : `+${sellPrice} 🪙`}
+        </div>
+      `;
+    }
+
+    return `
+      <div onclick="window.RPG.handleInventoryItemClick('${item.uid}')" class="cursor-pointer p-2.5 rounded-2xl border-2 ${isSelected ? 'border-amber-400 ring-3 ring-amber-400/60 scale-102 bg-amber-500/15 shadow-md shadow-amber-500/20' : rInfo.color} flex flex-col justify-between hover:scale-102 active:scale-98 transition-all relative space-y-1 bg-white/70 dark:bg-slate-800/80 shadow-xs">
+        <!-- Multi-select Checkbox Badge -->
+        <button onclick="event.stopPropagation(); window.RPG.toggleItemSelection('${item.uid}')" class="absolute top-1.5 left-1.5 w-6 h-6 rounded-lg flex items-center justify-center text-xs font-black border transition-all z-10 ${isSelected ? 'bg-amber-500 border-amber-300 text-slate-950 shadow-md scale-110' : 'bg-slate-900/80 border-slate-600 text-slate-400 hover:border-amber-400 hover:text-white'}">
+          ${isSelected ? "✓" : "○"}
+        </button>
+        <div class="flex items-center justify-between">
+          <span class="text-[8.5px] font-extrabold px-1.5 py-0.2 rounded bg-black/20 ml-6">${slotBadge}</span>
+          <div class="flex items-center gap-1">
+            ${(() => {
+              const activeDef = Object.values(ACTIVE_ITEM_DEFINITIONS).find(d => d.match(item));
+              return activeDef ? `<span class="px-1 rounded bg-amber-500/20 text-amber-400 text-[8px] font-black border border-amber-500/30">⚡ АКТИВКА</span>` : "";
+            })()}
+            ${forgeTag ? `<span class="px-1.5 rounded-md bg-amber-500 text-slate-950 font-black text-[8.5px] shadow-sm">${forgeTag}</span>` : ""}
+          </div>
+        </div>
+        <div class="text-center py-1">
+          <span class="text-2xl block">${item.icon || "📦"}</span>
+          <span class="block text-[10.5px] font-black truncate mt-0.5">${item.name}</span>
+        </div>
+        <div class="text-center min-h-[14px]">
+          <span class="text-[8.5px] text-slate-500 dark:text-slate-400 line-clamp-2 block leading-tight">${item.bonus_desc || ""}</span>
+        </div>
+        ${actionBtnHTML}
+      </div>
+    `;
+  }
+
+  // ===========================================================================
+  // 2. FARM TAB (2D ACTION ARENA OR FAST SIM)
+  // ===========================================================================
+
+  function renderFarmTabHTML() {
+    const p = RPG_STATE.profile || {};
+    const floor = p.dungeon_floor || 1;
+    const isArena = RPG_STATE.farmMode === "arena";
+    const isBossFight = !!(ARENA.isRaidBossBattle || (ARENA.isBossActive && ARENA.topDownMode));
+    const bossObj = ARENA.bossEntity || ARENA.currentRaidBoss || {};
+
+    if (isBossFight) {
+      return `
+        <div class="space-y-3.5">
+          <!-- Brawl Boss Fight Header -->
+          <div class="p-3.5 rounded-2xl bg-gradient-to-r from-red-950 via-purple-950 to-amber-950 text-white border-2 border-red-500/50 shadow-xl flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <span class="text-3xl animate-bounce">👑</span>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="text-sm font-black tracking-wide uppercase text-amber-400">
+                    БОЙ С БОССОМ: ${bossObj.name || "БОСС"}
+                  </h3>
+                  <span class="text-[9px] px-2 py-0.5 rounded-full bg-red-600 text-white font-extrabold uppercase shadow-sm">BRAWL 2D</span>
+                </div>
+                <p class="text-[11px] text-purple-200 font-medium">
+                  Джойстик — беги в 360°, уворачивайся от тарана и ракет! Отпусти — автострельба!
+                </p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="window.RPG.toggleBossPartyMode()" class="px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 active:scale-95 text-white font-bold text-xs border border-slate-600 flex items-center gap-1 shadow-md">
+                <span>${(ARENA.bossPartyMode || "trio") === "trio" ? "👥 3 Игрока" : "👤 1 Игрок"}</span>
+              </button>
+              <button onclick="window.RPG.exitRaidBossBattle()" class="px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 active:scale-95 text-slate-300 font-bold text-xs border border-slate-600 flex items-center gap-1 shadow-md">
+                <span>✕ В лобби</span>
+              </button>
+            </div>
+          </div>
+
+          ${renderActionArenaHTML()}
+        </div>
+      `;
+    }
+
+    return `
+      <div class="space-y-3.5">
+        <!-- Floor Header & Mode Switcher -->
+        <div class="p-3.5 rounded-2xl bg-gradient-to-r from-red-950 via-slate-900 to-amber-950 text-white border border-red-500/30 shadow-md flex items-center justify-between">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-base">⚔️</span>
+              <h3 class="text-sm font-black tracking-wide uppercase">
+                Этаж ${floor} Катакомб
+              </h3>
+            </div>
+            <p class="text-[11px] text-amber-200/80 font-medium">
+              ${isArena ? "Защита тропы! Крипы бегут справа — руби и отбивай боссов!" : "Автоматическое месилово крипов"}
+            </p>
+          </div>
+
+          <!-- Mode Toggle Buttons -->
+          <div class="flex items-center p-1 rounded-xl bg-slate-800/80 border border-slate-700 text-[10px] font-bold">
+            <button onclick="window.RPG.setFarmMode('arena')" class="px-2.5 py-1 rounded-lg transition-all ${
+              isArena ? "bg-amber-500 text-slate-950 font-black" : "text-slate-400 hover:text-white"
+            }">
+              🎮 Арена
+            </button>
+            <button onclick="window.RPG.setFarmMode('sim')" class="px-2.5 py-1 rounded-lg transition-all ${
+              !isArena ? "bg-amber-500 text-slate-950 font-black" : "text-slate-400 hover:text-white"
+            }">
+              ⚡ Авто
+            </button>
+          </div>
+        </div>
+
+        ${isArena ? renderActionArenaHTML() : renderFastSimHTML()}
+      </div>
+    `;
+  }
+
+  function renderActionArenaHTML() {
+    const p = RPG_STATE.profile || {};
+    const stats = p.stats || {};
+    const cfg = getHeroSkillConfig();
+    const s1CdSec = ARENA.skill1Cooldown > 0 ? Math.ceil(ARENA.skill1Cooldown / 60) : 0;
+    const ultCdSec = ARENA.ultCooldown > 0 ? Math.ceil(ARENA.ultCooldown / 60) : 0;
+
+    return `
+      <div class="space-y-2">
+                <!-- Canvas Arena Element -->
+        <div class="relative w-full rounded-3xl overflow-hidden border-2 border-amber-500/40 shadow-2xl bg-slate-950">
+          <canvas id="rpg-action-canvas" class="w-full ${ARENA.isRaidBossBattle || ARENA.topDownMode ? 'h-[520px]' : 'h-[320px]'} block cursor-crosshair"></canvas>
+
+          <!-- Top-Down / Classic Side View Mode Switcher -->
+          <div class="absolute top-3 left-3 z-20 flex items-center gap-1.5">
+            <button onclick="window.RPG.toggleTopDownArenaMode()"
+              title="Переключить вид: Top-Down шутер (с джойстиком) или классическая 2D-тропа"
+              class="h-7 px-2.5 rounded-full bg-slate-900/85 border border-slate-700/80 hover:border-amber-400/60 text-white font-black text-[10px] flex items-center gap-1.5 shadow-lg backdrop-blur-md active:scale-95 transition-all">
+              <span>${ARENA.topDownMode || ARENA.isRaidBossBattle ? "🕹️ Top-Down" : "🛣️ Сайд-вид"}</span>
+            </button>
+
+            ${!ARENA.isRaidBossBattle ? `
+            <button onclick="window.RPG.startRaidBossActionBattle('roshan')"
+              title="Мгновенно начать 2D Бой с Боссом (Brawl 2D)!"
+              class="h-7 px-2.5 rounded-full bg-gradient-to-r from-red-600 to-amber-600 border border-amber-400 text-white font-black text-[10px] flex items-center gap-1.5 shadow-lg active:scale-95 transition-all animate-pulse">
+              <span>👑 В БОЙ С БОССОМ!</span>
+            </button>
+            ` : `
+            <button onclick="window.RPG.exitRaidBossBattle()"
+              class="h-7 px-2.5 rounded-full bg-slate-900/90 border border-slate-700 text-slate-300 font-bold text-[10px] flex items-center gap-1.5 shadow-lg active:scale-95 transition-all">
+              <span>✕ В лобби боссов</span>
+            </button>
+            `}
+          </div>
+
+          <!-- Squad Mode / Solo Duel Toggle Badge -->
+          <div class="absolute top-3 right-3 z-20">
+            <button id="rpg-btn-party-toggle"
+              onclick="window.RPG.toggleBossPartyMode()"
+              title="Переключить режим битвы с боссом: 3 Героя (Отряд) или 1v1 (Соло)"
+              class="h-7 px-2.5 rounded-full bg-slate-900/85 border border-slate-700/80 hover:border-amber-400/60 text-white font-extrabold text-[10px] flex items-center gap-1.5 shadow-lg backdrop-blur-md active:scale-95 transition-all">
+              <span class="text-xs">${(ARENA.bossPartyMode || "trio") === "trio" ? "👥" : "👤"}</span>
+              <span class="${(ARENA.bossPartyMode || "trio") === "trio" ? "text-emerald-400" : "text-purple-400"}">
+                ${(ARENA.bossPartyMode || "trio") === "trio" ? "Отряд: 3" : "Соло: 1"}
+              </span>
+            </button>
+          </div>
+
+          <!-- Virtual Touch Joystick (Bottom Left, clear of action buttons) -->
+          <div id="rpg-virtual-joystick-zone"
+               class="absolute bottom-3 left-3 w-24 h-24 flex items-center justify-center pointer-events-auto z-30 select-none touch-none">
+            <div id="rpg-joystick-base" class="relative w-20 h-20 rounded-full border-2 border-amber-400/50 bg-slate-900/80 shadow-2xl flex items-center justify-center backdrop-blur-md ring-2 ring-amber-500/20">
+              <span class="absolute top-1 text-[9px] text-amber-300/50">▲</span>
+              <span class="absolute bottom-1 text-[9px] text-amber-300/50">▼</span>
+              <span class="absolute left-1.5 text-[9px] text-amber-300/50">◀</span>
+              <span class="absolute right-1.5 text-[9px] text-amber-300/50">▶</span>
+              <div id="rpg-joystick-knob" class="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-yellow-300 shadow-xl border-2 border-white pointer-events-none flex items-center justify-center">
+                <span class="text-xs font-black text-slate-950">🕹️</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Potion button (above joystick) -->
+          <div class="absolute bottom-28 left-3 z-20">
+            <button onclick="window.RPG.usePotionAction()" title="Зелье / Сыр [F / 1]" class="w-10 h-10 rounded-2xl bg-emerald-600/95 border-2 border-emerald-300 text-white font-bold text-lg flex items-center justify-center shadow-lg active:scale-90 transition-transform">
+              🧪
+            </button>
+          </div>
+
+          <!-- Right Action Buttons (Attack, Dash / Roll, Skill 1, Ultimate) -->
+          <div class="absolute bottom-3 right-3 flex flex-col gap-1.5 z-20">
+            <!-- Top row: Skill 1 + Ultimate -->
+            <div class="flex items-center gap-1.5">
+              <!-- Hero Skill 1 Button [E] -->
+              <button id="rpg-btn-skill1" onclick="window.RPG.castSkill1Action()" title="${cfg.skill1Name} [E]" class="w-11 h-11 rounded-2xl ${s1CdSec > 0 ? 'bg-slate-800/80 border border-slate-700 opacity-60' : 'bg-gradient-to-r from-blue-600 to-cyan-600 border-2 border-cyan-400'} text-white font-black text-sm flex flex-col items-center justify-center shadow-lg active:scale-90 transition-transform">
+                <span class="text-base">${cfg.skill1Icon || '⚡'}</span>
+                <span id="rpg-cd-skill1" class="text-[8px] font-bold">${s1CdSec > 0 ? `${s1CdSec}с` : 'Скилл'}</span>
+              </button>
+
+              <!-- Hero Ultimate Skill Button [Q] -->
+              <button id="rpg-btn-ult" onclick="window.RPG.castUltimateAction()" title="${cfg.ultName} [Q]" class="w-11 h-11 rounded-2xl ${ultCdSec > 0 ? 'bg-slate-800/80 border border-slate-700 opacity-60' : 'bg-gradient-to-r from-purple-600 to-indigo-600 border-2 border-purple-400'} text-white font-black text-sm flex flex-col items-center justify-center shadow-lg active:scale-90 transition-transform">
+                <span class="text-base">${cfg.ultIcon || '🌟'}</span>
+                <span id="rpg-cd-ult" class="text-[8px] font-bold">${ultCdSec > 0 ? `${ultCdSec}с` : 'Ульта'}</span>
+              </button>
+            </div>
+
+            <!-- Bottom row: Attack + Dash -->
+            <div class="flex items-center gap-1.5">
+              <!-- Attack / Shoot Button [Space / Click] -->
+              <button id="rpg-btn-attack" onclick="window.RPG.playerSlashAttackAction()" title="Атака [Пробел / Клик]"
+                class="w-11 h-11 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 border-2 border-amber-300 text-white font-black text-xs flex flex-col items-center justify-center shadow-lg shadow-red-600/40 active:scale-90 transition-transform">
+                <span class="text-base leading-none">⚔️</span>
+                <span class="text-[8px] font-bold mt-0.5">АТАК</span>
+              </button>
+
+              <!-- Dash / Roll Button -->
+              <button onclick="window.RPG.playerDashRollAction()" title="Рывок / Кувырок [Shift / C]"
+                class="w-11 h-11 rounded-2xl ${ARENA.dodgeCooldown > 0 ? 'bg-slate-800/80 border border-slate-700 opacity-60' : 'bg-gradient-to-r from-sky-500 to-cyan-500 border-2 border-sky-300 shadow-sky-500/40'} text-white font-black text-sm flex flex-col items-center justify-center shadow-lg active:scale-90 transition-all">
+                <span class="text-base">🌀</span>
+                <span class="text-[8px] leading-tight font-bold">${ARENA.dodgeCooldown > 0 ? Math.ceil(ARENA.dodgeCooldown / 60) + 'с' : 'Рывок'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Controls Guide Toolbar -->
+        <div class="p-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-[10.5px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-1.5">
+            <span>🕹️ <b>Top-Down Бой</b>: джойстик — бег с авто-прицелом в босса, [⚔️ Атака] — огонь, [🌀 Рывок] — уворот!</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <!-- Auto-Attack ON / OFF Toggle Button (Wave/Dungeon/Arena) -->
+            <button id="rpg-auto-attack-btn" onclick="window.RPG.toggleArenaAutoAttack()" class="px-2.5 py-1 rounded-xl text-xs font-black transition-all ${ARENA.player.autoAttack ? 'bg-amber-500/20 text-amber-500 border border-amber-500/40 shadow-sm' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'}" title="Включить или выключить автоматический удар">
+              Авто-удар: ${ARENA.player.autoAttack ? "ВКЛ ⚔️" : "ВЫКЛ ✋"}
+            </button>
+            <button id="rpg-wave-confirm-btn" onclick="window.RPG.toggleArenaWaveConfirm()" class="px-2.5 py-1 rounded-xl text-xs font-black transition-all ${ARENA.autoAdvanceWaves ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-sm' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'}" title="${ARENA.autoAdvanceWaves ? 'Подтверждение волн отключено' : 'Подтверждение волн включено'}">
+              Авто-волны: ${ARENA.autoAdvanceWaves ? "ВКЛ ⏩" : "ВЫКЛ ⏸️"}
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderFastSimHTML() {
+    const p = RPG_STATE.profile || {};
+    const stats = p.stats || {};
+    const battle = RPG_STATE.lastBattle;
+
+    return `
+      <div class="space-y-3.5">
+        <!-- Arena Display -->
+        <div class="theme-card p-4 rounded-3xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+          <!-- Floor & Wave Synchronized Status -->
+          <div class="flex items-center justify-between px-3 py-2 rounded-2xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-700/60 text-xs font-bold text-slate-600 dark:text-slate-300">
+            <span>⚔️ Этаж ${p.dungeon_floor || 1} • Волна <b class="text-amber-500">${((p.dungeon_cleared || 0) % 20) + 1} / 20</b></span>
+            <span>🏆 Зачищено всего: <b class="text-emerald-500">${p.dungeon_cleared || 0} волн</b></span>
+          </div>
+
+          <div class="flex items-center justify-between gap-3">
+            <!-- Hero Side -->
+            <div class="flex-1 text-center space-y-1.5 p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-700/60">
+              <div class="text-3xl">${p.class_avatar || p.class_icon || "🛡️"}</div>
+              <div class="text-xs font-black truncate">${p.user_name || p.class_name}</div>
+              <div class="space-y-1">
+                ${(() => {
+                  const hMax = battle?.hero_hp_max || stats.hp_max || 180;
+                  const hCur = battle?.hero_hp_left !== undefined ? battle.hero_hp_left : hMax;
+                  const hPct = Math.max(0, Math.min(100, Math.round((hCur / hMax) * 100)));
+                  return `
+                    <div class="flex justify-between text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                      <span>HP</span>
+                      <span class="${hCur <= 0 ? 'text-rose-500 font-black' : ''}">${hCur.toLocaleString()} / ${hMax.toLocaleString()}</span>
+                    </div>
+                    <div class="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                      <div class="h-full ${hCur <= 0 ? 'bg-rose-500' : 'bg-emerald-500'} transition-all duration-300" style="width: ${hPct}%"></div>
+                    </div>
+                  `;
+                })()}
+              </div>
+            </div>
+
+            <!-- VS Badge -->
+            <div class="flex flex-col items-center justify-center">
+              <span class="text-xs font-black px-2.5 py-1 rounded-xl bg-red-500/10 text-red-600 border border-red-500/30">VS</span>
+            </div>
+
+            <!-- Enemy Side -->
+            <div class="flex-1 text-center space-y-1.5 p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-700/60">
+              <div class="text-3xl">${battle?.enemy_icon || "👾"}</div>
+              <div class="text-xs font-black truncate">${battle?.enemy_name || "Пачка крипов"}</div>
+              <div class="space-y-1">
+                ${(() => {
+                  const eMax = battle?.enemy_hp_max || 100;
+                  const eCur = battle?.enemy_hp_left !== undefined ? battle.enemy_hp_left : (battle?.victory ? 0 : eMax);
+                  const ePct = Math.max(0, Math.min(100, Math.round((eCur / eMax) * 100)));
+                  return `
+                    <div class="flex justify-between text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                      <span>HP Врагов</span>
+                      <span>${eCur <= 0 ? '💀 0 (Повержен)' : `${eCur.toLocaleString()} (${ePct}%)`}</span>
+                    </div>
+                    <div class="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                      <div class="h-full bg-red-500 transition-all duration-300" style="width: ${ePct}%"></div>
+                    </div>
+                  `;
+                })()}
+              </div>
+            </div>
+          </div>
+
+          <!-- Streak & Victory banner if just fought -->
+          ${
+            battle
+              ? `
+            <div class="p-3 rounded-2xl ${
+              battle.victory
+                ? "bg-gradient-to-r from-amber-500/10 via-emerald-500/10 to-amber-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
+                : battle.is_draw
+                  ? "bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/40 text-amber-700 dark:text-amber-300"
+                  : "bg-red-500/10 border border-red-500/30 text-red-600"
+            } text-center space-y-1">
+              <div class="text-xs font-black tracking-wide">
+                ${
+                  battle.victory
+                    ? (battle.streak_title || "ВОЛНА ЗАЧИЩЕНА! 🏆")
+                    : battle.is_draw
+                      ? `⏳ НИЧЬЯ (ТАЙМАУТ ${battle.rounds_fought || 400} РАУНДОВ)!`
+                      : "💀 ВАШ ГЕРОЙ ПАЛ В БОЮ!"
+                }
+              </div>
+              ${battle.description ? `<div class="text-[10.5px] font-medium opacity-90">${battle.description}</div>` : ""}
+              ${
+                battle.victory
+                  ? `
+                <div class="flex items-center justify-center gap-3 text-[11px] font-bold">
+                  <span>+${battle.gold_earned} 🪙</span>
+                  <span>+${battle.xp_earned} XP</span>
+                  ${battle.crits_count > 0 ? `<span>🔥 ${battle.crits_count} критов</span>` : ""}
+                  ${battle.rounds_fought ? `<span>⏱️ ${battle.rounds_fought} раундов</span>` : ""}
+                </div>
+              `
+                  : ""
+              }
+            </div>
+          `
+              : ""
+          }
+
+          <!-- Action Controls -->
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="window.RPG.slashWave()" ${RPG_STATE.isFighting ? "disabled" : ""} class="py-3 px-4 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 active:scale-95 text-white font-black text-sm shadow-md shadow-red-600/20 flex items-center justify-center gap-2 transition-all ${
+              RPG_STATE.isFighting ? "opacity-60 cursor-not-allowed" : ""
+            }">
+              <span>⚔️</span>
+              <span>${RPG_STATE.isFighting ? "Месилово..." : "Зарубить волну"}</span>
+            </button>
+
+            <button onclick="window.RPG.toggleAutoFarm()" class="py-3 px-4 rounded-2xl ${
+              RPG_STATE.autoFarm
+                ? "bg-amber-500 text-slate-950 font-black animate-pulse"
+                : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-300"
+            } active:scale-95 text-sm shadow-sm flex items-center justify-center gap-2 transition-all">
+              <span>⚡</span>
+              <span>${RPG_STATE.autoFarm ? "Стоп авто-фарм" : "Авто-месилово"}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Combat Feed / Log -->
+        <div class="theme-card p-3.5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm space-y-2">
+          <div class="flex items-center justify-between text-xs font-black uppercase text-slate-500 dark:text-slate-400">
+            <span>📜 Лог сражения</span>
+            <span>Сессия: ${RPG_STATE.killsSession} волн</span>
+          </div>
+
+          <div class="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900/60 max-h-36 overflow-y-auto space-y-1 font-mono text-[11px]">
+            ${
+              RPG_STATE.combatLog.length === 0
+                ? `<div class="text-slate-400 text-center py-2">Нажмите «Зарубить волну» для фарма золота и опыта!</div>`
+                : RPG_STATE.combatLog.map((line) => `<div class="leading-tight text-slate-700 dark:text-slate-300">${line}</div>`).join("")
+            }
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // ===========================================================================
+  // 3. CO-OP BOSS RAIDS HTML
+  // ===========================================================================
+
+  function renderCoopRaidsHTML() {
+    if (RPG_STATE.coopRoomId && RPG_STATE.coopRoomData) {
+      return renderActiveCoopBattleHTML();
+    }
+
+        const TAG_MAP = {
+      golem: { tag: "Начальный", color: "border-stone-500/60 bg-stone-500/5" },
+      lich: { tag: "Нежить", color: "border-cyan-500/60 bg-cyan-500/5" },
+      tormentor: { tag: "Магический", color: "border-purple-500/60 bg-purple-500/5" },
+      dragon: { tag: "Рейдовый", color: "border-rose-500/60 bg-rose-500/5" },
+      roshan: { tag: "Хозяин Ямы", color: "border-amber-500/60 bg-amber-500/5" },
+      tidehunter: { tag: "Сверх-Ранг", color: "border-teal-500/60 bg-teal-500/5" },
+      sf_boss: { tag: "Сверх-Ранг", color: "border-red-600/60 bg-red-600/5" },
+      necrophos: { tag: "Сверх-Ранг", color: "border-emerald-600/60 bg-emerald-600/5" },
+      invoker_boss: { tag: "Сверх-Ранг", color: "border-yellow-500/60 bg-yellow-500/5" },
+      chaos_knight: { tag: "Сверх-Ранг", color: "border-amber-600/60 bg-amber-600/5" },
+      dark_tormentor: { tag: "Сверх-Ранг", color: "border-purple-700/60 bg-purple-700/5" },
+      doom: { tag: "Сверх-Ранг", color: "border-orange-600/60 bg-orange-600/5" },
+      primal_beast: { tag: "Сверх-Ранг", color: "border-red-700/60 bg-red-700/5" },
+      phantom_roshan: { tag: "Сверх-Ранг", color: "border-cyan-400/60 bg-cyan-400/5" },
+      enigma: { tag: "Финальный Босс", color: "border-indigo-600/60 bg-indigo-600/5" }
+    };
+
+    const bosses = (RPG_STATE.coopBosses && RPG_STATE.coopBosses.length > 0)
+      ? RPG_STATE.coopBosses.map(b => ({
+          id: b.id,
+          name: b.name,
+          icon: b.icon || "🗿",
+          hp: `${b.max_hp ? b.max_hp.toLocaleString('ru-RU') : (b.hp || 50000)} HP`,
+          desc: b.desc || "Могущественный рейд-босс",
+          tag: (TAG_MAP[b.id] || {}).tag || "Рейдовый",
+          color: (TAG_MAP[b.id] || {}).color || "border-purple-500/60 bg-purple-500/5"
+        }))
+      : [
+          { id: "golem", name: "Древний Гранитный Голем", icon: "🗿", hp: "1,500,000 HP", desc: "Гигант из древнего гранита с тяжелыми разломами земли.", tag: "Начальный", color: "border-stone-500/60 bg-stone-500/5" },
+          { id: "lich", name: "Архилич Некрополя", icon: "☠️", hp: "3,000,000 HP", desc: "Владыка темных заклятий, ледяных сфер и телепортации.", tag: "Нежить", color: "border-cyan-500/60 bg-cyan-500/5" },
+          { id: "tormentor", name: "Древний Терзатель", icon: "🔮", hp: "6,000,000 HP", desc: "Отражает входящий урон кристальным панцирем. Дропает Shard!", tag: "Магический", color: "border-purple-500/60 bg-purple-500/5" },
+          { id: "dragon", name: "Дракон Инферно", icon: "🌋", hp: "10,000,000 HP", desc: "Испепеляет арену потоками лавы и огненными взмахами крыльев.", tag: "Рейдовый", color: "border-rose-500/60 bg-rose-500/5" },
+          { id: "roshan", name: "Рошан Свирепый (Roshan)", icon: "🐲", hp: "15,000,000 HP", desc: "КУЛЬТОВЫЙ ХОЗЯИН ЯМЫ! Дропает Aegis of the Immortal, Сыр и Divine Rapier!", tag: "Хозяин Ямы", color: "border-amber-500/60 bg-amber-500/5" },
+          { id: "tidehunter", name: "Левиафан Бездны (Tidehunter)", icon: "🐙", hp: "20,000,000 HP", desc: "[СИЛЬНЕЕ РОШАНА!] Владыка пучин. Чешуя Кракена гасит урон, Раваж сносит арену.", tag: "Сверх-Ранг", color: "border-teal-500/60 bg-teal-500/5" },
+          { id: "sf_boss", name: "Архидемон Nevermore", icon: "💀", hp: "26,000,000 HP", desc: "[СИЛЬНЕЕ РОШАНА!] Собирает легион душ. Тройные коилы и взрывной Реквием Душ!", tag: "Сверх-Ранг", color: "border-red-600/60 bg-red-600/5" },
+          { id: "necrophos", name: "Чумной Владыка (Necrophos)", icon: "🧟", hp: "33,000,000 HP", desc: "[СИЛЬНЕЕ РОШАНА!] Аура чумы истощает здоровье, а Коса Смерти наносит сокрушительный удар!", tag: "Сверх-Ранг", color: "border-emerald-600/60 bg-emerald-600/5" },
+          { id: "invoker_boss", name: "Демиург Арсенала (Invoker)", icon: "🧙‍♂️", hp: "42,000,000 HP", desc: "[СИЛЬНЕЕ РОШАНА!] Повелитель всех стихий. Обрушивает хаос-метеоры и звуковые взрывы!", tag: "Сверх-Ранг", color: "border-yellow-500/60 bg-yellow-500/5" },
+          { id: "chaos_knight", name: "Всадник Хаоса (Chaos Knight)", icon: "🐎", hp: "52,000,000 HP", desc: "[СИЛЬНЕЕ РОШАНА!] Призывает фантомные иллюзии и пробивает непредсказуемыми критами!", tag: "Сверх-Ранг", color: "border-amber-600/60 bg-amber-600/5" },
+          { id: "dark_tormentor", name: "Тёмный Терзатель Бездны", icon: "💎", hp: "65,000,000 HP", desc: "[СИЛЬНЕЕ РОШАНА!] Мутировавший Терзатель Тьмы. Отражает 45% урона и стреляет шипами бездны!", tag: "Сверх-Ранг", color: "border-purple-700/60 bg-purple-700/5" },
+          { id: "doom", name: "Вестник Апокалипсиса (Lord Doom)", icon: "👹", hp: "80,000,000 HP", desc: "[СИЛЬНЕЕ РОШАНА!] Дьявольский лорд преисподней. Чистый урон и печать безмолвия!", tag: "Сверх-Ранг", color: "border-orange-600/60 bg-orange-600/5" },
+          { id: "primal_beast", name: "Первобытный Титан (Primal Beast)", icon: "🦣", hp: "100,000,000 HP", desc: "[СИЛЬНЕЕ РОШАНА!] Неукротимый сокрушитель материков с яростным топотом и тараном!", tag: "Сверх-Ранг", color: "border-red-700/60 bg-red-700/5" },
+          { id: "phantom_roshan", name: "Призрачный Рошан Хаоса", icon: "👻", hp: "125,000,000 HP", desc: "[СИЛЬНЕЕ РОШАНА!] Восставший из Бездны призрак Рошана. Астральный Slam и эктоплазма!", tag: "Сверх-Ранг", color: "border-cyan-400/60 bg-cyan-400/5" },
+          { id: "enigma", name: "Пожиратель Миров (Enigma Cosmic)", icon: "🌌", hp: "160,000,000 HP", desc: "[ФИНАЛЬНЫЙ СВЕРХ-БОСС! 160 МЛН!] Мастер гравитации. Схлопывает арену в Черную Дыру!", tag: "Финальный Босс", color: "border-indigo-600/60 bg-indigo-600/5" }
+        ];
+
+    return `
+      <div class="space-y-3.5">
+        <div class="p-3.5 rounded-2xl bg-gradient-to-r from-purple-950 via-slate-900 to-amber-950 text-white border border-purple-500/30 shadow-md">
+          <div class="flex items-center gap-2">
+            <span class="text-xl">🐉</span>
+            <div>
+              <h3 class="text-sm font-black tracking-wide uppercase">Совместные Рейды на Боссов (до 3 игроков)</h3>
+              <p class="text-[11px] text-purple-200/80">Идите на босса втроем! Герои стоят по кругу, а босс в центре бьет всех по очереди. Награды сохраняются в профиль.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Join Room by Code -->
+        <div class="p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center gap-2 shadow-sm">
+          <input id="coop-room-code-input" type="text" placeholder="Код рейда (напр. 1234)" class="flex-1 px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono text-slate-800 dark:text-slate-200 uppercase outline-none focus:border-purple-500" />
+          <button onclick="window.RPG.joinCoopRoom()" class="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 active:scale-95 text-white font-black text-xs shadow-sm flex items-center gap-1">
+            <span>Войти</span>
+          </button>
+        </div>
+
+        <!-- Boss Picker -->
+        <div class="space-y-2.5">
+          ${bosses
+            .map(
+              (b) => `
+            <div class="p-3.5 rounded-2xl border-2 ${b.color} bg-white dark:bg-slate-800 shadow-sm space-y-2.5 transition-all">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                  <span class="text-3xl">${b.icon}</span>
+                  <div>
+                    <h4 class="text-xs font-black text-slate-800 dark:text-white">${b.name}</h4>
+                    <span class="text-[10px] font-bold text-red-500">${b.hp}</span>
+                  </div>
+                </div>
+                <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-600 dark:text-purple-400">${b.tag}</span>
+              </div>
+
+              <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed font-normal">${b.desc}</p>
+
+              <div class="space-y-1.5 pt-1">
+                <button onclick="window.RPG.startRaidBossActionBattle('${b.id}')" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 hover:from-red-500 hover:to-amber-500 active:scale-95 text-white font-black text-xs shadow-lg shadow-red-600/30 flex items-center justify-center gap-2 border border-red-400/40">
+                  <span>⚔️</span>
+                  <span>В бой на Арену (Экшен 60 FPS)</span>
+                </button>
+                <div class="grid grid-cols-2 gap-1.5">
+                  <button onclick="window.RPG.startRaidBossActionBattle('${b.id}')" class="py-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 active:scale-95 text-white font-black text-[11px] shadow-sm flex items-center justify-center gap-1 border border-red-400/40">
+                    <span>⚔️</span>
+                    <span>2D Дуэль 1v1</span>
+                  </button>
+                  <button onclick="window.RPG.createCoopRaid('${b.id}', false)" class="py-2 rounded-xl bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 active:scale-95 text-white font-bold text-[11px] shadow-sm flex items-center justify-center gap-1">
+                    <span>👥</span>
+                    <span>Кооп (3 чел)</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          `
+            )
+            .join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderCoopHeroCard(hero, role, label, isCurrentTurn, isBossTarget) {
+    if (!hero || !hero.name || hero.name === "Свободный слот") {
+      return `
+        <div class="w-24 sm:w-28 p-2 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700/80 bg-slate-100/50 dark:bg-slate-900/40 text-center space-y-1 shadow-sm">
+          <span class="text-lg opacity-40">➕</span>
+          <div class="text-[9.5px] font-bold text-slate-400">${label}</div>
+          <button onclick="window.RPG.addCoopBot()" class="px-2 py-0.5 rounded-lg bg-purple-600 hover:bg-purple-500 active:scale-95 text-white font-black text-[8px] shadow-xs">
+            🤖 Бот
+          </button>
+        </div>
+      `;
+    }
+
+    const hpPct = Math.max(0, Math.min(100, Math.round((hero.hp / (hero.hp_max || 1)) * 100)));
+    const mpPct = Math.max(0, Math.min(100, Math.round((hero.mp / (hero.mp_max || 1)) * 100)));
+    const isDead = hero.is_dead || hero.hp <= 0;
+
+    let borderClass = "border-slate-200 dark:border-slate-700";
+    if (isDead) {
+      borderClass = "border-rose-900/60 opacity-50 grayscale";
+    } else if (isCurrentTurn) {
+      borderClass = "border-amber-400 ring-2 ring-amber-400/80 shadow-lg shadow-amber-500/20";
+    } else if (isBossTarget) {
+      borderClass = "border-red-500 ring-2 ring-red-500/80 shadow-lg shadow-red-500/20 animate-pulse";
+    }
+
+    return `
+      <div class="w-24 sm:w-28 p-1.5 rounded-2xl bg-white/95 dark:bg-slate-800/95 border-2 ${borderClass} transition-all space-y-1 text-center shadow-md relative">
+        ${isCurrentTurn ? `<span class="absolute -top-2 left-1/2 -translate-x-1/2 px-1.5 py-0.2 rounded-md bg-amber-500 text-slate-950 font-black text-[7.5px] shadow-sm animate-pulse whitespace-nowrap">⚡ ХОД</span>` : ""}
+        ${isBossTarget && !isDead ? `<span class="absolute -bottom-2 left-1/2 -translate-x-1/2 px-1.5 py-0.2 rounded-md bg-red-600 text-white font-black text-[7.5px] shadow-sm whitespace-nowrap">🎯 ЦЕЛЬ</span>` : ""}
+        ${hero.is_defending ? `<span class="absolute -top-1.5 right-1 text-[10px]">🛡️</span>` : ""}
+
+        <div class="flex items-center justify-center">
+          <span class="text-xl">${isDead ? "💀" : (hero.class_icon || "🛡️")}</span>
+        </div>
+        <div class="text-[9.5px] font-black truncate text-slate-900 dark:text-white px-0.5">${hero.name}</div>
+        
+        <!-- HP -->
+        <div class="space-y-0.5">
+          <div class="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+            <div class="h-full ${hpPct > 35 ? 'bg-emerald-500' : 'bg-red-500'} transition-all duration-300" style="width: ${hpPct}%"></div>
+          </div>
+          <div class="text-[8px] font-bold text-slate-500 dark:text-slate-400 leading-none">${hero.hp}/${hero.hp_max}</div>
+        </div>
+
+        <!-- MP -->
+        <div class="w-full h-1 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+          <div class="h-full bg-sky-400 transition-all duration-300" style="width: ${mpPct}%"></div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderActiveCoopBattleHTML() {
+    const r = RPG_STATE.coopRoomData;
+    const boss = r.boss || {};
+    const p1 = r.players?.host || {};
+    const p2 = r.players?.player_2 || r.players?.opponent || {};
+    const p3 = r.players?.player_3 || {};
+    const yourRole = r.your_role;
+    const isYourTurn = r.is_your_turn;
+    const bossTarget = r.boss_target;
+
+    const bossHpPct = Math.max(0, Math.min(100, Math.round((boss.hp / (boss.hp_max || 1)) * 100)));
+    const targetName = bossTarget === "host" ? p1.name : bossTarget === "player_2" || bossTarget === "opponent" ? p2.name : bossTarget === "player_3" ? p3.name : "";
+
+    return `
+      <div class="space-y-3.5">
+        <!-- Header Status -->
+        <div class="p-3 rounded-2xl bg-slate-900 text-white flex items-center justify-between border ${r.is_solo ? 'border-rose-500/40' : 'border-purple-500/40'}">
+          <div class="flex items-center gap-2">
+            <span class="text-xl">${boss.icon || "🐉"}</span>
+            <div>
+              <h4 class="text-xs font-black">${boss.name || "Босс"} ${r.is_solo ? '<span class="text-[9px] px-1.5 py-0.2 rounded bg-rose-600 text-white font-extrabold ml-1">СОЛО 1v1</span>' : ''}</h4>
+              <span class="text-[10px] text-slate-400">
+                ${r.status === "waiting" ? (r.is_solo ? "Готов к бою 1v1" : "Ожидание героев (до 3 игроков)") : r.status === "playing" ? (r.is_solo ? "Идет дуэль 1 на 1!" : "Идет круговой бой!") : "Рейд завершен"}
+              </span>
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button onclick="window.RPG.startRaidBossActionBattle('${boss.id || 'golem'}')" class="px-2.5 py-1 rounded-lg bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 text-white text-[10px] font-black shadow-sm flex items-center gap-1">
+              <span>⚔️</span>
+              <span>На Арену</span>
+            </button>
+            <button onclick="navigator.clipboard && navigator.clipboard.writeText('${r.room_id}'); alert('Код комнаты скопирован: ${r.room_id}');" class="px-2 py-1 rounded-lg bg-purple-900/60 border border-purple-500/40 text-[10px] font-bold text-purple-200">
+              #${r.room_id} 📋
+            </button>
+            <button onclick="window.RPG.leaveCoopRoom()" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300">
+              ✕
+            </button>
+          </div>
+        </div>
+
+        <!-- Boss Big Bar -->
+        <div class="theme-card p-3 rounded-2xl bg-white dark:bg-slate-800 border ${boss.shield_active ? "border-purple-500/80 shadow-md shadow-purple-900/30" : "border-slate-200 dark:border-slate-700"} space-y-1.5 transition-all">
+          <div class="flex items-center justify-between text-xs font-black">
+            <span class="text-red-600 dark:text-red-400 flex items-center gap-1.5">
+              <span>${boss.icon || "🐲"}</span>
+              <span>${boss.name}</span>
+              ${boss.shield_active ? `<span class="px-2 py-0.5 rounded-full bg-purple-900/80 text-purple-200 border border-purple-400 text-[10px] font-black animate-pulse flex items-center gap-1"><span>🔮</span><span>ЩИТ 50%</span></span>` : ""}
+            </span>
+            <span class="text-[11px]">${boss.hp} / ${boss.hp_max} HP (${bossHpPct}%)</span>
+          </div>
+          <div class="w-full h-3 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+            <div class="h-full bg-gradient-to-r from-red-600 to-rose-500 transition-all duration-300" style="width: ${bossHpPct}%"></div>
+          </div>
+        </div>
+
+        <!-- 2D ACTION ARENA FAST-LAUNCH BANNER -->
+        <div class="p-3.5 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 text-white shadow-xl shadow-red-950/60 border-2 border-amber-400 flex items-center justify-between gap-3 animate-pulse">
+          <div class="flex items-center gap-2.5">
+            <span class="text-2xl">⚔️</span>
+            <div>
+              <span class="text-xs font-black block">НАСТОЯЩИЙ 2D ЭКШЕН-БОЙ НА АРЕНЕ!</span>
+              <span class="text-[10px] text-amber-100">Свободное движение героя, увороты, удары и скиллы в 60 FPS</span>
+            </div>
+          </div>
+          <button onclick="window.RPG.startRaidBossActionBattle('${boss.id || 'golem'}')" class="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 active:scale-95 text-slate-950 font-black text-xs shadow-lg whitespace-nowrap">
+            В БОЙ 2D ⚡
+          </button>
+        </div>
+
+        <!-- ARENA DISPLAY: 1v1 SHOWDOWN OR 3-HERO CIRCULAR -->
+        ${
+          r.is_solo
+            ? `
+          <div class="theme-card p-4 rounded-3xl bg-gradient-to-b from-slate-900 via-rose-950/30 to-slate-950 border-2 border-rose-500/40 shadow-2xl space-y-3 relative overflow-hidden">
+            <div class="text-[10px] font-black uppercase text-center text-rose-400 tracking-wider flex items-center justify-center gap-1.5">
+              <span>🗡️</span>
+              <span>СОЛО-РЕЙД: ДУЭЛЬ 1 НА 1</span>
+            </div>
+
+            <!-- Big Action Arena Button -->
+            <button onclick="window.RPG.startRaidBossActionBattle('${boss.id || 'golem'}')" class="w-full py-3 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 text-white font-black text-xs shadow-lg active:scale-95 flex items-center justify-center gap-2 border-2 border-amber-400/60">
+              <span class="text-base">⚔️</span>
+              <span>ВЫЙТИ В 2D БОЙ НА АРЕНУ (РЕАЛЬНОЕ ВРЕМЯ)</span>
+            </button>
+
+            <div class="flex items-center justify-around py-3">
+              <!-- Solo Hero Card -->
+              <div class="flex flex-col items-center">
+                <span class="text-[9px] font-extrabold text-slate-400 mb-1">ТВОЙ ГЕРОЙ</span>
+                ${renderCoopHeroCard(p1, "host", "Герой", (r.turn === "host"), (bossTarget === "host"))}
+              </div>
+
+              <!-- VS Badge -->
+              <div class="flex flex-col items-center justify-center px-2">
+                <span class="text-3xl font-black text-rose-500 animate-pulse tracking-widest">VS</span>
+                <span class="text-[8px] font-extrabold text-rose-300 uppercase px-2 py-0.5 rounded-full bg-rose-900/60 border border-rose-500/40 mt-1">1 на 1</span>
+              </div>
+
+              <!-- Boss Card -->
+              <div class="flex flex-col items-center">
+                <span class="text-[9px] font-extrabold text-red-400 mb-1">РЕЙД БОСС</span>
+                <div class="w-24 sm:w-28 p-2 rounded-2xl bg-gradient-to-b from-slate-900 to-red-950/90 border-2 border-red-500/70 shadow-lg text-center space-y-1 relative">
+                  <div class="text-2xl animate-bounce">${boss.icon || "🐉"}</div>
+                  <div class="text-[9.5px] font-black text-red-300 truncate px-0.5">${boss.name.split(" ")[0]}</div>
+                  <div class="space-y-0.5">
+                    <div class="w-full h-1.5 rounded-full bg-slate-700 overflow-hidden">
+                      <div class="h-full bg-red-500 transition-all duration-300" style="width: ${bossHpPct}%"></div>
+                    </div>
+                    <div class="text-[8px] font-bold text-amber-300">${boss.hp} / ${boss.hp_max}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `
+            : `
+          <!-- CIRCULAR ARENA: 3 HEROES AROUND CENTRAL BOSS -->
+          <div class="theme-card p-3.5 rounded-3xl bg-radial from-slate-900 via-purple-950/30 to-slate-950 border-2 border-purple-500/30 shadow-2xl space-y-2 relative overflow-hidden">
+            <div class="text-[10px] font-black uppercase text-center text-purple-300 tracking-wider flex items-center justify-center gap-1.5">
+              <span>⭕</span>
+              <span>Круговая Арена Рейда (Босс в центре)</span>
+            </div>
+
+            <!-- Circular Battle Arena Layout -->
+            <div class="relative w-full max-w-[320px] mx-auto min-h-[290px] flex flex-col justify-between items-center py-1">
+              <!-- Decorative circle track -->
+              <div class="absolute inset-4 rounded-full border border-dashed border-purple-500/25 pointer-events-none"></div>
+
+              <!-- Position 1: Player 1 (Top / North) -->
+              <div class="z-10">
+                ${renderCoopHeroCard(p1, "host", "Игрок 1", (r.turn === "host"), (bossTarget === "host"))}
+              </div>
+
+              <!-- Position Center: RAID BOSS -->
+              <div id="coop-boss-token" class="z-20 my-1 text-center p-3 rounded-full bg-gradient-to-b from-slate-900 to-red-950/90 border-2 border-red-500/70 shadow-2xl shadow-red-900/60 relative transition-transform duration-200">
+                <span class="text-4xl block animate-pulse">${boss.icon || "🐉"}</span>
+                <div class="text-[10px] font-black text-red-400 truncate max-w-[80px] mx-auto">${boss.name.split(" ")[0]}</div>
+                <div class="text-[9px] font-extrabold text-amber-300">${boss.hp} HP</div>
+                ${targetName ? `
+                  <div class="text-[7.5px] px-1.5 py-0.2 rounded-full bg-red-600 text-white font-black mt-0.5 whitespace-nowrap shadow-sm">
+                    🎯 Очередь: ${targetName}
+                  </div>
+                ` : ""}
+              </div>
+
+              <!-- Position 2 & 3: Player 2 (Left) & Player 3 (Right) -->
+              <div class="z-10 w-full flex items-center justify-between px-1">
+                <div>
+                  ${renderCoopHeroCard(p2, "player_2", "Игрок 2", (r.turn === "player_2" || r.turn === "opponent"), (bossTarget === "player_2" || bossTarget === "opponent"))}
+                </div>
+                <div>
+                  ${renderCoopHeroCard(p3, "player_3", "Игрок 3", (r.turn === "player_3"), (bossTarget === "player_3"))}
+                </div>
+              </div>
+            </div>
+          </div>
+        `
+        }
+
+        <!-- Actions -->
+        ${
+          r.status === "playing"
+            ? (() => {
+                const myRole = r.your_role;
+                const myHero = myRole === "host" ? p1 : (myRole === "player_2" || myRole === "opponent") ? p2 : p3;
+                const skillCd = myHero?.skill_cooldown || 0;
+                const canSkill = isYourTurn && skillCd === 0;
+
+                return `
+          <div class="theme-card p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-2">
+            <div class="text-xs font-black text-center ${isYourTurn ? "text-amber-500 animate-pulse" : "text-slate-400"}">
+              ${isYourTurn ? "🔥 ВАШ ХОД! Выберите действие:" : `⏳ Ход: ${r.turn === "host" ? p1.name : r.turn === "player_2" || r.turn === "opponent" ? p2.name : p3.name}, ждем...`}
+            </div>
+            <div class="grid grid-cols-4 gap-1.5">
+              <button onclick="window.RPG.sendCoopAction('attack')" ${!isYourTurn ? "disabled" : ""} class="py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 active:scale-95 text-white font-bold text-xs flex flex-col items-center justify-center gap-0.5 ${!isYourTurn ? "opacity-40 cursor-not-allowed" : "shadow-md shadow-red-600/20"}">
+                <span>⚔️</span>
+                <span>Атака</span>
+              </button>
+              <button onclick="window.RPG.sendCoopAction('skill')" ${!canSkill ? "disabled" : ""} class="py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 active:scale-95 text-white font-bold text-xs flex flex-col items-center justify-center gap-0.5 ${!canSkill ? "opacity-40 cursor-not-allowed" : "shadow-md shadow-purple-600/20"}">
+                <span>⚡</span>
+                <span>${skillCd > 0 ? `КД (${skillCd})` : "Скилл"}</span>
+              </button>
+              <button onclick="window.RPG.sendCoopAction('defend')" ${!isYourTurn ? "disabled" : ""} class="py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 active:scale-95 text-white font-bold text-xs flex flex-col items-center justify-center gap-0.5 ${!isYourTurn ? "opacity-40 cursor-not-allowed" : "shadow-md shadow-sky-600/20"} ${boss.shield_active ? "ring-2 ring-sky-300 animate-pulse" : ""}">
+                <span>🛡️</span>
+                <span>Блок</span>
+              </button>
+              <button onclick="window.RPG.sendCoopAction('potion')" ${!isYourTurn ? "disabled" : ""} class="py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 active:scale-95 text-white font-bold text-xs flex flex-col items-center justify-center gap-0.5 ${!isYourTurn ? "opacity-40 cursor-not-allowed" : "shadow-md shadow-emerald-600/20"}">
+                <span>🧪</span>
+                <span>Зелье</span>
+              </button>
+            </div>
+            ${boss.shield_active ? `
+              <div class="p-2.5 rounded-xl bg-gradient-to-r from-purple-950/90 via-slate-900 to-purple-950/90 border-2 border-purple-500/80 text-center animate-pulse space-y-0.5 shadow-lg shadow-purple-950/40">
+                <div class="text-[11px] font-black text-purple-300 flex items-center justify-center gap-1.5">
+                  <span>🔮</span>
+                  <span>ОТРАЖАЮЩИЙ ЩИТ БОССА АКТИВЕН!</span>
+                  <span>🔮</span>
+                </div>
+                <p class="text-[10px] text-purple-200">Любая атака отразит 50% урона обратно в героя! Используйте Блок 🛡️ или Зелье 🧪!</p>
+              </div>
+            ` : ""}
+          </div>
+        `;
+              })()
+            : r.status === "finished" && r.winner === "heroes"
+            ? `
+          <div class="theme-card p-4 rounded-3xl bg-gradient-to-b from-amber-950/40 via-slate-900 to-slate-950 border-2 border-amber-500/80 shadow-2xl space-y-3.5 text-center animate-scale-up">
+            <div class="text-4xl animate-bounce">🏆</div>
+            <div>
+              <h3 class="text-base font-black text-amber-400">ВЕЛИКАЯ ПОБЕДА НАД РЕЙД-БОССОМ!</h3>
+              <p class="text-xs text-slate-300 font-medium">${boss.name || "Босс"} пал под натиском героев!</p>
+            </div>
+
+            ${r.victory_rewards?.item ? `
+              <div class="p-3 rounded-2xl bg-slate-800/90 border border-amber-500/50 space-y-1.5 text-center">
+                <span class="text-3xl block">${r.victory_rewards.item.icon || "🎁"}</span>
+                <h4 class="text-xs font-black text-amber-300">${r.victory_rewards.item.name}</h4>
+                <div class="text-[10px] font-extrabold text-amber-400">${r.victory_rewards.item.bonus_desc || ""}</div>
+                <div class="text-[9px] text-emerald-400 font-bold">✨ Легендарный дроп добавлен в инвентарь!</div>
+              </div>
+            ` : ""}
+
+            <div class="flex items-center justify-around p-2 rounded-xl bg-slate-800/60 text-xs font-black text-amber-300">
+              <span>+${r.victory_rewards?.gold_earned || boss.gold_reward || 1200} 🪙</span>
+              <span>+${r.victory_rewards?.xp_earned || boss.xp_reward || 850} ✨</span>
+              <span>+${r.victory_rewards?.gems_earned || 35} 💎</span>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button onclick="window.RPG.fetchProfile(); RPG_STATE.activeTab = 'inventory'; renderRoot();" class="flex-1 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/20 active:scale-95">
+                ОТКРЫТЬ РЮКЗАК 🎒
+              </button>
+              <button onclick="window.RPG.leaveCoopRoom()" class="flex-1 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white font-black text-xs active:scale-95">
+                В ЛОББИ РЕЙДА ⚔️
+              </button>
+            </div>
+          </div>
+        ` : r.status === "finished" && r.winner === "boss" ? `
+          <div class="theme-card p-4 rounded-3xl bg-slate-900 border-2 border-rose-600/70 shadow-2xl space-y-3 text-center animate-scale-up">
+            <div class="text-4xl">💀</div>
+            <h3 class="text-base font-black text-rose-500">РЕЙД ПРОВАЛЕН</h3>
+            <p class="text-xs text-slate-300">Все герои пали в неравном бою. Улучшите экипировку и попробуйте снова!</p>
+            <button onclick="window.RPG.leaveCoopRoom()" class="w-full py-3 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs shadow-lg active:scale-95">
+              ВЕРНУТЬСЯ В ЛОББИ ⚔️
+            </button>
+          </div>
+        ` : ""
+        }
+
+        <!-- Co-op Combat Feed / Log -->
+        <div class="theme-card p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-1.5">
+          <div class="flex items-center justify-between text-xs font-black uppercase text-slate-500 dark:text-slate-400">
+            <span>📜 Лог рейда (Босс бьет по кругу)</span>
+            <span class="text-amber-500 text-[10px]">Круг целей</span>
+          </div>
+
+          <div class="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900/60 max-h-32 overflow-y-auto space-y-1 font-mono text-[10.5px]">
+            ${
+              !r.combat_log || r.combat_log.length === 0
+                ? `<div class="text-slate-400 text-center py-2">Рейд начался! Атакуйте босса по очереди.</div>`
+                : r.combat_log.map((entry) => {
+                    const txt = typeof entry === "string" ? entry : (entry.text || "");
+                    const isBoss = typeof entry === "object" && entry.type === "boss_attack";
+                    const isVictory = typeof entry === "object" && entry.type === "victory";
+                    const isDefeat = typeof entry === "object" && entry.type === "defeat";
+                    const colorClass = isVictory ? "text-emerald-500 font-bold" : isDefeat ? "text-rose-500 font-bold" : isBoss ? "text-red-400" : "text-slate-700 dark:text-slate-300";
+                    return `<div class="leading-tight ${colorClass}">${txt}</div>`;
+                  }).join("")
+            }
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // ===========================================================================
+  // 4. PVP DUELS & LEADERBOARD HTML
+  // ===========================================================================
+
+  function renderPvPDuelsHTML() {
+    if (RPG_STATE.pvpRoomId && RPG_STATE.pvpRoomData) {
+      return renderActivePvPDuelHTML();
+    }
+
+    const p = RPG_STATE.profile || {};
+    const classmates = RPG_STATE.classmates || [];
+
+    return `
+      <div class="space-y-3.5">
+        <div class="p-3.5 rounded-2xl bg-gradient-to-r from-red-950 via-slate-900 to-amber-950 text-white border border-red-500/30 shadow-md">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-sm font-black tracking-wide uppercase">1v1 Дуэли Одноклассников</h3>
+              <p class="text-[11px] text-red-200/80">Сразитесь экипировкой с одноклассником! Рейтинг: <b>${p.pvp_rating || 1000}</b></p>
+            </div>
+            <span class="text-2xl">🥊</span>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <h4 class="text-xs font-black uppercase text-slate-500">Одноклассники в сети:</h4>
+          ${
+            classmates.length === 0
+              ? `<div class="p-4 text-center text-xs text-slate-400 theme-card rounded-2xl">Одноклассники не найдены. Поделитесь ботом!</div>`
+              : classmates
+                  .map(
+                    (c) => `
+              <div class="p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between shadow-sm">
+                <div class="flex items-center gap-2.5">
+                  <div class="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-600 font-black text-xs flex items-center justify-center">
+                    ${c.name ? c.name[0] : "👤"}
+                  </div>
+                  <div>
+                    <span class="text-xs font-bold text-slate-800 dark:text-white block">${c.name}</span>
+                    <span class="text-[10px] text-slate-400">Рейтинг: 1000</span>
+                  </div>
+                </div>
+                <button onclick="window.RPG.challengeClassmate(${c.tg_id}, '${c.name}')" class="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 active:scale-95 text-white font-bold text-xs shadow-sm">
+                  Вызвать ⚔️
+                </button>
+              </div>
+            `
+                  )
+                  .join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderActivePvPDuelHTML() {
+    const r = RPG_STATE.pvpRoomData;
+    const host = r.players?.host || {};
+    const opp = r.players?.opponent || {};
+    const isYourTurn = r.is_your_turn;
+
+    return `
+      <div class="space-y-3.5">
+        <div class="p-3 rounded-2xl bg-slate-900 text-white flex items-center justify-between border border-red-500/40">
+          <h4 class="text-xs font-black">1v1 Дуэль</h4>
+          <button onclick="window.RPG.leavePvPRoom()" class="px-2.5 py-1 rounded-lg bg-slate-800 text-xs font-bold text-slate-300">
+            Сдаться
+          </button>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <!-- Player 1 -->
+          <div class="p-3 rounded-2xl bg-white dark:bg-slate-800 border ${r.turn === "host" ? "border-amber-500 shadow-md" : "border-slate-200 dark:border-slate-700"} text-center space-y-1">
+            <span class="text-3xl">${host.class_icon || "🗡️"}</span>
+            <div class="text-xs font-black truncate">${host.name}</div>
+            <div class="text-xs font-extrabold text-emerald-500">${host.hp} HP</div>
+          </div>
+
+          <!-- Player 2 -->
+          <div class="p-3 rounded-2xl bg-white dark:bg-slate-800 border ${r.turn === "opponent" ? "border-amber-500 shadow-md" : "border-slate-200 dark:border-slate-700"} text-center space-y-1">
+            <span class="text-3xl">${opp.class_icon || "🛡️"}</span>
+            <div class="text-xs font-black truncate">${opp.name}</div>
+            <div class="text-xs font-extrabold text-emerald-500">${opp.hp} HP</div>
+          </div>
+        </div>
+
+        ${
+          r.status === "playing"
+            ? `
+          <div class="theme-card p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-2">
+            <div class="text-xs font-black text-center ${isYourTurn ? "text-amber-500 animate-pulse" : "text-slate-400"}">
+              ${isYourTurn ? "ВАШ ХОД!" : "Ход соперника..."}
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+              <button onclick="window.RPG.sendPvPAction('attack')" ${!isYourTurn ? "disabled" : ""} class="py-2.5 rounded-xl bg-red-600 active:scale-95 text-white font-bold text-xs flex flex-col items-center justify-center gap-0.5 ${!isYourTurn ? "opacity-40" : ""}">
+                <span>⚔️</span>
+                <span>Удар</span>
+              </button>
+              <button onclick="window.RPG.sendPvPAction('skill')" ${!isYourTurn ? "disabled" : ""} class="py-2.5 rounded-xl bg-purple-600 active:scale-95 text-white font-bold text-xs flex flex-col items-center justify-center gap-0.5 ${!isYourTurn ? "opacity-40" : ""}">
+                <span>⚡</span>
+                <span>Скилл</span>
+              </button>
+              <button onclick="window.RPG.sendPvPAction('defend')" ${!isYourTurn ? "disabled" : ""} class="py-2.5 rounded-xl bg-sky-600 active:scale-95 text-white font-bold text-xs flex flex-col items-center justify-center gap-0.5 ${!isYourTurn ? "opacity-40" : ""}">
+                <span>🛡️</span>
+                <span>Щит</span>
+              </button>
+            </div>
+          </div>
+        `
+            : ""
+        }
+      </div>
+    `;
+  }
+
+  function renderLeaderboardHTML() {
+    const list = RPG_STATE.leaderboard || [];
+
+    return `
+      <div class="space-y-3.5">
+        <div class="p-3.5 rounded-2xl bg-gradient-to-r from-amber-600 to-yellow-500 text-slate-950 shadow-md flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-black tracking-wide uppercase">Рейтинг natarGRP 11 «Б»</h3>
+            <p class="text-[11px] font-bold opacity-90">Сильнейшие воины класса</p>
+          </div>
+          <span class="text-2xl">🏆</span>
+        </div>
+
+        <div class="space-y-1.5">
+          ${
+            list.length === 0
+              ? `<div class="p-6 text-center text-xs text-slate-400 theme-card rounded-2xl">Рейтинг пока пуст. Будьте первым!</div>`
+              : list
+                  .map(
+                    (p, idx) => `
+              <div class="p-2.5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between shadow-sm">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-6 text-center font-black text-xs ${idx === 0 ? "text-amber-500 text-sm" : idx === 1 ? "text-slate-400" : idx === 2 ? "text-amber-700" : "text-slate-400"}">
+                    ${idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `#${idx + 1}`}
+                  </span>
+                  <div class="text-xl">${p.class_avatar || p.class_icon || "🛡️"}</div>
+                  <div>
+                    <span class="text-xs font-bold text-slate-800 dark:text-white block truncate">${p.name || "Воин"}</span>
+                    <span class="text-[10px] text-slate-400">${p.class_name || ""} • Ур. ${p.level}</span>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <span class="text-xs font-black text-amber-500 block">${p.pvp_rating || 1000} 🏆</span>
+                  <span class="text-[9.5px] text-slate-400">${p.dungeon_floor || 1} этаж</span>
+                </div>
+              </div>
+            `
+                  )
+                  .join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  // ===========================================================================
+  // MODALS: ITEM INSPECT, FORGE & REWARD CHEST
+  // ===========================================================================
+
+  function renderItemModalHTML(item) {
+    const rInfo = RARITY_MAP[item.rarity] || RARITY_MAP.common;
+    const forgeTag = item.forge_level > 0 ? `+${item.forge_level}` : "";
+    const slotName = item.slot_name || (item.slot === "weapon" ? "Оружие" : item.slot === "armor" ? "Броня" : item.slot === "relic" ? "Реликвия" : "Зелье");
+
+    const p = RPG_STATE.profile || {};
+    const eq = p.equipment || {};
+    const isEquipped =
+      eq.weapon?.uid === item.uid || eq.armor?.uid === item.uid || eq.relic?.uid === item.uid;
+
+    let deltaHTML = "";
+    if (!isEquipped && ["weapon", "armor", "relic"].includes(item.slot)) {
+      const curr = eq[item.slot];
+      if (!curr) {
+        deltaHTML = `
+          <div class="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-[10.5px] font-bold text-emerald-600 dark:text-emerald-400 text-center">
+            ✨ Слот пуст: надев предмет, вы получите полный бонус!
+          </div>
+        `;
+      } else {
+        const deltas = [];
+        if (item.slot === "weapon") {
+          const itemMin = item.min_atk || item.base_min || 0;
+          const itemMax = item.max_atk || item.base_max || 0;
+          const currMin = curr.min_atk || curr.base_min || 0;
+          const currMax = curr.max_atk || curr.base_max || 0;
+          const dMin = itemMin - currMin;
+          const dMax = itemMax - currMax;
+          if (dMin !== 0 || dMax !== 0) {
+            const sign = dMax >= 0 ? "+" : "";
+            const col = dMax >= 0 ? "text-emerald-500" : "text-rose-500";
+            deltas.push(`<span class="${col} font-bold">${dMax >= 0 ? "▲" : "▼"} ${sign}${dMin}..${sign}${dMax} Урон</span>`);
+          }
+        } else if (item.slot === "armor") {
+          const itemDef = item.defense || item.base_def || 0;
+          const itemHp = item.hp_bonus || item.base_hp || 0;
+          const currDef = curr.defense || curr.base_def || 0;
+          const currHp = curr.hp_bonus || curr.base_hp || 0;
+          const dDef = itemDef - currDef;
+          const dHp = itemHp - currHp;
+          if (dDef !== 0) {
+            const sign = dDef >= 0 ? "+" : "";
+            const col = dDef >= 0 ? "text-emerald-500" : "text-rose-500";
+            deltas.push(`<span class="${col} font-bold">${dDef >= 0 ? "▲" : "▼"} ${sign}${dDef} Броня</span>`);
+          }
+          if (dHp !== 0) {
+            const sign = dHp >= 0 ? "+" : "";
+            const col = dHp >= 0 ? "text-emerald-500" : "text-rose-500";
+            deltas.push(`<span class="${col} font-bold">${dHp >= 0 ? "▲" : "▼"} ${sign}${dHp} HP</span>`);
+          }
+        }
+        if (deltas.length > 0) {
+          deltaHTML = `
+            <div class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-[10.5px] text-center border border-slate-200 dark:border-slate-700">
+              <span class="text-slate-400 block text-[9.5px]">Сравнение с надетым [${curr.name}]:</span>
+              <div class="flex items-center justify-center gap-2 mt-0.5">${deltas.join(" | ")}</div>
+            </div>
+          `;
+        }
+      }
+    }
+
+    const isConsumable = item.slot === "consumable" || item.type === "potion";
+
+    return `
+      <div class="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="w-full max-w-sm rounded-3xl bg-white dark:bg-slate-900 border-2 ${rInfo.color} p-5 space-y-4 shadow-2xl animate-scale-up">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1.5">
+              <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-lg ${rInfo.badge}">${rInfo.name}</span>
+              <span class="text-[10px] font-black px-2 py-0.5 rounded-lg bg-black/20 text-slate-600 dark:text-slate-300">[${slotName}]</span>
+              ${isEquipped ? `<span class="text-[9.5px] font-black px-1.5 py-0.5 rounded-md bg-emerald-500 text-white">НАДЕТО</span>` : ""}
+            </div>
+            <button onclick="window.RPG.closeItemModal()" class="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-xs">
+              ✕
+            </button>
+          </div>
+
+          <div class="text-center space-y-2">
+            <div class="relative inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-b from-slate-800 to-slate-900 border-2 border-amber-500/40 shadow-lg shadow-amber-500/10">
+              <span class="text-4xl leading-none">${item.icon || "📦"}</span>
+              ${forgeTag ? `<span class="absolute -top-1 -right-2 px-1.5 rounded-md bg-amber-500 text-slate-950 font-black text-xs shadow-sm">${forgeTag}</span>` : ""}
+            </div>
+            <h3 class="text-sm font-black text-slate-900 dark:text-white">${item.name}</h3>
+            <p class="text-xs font-bold text-amber-500">${item.bonus_desc || ""}</p>
+            ${(() => {
+              const matchedDef = Object.values(ACTIVE_ITEM_DEFINITIONS).find(d => d.match(item));
+              if (!matchedDef) return "";
+              return `
+                <div class="p-2 rounded-xl bg-gradient-to-r from-emerald-500/20 via-teal-500/20 to-emerald-500/20 border border-emerald-500/40 text-[10.5px] font-bold text-emerald-400 text-center space-y-0.5">
+                  <div class="flex items-center justify-center gap-1 text-emerald-300 font-black uppercase text-[10px]">
+                    <span>⚡</span> <span>АКТИВНЫЙ ПРЕДМЕТ</span>
+                  </div>
+                  <span>${matchedDef.description}</span>
+                  <div class="text-[9px] text-amber-300 font-extrabold mt-1">
+                    ${isEquipped ? '✅ Экипирован: кнопка активна на боевом экране [Клавиша: R / 1 или тап]' : '💡 Наденьте в слот, чтобы применять способность кнопкой в бою!'}
+                  </div>
+                </div>
+              `;
+            })()}
+          </div>
+
+          ${deltaHTML}
+
+          <div class="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            ${
+              isEquipped
+                ? `
+              <button onclick="window.RPG.openSlotFilterModal('${item.slot || item.type}')" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-95 text-white font-black text-xs shadow-md flex items-center justify-center gap-1.5">
+                <span>🔄</span>
+                <span>Сменить на другой предмет (${slotName})</span>
+              </button>
+              <button onclick="window.RPG.unequipItem('${item.slot || item.type || item.uid}')" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 active:scale-95 text-white font-black text-xs shadow-md flex items-center justify-center gap-1.5">
+                <span>🎒</span>
+                <span>Снять в рюкзак</span>
+              </button>
+            `
+                : !isConsumable
+                  ? `
+              <button onclick="window.RPG.equipItem('${item.uid}')" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-black text-xs shadow-md flex items-center justify-center gap-1.5">
+                <span>⚔️</span>
+                <span>${eq[item.slot || item.type] ? `Сменить [${eq[item.slot || item.type].name}] ➔ [${item.name}]` : "Надеть в слот снаряжения"}</span>
+              </button>
+            `
+                  : `
+              <button onclick="window.RPG.useConsumable('${item.uid}')" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 active:scale-95 text-white font-black text-xs shadow-md flex items-center justify-center gap-1.5">
+                <span>🧪</span>
+                <span>Использовать ${item.count ? `(${item.count} шт.)` : ""}</span>
+              </button>
+            `
+            }
+
+            ${
+              !isConsumable
+                ? `
+              <button onclick="window.RPG.openForge('${item.uid}')" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 active:scale-95 text-slate-950 font-black text-xs shadow-md">
+                Заточить в Кузнице (+1..+99) ⚒️
+              </button>
+            `
+                : ""
+            }
+
+            ${
+              !isEquipped
+                ? `
+              <button onclick="window.RPG.toggleItemSelection('${item.uid}'); window.RPG.closeItemModal();" class="w-full py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-500 font-black text-xs flex items-center justify-center gap-1.5">
+                <span>☑️</span>
+                <span>Выбрать для продажи (+${getItemSellPrice(item)} 🪙)</span>
+              </button>
+              <button onclick="window.RPG.sellItem('${item.uid}')" class="w-full py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-bold text-xs">
+                Продать этот предмет (+${getItemSellPrice(item)} 🪙)
+              </button>
+            `
+                : ""
+            }
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderForgeModalHTML(item) {
+    const p = RPG_STATE.profile || {};
+    const userGold = p.gold || 0;
+    const currentUpg = item.upgrade || item.forge_level || 0;
+    const goldCost = Math.floor(60 * Math.pow(1.25, currentUpg));
+    const canAfford = userGold >= goldCost;
+
+    // Collect all forgeable equipment & inventory items
+    const eq = p.equipment || {};
+    const inv = p.inventory || [];
+    const allForgeable = [
+      ...(eq.weapon ? [{ ...eq.weapon, locLabel: "Оружие" }] : []),
+      ...(eq.armor ? [{ ...eq.armor, locLabel: "Броня" }] : []),
+      ...(eq.relic ? [{ ...eq.relic, locLabel: "Реликвия" }] : []),
+      ...inv.filter((i) => {
+        const itype = (i.type || "").toLowerCase();
+        const islot = (i.slot || "").toLowerCase();
+        return itype !== "consumable" && islot !== "consumable" && itype !== "potion";
+      }).map((i) => ({ ...i, locLabel: "Рюкзак" }))
+    ];
+
+    // Compute preview stat deltas
+    let previewStats = "";
+    const itemT = (item.type || item.slot || "").toLowerCase();
+    if (itemT === "weapon") {
+      const curMin = item.min_atk || item.base_min || 16;
+      const curMax = item.max_atk || item.base_max || 24;
+      const nextMin = Math.floor(curMin * 1.15) + 3;
+      const nextMax = Math.floor(curMax * 1.15) + 5;
+      previewStats = `
+        <div class="p-2 rounded-xl bg-slate-800/80 border border-amber-500/30 text-[11px] font-bold text-amber-300">
+          ⚔️ Урон: ${curMin}..${curMax} ➔ <span class="text-emerald-400 font-extrabold">${nextMin}..${nextMax}</span> (+15%)
+        </div>
+      `;
+    } else if (itemT === "armor") {
+      const curDef = item.defense || item.base_def || 10;
+      const curHp = item.hp_bonus || item.base_hp || 40;
+      const nextDef = Math.floor(curDef * 1.15) + 2;
+      const nextHp = Math.floor(curHp * 1.15) + 25;
+      previewStats = `
+        <div class="p-2 rounded-xl bg-slate-800/80 border border-amber-500/30 text-[11px] font-bold text-amber-300">
+          🛡️ Броня: ${curDef} ➔ <span class="text-emerald-400 font-extrabold">${nextDef}</span> | ❤️ HP: +${curHp} ➔ <span class="text-emerald-400 font-extrabold">+${nextHp}</span>
+        </div>
+      `;
+    } else {
+      previewStats = `
+        <div class="p-2 rounded-xl bg-slate-800/80 border border-amber-500/30 text-[11px] font-bold text-amber-300">
+          ✨ Все бонусы реликвии усилятся на <span class="text-emerald-400 font-extrabold">+15%</span>!
+        </div>
+      `;
+    }
+
+    return `
+      <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="w-full max-w-sm rounded-3xl bg-slate-900 border-2 border-amber-500/60 p-5 space-y-3.5 shadow-2xl text-white animate-scale-up">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-black uppercase text-amber-400 flex items-center gap-1.5">
+              <span>⚒️</span> Кузница natarGRP
+            </h3>
+            <button onclick="window.RPG.closeForgeModal()" class="w-7 h-7 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-xs">
+              ✕
+            </button>
+          </div>
+
+          ${
+            RPG_STATE.forgeSuccessAnimation
+              ? `<div class="p-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-black text-xs text-center shadow-lg animate-bounce flex items-center justify-center gap-1.5">
+                  <span>🔥</span> ЗАТОЧКА УСПЕШНА! Уровень +${currentUpg}! <span>✨</span>
+                </div>`
+              : ""
+          }
+
+          <div class="text-center space-y-2 py-1">
+            <div class="text-4xl ${RPG_STATE.forgeSuccessAnimation ? "animate-bounce" : ""}">${item.icon || "⚔️"}</div>
+            <h4 class="text-sm font-black">${item.name} <span class="text-amber-400 font-extrabold">+${currentUpg}</span></h4>
+            ${
+              item.bonus_desc
+                ? `
+              <div class="p-2 rounded-xl bg-slate-800/60 border border-slate-700 text-xs font-bold text-slate-300">
+                ${item.bonus_desc}
+              </div>
+            `
+                : ""
+            }
+            ${previewStats}
+            <span class="text-[10.5px] text-emerald-400 block font-semibold">Шанс успеха: 100% (гарантированное улучшение)</span>
+          </div>
+
+          <!-- Quick Item Selector Chips -->
+          ${
+            allForgeable.length > 1
+              ? `
+            <div class="space-y-1">
+              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Другие предметы:</span>
+              <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                ${allForgeable
+                  .map(
+                    (it) => `
+                  <button onclick="window.RPG.openForge('${it.uid}')" class="px-2 py-1 rounded-lg text-[10.5px] font-bold whitespace-nowrap flex items-center gap-1 border transition-all ${
+                      it.uid === item.uid
+                        ? "bg-amber-500/20 border-amber-400 text-amber-300"
+                        : "bg-slate-800 border-slate-700 text-slate-400 hover:text-white"
+                    }">
+                    <span>${it.icon || "🗡️"}</span>
+                    <span>${it.name.split(" ")[0]}</span>
+                    <span class="text-amber-400 text-[9px] font-black">${(it.upgrade || it.forge_level) ? `+${it.upgrade || it.forge_level}` : ""}</span>
+                  </button>
+                `
+                  )
+                  .join("")}
+              </div>
+            </div>
+          `
+              : ""
+          }
+
+          <div class="p-2.5 rounded-xl bg-slate-800/50 border border-slate-700 flex items-center justify-between text-xs font-bold">
+            <span class="text-slate-400">Стоимость заточки:</span>
+            <span class="${canAfford ? "text-amber-400 font-black" : "text-red-400 font-black"}">🪙 ${goldCost} (у вас ${userGold})</span>
+          </div>
+
+          <div class="space-y-2">
+            <button onclick="window.RPG.forgeCurrentItem()" ${!canAfford ? "disabled" : ""} class="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 active:scale-95 text-slate-950 font-black text-xs shadow-md ${
+              !canAfford ? "opacity-40 cursor-not-allowed" : ""
+            }">
+              ${canAfford ? `Заточить до +${currentUpg + 1} 🔥` : "Недостаточно золота"}
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderChestModalHTML(chest) {
+    const item = chest.item || {};
+    const rInfo = RARITY_MAP[item.rarity] || RARITY_MAP.common;
+    const isOpened = chest.opened;
+
+    return `
+      <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="w-full max-w-sm rounded-3xl bg-slate-900 border-2 border-amber-500 p-6 space-y-4 shadow-2xl text-white text-center animate-scale-up">
+          <div class="text-5xl ${!isOpened ? "animate-bounce" : "scale-110 transition-transform"}">
+            ${!isOpened ? (chest.chest_icon || "🎁") : "✨"}
+          </div>
+
+          <h3 class="text-base font-black text-amber-400">${chest.chest_name || "Наградной Сундук"}</h3>
+
+          ${
+            !isOpened
+              ? `
+            <p class="text-xs text-slate-300 font-medium">Поздравляем с зачисткой этажа! Внутри гарантированный функциональный артефакт и сокровища.</p>
+            <button onclick="window.RPG.claimChestReward()" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 active:scale-95 text-slate-950 font-black text-sm shadow-xl shadow-amber-500/30">
+              ОТКРЫТЬ СУНДУК 🎁
+            </button>
+          `
+              : `
+            <div class="p-4 rounded-2xl border-2 ${rInfo.color} space-y-2 bg-slate-800/80">
+              <span class="text-4xl block">${item.icon || "⚔️"}</span>
+              <h4 class="text-sm font-black">${item.name}</h4>
+              <div class="flex items-center justify-center gap-1.5">
+                <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-md ${rInfo.badge}">${rInfo.name}</span>
+                <span class="text-[10px] font-black px-2 py-0.5 rounded-md bg-black/30">[${item.slot_name || "Снаряжение"}]</span>
+              </div>
+              <p class="text-xs text-amber-400 font-bold">${item.bonus_desc || ""}</p>
+            </div>
+
+            <div class="flex items-center justify-center gap-4 text-xs font-extrabold text-amber-300">
+              <span>+${chest.gold_reward || 200} 🪙</span>
+              <span>+${chest.gems_reward || 10} 💎</span>
+            </div>
+
+            <button onclick="window.RPG.closeChestModal()" class="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-xs shadow-md">
+              Забрать награду в инвентарь 🎒
+            </button>
+          `
+          }
+        </div>
+      </div>
+    `;
+  }
+
+  function renderShopModalHTML() {
+    const p = RPG_STATE.profile || {};
+    const catalog = RPG_STATE.shopCatalog || [];
+    const filter = RPG_STATE.shopFilter || "all";
+    const userGold = p.gold || 0;
+    const userGems = p.gems || 0;
+
+    const filterTabs = [
+      { id: "all", label: "Все товары" },
+      { id: "mage", label: "Магия 🔮" },
+      { id: "agi", label: "Ловкость 🏹" },
+      { id: "str", label: "Сила 💪" },
+      { id: "weapon", label: "Оружие ⚔️" },
+      { id: "armor", label: "Броня 🛡️" },
+      { id: "relic", label: "Реликвии 💍" },
+      { id: "potion", label: "Зелья 🧪" }
+    ];
+
+    const filteredItems = catalog.filter((it) => {
+      if (filter === "all") return true;
+      if (filter === "mage") {
+        const desc = ((it.bonus_desc || "") + " " + (it.name || "")).toLowerCase();
+        return (it.int && it.int > 0) || (it.spell_amp && it.spell_amp > 0) || (it.ult_boost && it.ult_boost > 0) || (it.ult_cd && it.ult_cd > 0) || (it.cooldown_reduct && it.cooldown_reduct > 0) || desc.includes("интеллект") || desc.includes("маг") || desc.includes("заклинаний") || desc.includes("мана") || desc.includes("ульт");
+      }
+      if (filter === "agi") {
+        const desc = ((it.bonus_desc || "") + " " + (it.name || "")).toLowerCase();
+        return (it.agi && it.agi > 0) || (it.atk_speed && it.atk_speed > 0) || (it.dodge && it.dodge > 0) || desc.includes("ловкост") || desc.includes("скор. атаки") || desc.includes("уворот");
+      }
+      if (filter === "str") {
+        const desc = ((it.bonus_desc || "") + " " + (it.name || "")).toLowerCase();
+        return (it.str && it.str > 0) || (it.hp && it.hp > 0) || (it.hp_regen && it.hp_regen > 0) || desc.includes("сила") || desc.includes("жизни") || desc.includes("регенерац");
+      }
+      if (filter === "weapon") return it.slot === "weapon" || it.type === "weapon";
+      if (filter === "armor") return it.slot === "armor" || it.type === "armor";
+      if (filter === "relic") return it.slot === "relic" || it.type === "relic";
+      if (filter === "potion") return it.slot === "consumable" || it.type === "potion";
+      return true;
+    });
+
+    return `
+      <div class="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+        <div class="w-full max-w-lg max-h-[88vh] flex flex-col rounded-3xl bg-slate-900 border-2 border-emerald-500/60 p-4 sm:p-5 space-y-3 shadow-2xl text-white animate-scale-up">
+          <!-- Header -->
+          <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+            <div class="flex items-center gap-2">
+              <span class="text-2xl">🏪</span>
+              <div>
+                <h3 class="text-sm font-black uppercase text-emerald-400">Тайная Лавка Снаряжения</h3>
+                <div class="flex items-center gap-2 text-[11px] font-bold text-amber-300">
+                  <span>🪙 ${(userGold).toLocaleString()}</span>
+                  <span>💎 ${userGems}</span>
+                </div>
+              </div>
+            </div>
+            <button onclick="window.RPG.closeShopModal()" class="w-7 h-7 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-xs">
+              ✕
+            </button>
+          </div>
+
+          <!-- Category Filters -->
+          <div class="flex items-center gap-1 overflow-x-auto pb-1 text-[10.5px] font-bold">
+            ${filterTabs
+              .map(
+                (t) => `
+              <button onclick="window.RPG.setShopFilter('${t.id}')" class="px-2.5 py-1 rounded-xl whitespace-nowrap transition-all ${
+                  filter === t.id
+                    ? "bg-emerald-500 text-slate-950 font-black shadow-sm"
+                    : "bg-slate-800 text-slate-400 hover:text-white"
+                }">
+                ${t.label}
+              </button>
+            `
+              )
+              .join("")}
+          </div>
+
+          <!-- Catalog List -->
+          <div class="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+            ${
+              RPG_STATE.shopLoading
+                ? `
+                <div class="py-14 text-center text-slate-400 text-xs flex flex-col items-center justify-center gap-3">
+                  <div class="w-8 h-8 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+                  <span class="font-bold text-slate-300">Загрузка товаров лавки... 🏪</span>
+                </div>
+              `
+                : filteredItems.length === 0
+                ? `
+                <div class="py-10 text-center text-slate-400 text-xs space-y-3">
+                  <span class="text-3xl block">📦</span>
+                  <p>В этой категории товары отсутствуют или обновляются.</p>
+                  <button onclick="window.RPG.reloadShopCatalog()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 font-black text-xs border border-slate-700">
+                    🔄 Обновить ассортимент
+                  </button>
+                </div>
+              `
+                : filteredItems
+                    .map((item) => {
+                      const rInfo = RARITY_MAP[item.rarity] || RARITY_MAP.common;
+                      const costGold = item.price_gold || 0;
+                      const costGems = item.price_gems || 0;
+                      const canAfford = userGold >= costGold && userGems >= costGems;
+                      const isBuying = RPG_STATE.buyingItemId === item.id;
+                      const slotBadge = item.slot_name || (item.slot === "weapon" ? "Оружие" : item.slot === "armor" ? "Броня" : item.slot === "relic" ? "Реликвия" : "Зелье");
+
+                      return `
+                        <div class="p-3 rounded-2xl bg-slate-800/70 border border-slate-700/80 flex items-center justify-between gap-3 hover:border-emerald-500/40 transition-colors">
+                          <div class="flex items-center gap-3 min-w-0">
+                            <div class="w-10 h-10 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center text-2xl shrink-0">
+                              ${item.icon || "📦"}
+                            </div>
+                            <div class="min-w-0">
+                              <div class="flex items-center gap-1.5 flex-wrap">
+                                <span class="text-xs font-black truncate">${item.name}</span>
+                                <span class="text-[9px] font-extrabold px-1.5 py-0.2 rounded-md ${rInfo.badge}">${rInfo.name}</span>
+                                <span class="text-[9px] font-bold px-1 rounded bg-black/30 text-slate-300">[${slotBadge}]</span>
+                              </div>
+                              <p class="text-[10px] text-amber-300/90 font-medium line-clamp-2 leading-tight mt-0.5">${item.bonus_desc || ""}</p>
+                            </div>
+                          </div>
+
+                          <div class="shrink-0 text-right space-y-1">
+                            <div class="text-[11px] font-extrabold flex items-center justify-end gap-1.5">
+                              ${costGold > 0 ? `<span class="${userGold >= costGold ? 'text-amber-400' : 'text-rose-400'}">${costGold} 🪙</span>` : ""}
+                              ${costGems > 0 ? `<span class="${userGems >= costGems ? 'text-cyan-400' : 'text-rose-400'}">${costGems} 💎</span>` : ""}
+                            </div>
+                            <button onclick="window.RPG.buyShopItem('${item.id}')" ${!canAfford || isBuying ? "disabled" : ""} class="px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 ${
+                              canAfford && !isBuying
+                                ? "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20"
+                                : "bg-slate-700 text-slate-400 opacity-50 cursor-not-allowed"
+                            }">
+                              ${isBuying ? "Покупка..." : "Купить"}
+                            </button>
+                          </div>
+                        </div>
+                      `;
+                    })
+                    .join("")
+            }
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderSlotFilterModalHTML(slotKey) {
+    const p = RPG_STATE.profile || {};
+    const inv = p.inventory || [];
+    const eq = p.equipment || {};
+    const sKey = (slotKey || "").toLowerCase();
+    const currEquipped = eq[sKey] || eq[slotKey];
+    const slotRu = sKey === "weapon" ? "Оружие" : sKey === "armor" ? "Броня" : "Реликвия";
+    const matchingItems = inv.filter((it) => {
+      const islot = (it.slot || it.type || "").toLowerCase();
+      return islot === sKey;
+    });
+
+    return `
+      <div class="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="w-full max-w-sm max-h-[85vh] flex flex-col rounded-3xl bg-white dark:bg-slate-900 border-2 border-amber-500/60 p-5 space-y-3 shadow-2xl animate-scale-up text-slate-900 dark:text-white">
+          <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+            <h3 class="text-xs font-black uppercase tracking-wider text-amber-500 flex items-center gap-1.5">
+              <span>🛡️</span> Выбор снаряжения: ${slotRu}
+            </h3>
+            <button onclick="window.RPG.closeSlotFilterModal()" class="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-xs">
+              ✕
+            </button>
+          </div>
+
+          ${
+            currEquipped
+              ? `
+            <!-- Currently Equipped Item Banner -->
+            <div class="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/40 space-y-1.5 shrink-0">
+              <div class="flex items-center justify-between text-[10px] font-black text-amber-500 dark:text-amber-400 uppercase">
+                <span>🛡️ Сейчас надето:</span>
+                <button onclick="window.RPG.unequipItem('${slotKey}')" class="text-rose-500 hover:text-rose-400 font-bold underline text-[9.5px]">
+                  Снять в рюкзак
+                </button>
+              </div>
+              <div class="flex items-center gap-2.5">
+                <span class="text-2xl">${currEquipped.icon || "🗡️"}</span>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-1">
+                    <span class="text-xs font-black truncate">${currEquipped.name}</span>
+                    ${(currEquipped.forge_level || currEquipped.upgrade) ? `<span class="px-1 rounded bg-amber-500 text-slate-950 font-black text-[8px]">+${currEquipped.forge_level || currEquipped.upgrade}</span>` : ""}
+                  </div>
+                  <span class="text-[10px] text-slate-500 dark:text-slate-400 truncate block">${currEquipped.bonus_desc || ""}</span>
+                </div>
+              </div>
+            </div>
+          `
+              : ""
+          }
+
+          <div class="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+            ${
+              matchingItems.length === 0
+                ? `
+              <div class="py-6 text-center space-y-3">
+                <span class="text-3xl block">🎒</span>
+                <p class="text-xs text-slate-400">В вашем рюкзаке пока нет других предметов типа <b>${slotRu}</b>.</p>
+                <button onclick="window.RPG.closeSlotFilterModal(); window.RPG.openShopModal(); window.RPG.setShopFilter('${slotKey}');" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 active:scale-95 text-white font-black text-xs shadow-md">
+                  Купить ${slotRu} в Лавке Снаряжения 🏪
+                </button>
+              </div>
+            `
+                : matchingItems
+                    .map((item) => {
+                      const rInfo = RARITY_MAP[item.rarity] || RARITY_MAP.common;
+                      const forgeTag = (item.forge_level || item.upgrade) > 0 ? `+${item.forge_level || item.upgrade}` : "";
+                      return `
+                        <div class="p-3 rounded-2xl border-2 ${rInfo.color} flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-800/60">
+                          <div class="flex items-center gap-2.5 min-w-0">
+                            <span class="text-2xl shrink-0">${item.icon || "📦"}</span>
+                            <div class="min-w-0">
+                              <div class="flex items-center gap-1">
+                                <span class="text-xs font-black truncate">${item.name}</span>
+                                ${forgeTag ? `<span class="px-1 rounded bg-amber-500 text-slate-950 font-black text-[8px]">${forgeTag}</span>` : ""}
+                              </div>
+                              <span class="text-[10px] text-slate-500 dark:text-slate-400 truncate block">${item.bonus_desc || ""}</span>
+                            </div>
+                          </div>
+                          <button onclick="window.RPG.equipItem('${item.uid}')" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs shrink-0 shadow-sm flex items-center gap-1">
+                            <span>⚔️</span>
+                            <span>${currEquipped ? "Сменить" : "Надеть"}</span>
+                          </button>
+                        </div>
+                      `;
+                    })
+                    .join("")
+            }
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderHeroSelectHTML() {
+    const heroes = RPG_STATE.heroesList || [];
+
+    return `
+      <div class="space-y-4 py-2">
+        <div class="text-center space-y-1">
+          <h2 class="text-base font-black text-slate-900 dark:text-white tracking-tight flex items-center justify-center gap-1.5">
+            <span>⚔️</span> Выберите героя natarGRP
+          </h2>
+          <p class="text-xs text-slate-400">У каждого героя уникальный основной атрибут (+1 Урон за очко) и коронный скилл!</p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          ${heroes
+            .map(
+              (h) => `
+            <div class="p-3.5 rounded-2xl bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 hover:border-amber-500 transition-all space-y-2.5 shadow-sm">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                  <span class="text-3xl">${h.avatar || h.icon}</span>
+                  <div>
+                    <h3 class="text-xs font-black text-slate-900 dark:text-white">${h.name}</h3>
+                    <span class="text-[10px] font-extrabold px-1.5 py-0.2 rounded-md ${
+                      h.attr === "Сила" ? "bg-red-500/10 text-red-600" : h.attr === "Ловкость" ? "bg-emerald-500/10 text-emerald-600" : "bg-sky-500/10 text-sky-600"
+                    }">
+                      Основной: ${h.attr}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed font-normal">${h.desc}</p>
+
+              <div class="p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 text-[10.5px] font-bold text-amber-600 dark:text-amber-400">
+                ⚡ ${h.skill?.name}: ${h.skill?.desc}
+              </div>
+
+              <button onclick="window.RPG.selectHero('${h.id}')" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 active:scale-95 text-slate-950 font-black text-xs shadow-md">
+                Выбрать героя ⚔️
+              </button>
+            </div>
+          `
+            )
+            .join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  // ===========================================================================
+  // PUBLIC API EXPOSURE
+  // ===========================================================================
+
+  window.RPG = {
+    init: initRPG,
+    setSubTab: setSubTab,
+    setFarmMode: setFarmMode,
+    loadProfile: loadProfile,
+    selectHero: selectHero,
+    openHeroPicker: () => {
+      if (RPG_STATE.profile) RPG_STATE.profile.hero_class = null;
+      renderRoot();
+    },
+    upgradeStat: upgradeStat,
+    openItemModal: openItemModal,
+    closeItemModal: closeItemModal,
+    equipItem: equipItem,
+    unequipItem: unequipItem,
+    useConsumable: useConsumable,
+    openShopModal: openShopModal,
+    closeShopModal: closeShopModal,
+    reloadShopCatalog: reloadShopCatalog,
+    setShopFilter: setShopFilter,
+    buyShopItem: buyShopItem,
+    openSlotFilterModal: openSlotFilterModal,
+    closeSlotFilterModal: closeSlotFilterModal,
+    openForge: (uid) => {
+      if (uid) {
+        openForge(uid);
+      } else {
+        const p = RPG_STATE.profile;
+        const w = p?.equipment?.weapon;
+        if (w) openForge(w.uid);
+        else alert("Сначала наденьте оружие или выберите предмет из инвентаря!");
+      }
+    },
+    closeForgeModal: closeForgeModal,
+    forgeCurrentItem: forgeCurrentItem,
+    sellItem: sellItem,
+    toggleItemSelection: toggleItemSelection,
+    toggleItemSelectionMode: toggleItemSelectionMode,
+    handleInventoryItemClick: handleInventoryItemClick,
+    selectAllByRarity: selectAllByRarity,
+    clearItemSelection: clearItemSelection,
+    sellSelectedItems: sellSelectedItems,
+    resetCharacter: resetCharacter,
+    slashWave: slashWave,
+    toggleAutoFarm: toggleAutoFarm,
+    toggleBossPartyMode: toggleBossPartyMode,
+    bossArenaDodgeAction: playerBossArenaDodge,
+    // Admin Dev Panel
+    toggleAdminModal: toggleAdminModal,
+    switchAdminTestAccount: switchAdminTestAccount,
+    createCustomAdminTestAccount: createCustomAdminTestAccount,
+    resetCurrentTestAccount: resetCurrentTestAccount,
+    // Chest Modal
+    claimChestReward: claimChestReward,
+    closeChestModal: closeChestModal,
+    // Arena Controls
+    playerSlashAttackAction: playerSlashAttack,
+    castSkill1Action: castPlayerSkill1,
+    castUltimateAction: castPlayerUltimate,
+    useActiveItemAction: useActiveItemAction,
+    getEquippedActiveItems: getEquippedActiveItems,
+    usePotionAction: usePlayerPotion,
+    playerDashAction: () => playerPerformDash(),
+    playerBlockAction: playerBlock,
+    hitQTEAction: hitQTE,
+    confirmNextWaveAction: confirmNextWave,
+    retryCurrentFloorAction: retryCurrentFloor,
+    toggleArenaAutoAttack: () => {
+      ARENA.player.autoAttack = !ARENA.player.autoAttack;
+      const btn = document.getElementById("rpg-auto-attack-btn");
+      if (btn) {
+        btn.innerText = `Авто-удар: ${ARENA.player.autoAttack ? "ВКЛ" : "ВЫКЛ"}`;
+        if (ARENA.player.autoAttack) {
+          btn.className = "px-2.5 py-1 rounded-xl text-xs font-black transition-all bg-amber-500/20 text-amber-500 border border-amber-500/40";
+        } else {
+          btn.className = "px-2.5 py-1 rounded-xl text-xs font-black transition-all bg-slate-200 dark:bg-slate-700 text-slate-500";
+        }
+      }
+      triggerHaptic("light");
+    },
+    playerDashRollAction: () => {
+      playerPerformDashRoll();
+    },
+    toggleTopDownArenaMode: () => {
+      toggleTopDownArenaMode();
+    },
+    toggleArenaWaveConfirm: () => {
+      ARENA.autoAdvanceWaves = !ARENA.autoAdvanceWaves;
+      try {
+        localStorage.setItem("rpg_arena_auto_advance_waves", ARENA.autoAdvanceWaves ? "true" : "false");
+      } catch (e) {}
+      const btn = document.getElementById("rpg-wave-confirm-btn");
+      if (btn) {
+        btn.innerText = `Подтверждение волн: ${ARENA.autoAdvanceWaves ? "ВЫКЛ ⏩" : "ВКЛ ⏸️"}`;
+        if (ARENA.autoAdvanceWaves) {
+          btn.className = "px-2.5 py-1 rounded-xl text-xs font-black transition-all bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-sm";
+          btn.title = "Подтверждение волн отключено: переход к следующей волне происходит автоматически";
+        } else {
+          btn.className = "px-2.5 py-1 rounded-xl text-xs font-black transition-all bg-slate-200 dark:bg-slate-700 text-slate-500";
+          btn.title = "Подтверждение волн включено: требуется нажимать продолжить";
+        }
+      }
+      triggerHaptic("light");
+      if (ARENA.autoAdvanceWaves && ARENA.waveState === "prompt" && !RPG_STATE.activeChestModal) {
+        confirmNextWave();
+      }
+    },
+    // Co-op
+    loadCoopBosses: loadCoopBosses,
+    createCoopRaid: createCoopRaid,
+    joinCoopRoom: joinCoopRoom,
+    sendCoopAction: sendCoopAction,
+    leaveCoopRoom: leaveCoopRoom,
+    addCoopBot: addCoopBot,
+    startRaidBossActionBattle: startRaidBossActionBattle,
+    exitRaidBossBattle: exitRaidBossBattle,
+    // PvP
+    loadClassmates: loadClassmates,
+    challengeClassmate: challengeClassmate,
+    sendPvPAction: sendPvPAction,
+    leavePvPRoom: leavePvPRoom,
+    renderRoot: renderRoot
+  };
+})();

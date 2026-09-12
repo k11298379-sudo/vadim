@@ -2,6 +2,7 @@ import logging
 from typing import Optional
 from datetime import date, timedelta
 from aiogram import Bot
+from aiogram.types import InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlalchemy import select
@@ -27,11 +28,12 @@ def escape_md(text: str) -> str:
         text = text.replace(ch, f"\\{ch}")
     return text
 
-async def send_evening_digest(bot: Bot, target_date: Optional[date] = None) -> int:
+async def send_evening_digest(bot: Bot, target_date: Optional[date] = None, force: bool = False) -> int:
     """
     Вечернее персональное напоминание в 19:00:
     Рассылает расписание на завтра и несделанные ДЗ каждому ученику в ЛС
     с учетом его персонального чек-листа (в группы не отправляется).
+    Не отправляется по пятницам (на субботу нет ДЗ) и по субботам (на воскресенье).
     """
     logger.info("Executing daily personalized evening digest job...")
     tomorrow = target_date if target_date is not None else (get_today() + timedelta(days=1))
@@ -40,9 +42,12 @@ async def send_evening_digest(bot: Bot, target_date: Optional[date] = None) -> i
     day_name = DAYS_RU.get(day_of_week, "День")
     date_str = tomorrow.strftime("%d.%m.%Y")
 
-    if target_date is None and day_of_week == 7:
-        # Воскресенье — выходной, уроков нет
-        return 0
+    if not force and target_date is None:
+        today_weekday = get_today().isoweekday()
+        if today_weekday == 5 or day_of_week in (6, 7):
+            # В пятницу вечером (на субботу) и в субботу вечером (на воскресенье) уведомления не отправляются
+            logger.info("Skipping evening digest: today is Friday or tomorrow is weekend.")
+            return 0
 
     sent_count = 0
     async with async_session_factory() as session:
@@ -511,6 +516,45 @@ async def send_monday_duty_personal_reminder(bot: Bot):
                 logger.warning(f"Could not send Monday duty reminder to {u.tg_id}: {e}")
 
         logger.info(f"Monday duty personal reminders sent to {sent_count} members.")
+
+
+async def notify_all_admins(
+    bot: Bot,
+    session: AsyncSession,
+    text: str,
+    reply_markup: Optional[InlineKeyboardMarkup] = None
+) -> int:
+    """
+    Отправляет служебное уведомление (заявки на вход, новые группы и т.д.)
+    всем администраторам системы (User.role == 'admin') и главному администратору (ADMIN_ID).
+    Возвращает количество успешно доставленных сообщений.
+    """
+    from backend.config import settings
+    from backend.db.crud import get_admin_users
+
+    admin_ids = set()
+    if settings.ADMIN_ID:
+        admin_ids.add(settings.ADMIN_ID)
+
+    admins = await get_admin_users(session)
+    for a in admins:
+        if a.tg_id:
+            admin_ids.add(a.tg_id)
+
+    sent = 0
+    for chat_id in admin_ids:
+        try:
+            await bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+            sent += 1
+        except Exception as e:
+            logger.warning(f"Failed to notify admin {chat_id}: {e}")
+    return sent
+
 
 
 

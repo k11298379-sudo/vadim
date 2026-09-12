@@ -32,8 +32,11 @@ def get_main_keyboard(is_admin: bool = False, user_id: int | None = None) -> Rep
         ]
     ])
 
+    bottom_row = []
     if is_admin:
-        kb.append([KeyboardButton(text="👑 Панель управления")])
+        bottom_row.append(KeyboardButton(text="👑 Панель управления"))
+    bottom_row.append(KeyboardButton(text="⚙️ Настройки"))
+    kb.append(bottom_row)
 
     return ReplyKeyboardMarkup(
         keyboard=kb,

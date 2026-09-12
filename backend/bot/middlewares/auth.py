@@ -121,23 +121,21 @@ class AuthMiddleware(BaseMiddleware):
                             )
                             data["current_user"] = user
 
-                            # Notify admin
-                            if settings.ADMIN_ID and bot:
+                            # Notify all admins
+                            if bot:
+                                from backend.bot.services.notifier import notify_all_admins
                                 uname_str = f"@{user_tg.username}" if user_tg.username else "без @username"
                                 admin_text = (
                                     "🔔 **Новая заявка на доступ к боту!**\n\n"
                                     f"👤 **Пользователь:** {user_tg.full_name}\n"
                                     f"🔗 **Telegram:** {uname_str}"
                                 )
-                                try:
-                                    await bot.send_message(
-                                        chat_id=settings.ADMIN_ID,
-                                        text=admin_text,
-                                        reply_markup=get_admin_approval_keyboard(user_tg.id),
-                                        parse_mode="Markdown"
-                                    )
-                                except Exception as e:
-                                    print(f"Failed to notify admin: {e}")
+                                await notify_all_admins(
+                                    bot=bot,
+                                    session=session,
+                                    text=admin_text,
+                                    reply_markup=get_admin_approval_keyboard(user_tg.id)
+                                )
 
                         msg = (
                             "⏳ **Ваша заявка находится на рассмотрении у администратора.**\n\n"
@@ -160,6 +158,13 @@ class AuthMiddleware(BaseMiddleware):
                             await event.answer("❌ Доступ отклонен. Отправьте /start для повторной заявки", show_alert=True)
                         return
 
+
+                    # Live-логирование действий пользователя
+                    try:
+                        from backend.bot.handlers.admin.logging import log_user_action
+                        await log_user_action(bot, event, user)
+                    except Exception:
+                        pass
 
                     try:
                         return await handler(event, data)

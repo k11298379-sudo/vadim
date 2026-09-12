@@ -1,8 +1,21 @@
 import os
+import sys
+
+# Ensure root directory is always in sys.path regardless of how main.py is called
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+# Ensure console supports UTF-8 emojis without crashing on Windows
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,10 +28,24 @@ from backend.api.routes import api_router
 from backend.bot.bot import create_bot_and_dispatcher
 from backend.bot.services.scheduler import setup_scheduler
 
-# Configure logging
+# Configure logging with console and file handler
+from logging.handlers import RotatingFileHandler
+os.makedirs("data", exist_ok=True)
+_file_handler = RotatingFileHandler(
+    os.path.join("data", "bot.log"),
+    maxBytes=5 * 1024 * 1024,
+    backupCount=3,
+    encoding="utf-8"
+)
+_file_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        _file_handler
+    ]
 )
 logger = logging.getLogger("botdz")
 
@@ -64,6 +91,9 @@ async def lifespan(app: FastAPI):
             await asyncio.sleep(3)
             from backend.config import get_current_date_and_hour
             today, current_hour = get_current_date_and_hour()
+            if today.isoweekday() in (5, 6):
+                # По пятницам и субботам вечером уведомления не отправляются
+                return
             if current_hour >= 19:
                 from backend.db.crud import get_class_setting, set_class_setting
                 async with async_session_factory() as session:
@@ -80,10 +110,26 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(check_and_send_evening_digest_on_startup())
 
 
+    # Start Cloudflare Tunnel if configured and URL is not already HTTPS
+    port = int(os.environ.get("PORT", settings.PORT))
+    if getattr(settings, "AUTO_TUNNEL", True) and not settings.WEBAPP_URL.startswith("https://"):
+        try:
+            from backend.tunnel import start_tunnel
+            tunnel_url = await start_tunnel(port)
+            if tunnel_url:
+                settings.WEBAPP_URL = f"{tunnel_url}/app"
+                settings.BASE_URL = tunnel_url
+                print("\n" + "=" * 64)
+                print(f"🚀 CLOUDFLARE HTTPS ТУННЕЛЬ АКТИВЕН!")
+                print(f"📱 Ссылка на Mini App: {settings.WEBAPP_URL}")
+                print("=" * 64 + "\n", flush=True)
+        except Exception as e:
+            logger.warning(f"Could not start Cloudflare tunnel: {e}")
+
     # Start Aiogram polling and register command hints in background task
     global polling_task
     if settings.BOT_TOKEN and not settings.BOT_TOKEN.startswith("1234567890:ABCdef"):
-        logger.info("Registering Telegram command autocomplete hints...")
+        logger.info("Registering Telegram command autocomplete hints and menu button...")
         await setup_bot_commands(bot)
         logger.info("Starting Telegram Bot long-polling...")
         polling_task = asyncio.create_task(dp.start_polling(bot))
@@ -95,22 +141,31 @@ async def lifespan(app: FastAPI):
                     await asyncio.sleep(1)
                     from backend.config import get_today
                     today_str = get_today().strftime("%d.%m.%Y")
-                    if "sqlite" in settings.DATABASE_URL:
-                        bot_header = "🧪 **Тестовый бот (Dev) успешно запущен на localhost!**"
-                        db_name = "SQLite (Локальная база dev)"
-                        extra_info = f"🌐 Порт: `{settings.PORT}`\n🔔 Все модули и Mini App готовы к тестам!"
-                    else:
-                        bot_header = "🚀 **Деплой успешно завершен! Бот 11 «Б» запущен.**"
-                        db_name = "Neon PostgreSQL"
-                        extra_info = "🔔 Все модули, расписание, звонки и Mini App готовы к работе!"
-
+                    is_dev_db = "sqlite" in settings.DATABASE_URL
+                    bot_header = (
+                        "🧪 **Тестовый бот (Dev) успешно запущен на localhost!**"
+                        if is_dev_db
+                        else "🚀 **Деплой успешно завершен! Бот 11 «Б» запущен.**"
+                    )
+                    db_name = "SQLite (Локальная база dev)" if is_dev_db else "Neon PostgreSQL"
+                    webapp_info = (
+                        f"📱 **Mini App для телефона:**\n{settings.WEBAPP_URL}\n"
+                        if settings.WEBAPP_URL.startswith("https://")
+                        else ""
+                    )
+                    extra_info = (
+                        f"🌐 Порт: `{settings.PORT}`\n🔔 Все модули и Mini App готовы к тестам!"
+                        if is_dev_db
+                        else f"🌐 Порт: `{settings.PORT}`\n🔔 Все модули, расписание, звонки и Mini App готовы к работе!"
+                    )
                     await bot.send_message(
                         chat_id=settings.ADMIN_ID,
                         text=(
                             f"{bot_header}\n\n"
                             f"📅 **Дата:** `{today_str}`\n"
                             f"⚡ База данных: `{db_name}`\n"
-                            f"{extra_info}"
+                            f"{extra_info}\n"
+                            f"{webapp_info}"
                         ),
                         parse_mode="Markdown"
                     )
@@ -124,11 +179,13 @@ async def lifespan(app: FastAPI):
 
     yield
 
-
-
-
     # --- Shutdown ---
     logger.info("Shutting down...")
+    try:
+        from backend.tunnel import stop_tunnel
+        await stop_tunnel()
+    except Exception:
+        pass
     if polling_task:
         polling_task.cancel()
         try:
@@ -162,10 +219,22 @@ app.include_router(api_router)
 async def health_check():
     return {"status": "ok", "service": "class-bot"}
 
+@app.get("/favicon.ico")
+async def favicon():
+    return Response(content=b"", media_type="image/x-icon")
+
+
+class NoCacheStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        return response
+
 # Static files for Telegram Mini App
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
 if os.path.exists(frontend_path):
-    app.mount("/static", StaticFiles(directory=frontend_path), name="static")
+    app.mount("/static", NoCacheStaticFiles(directory=frontend_path), name="static")
 
 @app.get("/")
 async def root():

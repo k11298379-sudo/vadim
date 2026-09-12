@@ -30,7 +30,7 @@ from backend.db.crud import (
     get_bell_schedule_for_date, clear_date_bells, save_bulk_date_bells, clear_all_duty_members,
     find_upcoming_dates_for_subject, auto_shift_active_homeworks,
     delete_homework, get_homework_by_id, get_recent_active_homeworks,
-    delete_user, get_all_users
+    delete_user, get_all_users, update_user_tester_status
 )
 
 
@@ -143,6 +143,13 @@ async def test_database_and_crud():
 
         student = await update_user_role(session, 111222, "student")
         assert student.role == "student"
+        assert student.is_tester is False
+
+        student = await update_user_tester_status(session, 111222, True)
+        assert student.is_tester is True
+
+        student = await update_user_tester_status(session, 111222, False)
+        assert student.is_tester is False
 
         group = await create_or_update_group_chat(session, chat_id=-100999, title="11-Б Класс", added_by=111222, role="pending")
         assert group.role == "pending"
@@ -643,19 +650,21 @@ def test_keyboards_and_fastapi():
     assert "🧹 График дежурств" in btn_texts
     assert "☀️ До лета осталось" in btn_texts
     assert "💡 Интересный факт" in btn_texts
-    assert "⚙️ Настройки" not in btn_texts, "Settings button should be removed"
-    print("[OK] Main keyboard buttons verified (Duty, Summer and Interesting Fact present, Settings removed).")
+    assert "⚙️ Настройки" in btn_texts, "Settings button should be present"
+    print("[OK] Main keyboard buttons verified (Duty, Summer, Interesting Fact, and Settings present).")
 
     adm_kb = get_admin_panel_keyboard()
     adm_cb = [b.callback_data for row in adm_kb.inline_keyboard for b in row]
     assert "admin_delete_hw" in adm_cb, "admin_delete_hw must be present in admin panel"
-    assert "admin_delete_user" in adm_cb, "admin_delete_user must be present in admin panel"
+    assert "admin_delete_user" not in adm_cb, "admin_delete_user removed from main admin panel"
+    assert "admin_manage_subjects" not in adm_cb, "admin_manage_subjects removed from main admin panel"
     assert "admin_broadcast_custom" in adm_cb, "admin_broadcast_custom must be present in admin panel"
     assert "admin_edit_date_schedule" in adm_cb
     assert "admin_edit_schedule" in adm_cb
     assert "admin_manage_duty" in adm_cb
     assert "admin_broadcast_schedule" in adm_cb, "admin_broadcast_schedule must be present in admin panel"
-    print("[OK] Admin panel with HW delete, user delete, urgent broadcast, schedule broadcast, duty announcement, date schedule, permanent schedule & duty roster verified.")
+    assert "admin_give_coins" in adm_cb, "admin_give_coins must be present in admin panel"
+    print("[OK] Admin panel verified: HW delete, urgent broadcast, schedule broadcast, duty announcement, date schedule, permanent schedule, duty roster & give coins verified; redundant buttons removed.")
 
     # Test Schedule Broadcast Keyboards
     from backend.bot.keyboards.admin_kb import get_schedule_broadcast_day_keyboard, get_schedule_broadcast_destination_keyboard

@@ -15,7 +15,12 @@ scheduler = AsyncIOScheduler(timezone=settings.TIMEZONE)
 def setup_scheduler(bot: Bot):
     try:
         hour, minute = settings.NOTIFICATION_TIME_EVENING.split(":")
-        trigger = CronTrigger(hour=int(hour), minute=int(minute), timezone=settings.TIMEZONE)
+        trigger = CronTrigger(
+            day_of_week="mon-thu,sat,sun",
+            hour=int(hour),
+            minute=int(minute),
+            timezone=settings.TIMEZONE
+        )
 
         scheduler.add_job(
             send_evening_digest,
@@ -84,8 +89,18 @@ def setup_scheduler(bot: Bot):
             replace_existing=True
         )
 
+        # Напоминание о столовой после 5 урока (проверка каждую минуту в учебные дни)
+        from backend.bot.services.canteen import check_canteen_time_job
+        scheduler.add_job(
+            check_canteen_time_job,
+            trigger=CronTrigger(day_of_week="mon-fri", minute="*", timezone=settings.TIMEZONE),
+            args=[bot],
+            id="canteen_reminder_check_job",
+            replace_existing=True
+        )
+
         scheduler.start()
-        logger.info(f"Scheduler started with evening digest ({settings.NOTIFICATION_TIME_EVENING}), duty check (07:30), Monday duty reminder (06:00), fact rotation (every 30m), and daily cleanup (00:05, {settings.TIMEZONE})")
+        logger.info(f"Scheduler started with evening digest ({settings.NOTIFICATION_TIME_EVENING}), canteen reminder, duty check (07:30), Monday duty reminder (06:00), fact rotation (every 30m), and daily cleanup (00:05, {settings.TIMEZONE})")
 
 
     except Exception as e:
