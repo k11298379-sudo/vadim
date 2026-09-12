@@ -91,12 +91,13 @@ async def run_birthdays_test_suite():
         assert "Глеб" in msg_single
         assert "С ДНЁМ РОЖДЕНИЯ" in msg_single
         assert "ЕГЭ" in msg_single
-        assert "От всего нашего класса" in msg_single
+        assert "Сегодня наш класс поздравляет тебя" in msg_single
         print("[OK] Single celebrant greeting message format verified.")
 
         july_list = await get_birthdays_for_date(session, 10, 7)
         msg_multi = format_birthday_message(july_list, date(2026, 7, 10))
         assert "Арина" in msg_multi and "Полина" in msg_multi
+        assert "От всего нашего класса желаем вам" in msg_multi
         print("[OK] Multi celebrant greeting message format verified.")
 
         # Test group dispatch with topic_announcements_id
