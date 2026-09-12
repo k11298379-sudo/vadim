@@ -97,16 +97,18 @@ async def cb_view_students(callback: CallbackQuery, db_session: AsyncSession):
         lines.append(f"{i}. {safe_disp}{uname} — {role_label}{tester_badge}")
 
         tester_icon = "🧪 ✅" if getattr(s, "is_tester", False) else "🧪 ⬜"
-        toggle_role_text = "👑 Снять" if s.role == "admin" else "👑 Сделать"
+        toggle_role_text = "👑 Снять админа" if s.role == "admin" else "👑 Сделать админом"
         log_icon = "🔴 Лог" if is_logged(s.tg_id) else "🔍 Лог"
 
-        # Все кнопки для одного пользователя в одном ряду:
-        # [карандаш ник] [бутылочка квадрат] [корона сделать/снять админа] [корзина] [лупа лог]
+        # 1-й ряд: ник и админ
         buttons.append([
-            InlineKeyboardButton(text=f"✏️ {s.display_name[:10]}", callback_data=f"adm_ren_ask_{s.tg_id}"),
-            InlineKeyboardButton(text=tester_icon, callback_data=f"adm_tog_test_{s.tg_id}"),
+            InlineKeyboardButton(text=f"✏️ {s.display_name[:12]}", callback_data=f"adm_ren_ask_{s.tg_id}"),
             InlineKeyboardButton(text=toggle_role_text, callback_data=f"adm_toggle_role_{s.tg_id}"),
-            InlineKeyboardButton(text="🗑", callback_data=f"adm_del_user_ask_{s.tg_id}"),
+        ])
+        # 2-й ряд: остальное (бутылочка квадрат, корзина, лупа лог)
+        buttons.append([
+            InlineKeyboardButton(text=tester_icon, callback_data=f"adm_tog_test_{s.tg_id}"),
+            InlineKeyboardButton(text="🗑 Удалить", callback_data=f"adm_del_user_ask_{s.tg_id}"),
             InlineKeyboardButton(text=log_icon, callback_data=f"adm_log_open_{s.tg_id}")
         ])
 
