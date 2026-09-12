@@ -46,7 +46,11 @@ async def start_tunnel(port: int, timeout: float = 20.0) -> Optional[str]:
     logger.info(f"Starting Cloudflare Quick Tunnel for port {port} via {binary}...")
     try:
         proc = await asyncio.create_subprocess_exec(
-            binary, "tunnel", "--url", f"http://127.0.0.1:{port}",
+            binary, "tunnel",
+            "--protocol", "http2",
+            "--edge-ip-version", "4",
+            "--retries", "10",
+            "--url", f"http://127.0.0.1:{port}",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
@@ -70,6 +74,9 @@ async def start_tunnel(port: int, timeout: float = 20.0) -> Optional[str]:
                     match = url_pattern.search(text)
                     if match:
                         _tunnel_url = match.group(0)
+                if _tunnel_url and not url_event.is_set():
+                    if "precheck complete" in text or "metrics server" in text:
+                        await asyncio.sleep(2)
                         url_event.set()
         except Exception:
             pass
@@ -83,6 +90,9 @@ async def start_tunnel(port: int, timeout: float = 20.0) -> Optional[str]:
         logger.info(f"🌐 Cloudflare Tunnel online: {_tunnel_url}")
         return _tunnel_url
     except asyncio.TimeoutError:
+        if _tunnel_url:
+            logger.info(f"🌐 Cloudflare Tunnel online (post-timeout): {_tunnel_url}")
+            return _tunnel_url
         logger.warning("Timed out waiting for Cloudflare Tunnel URL to appear.")
         return None
 
