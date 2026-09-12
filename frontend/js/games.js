@@ -9,14 +9,6 @@
   let testerChecked = false;
 
   async function checkTesterStatus() {
-    if (window.currentUser && typeof window.currentUser.is_tester !== "undefined") {
-      isTesterUser = Boolean(window.currentUser.is_tester);
-      isCurrencyEnabled = Boolean(window.currentUser.currency_ecosystem_enabled);
-      userCoins = Number(window.currentUser.coins || 0);
-      testerChecked = true;
-      return isTesterUser;
-    }
-
     try {
       const sParams = new URLSearchParams(window.location.search);
       if (sParams.has("tester")) {
@@ -24,13 +16,27 @@
         isTesterUser = val === "1" || val === "true";
         testerChecked = true;
         try { localStorage.setItem("is_tester", isTesterUser ? "1" : "0"); } catch (e) {}
+        if (window.currentUser) {
+          isCurrencyEnabled = Boolean(window.currentUser.currency_ecosystem_enabled);
+          userCoins = Number(window.currentUser.coins || 0);
+        }
+        return isTesterUser;
       }
       if (sParams.get("role") === "tester") {
         isTesterUser = true;
         testerChecked = true;
         try { localStorage.setItem("is_tester", "1"); } catch (e) {}
+        return isTesterUser;
       }
     } catch (e) {}
+
+    if (window.currentUser && typeof window.currentUser.is_tester !== "undefined") {
+      isTesterUser = Boolean(window.currentUser.is_tester);
+      isCurrencyEnabled = Boolean(window.currentUser.currency_ecosystem_enabled);
+      userCoins = Number(window.currentUser.coins || 0);
+      testerChecked = true;
+      return isTesterUser;
+    }
 
     try {
       const cachedTester = localStorage.getItem("is_tester");
