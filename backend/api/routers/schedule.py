@@ -95,8 +95,8 @@ async def get_week_schedule(session: AsyncSession = Depends(get_db_session)):
             bell = bells.get(it.lesson_number)
             lessons.append({
                 "lesson_number": it.lesson_number,
-                "start_time": bell.start_time if bell else "",
-                "end_time": bell.end_time if bell else "",
+                "start_time": it.start_time or (bell.start_time if bell else ""),
+                "end_time": it.end_time or (bell.end_time if bell else ""),
                 "subject_name": it.subject.name
             })
         result[day_num] = lessons

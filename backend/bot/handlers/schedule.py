@@ -247,8 +247,13 @@ async def cb_sched_week(callback: CallbackQuery, db_session: AsyncSession, curre
             continue
         text_parts.append(f"📌 **{day_name}:**")
         for it in items:
-            bell = bells.get(it.lesson_number)
-            t_str = f" `{bell.start_time}`" if bell else ""
+            if it.start_time and it.end_time:
+                t_str = f" `{it.start_time}-{it.end_time}`"
+            elif it.start_time:
+                t_str = f" `{it.start_time}`"
+            else:
+                bell = bells.get(it.lesson_number)
+                t_str = f" `{bell.start_time}`" if bell else ""
             text_parts.append(f"  {it.lesson_number}.{t_str} {it.subject.name}")
         text_parts.append("")
 
