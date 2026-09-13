@@ -45,10 +45,13 @@ async def get_schedule(
         base = sched_map.get(num)
         sub = sub_map.get(num)
 
+        start_t = base.start_time if base and base.start_time else (bell.start_time if bell else "")
+        end_t = base.end_time if base and base.end_time else (bell.end_time if bell else "")
+
         lesson_item = {
             "lesson_number": num,
-            "start_time": bell.start_time if bell else "",
-            "end_time": bell.end_time if bell else "",
+            "start_time": start_t,
+            "end_time": end_t,
             "is_substitution": False,
             "is_cancelled": False,
             "subject_name": "",

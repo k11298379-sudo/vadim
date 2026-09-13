@@ -96,3 +96,25 @@ async def seed_initial_data(session: AsyncSession):
     # Seed student birthdays for 11 «Б»
     from backend.db.crud.birthdays import seed_default_birthdays
     await seed_default_birthdays(session)
+
+    # Seed Saturday Physics (09:00 - 11:00, separate lesson)
+    from backend.db.crud.schedule import get_permanent_schedule_for_day, set_permanent_schedule_item
+    sat_lessons = await get_permanent_schedule_for_day(session, 6)
+    sat_physics = next((l for l in sat_lessons if l.subject and l.subject.name.strip().lower() == "физика"), None)
+    if not sat_physics:
+        physics = next((s for s in existing_subjects if s.name.strip().lower() == "физика"), None)
+        if not physics:
+            for s in await get_all_subjects(session):
+                if s.name.strip().lower() == "физика":
+                    physics = s
+                    break
+        if physics:
+            await set_permanent_schedule_item(
+                session=session,
+                day_of_week=6,
+                lesson_number=1,
+                subject_id=physics.id,
+                room="Каб. 402",
+                start_time="09:00",
+                end_time="11:00"
+            )

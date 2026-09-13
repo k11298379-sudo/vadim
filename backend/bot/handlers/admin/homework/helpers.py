@@ -162,6 +162,11 @@ def build_subjects_keyboard_grid(subjects: List[Subject]) -> InlineKeyboardMarku
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
+def is_saturday_physics(subject_name: Optional[str], target_date: date) -> bool:
+    """Субботняя физика — отдельное занятие, на неё нельзя назначить ДЗ"""
+    return bool(subject_name and subject_name.strip().lower() == "физика" and target_date.isoweekday() == 6)
+
+
 async def get_upcoming_or_fallback_dates(
     db_session: AsyncSession,
     subject_id: int,
@@ -172,16 +177,19 @@ async def get_upcoming_or_fallback_dates(
     Возвращает (список_дат, есть_ли_в_расписании).
     Если предмет стоит в расписании уроков, возвращает дни уроков.
     Если расписание для предмета не заполнено (или уроков меньше limit),
-    дополняет ближайшими учебными днями (Пн-Сб, пропуская Вс).
+    дополняет ближайшими учебными днями (Пн-Сб, пропуская Вс и субботу для физики).
     """
     scheduled = await find_upcoming_dates_for_subject(db_session, subject_id, from_date=from_date, limit=limit)
     is_scheduled = bool(scheduled)
     dates = list(scheduled)
 
+    subj = await get_subject_by_id(db_session, subject_id)
+    is_physics = bool(subj and subj.name.strip().lower() == "физика")
+
     cur = from_date
     while len(dates) < limit:
-        # Пропускаем воскресенье (7) и уже имеющиеся даты
-        if cur.isoweekday() != 7 and cur not in dates:
+        # Пропускаем воскресенье (7), субботу для физики и уже имеющиеся даты
+        if cur.isoweekday() != 7 and not (is_physics and cur.isoweekday() == 6) and cur not in dates:
             dates.append(cur)
         cur += timedelta(days=1)
 

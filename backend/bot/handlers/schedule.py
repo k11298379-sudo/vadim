@@ -76,9 +76,15 @@ async def format_day_schedule(session: AsyncSession, target_date: date) -> str:
 
     for num in range(1, max_lesson + 1):
         bell = bells.get(num)
-        time_str = f" `{bell.start_time}-{bell.end_time}`" if bell else ""
-        sub = subs.get(num)
         base = sched_map.get(num)
+        sub = subs.get(num)
+
+        if base and base.start_time and base.end_time:
+            time_str = f" `{base.start_time}-{base.end_time}`"
+        elif bell:
+            time_str = f" `{bell.start_time}-{bell.end_time}`"
+        else:
+            time_str = ""
 
         if sub:
             if sub.is_cancelled:

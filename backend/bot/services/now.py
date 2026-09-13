@@ -127,16 +127,19 @@ async def get_effective_lessons_for_date(session: AsyncSession, target_date: dat
     slots: List[LessonSlot] = []
     for num in all_numbers:
         bell = bells.get(num)
-        if not bell or not bell.start_time or not bell.end_time:
+        base = sched_map.get(num)
+        sub = subs.get(num)
+
+        start_str = base.start_time if base and base.start_time else (bell.start_time if bell else None)
+        end_str = base.end_time if base and base.end_time else (bell.end_time if bell else None)
+
+        if not start_str or not end_str:
             continue
 
-        start_min = time_to_minutes(bell.start_time)
-        end_min = time_to_minutes(bell.end_time)
+        start_min = time_to_minutes(start_str)
+        end_min = time_to_minutes(end_str)
         if start_min is None or end_min is None:
             continue
-
-        sub = subs.get(num)
-        base = sched_map.get(num)
 
         if sub:
             if sub.is_cancelled:
@@ -153,8 +156,8 @@ async def get_effective_lessons_for_date(session: AsyncSession, target_date: dat
             lesson_number=num,
             subject_name=subject_name,
             room=room,
-            start_time=bell.start_time,
-            end_time=bell.end_time,
+            start_time=start_str,
+            end_time=end_str,
             start_minutes=start_min,
             end_minutes=end_min
         ))

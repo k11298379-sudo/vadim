@@ -159,7 +159,10 @@ async def set_permanent_schedule_item(
     session: AsyncSession,
     day_of_week: int,
     lesson_number: int,
-    subject_id: int
+    subject_id: int,
+    room: Optional[str] = None,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None
 ) -> Schedule:
     await freeze_past_schedules_for_weekday(session, day_of_week)
     return await set_schedule_item(
@@ -167,6 +170,9 @@ async def set_permanent_schedule_item(
         day_of_week=day_of_week,
         lesson_number=lesson_number,
         subject_id=subject_id,
+        room=room,
+        start_time=start_time,
+        end_time=end_time,
         specific_date=None
     )
 
@@ -175,13 +181,19 @@ async def set_date_schedule_item(
     session: AsyncSession,
     target_date: date,
     lesson_number: int,
-    subject_id: int
+    subject_id: int,
+    room: Optional[str] = None,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None
 ) -> Schedule:
     return await set_schedule_item(
         session=session,
         day_of_week=target_date.isoweekday(),
         lesson_number=lesson_number,
         subject_id=subject_id,
+        room=room,
+        start_time=start_time,
+        end_time=end_time,
         specific_date=target_date
     )
 

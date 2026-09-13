@@ -4,7 +4,7 @@ from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from backend.db.models import Homework, UserHomeworkStatus, Deadline, Announcement
+from backend.db.models import Homework, UserHomeworkStatus, Deadline, Announcement, Subject
 
 
 async def create_homework(
@@ -245,6 +245,12 @@ async def is_subject_scheduled_on_date(session: AsyncSession, subject_id: int, t
     """
     if target_date <= date(2026, 9, 1):
         return False
+
+    # Субботняя физика — отдельное занятие, ДЗ по физике на субботу не ставится
+    if target_date.isoweekday() == 6:
+        subj = await session.get(Subject, subject_id)
+        if subj and subj.name.strip().lower() == "физика":
+            return False
 
     from backend.db.crud.schedule import get_substitutions_for_date, get_schedule_for_date
 
