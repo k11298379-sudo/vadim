@@ -39,7 +39,6 @@ class Subject(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     teacher_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    room: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     schedules: Mapped[List["Schedule"]] = relationship("Schedule", back_populates="subject")
     homeworks: Mapped[List["Homework"]] = relationship("Homework", back_populates="subject")
@@ -68,7 +67,6 @@ class Schedule(Base):
     start_time: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     end_time: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     subject_id: Mapped[int] = mapped_column(Integer, ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False)
-    room: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     subject: Mapped["Subject"] = relationship("Subject", back_populates="schedules")
 
@@ -82,7 +80,6 @@ class Substitution(Base):
     lesson_number: Mapped[int] = mapped_column(Integer, nullable=False)
     old_subject_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("subjects.id", ondelete="SET NULL"), nullable=True)
     new_subject_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("subjects.id", ondelete="SET NULL"), nullable=True)
-    new_room: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     comment: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     is_cancelled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 

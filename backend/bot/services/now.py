@@ -37,7 +37,6 @@ DAYS_PREP_RU = {
 class LessonSlot:
     lesson_number: int
     subject_name: str
-    room: Optional[str]
     start_time: str
     end_time: str
     start_minutes: int
@@ -51,11 +50,6 @@ def time_to_minutes(time_str: str) -> Optional[int]:
         return int(parts[0]) * 60 + int(parts[1])
     except Exception:
         return None
-
-
-def format_room(room: Optional[str]) -> str:
-    """Кабинеты не используются в 11 «Б» — всегда возвращает пустую строку."""
-    return ""
 
 
 def format_duration_ru(mins: int) -> str:
@@ -146,7 +140,6 @@ async def get_effective_lessons_for_date(session: AsyncSession, target_date: dat
         slots.append(LessonSlot(
             lesson_number=num,
             subject_name=subject_name,
-            room=None,
             start_time=start_str,
             end_time=end_str,
             start_minutes=start_min,
@@ -199,7 +192,6 @@ async def get_now_lesson_status(session: AsyncSession, now_dt: Optional[datetime
         if next_info:
             next_date, next_slots = next_info
             first_s = next_slots[0]
-            room_s = format_room(first_s.room)
             prep_day = DAYS_PREP_RU.get(next_date.isoweekday(), "В учебный день")
             date_str = next_date.strftime("%d.%m")
             lines.append(f"\n📅 **{prep_day} ({date_str}):** 1-й урок — {first_s.subject_name} в {first_s.start_time}")

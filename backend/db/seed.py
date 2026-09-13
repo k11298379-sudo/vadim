@@ -6,20 +6,20 @@ from backend.db.crud import (
 )
 
 DEFAULT_SUBJECTS = [
-    ("Русский язык", None),
-    ("Литература", None),
-    ("Алгебра", None),
-    ("Геометрия", None),
-    ("Физика", None),
-    ("Химия", None),
-    ("Биология", None),
-    ("История", None),
-    ("Обществознание", None),
-    ("География", None),
-    ("Английский язык", None),
-    ("Информатика", None),
-    ("Физкультура", None),
-    ("ОБЖ", None),
+    "Русский язык",
+    "Литература",
+    "Алгебра",
+    "Геометрия",
+    "Физика",
+    "Химия",
+    "Биология",
+    "История",
+    "Обществознание",
+    "География",
+    "Английский язык",
+    "Информатика",
+    "Физкультура",
+    "ОБЖ",
 ]
 
 # Exact official bell timings from class photo
@@ -47,21 +47,13 @@ DEFAULT_DUTY_GROUPS = [
 async def seed_initial_data(session: AsyncSession):
     from datetime import date
     from backend.config import get_today
-    from sqlalchemy import update
-    from backend.db.models import Subject, Schedule, Substitution
     today = get_today()
-
-    # Clear any leftover room information (11 «Б» does not use rooms)
-    await session.execute(update(Subject).values(room=None))
-    await session.execute(update(Schedule).values(room=None))
-    await session.execute(update(Substitution).values(new_room=None))
-    await session.commit()
 
     # Check subjects
     existing_subjects = await get_all_subjects(session)
     if not existing_subjects:
-        for name, room in DEFAULT_SUBJECTS:
-            await create_subject(session, name=name, room=room)
+        for name in DEFAULT_SUBJECTS:
+            await create_subject(session, name=name)
     
     # Check bell schedule - ensure all 8 lessons exist
     existing_bells = await get_bell_schedule(session)
@@ -122,7 +114,6 @@ async def seed_initial_data(session: AsyncSession):
                 day_of_week=6,
                 lesson_number=1,
                 subject_id=physics.id,
-                room=None,
                 start_time="09:00",
                 end_time="11:00"
             )

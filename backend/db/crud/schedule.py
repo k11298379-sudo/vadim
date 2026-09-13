@@ -67,7 +67,6 @@ async def set_schedule_item(
     day_of_week: int,
     lesson_number: int,
     subject_id: int,
-    room: Optional[str] = None,
     start_time: Optional[str] = None,
     end_time: Optional[str] = None,
     specific_date: Optional[date] = None
@@ -82,7 +81,6 @@ async def set_schedule_item(
     item = result.scalar_one_or_none()
     if item:
         item.subject_id = subject_id
-        item.room = room
         item.start_time = start_time
         item.end_time = end_time
     else:
@@ -91,7 +89,6 @@ async def set_schedule_item(
             day_of_week=day_of_week,
             lesson_number=lesson_number,
             subject_id=subject_id,
-            room=room,
             start_time=start_time,
             end_time=end_time
         )
@@ -145,7 +142,6 @@ async def freeze_past_schedules_for_weekday(
                     day_of_week=day_of_week,
                     lesson_number=l.lesson_number,
                     subject_id=l.subject_id,
-                    room=l.room,
                     start_time=l.start_time,
                     end_time=l.end_time
                 )
@@ -160,7 +156,6 @@ async def set_permanent_schedule_item(
     day_of_week: int,
     lesson_number: int,
     subject_id: int,
-    room: Optional[str] = None,
     start_time: Optional[str] = None,
     end_time: Optional[str] = None
 ) -> Schedule:
@@ -170,7 +165,6 @@ async def set_permanent_schedule_item(
         day_of_week=day_of_week,
         lesson_number=lesson_number,
         subject_id=subject_id,
-        room=room,
         start_time=start_time,
         end_time=end_time,
         specific_date=None
@@ -182,7 +176,6 @@ async def set_date_schedule_item(
     target_date: date,
     lesson_number: int,
     subject_id: int,
-    room: Optional[str] = None,
     start_time: Optional[str] = None,
     end_time: Optional[str] = None
 ) -> Schedule:
@@ -191,7 +184,6 @@ async def set_date_schedule_item(
         day_of_week=target_date.isoweekday(),
         lesson_number=lesson_number,
         subject_id=subject_id,
-        room=room,
         start_time=start_time,
         end_time=end_time,
         specific_date=target_date
@@ -280,7 +272,6 @@ async def create_substitution(
     lesson_number: int,
     old_subject_id: Optional[int],
     new_subject_id: Optional[int],
-    new_room: Optional[str] = None,
     comment: Optional[str] = None,
     is_cancelled: bool = False
 ) -> Substitution:
@@ -289,7 +280,6 @@ async def create_substitution(
         lesson_number=lesson_number,
         old_subject_id=old_subject_id,
         new_subject_id=new_subject_id,
-        new_room=new_room,
         comment=comment,
         is_cancelled=is_cancelled
     )

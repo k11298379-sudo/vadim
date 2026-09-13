@@ -24,7 +24,6 @@ from backend.bot.services.now import (
     get_now_lesson_status,
     time_to_minutes,
     format_duration_ru,
-    format_room,
     get_effective_lessons_for_date
 )
 from backend.bot.keyboards.main_menu import get_main_keyboard
@@ -34,9 +33,9 @@ from backend.bot.handlers.now import get_now_keyboard
 async def run_now_test_suite():
     print("=== [1/5] Testing Helper Functions ===")
     assert time_to_minutes("08:30") == 510
-    assert time_to_minutes("09:10") == 550
-    assert time_to_minutes("00:00") == 0
-    assert time_to_minutes("23:59") == 1439
+    assert time_to_minutes("12:05") == 725
+    assert time_to_minutes("15:10") == 910
+    assert time_to_minutes("invalid") is None
 
     assert format_duration_ru(1) == "1 минута"
     assert format_duration_ru(2) == "2 минуты"
@@ -45,12 +44,7 @@ async def run_now_test_suite():
     assert format_duration_ru(60) == "1 час"
     assert format_duration_ru(75) == "1 час 15 мин"
 
-    assert format_room("Каб. 305") == ""
-    assert format_room("304") == ""
-    assert format_room("Спортзал") == ""
-    assert format_room("") == ""
-    assert format_room(None) == ""
-    print("[OK] Helper functions verified (no rooms formatted).")
+    print("[OK] Helper functions verified.")
 
     print("\n=== [2/5] Initializing Test Database & Seeding Schedule ===")
     async with engine.begin() as conn:
@@ -59,10 +53,10 @@ async def run_now_test_suite():
 
     async with async_session_factory() as session:
         # Create subjects
-        s_rus = await create_subject(session, "Русский язык", room="Каб. 201")
-        s_alg = await create_subject(session, "Алгебра", room="Каб. 305")
-        s_fiz = await create_subject(session, "Физика", room="Каб. 402")
-        s_chem = await create_subject(session, "Химия", room="Каб. 408")
+        s_rus = await create_subject(session, "Русский язык")
+        s_alg = await create_subject(session, "Алгебра")
+        s_fiz = await create_subject(session, "Физика")
+        s_chem = await create_subject(session, "Химия")
 
         # Set bell schedule for lessons 1..4
         # 1: 08:30 - 09:10 (10 min break)
@@ -156,13 +150,12 @@ async def run_now_test_suite():
         print("[OK] Weekend state verified.")
 
         # Substitution on Tuesday 22 September:
-        # Lesson 2 (Algebra) replaced with History in room 312
-        s_hist = await create_subject(session, "История", room="Каб. 312")
+        # Lesson 2 (Algebra) replaced with History
+        s_hist = await create_subject(session, "История")
         sub = Substitution(
             date=date(2026, 9, 22),
             lesson_number=2,
             new_subject_id=s_hist.id,
-            new_room="312",
             is_cancelled=False
         )
         session.add(sub)
@@ -172,7 +165,6 @@ async def run_now_test_suite():
         res_sub = await get_now_lesson_status(session, dt_sub)
         assert "Сейчас (2-й урок):" in res_sub
         assert "История" in res_sub
-        assert "312" not in res_sub and "каб." not in res_sub and "Каб." not in res_sub
         print("[OK] Substitution reflected in /now correctly without room.")
 
     print("\n=== [5/5] Testing Keyboards & Command Registration ===")

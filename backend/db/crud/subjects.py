@@ -26,10 +26,9 @@ async def get_subject_by_name(session: AsyncSession, name: str) -> Optional[Subj
 async def create_subject(
     session: AsyncSession,
     name: str,
-    teacher_name: Optional[str] = None,
-    room: Optional[str] = None
+    teacher_name: Optional[str] = None
 ) -> Subject:
-    subject = Subject(name=name.strip(), teacher_name=teacher_name, room=room)
+    subject = Subject(name=name.strip(), teacher_name=teacher_name)
     session.add(subject)
     await session.commit()
     await session.refresh(subject)
