@@ -50,13 +50,14 @@
       .dk-stake-title { font-size:0.75rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; }
       .dk-stake-val { font-size:0.9rem; font-weight:800; color:#b45309; }
       .dk-stake-group { display:flex; gap:5px; justify-content:center; flex-wrap:wrap; }
-      .dk-stake-opt { padding:6px 10px; border-radius:10px; border:1px solid #cbd5e1; background:#fff; font-size:0.8rem; font-weight:700; cursor:pointer; transition:all 0.15s; }
-      .dk-stake-opt.active { background:#2563eb; color:#fff; border-color:#2563eb; box-shadow:0 2px 6px rgba(37,99,235,0.3); }
+      .dk-stake-opt { padding:6px 10px; border-radius:10px; border:1.5px solid #94a3b8; background:#fff; color:#0f172a; font-size:0.8rem; font-weight:800; cursor:pointer; transition:all 0.15s; }
+      .dk-stake-opt:hover:not(.active) { background:#f1f5f9; color:#0f172a; border-color:#64748b; }
+      .dk-stake-opt.active { background:#2563eb; color:#ffffff !important; border-color:#2563eb; box-shadow:0 2px 6px rgba(37,99,235,0.3); }
       
       .dk-custom-stake-wrap { display:flex; gap:6px; align-items:center; margin-top:2px; }
       .dk-input-with-icon { position:relative; flex:1; display:flex; align-items:center; }
       .dk-input-icon { position:absolute; left:10px; font-size:0.9rem; pointer-events:none; }
-      .dk-stake-input { width:100%; border:1.5px solid #cbd5e1; border-radius:10px; padding:7px 10px 7px 32px; font-size:0.85rem; font-weight:700; outline:none; transition:border-color 0.15s; background:#fff; }
+      .dk-stake-input { width:100%; border:1.5px solid #cbd5e1; border-radius:10px; padding:7px 10px 7px 32px; font-size:0.85rem; font-weight:700; outline:none; transition:border-color 0.15s; background:#fff; color:#0f172a; }
       .dk-stake-input:focus { border-color:#2563eb; }
       .dk-btn-all-in { padding:7px 10px; border:1.5px solid #f59e0b; background:rgba(245, 158, 11, 0.12); color:#b45309; border-radius:10px; font-size:0.8rem; font-weight:800; cursor:pointer; white-space:nowrap; transition:all 0.15s; }
       .dk-btn-all-in:hover { background:rgba(245, 158, 11, 0.25); }
