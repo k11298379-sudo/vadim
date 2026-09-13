@@ -6,20 +6,20 @@ from backend.db.crud import (
 )
 
 DEFAULT_SUBJECTS = [
-    ("Русский язык", "Каб. 201"),
-    ("Литература", "Каб. 201"),
-    ("Алгебра", "Каб. 305"),
-    ("Геометрия", "Каб. 305"),
-    ("Физика", "Каб. 402"),
-    ("Химия", "Каб. 408"),
-    ("Биология", "Каб. 210"),
-    ("История", "Каб. 312"),
-    ("Обществознание", "Каб. 312"),
-    ("География", "Каб. 215"),
-    ("Английский язык", "Каб. 104"),
-    ("Информатика", "Каб. 310"),
-    ("Физкультура", "Спортзал"),
-    ("ОБЖ", "Каб. 101"),
+    ("Русский язык", None),
+    ("Литература", None),
+    ("Алгебра", None),
+    ("Геометрия", None),
+    ("Физика", None),
+    ("Химия", None),
+    ("Биология", None),
+    ("История", None),
+    ("Обществознание", None),
+    ("География", None),
+    ("Английский язык", None),
+    ("Информатика", None),
+    ("Физкультура", None),
+    ("ОБЖ", None),
 ]
 
 # Exact official bell timings from class photo
@@ -47,7 +47,15 @@ DEFAULT_DUTY_GROUPS = [
 async def seed_initial_data(session: AsyncSession):
     from datetime import date
     from backend.config import get_today
+    from sqlalchemy import update
+    from backend.db.models import Subject, Schedule, Substitution
     today = get_today()
+
+    # Clear any leftover room information (11 «Б» does not use rooms)
+    await session.execute(update(Subject).values(room=None))
+    await session.execute(update(Schedule).values(room=None))
+    await session.execute(update(Substitution).values(new_room=None))
+    await session.commit()
 
     # Check subjects
     existing_subjects = await get_all_subjects(session)

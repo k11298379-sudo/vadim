@@ -54,15 +54,8 @@ def time_to_minutes(time_str: str) -> Optional[int]:
 
 
 def format_room(room: Optional[str]) -> str:
-    """Форматирует номер кабинета для красивого вывода в скобках."""
-    if not room:
-        return ""
-    r = room.strip()
-    if not r:
-        return ""
-    if r.lower().startswith("каб") or "спортзал" in r.lower() or "зал" in r.lower():
-        return f" ({r})"
-    return f" (каб. {r})"
+    """Кабинеты не используются в 11 «Б» — всегда возвращает пустую строку."""
+    return ""
 
 
 def format_duration_ru(mins: int) -> str:
@@ -145,23 +138,15 @@ async def get_effective_lessons_for_date(session: AsyncSession, target_date: dat
             if sub.is_cancelled:
                 continue
             subject_name = sub.new_subject.name if sub.new_subject else (base.subject.name if base and base.subject else "Урок")
-            if target_date.isoweekday() == 6:
-                room = sub.new_room or (base.room if base else None)
-            else:
-                room = sub.new_room or (base.room if base and base.room else (base.subject.room if base and base.subject and base.subject.room else None))
         elif base and base.subject:
             subject_name = base.subject.name
-            if target_date.isoweekday() == 6:
-                room = base.room
-            else:
-                room = base.room or base.subject.room
         else:
             continue
 
         slots.append(LessonSlot(
             lesson_number=num,
             subject_name=subject_name,
-            room=room,
+            room=None,
             start_time=start_str,
             end_time=end_str,
             start_minutes=start_min,
@@ -217,7 +202,7 @@ async def get_now_lesson_status(session: AsyncSession, now_dt: Optional[datetime
             room_s = format_room(first_s.room)
             prep_day = DAYS_PREP_RU.get(next_date.isoweekday(), "В учебный день")
             date_str = next_date.strftime("%d.%m")
-            lines.append(f"\n📅 **{prep_day} ({date_str}):** 1-й урок — {first_s.subject_name}{room_s} в {first_s.start_time}")
+            lines.append(f"\n📅 **{prep_day} ({date_str}):** 1-й урок — {first_s.subject_name} в {first_s.start_time}")
         return "\n".join(lines)
 
     first_slot = slots[0]
@@ -227,11 +212,10 @@ async def get_now_lesson_status(session: AsyncSession, now_dt: Optional[datetime
     if now_minutes < first_slot.start_minutes:
         diff = first_slot.start_minutes - now_minutes
         t_left = format_duration_ru(diff)
-        room_str = format_room(first_slot.room)
         lines = [
             "🌅 **Уроки ещё не начались**\n",
             f"⏳ **До 1-го урока:** `{t_left}` (звонок в {first_slot.start_time})",
-            f"🔔 **1-й урок ({first_slot.lesson_number}-й):** {first_slot.subject_name}{room_str}",
+            f"🔔 **1-й урок ({first_slot.lesson_number}-й):** {first_slot.subject_name}",
             f"📋 **Всего сегодня:** {format_lessons_count_ru(len(slots))} (до {last_slot.end_time})"
         ]
         return "\n".join(lines)
@@ -241,16 +225,14 @@ async def get_now_lesson_status(session: AsyncSession, now_dt: Optional[datetime
         if curr_slot.start_minutes <= now_minutes < curr_slot.end_minutes:
             diff = curr_slot.end_minutes - now_minutes
             t_left = format_duration_ru(diff)
-            room_str = format_room(curr_slot.room)
             lines = [
-                f"🔔 **Сейчас ({curr_slot.lesson_number}-й урок):** {curr_slot.subject_name}{room_str}",
+                f"🔔 **Сейчас ({curr_slot.lesson_number}-й урок):** {curr_slot.subject_name}",
                 f"⏳ **До конца урока:** `{t_left}` (звонок в {curr_slot.end_time})"
             ]
             if idx + 1 < len(slots):
                 next_slot = slots[idx + 1]
                 break_min = next_slot.start_minutes - curr_slot.end_minutes
-                next_room = format_room(next_slot.room)
-                lines.append(f"🔜 **Следующий урок ({next_slot.lesson_number}-й):** {next_slot.subject_name}{next_room} (перемена {break_min} мин)")
+                lines.append(f"🔜 **Следующий урок ({next_slot.lesson_number}-й):** {next_slot.subject_name} (перемена {break_min} мин)")
             else:
                 lines.append("🏁 **Это последний урок на сегодня!** Дальше домой.")
             return "\n".join(lines)
@@ -263,11 +245,10 @@ async def get_now_lesson_status(session: AsyncSession, now_dt: Optional[datetime
             diff = next_slot.start_minutes - now_minutes
             t_left = format_duration_ru(diff)
             break_total = next_slot.start_minutes - prev_slot.end_minutes
-            next_room = format_room(next_slot.room)
             lines = [
                 "☕ **Сейчас перемена!**\n",
                 f"⏳ **До звонка на урок:** `{t_left}` (перемена {break_total} мин)",
-                f"🔜 **Следующий урок ({next_slot.lesson_number}-й):** {next_slot.subject_name}{next_room} (звонок в {next_slot.start_time})",
+                f"🔜 **Следующий урок ({next_slot.lesson_number}-й):** {next_slot.subject_name} (звонок в {next_slot.start_time})",
                 f"🚪 _Предыдущий урок:_ {prev_slot.subject_name} завершён"
             ]
             return "\n".join(lines)
@@ -281,12 +262,11 @@ async def get_now_lesson_status(session: AsyncSession, now_dt: Optional[datetime
     if next_info:
         next_date, next_slots = next_info
         first_s = next_slots[0]
-        room_s = format_room(first_s.room)
         if next_date == today + timedelta(days=1):
             day_label = f"Завтра ({DAYS_RU.get(next_date.isoweekday(), '')})"
         else:
             day_label = f"{DAYS_PREP_RU.get(next_date.isoweekday(), '')} ({next_date.strftime('%d.%m')})"
-        lines.append(f"📅 **{day_label}:** 1-й урок — {first_s.subject_name}{room_s} в {first_s.start_time}")
+        lines.append(f"📅 **{day_label}:** 1-й урок — {first_s.subject_name} в {first_s.start_time}")
 
     lines.append("📝 _Подсказка: проверить заданную домашку можно по кнопке «📚 Домашка»_")
     return "\n".join(lines)

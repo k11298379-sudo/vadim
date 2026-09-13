@@ -469,7 +469,7 @@ async def notify_duty_change_if_needed(bot: Bot, session: AsyncSession, force: b
         "🧹 **Смена дежурных в 11 «Б»!**\n\n"
         f"📌 **Дежурит:** {active_group.name}\n"
         f"👥 **Состав:** {members_text}\n\n"
-        "Пожалуйста, следите за чистотой и порядком в кабинете!"
+        "Пожалуйста, следите за чистотой и порядком в классе!"
     )
 
     groups = await get_approved_group_chats(session)
@@ -541,7 +541,7 @@ async def send_monday_duty_personal_reminder(bot: Bot):
                 f"🔔 **Доброе утро, {name_greeting}! Напоминание о дежурстве** 🧹\n\n"
                 f"На этой неделе дежурит **{active_group.name}**, и вы входите в её состав!\n\n"
                 f"👥 **Состав группы:** {members_text}\n\n"
-                "Пожалуйста, не забудьте прийти вовремя, проветрить кабинет, подготовить доску и следить за порядком."
+                "Пожалуйста, не забудьте прийти вовремя, проветрить класс, подготовить доску и следить за порядком."
             )
             try:
                 await bot.send_message(chat_id=u.tg_id, text=msg, parse_mode="Markdown")

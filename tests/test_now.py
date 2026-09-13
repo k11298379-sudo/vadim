@@ -45,12 +45,12 @@ async def run_now_test_suite():
     assert format_duration_ru(60) == "1 час"
     assert format_duration_ru(75) == "1 час 15 мин"
 
-    assert format_room("Каб. 305") == " (Каб. 305)"
-    assert format_room("304") == " (каб. 304)"
-    assert format_room("Спортзал") == " (Спортзал)"
+    assert format_room("Каб. 305") == ""
+    assert format_room("304") == ""
+    assert format_room("Спортзал") == ""
     assert format_room("") == ""
     assert format_room(None) == ""
-    print("[OK] Helper functions verified.")
+    print("[OK] Helper functions verified (no rooms formatted).")
 
     print("\n=== [2/5] Initializing Test Database & Seeding Schedule ===")
     async with engine.begin() as conn:
@@ -100,9 +100,9 @@ async def run_now_test_suite():
         assert "До 1-го урока" in res_morning
         assert "45 минут" in res_morning
         assert "Русский язык" in res_morning
-        assert "Каб. 201" in res_morning
+        assert "Каб." not in res_morning and "каб." not in res_morning
         assert "4 урока" in res_morning
-        print("[OK] Morning before lessons verified.")
+        print("[OK] Morning before lessons verified (strictly without room).")
 
         # State B: During Lesson 1 (08:45)
         dt_lesson1 = datetime(2026, 9, 15, 8, 45)
@@ -172,8 +172,8 @@ async def run_now_test_suite():
         res_sub = await get_now_lesson_status(session, dt_sub)
         assert "Сейчас (2-й урок):" in res_sub
         assert "История" in res_sub
-        assert "312" in res_sub
-        print("[OK] Substitution reflected in /now correctly.")
+        assert "312" not in res_sub and "каб." not in res_sub and "Каб." not in res_sub
+        print("[OK] Substitution reflected in /now correctly without room.")
 
     print("\n=== [5/5] Testing Keyboards & Command Registration ===")
     main_kb = get_main_keyboard()
