@@ -23,17 +23,18 @@ from backend.db.crud import (
     get_all_subjects, get_permanent_schedule_for_day, get_schedule_for_date,
     set_permanent_schedule_item, is_subject_scheduled_on_date,
     find_upcoming_dates_for_subject, auto_shift_active_homeworks,
-    create_homework
+    create_homework, create_user, create_or_update_group_chat
 )
 from backend.bot.handlers.schedule import format_day_schedule
 from backend.bot.handlers.admin.homework.helpers import (
     is_saturday_physics, get_upcoming_or_fallback_dates
 )
 from backend.bot.services.now import get_effective_lessons_for_date, get_now_lesson_status
+from backend.bot.services.notifier import send_evening_digest
 
 
 async def test_saturday_physics_feature():
-    print("--- [1/4] Testing Database Seeding and Saturday Physics Schedule ---")
+    print("--- [1/5] Testing Database Seeding and Saturday Physics Schedule ---")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
@@ -49,7 +50,8 @@ async def test_saturday_physics_feature():
         assert sat_item.subject.name == "Физика"
         assert sat_item.start_time == "09:00"
         assert sat_item.end_time == "11:00"
-        print("  [OK] Saturday Physics (09:00 - 11:00) seeded successfully.")
+        assert sat_item.room is None, f"Expected Saturday Physics room to be None, got {sat_item.room}"
+        print("  [OK] Saturday Physics (09:00 - 11:00, room=None) seeded successfully.")
 
         # Test schedule formatting on Saturday
         # Saturday: 2026-09-19
@@ -126,18 +128,70 @@ async def test_saturday_physics_feature():
         assert "Физика" in status_during
         assert "До конца урока" in status_during
         assert "11:00" in status_during
-        print("  [OK] /now during Saturday Physics shows ongoing lesson until 11:00.")
+        assert "Каб." not in status_during and "каб." not in status_during
+        print("  [OK] /now during Saturday Physics shows ongoing lesson until 11:00 without room.")
 
         # Test at 08:30 (before lesson)
         status_before = await get_now_lesson_status(session, now_dt=datetime(2026, 9, 19, 8, 30))
         assert "До 1-го урока" in status_before
         assert "09:00" in status_before
-        print("  [OK] /now before Saturday Physics shows countdown to 09:00.")
+        assert "Каб." not in status_before and "каб." not in status_before
+        print("  [OK] /now before Saturday Physics shows countdown to 09:00 without room.")
 
         # Test at 12:00 (after lesson)
         status_after = await get_now_lesson_status(session, now_dt=datetime(2026, 9, 19, 12, 0))
         assert "Уроки на сегодня всё!" in status_after
         print("  [OK] /now after Saturday Physics shows lessons ended.")
+
+    print("\n--- [5/5] Testing Friday Evening Digest for Saturday ---")
+    async with async_session_factory() as session:
+        # Create student and approved group
+        user_test = await create_user(session, tg_id=999888, full_name="Тестовый Ученик", role="student")
+        await create_or_update_group_chat(session, chat_id=-100999888, title="11 Б Чат", chat_type="supergroup", role="approved")
+
+        # Create homework for next week Tuesday
+        await create_homework(
+            session=session,
+            subject_id=physics_id,
+            due_date=date(2026, 9, 22),
+            assigned_date=date(2026, 9, 18),
+            description="Подготовка к контрольной"
+        )
+
+        class MockDigestBot:
+            def __init__(self):
+                self.messages = {}
+            async def send_message(self, chat_id, text, parse_mode=None, message_thread_id=None):
+                self.messages.setdefault(chat_id, []).append(text)
+
+        digest_bot = MockDigestBot()
+
+        # Send evening digest targeting Saturday 2026-09-19
+        sent = await send_evening_digest(digest_bot, target_date=sat_date)
+        assert sent > 0, "Expected digest to be sent for Saturday with lessons"
+
+        # Verify group message
+        assert -100999888 in digest_bot.messages, "Group must receive Saturday digest"
+        group_msg = digest_bot.messages[-100999888][0]
+        assert "Физика" in group_msg
+        assert "09:00-11:00" in group_msg
+        assert "Каб." not in group_msg and "каб." not in group_msg
+        # Strictly no homework blocks in Saturday notification ("только в расписании")
+        assert "Домашнее задание" not in group_msg
+        assert "Подготовка к контрольной" not in group_msg
+        print("  [OK] Group message contains Saturday schedule and NO homework block.")
+
+        # Verify student PM message
+        assert 999888 in digest_bot.messages, "Student must receive Saturday digest in PM"
+        user_msg = digest_bot.messages[999888][0]
+        assert "Физика" in user_msg
+        assert "09:00-11:00" in user_msg
+        assert "Каб." not in user_msg and "каб." not in user_msg
+        # Strictly no homework checklist in student PM for Saturday
+        assert "Домашнее задание" not in user_msg
+        assert "Подготовка к контрольной" not in user_msg
+        assert "[ ]" not in user_msg and "[x]" not in user_msg
+        print("  [OK] Student PM message contains Saturday schedule and NO homework checklist.")
 
     print("\n=== ALL SATURDAY PHYSICS TESTS PASSED! ZERO ERRORS! ===")
 

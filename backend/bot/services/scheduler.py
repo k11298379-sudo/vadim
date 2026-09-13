@@ -16,7 +16,7 @@ def setup_scheduler(bot: Bot):
     try:
         hour, minute = settings.NOTIFICATION_TIME_EVENING.split(":")
         trigger = CronTrigger(
-            day_of_week="mon-thu,sat,sun",
+            day_of_week="mon-fri,sun",
             hour=int(hour),
             minute=int(minute),
             timezone=settings.TIMEZONE

@@ -42,22 +42,27 @@ async def send_evening_digest(bot: Bot, target_date: Optional[date] = None, forc
     day_name = DAYS_RU.get(day_of_week, "День")
     date_str = tomorrow.strftime("%d.%m.%Y")
 
-    if not force and target_date is None:
-        today_weekday = get_today().isoweekday()
-        if today_weekday == 5 or day_of_week in (6, 7):
-            # В пятницу вечером (на субботу) и в субботу вечером (на воскресенье) уведомления не отправляются
-            logger.info("Skipping evening digest: today is Friday or tomorrow is weekend.")
-            return 0
-
     sent_count = 0
     async with async_session_factory() as session:
+        schedules = await get_schedule_for_date(session, tomorrow)
+        subs = {s.lesson_number: s for s in await get_substitutions_for_date(session, tomorrow)}
+
+        if not force and target_date is None:
+            today_weekday = get_today().isoweekday()
+            # В субботу вечером (на воскресенье) уроков нет — пропускаем
+            if today_weekday == 6 or day_of_week == 7:
+                logger.info("Skipping evening digest: tomorrow is Sunday.")
+                return 0
+            # Если завтра суббота, но уроков нет — пропускаем
+            if day_of_week == 6 and not schedules and not subs:
+                logger.info("Skipping evening digest: Saturday has no lessons.")
+                return 0
+
         students = await get_notifiable_users(session)
         if not students:
             return 0
 
-        schedules = await get_schedule_for_date(session, tomorrow)
         bells = {b.lesson_number: b for b in await get_bell_schedule_for_date(session, tomorrow)}
-        subs = {s.lesson_number: s for s in await get_substitutions_for_date(session, tomorrow)}
         tomorrow_homeworks = await get_homework_for_date(session, tomorrow)
 
         # Другие активные задания на будущие даты после завтра
@@ -78,9 +83,15 @@ async def send_evening_digest(bot: Bot, target_date: Optional[date] = None, forc
             sched_map = {s.lesson_number: s for s in schedules}
             for n in range(1, max_l + 1):
                 bell = bells.get(n)
-                t_str = f" `{bell.start_time}-{bell.end_time}`" if bell else ""
                 sub = subs.get(n)
                 base = sched_map.get(n)
+
+                if base and base.start_time and base.end_time:
+                    t_str = f" `{base.start_time}-{base.end_time}`"
+                elif bell:
+                    t_str = f" `{bell.start_time}-{bell.end_time}`"
+                else:
+                    t_str = ""
 
                 if sub:
                     if sub.is_cancelled:
@@ -107,6 +118,19 @@ async def send_evening_digest(bot: Bot, target_date: Optional[date] = None, forc
         hw_group_text = "\n".join(hw_group_lines)
 
         for g in approved_groups:
+            # Если завтра суббота — рассылаем только расписание без ДЗ
+            if day_of_week == 6:
+                try:
+                    await bot.send_message(
+                        chat_id=g.chat_id,
+                        message_thread_id=g.topic_schedule_id,
+                        text=sched_group_text,
+                        parse_mode="Markdown"
+                    )
+                except Exception as e_sc:
+                    logger.warning(f"Could not send Saturday schedule to group {g.chat_id}: {e_sc}")
+                continue
+
             # Если настроены отдельные ветки (топики):
             if g.topic_schedule_id or g.topic_hw_id:
                 if g.topic_schedule_id:
@@ -153,6 +177,16 @@ async def send_evening_digest(bot: Bot, target_date: Optional[date] = None, forc
                 f"План на завтра ({day_name}, {date_str}):\n"
             ]
             user_lines.extend(sched_lines)
+
+            # На субботу отправляется только расписание (без блоков ДЗ)
+            if day_of_week == 6:
+                user_msg = "\n".join(user_lines)
+                try:
+                    await bot.send_message(chat_id=st.tg_id, text=user_msg, parse_mode="Markdown")
+                    sent_count += 1
+                except Exception as e:
+                    logger.warning(f"Could not send evening digest to user {st.tg_id}: {e}")
+                continue
 
             # Проверяем ДЗ на завтра конкретно для этого ученика
             if not tomorrow_homeworks:

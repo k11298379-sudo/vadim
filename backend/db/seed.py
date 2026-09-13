@@ -114,7 +114,7 @@ async def seed_initial_data(session: AsyncSession):
                 day_of_week=6,
                 lesson_number=1,
                 subject_id=physics.id,
-                room="Каб. 402",
+                room=None,
                 start_time="09:00",
                 end_time="11:00"
             )

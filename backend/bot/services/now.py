@@ -145,10 +145,16 @@ async def get_effective_lessons_for_date(session: AsyncSession, target_date: dat
             if sub.is_cancelled:
                 continue
             subject_name = sub.new_subject.name if sub.new_subject else (base.subject.name if base and base.subject else "Урок")
-            room = sub.new_room or (base.room if base and base.room else (base.subject.room if base and base.subject and base.subject.room else None))
+            if target_date.isoweekday() == 6:
+                room = sub.new_room or (base.room if base else None)
+            else:
+                room = sub.new_room or (base.room if base and base.room else (base.subject.room if base and base.subject and base.subject.room else None))
         elif base and base.subject:
             subject_name = base.subject.name
-            room = base.room or base.subject.room
+            if target_date.isoweekday() == 6:
+                room = base.room
+            else:
+                room = base.room or base.subject.room
         else:
             continue
 
