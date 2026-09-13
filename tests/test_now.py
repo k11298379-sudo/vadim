@@ -188,6 +188,25 @@ async def run_now_test_suite():
     assert "sched_today" in now_cbs
     print("[OK] Inline refresh and schedule buttons present.")
 
+    print("\n=== [6/6] Testing Double-Click Protection on Schedule Callbacks ===")
+    from backend.bot.handlers.schedule import cb_sched_today
+    from unittest.mock import AsyncMock, MagicMock
+    from aiogram.exceptions import TelegramBadRequest
+
+    mock_msg = MagicMock()
+    mock_msg.edit_text = AsyncMock(side_effect=TelegramBadRequest(method=MagicMock(), message="Bad Request: message is not modified"))
+    mock_cb = MagicMock()
+    mock_cb.data = "sched_today"
+    mock_cb.from_user.id = 12345
+    mock_cb.message = mock_msg
+    mock_cb.answer = AsyncMock()
+
+    async with async_session_factory() as session:
+        # Calling cb_sched_today when message is already open should not throw and should answer nicely
+        await cb_sched_today(mock_cb, session)
+        mock_cb.answer.assert_called_with("Расписание на сегодня уже открыто 📅")
+        print("[OK] cb_sched_today handled identical content cleanly without error!")
+
     print("\n" + "=" * 60)
     print(">>> ALL /NOW TESTS PASSED FLAWLESSLY! ZERO ERRORS! <<<")
     print("=" * 60 + "\n")

@@ -169,6 +169,14 @@ class AuthMiddleware(BaseMiddleware):
                     try:
                         return await handler(event, data)
                     except Exception as handler_err:
+                        from aiogram.exceptions import TelegramBadRequest
+                        if isinstance(handler_err, TelegramBadRequest) and "message is not modified" in str(handler_err).lower():
+                            if isinstance(event, CallbackQuery):
+                                try:
+                                    await event.answer("Данные уже актуальны ⏳")
+                                except Exception:
+                                    pass
+                            return
                         if isinstance(event, CallbackQuery):
                             try:
                                 await event.answer("⚠️ Произошла ошибка. Попробуйте снова.", show_alert=True)

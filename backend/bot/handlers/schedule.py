@@ -1,7 +1,8 @@
 from datetime import date, timedelta
 from typing import List, Optional
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup
+from aiogram.exceptions import TelegramBadRequest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import get_today, settings
@@ -121,20 +122,36 @@ async def show_bells(message: Message, db_session: AsyncSession):
 
     await message.answer(format_bell_schedule_text(bells), parse_mode="Markdown")
 
+async def safe_edit_schedule_message(
+    callback: CallbackQuery,
+    text: str,
+    reply_markup: Optional[InlineKeyboardMarkup] = None,
+    parse_mode: str = "Markdown",
+    same_message_alert: str = "Расписание уже открыто 📅"
+) -> None:
+    """Безопасно редактирует сообщение с расписанием, предотвращая ошибку 'message is not modified'."""
+    try:
+        if callback.message:
+            await callback.message.edit_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
+        await callback.answer()
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e).lower():
+            await callback.answer(same_message_alert)
+        else:
+            raise e
+
 @router.callback_query(F.data == "sched_today")
 async def cb_sched_today(callback: CallbackQuery, db_session: AsyncSession, current_user: Optional[User] = None):
     text = await format_day_schedule(db_session, get_today())
     is_adm = is_admin_user(current_user, callback.from_user.id) if current_user else False
-    await callback.message.edit_text(text, reply_markup=get_schedule_keyboard(is_admin=is_adm), parse_mode="Markdown")
-    await callback.answer()
+    await safe_edit_schedule_message(callback, text, reply_markup=get_schedule_keyboard(is_admin=is_adm), same_message_alert="Расписание на сегодня уже открыто 📅")
 
 @router.callback_query(F.data == "sched_tomorrow")
 async def cb_sched_tomorrow(callback: CallbackQuery, db_session: AsyncSession, current_user: Optional[User] = None):
     tomorrow = get_today() + timedelta(days=1)
     text = await format_day_schedule(db_session, tomorrow)
     is_adm = is_admin_user(current_user, callback.from_user.id) if current_user else False
-    await callback.message.edit_text(text, reply_markup=get_schedule_keyboard(is_admin=is_adm), parse_mode="Markdown")
-    await callback.answer()
+    await safe_edit_schedule_message(callback, text, reply_markup=get_schedule_keyboard(is_admin=is_adm), same_message_alert="Расписание на завтра уже открыто 📅")
 
 @router.callback_query(F.data == "sched_bells")
 async def cb_sched_bells(callback: CallbackQuery, db_session: AsyncSession, current_user: Optional[User] = None):
@@ -143,11 +160,9 @@ async def cb_sched_bells(callback: CallbackQuery, db_session: AsyncSession, curr
         await callback.answer("Расписание звонков не заполнено", show_alert=True)
         return
 
-
     text = format_bell_schedule_text(bells)
     is_adm = is_admin_user(current_user, callback.from_user.id) if current_user else False
-    await callback.message.edit_text(text, reply_markup=get_schedule_keyboard(is_admin=is_adm), parse_mode="Markdown")
-    await callback.answer()
+    await safe_edit_schedule_message(callback, text, reply_markup=get_schedule_keyboard(is_admin=is_adm), same_message_alert="Расписание звонков уже открыто 🔔")
 
 
 from backend.bot.keyboards.calendar import get_inline_calendar
@@ -190,12 +205,7 @@ async def cb_cal_act_sched(callback: CallbackQuery, db_session: AsyncSession, cu
 
     text = await format_day_schedule(db_session, target_date)
     is_adm = is_admin_user(current_user, callback.from_user.id) if current_user else False
-    await callback.message.edit_text(
-        text,
-        reply_markup=get_schedule_keyboard(is_admin=is_adm),
-        parse_mode="Markdown"
-    )
-    await callback.answer()
+    await safe_edit_schedule_message(callback, text, reply_markup=get_schedule_keyboard(is_admin=is_adm))
 
 @router.callback_query(F.data == "sched_pick_day")
 async def cb_sched_pick_day(callback: CallbackQuery):
@@ -215,8 +225,7 @@ async def cb_sched_day_selected(callback: CallbackQuery, db_session: AsyncSessio
 
     text = await format_day_schedule(db_session, target_date)
     is_adm = is_admin_user(current_user, callback.from_user.id) if current_user else False
-    await callback.message.edit_text(text, reply_markup=get_schedule_keyboard(is_admin=is_adm), parse_mode="Markdown")
-    await callback.answer()
+    await safe_edit_schedule_message(callback, text, reply_markup=get_schedule_keyboard(is_admin=is_adm))
 
 @router.callback_query(F.data == "sched_week")
 async def cb_sched_week(callback: CallbackQuery, db_session: AsyncSession, current_user: Optional[User] = None):
@@ -239,15 +248,13 @@ async def cb_sched_week(callback: CallbackQuery, db_session: AsyncSession, curre
 
     full_text = "\n".join(text_parts) if len(text_parts) > 1 else "Расписание на неделю пока не заполнено."
     is_adm = is_admin_user(current_user, callback.from_user.id) if current_user else False
-    await callback.message.edit_text(full_text, reply_markup=get_schedule_keyboard(is_admin=is_adm), parse_mode="Markdown")
-    await callback.answer()
+    await safe_edit_schedule_message(callback, full_text, reply_markup=get_schedule_keyboard(is_admin=is_adm), same_message_alert="Расписание на неделю уже открыто 📅")
 
 @router.callback_query(F.data == "sched_menu")
 async def cb_sched_menu(callback: CallbackQuery, db_session: AsyncSession, current_user: Optional[User] = None):
     text = await format_day_schedule(db_session, get_today())
     is_adm = is_admin_user(current_user, callback.from_user.id) if current_user else False
-    await callback.message.edit_text(text, reply_markup=get_schedule_keyboard(is_admin=is_adm), parse_mode="Markdown")
-    await callback.answer()
+    await safe_edit_schedule_message(callback, text, reply_markup=get_schedule_keyboard(is_admin=is_adm))
 
 
 # ==================== SUMMER COUNTDOWN ====================
