@@ -153,7 +153,9 @@ const RUSSIAN_VOWELS = "аеёиоуыэюяАЕЁИОУЫЭЮЯ";
     currentSubject = subjectId;
     if (subjectId === "math") {
       currentTask = 18;
-      math18ShowSolution = false;
+      if (window.EGE_MATH18 && typeof window.EGE_MATH18.resetSolution === "function") {
+        window.EGE_MATH18.resetSolution();
+      }
     } else if (subjectId === "russian") {
       if (currentTask !== 4 && currentTask !== 5) currentTask = 4;
     }

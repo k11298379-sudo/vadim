@@ -1446,11 +1446,14 @@
     }
 
     const rect = canvas.getBoundingClientRect();
-    const dpr = (typeof window !== "undefined" && window.devicePixelRatio && window.devicePixelRatio > 0) ? window.devicePixelRatio : 1;
+    const dpr = Math.min(2, (typeof window !== "undefined" && window.devicePixelRatio && window.devicePixelRatio > 0) ? window.devicePixelRatio : 1);
     const isTopDown = !!(ARENA.topDownMode || ARENA.isRaidBossBattle);
     const clientW = rect.width > 50 ? rect.width : (canvas.clientWidth > 50 ? canvas.clientWidth : 360);
     const clientH = isTopDown ? 520 : (rect.height > 50 ? rect.height : 320);
     // In Top-Down Brawl mode, arena logical space is a spacious 520x720 battlefield!
+    ARENA.cachedClientW = clientW;
+    ARENA.cachedClientH = clientH;
+    ARENA.dpr = dpr;
     ARENA.width = isTopDown ? 520 : clientW;
     ARENA.height = isTopDown ? 720 : clientH;
     canvas.width = Math.round(clientW * dpr);
@@ -2168,38 +2171,39 @@
   function startArenaLoop() {
     stopArenaLoop();
     if (ARENA.startLoopTimeout) {
+      cancelAnimationFrame(ARENA.startLoopTimeout);
       clearTimeout(ARENA.startLoopTimeout);
       ARENA.startLoopTimeout = null;
     }
-    ARENA.startLoopTimeout = setTimeout(() => {
-      // Ensure canvas has real pixel dimensions before starting the loop
-      const canvas = document.getElementById("rpg-action-canvas");
-      if (canvas) {
-        const r = canvas.getBoundingClientRect();
-        const hasSize = (r.width > 50) || (canvas.clientWidth > 50);
-        if (!hasSize) {
-          // Canvas not laid out yet — retry after one more frame
-          ARENA.startLoopTimeout = null;
-          requestAnimationFrame(() => startArenaLoop());
-          return;
-        }
-        if (!ARENA.isRaidBossBattle || !ARENA.bossEntity) {
-          initArenaCanvas();
-        }
+    const canvas = document.getElementById("rpg-action-canvas");
+    if (canvas) {
+      const r = canvas.getBoundingClientRect();
+      const hasSize = (r.width > 50) || (canvas.clientWidth > 50);
+      if (!hasSize) {
+        // Canvas not laid out yet — retry on next frame
+        ARENA.startLoopTimeout = requestAnimationFrame(() => startArenaLoop());
+        return;
       }
-      ARENA.running = true;
-      function loop() {
-        if (!ARENA.running) return;
-        try {
-          updateArena();
-          renderArena();
-        } catch (err) {
-          console.error("Arena animation frame error:", err);
-        }
+      if (!ARENA.isRaidBossBattle || !ARENA.bossEntity) {
+        initArenaCanvas();
+      } else if (!ARENA.ctx || ARENA.canvas !== canvas) {
+        bindArenaCanvas(canvas);
+      }
+    }
+    ARENA.running = true;
+    function loop() {
+      if (!ARENA.running) return;
+      try {
+        updateArena();
+        renderArena();
+      } catch (err) {
+        console.error("Arena animation frame error:", err);
+      }
+      if (ARENA.running) {
         ARENA.animId = requestAnimationFrame(loop);
       }
-      ARENA.animId = requestAnimationFrame(loop);
-    }, 80);
+    }
+    ARENA.animId = requestAnimationFrame(loop);
   }
 
   function stopArenaLoop() {
@@ -2207,6 +2211,11 @@
     if (ARENA.animId) {
       cancelAnimationFrame(ARENA.animId);
       ARENA.animId = null;
+    }
+    if (ARENA.startLoopTimeout) {
+      cancelAnimationFrame(ARENA.startLoopTimeout);
+      clearTimeout(ARENA.startLoopTimeout);
+      ARENA.startLoopTimeout = null;
     }
   }
 
@@ -2309,8 +2318,8 @@
     // TOP-DOWN ARCHERO-STYLE UPDATE LOOP
     // =========================================================================
     if (ARENA.topDownMode || ARENA.isRaidBossBattle) {
-      // 1. Calm, controllable walking speed in 520x720 arena (~70 px/sec)
-      const moveSpeed = 1.15 * (1.0 + Math.min(0.20, (stats.agility || 10) * 0.0015));
+      // 1. Dynamic, responsive walking speed in 520x720 arena (+2.2 units speed boost)
+      const moveSpeed = 3.35 * (1.0 + Math.min(0.25, (stats.agility || 10) * 0.002));
 
       if (ARENA.player.isMoving && (Math.abs(ARENA.joystick.dx) > 0.06 || Math.abs(ARENA.joystick.dy) > 0.06)) {
         p.x += ARENA.joystick.dx * moveSpeed;
@@ -2627,8 +2636,8 @@
       }
     }
 
-    // ===== BOSS ARENA: Player Free Movement =====
-    if (ARENA.bossArenaMode) {
+    // ===== BOSS ARENA: Side-Scroller Movement (Only when NOT in Top-Down mode!) =====
+    if (ARENA.bossArenaMode && !ARENA.topDownMode && !ARENA.isRaidBossBattle) {
       const moveSpeed = 3.2;
       if (ARENA.dodgeActive > 0) {
         // Dodge roll: fast movement + i-frame
@@ -2762,15 +2771,79 @@
       }
     }
 
-    // Special effects animation timers
+    // Special effects animation timers & top-down ability controllers
     for (let i = ARENA.specialEffects.length - 1; i >= 0; i--) {
       const fx = ARENA.specialEffects[i];
       fx.timer--;
+
+      // Invoker Top-Down Chaos Meteor Flight & Impact
+      if (fx.type === "topdown_meteor") {
+        const prog = 1 - (fx.timer / (fx.maxTimer || 50));
+        if (prog < 0.65) {
+          const flightProg = prog / 0.65;
+          fx.x = fx.startX + (fx.targetX - fx.startX) * flightProg;
+          fx.y = fx.startY + (fx.targetY - fx.startY) * flightProg;
+        } else {
+          fx.x = fx.targetX;
+          fx.y = fx.targetY;
+          if (!fx.impactDone) {
+            fx.impactDone = true;
+            ARENA.cameraTrauma = Math.min(1.0, (ARENA.cameraTrauma || 0) + 0.75);
+            triggerHaptic("heavy");
+            if (!ARENA.shockwaves) ARENA.shockwaves = [];
+            ARENA.shockwaves.push({ x: fx.x, y: fx.y, radius: 10, maxRadius: 110, alpha: 1.0, speed: 6, color: "#ea580c" });
+            spawnFloatingText(fx.x, fx.y - 45, "💥 БАБАХ! МЕТЕОР ПРИЗЕМЛИЛСЯ!", "#ea580c");
+            if (ARENA.bossEntity && ARENA.bossEntity.hp > 0) {
+              ARENA.bossEntity.poise = Math.max(0, (ARENA.bossEntity.poise || 300) - 100);
+            }
+          }
+        }
+      }
+
+      // Juggernaut Top-Down Omnislash Slashes
+      if (fx.type === "topdown_omnislash" && fx.timer % 6 === 0 && fx.slashes > 0) {
+        fx.slashes--;
+        const boss = ARENA.bossEntity;
+        if (boss && boss.hp > 0) {
+          const slashDmg = Math.max(10, Math.floor((fx.dmg || 100) / 8));
+          const ang = Math.random() * Math.PI * 2;
+          if (!fx.slashArcs) fx.slashArcs = [];
+          fx.slashArcs.push({ x: boss.x + Math.cos(ang) * 18, y: boss.y + Math.sin(ang) * 18, angle: ang });
+          spawnFloatingText(boss.x + (Math.random() * 32 - 16), boss.y - 25, `⚔️ -${slashDmg}`, "#facc15");
+          triggerHaptic("medium");
+        }
+      }
+
+      // PA Dagger Throw
+      if (fx.type === "dagger_throw") {
+        const dProg = 1 - (fx.timer / (fx.maxTimer || 20));
+        fx.x = fx.fromX + (fx.toX - fx.fromX) * dProg;
+        fx.y = fx.fromY + (fx.toY - fx.fromY) * dProg;
+        if (fx.timer === 1) {
+          ARENA.specialEffects.push({ type: "slash_burst", x: fx.toX, y: fx.toY, timer: 16, maxTimer: 16, color: "#f43f5e" });
+        }
+      }
+
+      // Wraith King Wraithfire Skull
+      if (fx.type === "wraithfire") {
+        const wProg = 1 - (fx.timer / (fx.maxTimer || 26));
+        fx.x = fx.fromX + (fx.toX - fx.fromX) * wProg;
+        fx.y = fx.fromY + (fx.toY - fx.fromY) * wProg;
+      }
+
+      // Pudge Meat Hook
+      if (fx.type === "meat_hook") {
+        const hookProg = Math.sin((1 - (fx.timer / (fx.maxTimer || 24))) * Math.PI);
+        fx.curX = fx.fromX + (fx.toX - fx.fromX) * hookProg;
+        fx.curY = fx.fromY + (fx.toY - fx.fromY) * hookProg;
+      }
+
+      // Legacy Omnislash (Side-Scroller waves)
       if (fx.type === "omnislash" && fx.timer % 7 === 0 && fx.slashes > 0) {
         fx.slashes--;
         if (ARENA.creeps.length > 0) {
           const target = ARENA.creeps[Math.floor(Math.random() * ARENA.creeps.length)];
-          const dmg = Math.floor((stats.max_atk || 30) * 2.2 * (fx.mult || 1.0));
+          let dmg = Math.floor((stats.max_atk || 30) * 2.2 * (fx.mult || 1.0));
           if (target.archetype === "defender") {
             target.shieldBrokenTimer = 240;
             target.state = "stagger";
@@ -2810,8 +2883,8 @@
       if (ARENA.qteTimer <= 0) ARENA.qteActive = false;
     }
 
-    // Auto-attack
-    if (p.autoAttack && p.attackCooldown <= 0) {
+    // Auto-attack (Side-Scroller waves only; Top-Down mode handles 360 targeting independently)
+    if (!ARENA.topDownMode && !ARENA.isRaidBossBattle && p.autoAttack && p.attackCooldown <= 0) {
       let nearest = null;
       let nearestDist = Math.max(320, p.attackRange + 50);
       for (const c of ARENA.creeps) {
@@ -3177,17 +3250,36 @@
     // Allied Minions (Wraith King skeletons)
     for (let i = ARENA.alliedMinions.length - 1; i >= 0; i--) {
       const m = ARENA.alliedMinions[i];
-      m.x += m.speed;
-      // Attack nearest creep
-      for (const c of ARENA.creeps) {
-        if (c.x - m.x < 30 && c.x > m.x) {
-          safeDamageCreep(c, m.atk, false);
-          spawnFloatingText(c.x, c.y - 15, `☠️ -${m.atk}`, "#e2e8f0");
-          m.hp -= c.atk;
-          break;
+      if (ARENA.topDownMode || ARENA.isRaidBossBattle) {
+        const boss = ARENA.bossEntity;
+        if (boss && boss.hp > 0) {
+          const ang = Math.atan2(boss.y - m.y, boss.x - m.x);
+          const dist = Math.hypot(boss.x - m.x, boss.y - m.y);
+          if (dist > boss.radius + m.radius + 6) {
+            m.x += Math.cos(ang) * (m.speed || 2.6);
+            m.y += Math.sin(ang) * (m.speed || 2.6);
+          } else {
+            m.attackCd = (m.attackCd || 0) - 1;
+            if (m.attackCd <= 0) {
+              m.attackCd = 35;
+              const dmg = applyDamageToBoss(boss, m.atk || 25, false);
+              spawnFloatingText(boss.x + (Math.random() * 20 - 10), boss.y - 20, `💀 -${dmg}`, "#10b981");
+            }
+          }
+        }
+      } else {
+        m.x += m.speed;
+        // Attack nearest creep
+        for (const c of ARENA.creeps) {
+          if (c.x - m.x < 30 && c.x > m.x) {
+            safeDamageCreep(c, m.atk, false);
+            spawnFloatingText(c.x, c.y - 15, `☠️ -${m.atk}`, "#e2e8f0");
+            m.hp -= c.atk;
+            break;
+          }
         }
       }
-      if (m.hp <= 0 || m.x > ARENA.width + 30) {
+      if (m.hp <= 0 || m.x > ARENA.width + 50 || m.x < -50 || m.y < -50 || m.y > ARENA.height + 50) {
         ARENA.alliedMinions.splice(i, 1);
       }
     }
@@ -4916,60 +5008,96 @@
           ARENA.cameraTrauma = 0.5;
           return;
         } else if (hClass === "phantom_assassin") {
-          // Stifling Dagger: flies directly at boss with critical tracking!
+          // Stifling Dagger: spinning shadowy dagger flies at boss with neon critical sparks!
           const dmg = Math.floor((stats.max_atk || 30) * 3.4);
-          ARENA.playerProjectiles.push({
-            type: "topdown_shot",
+          ARENA.specialEffects.push({
+            type: "dagger_throw",
+            fromX: p.x,
+            fromY: p.y,
+            toX: boss.x,
+            toY: boss.y,
             x: p.x,
             y: p.y,
-            vx: Math.cos(toBossAngle) * 12,
-            vy: Math.sin(toBossAngle) * 12,
-            speed: 12,
-            target: boss,
-            dmg: dmg,
-            isCrit: true,
-            radius: 8,
-            color: "#f43f5e",
-            distTraveled: 0,
-            maxDist: 750
+            angle: toBossAngle,
+            timer: 20,
+            maxTimer: 20,
+            dmg: dmg
           });
-          spawnFloatingText(p.x, p.y - 25, "🗡️ КИНЖАЛ ТЕНИ!", "#f43f5e");
+          const actualDmg = applyDamageToBoss(boss, dmg, true);
+          spawnFloatingText(boss.x, boss.y - 30, `🗡️ КИНЖАЛ ТЕНИ! -${actualDmg}`, "#f43f5e");
+          ARENA.cameraTrauma = 0.35;
           return;
         } else if (hClass === "shadow_fiend") {
-          // Triple Shadowraze: erupts in line towards boss!
+          // Triple Shadowraze: 3 erupting dark soul pillars erupt along line towards boss!
           const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 2.6));
           for (let r = 1; r <= 3; r++) {
-            const rx = p.x + Math.cos(toBossAngle) * (r * 65);
-            const ry = p.y + Math.sin(toBossAngle) * (r * 65);
-            ARENA.specialEffects.push({ type: "shadowraze", x: rx, y: ry, radius: 50, timer: 28 });
+            const rx = p.x + Math.cos(toBossAngle) * (r * 68);
+            const ry = p.y + Math.sin(toBossAngle) * (r * 68);
+            ARENA.specialEffects.push({ type: "shadowraze", x: rx, y: ry, radius: 46, timer: 32, maxTimer: 32 });
           }
-          spawnFloatingText(boss.x, boss.y - 30, `🌑 КОЙЛ! -${dmg}`, "#c084fc");
+          spawnFloatingText(boss.x, boss.y - 30, `🌑 КОЙЛЫ ТЕМНОТЫ! -${dmg}`, "#c084fc");
+          ARENA.cameraTrauma = 0.45;
           return;
         } else if (hClass === "pudge") {
-          // Flesh Heap: Defense shield + Hook pull damage!
+          // Meat Hook: iron chain with sharp hook shoots directly at boss!
           p.fleshHeapActive = 480;
           const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 2.8));
+          ARENA.specialEffects.push({
+            type: "meat_hook",
+            fromX: p.x,
+            fromY: p.y,
+            toX: boss.x,
+            toY: boss.y,
+            timer: 24,
+            maxTimer: 24,
+            dmg: dmg
+          });
           spawnFloatingText(boss.x, boss.y - 30, `🥩 МЯСНОЙ КРЮК! -${dmg}`, "#ef4444");
+          ARENA.cameraTrauma = 0.5;
           return;
         } else if (hClass === "juggernaut") {
-          // Blade Dance: attack speed + immediate heavy slash
+          // Blade Fury: swirling golden whirlwind vortex around Juggernaut!
           p.bladeDanceActive = 360;
           const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 3.0));
-          spawnFloatingText(boss.x, boss.y - 30, `💨 ТАНЕЦ КЛИНКА! -${dmg}`, "#f59e0b");
+          ARENA.specialEffects.push({
+            type: "blade_fury",
+            x: p.x,
+            y: p.y,
+            radius: 52,
+            timer: 45,
+            maxTimer: 45,
+            dmg: dmg
+          });
+          spawnFloatingText(boss.x, boss.y - 30, `💨 ВИХРЬ КЛИНКОВ! -${dmg}`, "#f59e0b");
+          ARENA.cameraTrauma = 0.4;
           return;
         } else if (hClass === "wraith_king") {
-          // Wraithfire Blast: guided skull stuns boss
+          // Wraithfire Blast: flaming green ghost skull missile screaming at boss!
           const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 2.8));
           boss.poise = Math.max(0, (boss.poise || 400) - 80);
+          ARENA.specialEffects.push({
+            type: "wraithfire",
+            fromX: p.x,
+            fromY: p.y,
+            toX: boss.x,
+            toY: boss.y,
+            timer: 26,
+            maxTimer: 26,
+            dmg: dmg
+          });
           spawnFloatingText(boss.x, boss.y - 30, `💀 ПРИЗРАЧНЫЙ СТАН! -${dmg}`, "#10b981");
+          ARENA.cameraTrauma = 0.45;
           return;
         } else if (hClass === "anti_mage") {
-          // Blink strike behind boss
+          // Blink Strike: poof at origin, instant dash, and dual mana slash behind boss!
+          ARENA.specialEffects.push({ type: "blink_poof", x: p.x, y: p.y, timer: 18, maxTimer: 18 });
           p.x = Math.max(40, Math.min(480, boss.x - Math.cos(toBossAngle) * 50));
           p.y = Math.max(50, Math.min(670, boss.y - Math.sin(toBossAngle) * 50));
           p.counterspellActive = 240;
           const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 3.2));
+          ARENA.specialEffects.push({ type: "mana_slash", x: boss.x, y: boss.y, timer: 24, maxTimer: 24, dmg: dmg });
           spawnFloatingText(boss.x, boss.y - 30, `⚡ ВЫПАД ИЗ ТЕНИ! -${dmg}`, "#38bdf8");
+          ARENA.cameraTrauma = 0.5;
           return;
         }
       }
@@ -5143,16 +5271,37 @@
       const boss = ARENA.bossEntity;
       if (boss && boss.hp > 0) {
         if (hClass === "invoker") {
-          // Chaos Meteor falls from sky directly on boss!
+          // Chaos Meteor (Котлета) falls from sky directly on boss with massive fiery explosion!
           const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 5.5 * ultMultiplier));
-          ARENA.specialEffects.push({ type: "sunstrike", x: boss.x, y: boss.y, radius: 120, timer: 45, maxTimer: 45 });
-          ARENA.cameraTrauma = 0.8;
+          ARENA.specialEffects.push({
+            type: "topdown_meteor",
+            startX: Math.max(30, Math.min(480, boss.x - 90)),
+            startY: -70,
+            targetX: boss.x,
+            targetY: boss.y,
+            x: Math.max(30, Math.min(480, boss.x - 90)),
+            y: -70,
+            radius: 36,
+            timer: 50,
+            maxTimer: 50,
+            dmg: dmg
+          });
+          ARENA.cameraTrauma = 0.85;
           triggerHaptic("heavy");
           spawnFloatingText(boss.x, boss.y - 45, `☄️ ХАОС МЕТЕОР! -${dmg}`, "#ea580c");
           return;
         } else if (hClass === "juggernaut") {
-          // Omnislash: rapid slashes around the boss!
+          // Omnislash: rapid slashing combo around the boss!
           const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 6.0 * ultMultiplier));
+          ARENA.specialEffects.push({
+            type: "topdown_omnislash",
+            x: boss.x,
+            y: boss.y,
+            timer: 52,
+            maxTimer: 52,
+            slashes: 8,
+            dmg: dmg
+          });
           ARENA.cameraTrauma = 0.9;
           triggerHaptic("heavy");
           spawnFloatingText(boss.x, boss.y - 45, `⚔️ ОМНИСЛЕШ ПО БОССУ! -${dmg}`, "#facc15");
@@ -5160,7 +5309,14 @@
         } else if (hClass === "phantom_assassin") {
           // Coup de Grace: blood critical strike!
           const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 6.5 * ultMultiplier));
-          ARENA.specialEffects.push({ type: "blood_flash", timer: 25 });
+          ARENA.specialEffects.push({
+            type: "coup_de_grace",
+            x: boss.x,
+            y: boss.y,
+            timer: 35,
+            maxTimer: 35,
+            dmg: dmg
+          });
           ARENA.cameraTrauma = 1.0;
           triggerHaptic("heavy");
           spawnFloatingText(boss.x, boss.y - 45, `🩸 COUP DE GRACE x6.5! -${dmg}`, "#dc2626");
@@ -5168,25 +5324,74 @@
         } else if (hClass === "shadow_fiend") {
           // Requiem of Souls: blast of souls across the arena!
           const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 5.8 * ultMultiplier));
+          ARENA.specialEffects.push({
+            type: "requiem_of_souls",
+            x: p.x,
+            y: p.y,
+            timer: 45,
+            maxTimer: 45,
+            dmg: dmg
+          });
           ARENA.cameraTrauma = 0.85;
           triggerHaptic("heavy");
           spawnFloatingText(boss.x, boss.y - 45, `🌪️ РЕКВИЕМ ДУШ! -${dmg}`, "#a855f7");
           return;
         } else if (hClass === "wraith_king") {
-          // Skeleton Army: massive critical strike + life steal
+          // Skeleton Army: massive critical strike + summon skeletons
           const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 5.2 * ultMultiplier));
           p.currentHp = Math.min(p.maxHp, p.currentHp + Math.floor(dmg * 0.4));
+          ARENA.specialEffects.push({
+            type: "wk_skeletons",
+            x: p.x,
+            y: p.y,
+            bossX: boss.x,
+            bossY: boss.y,
+            timer: 180,
+            maxTimer: 180
+          });
+          if (!ARENA.alliedMinions) ARENA.alliedMinions = [];
+          for (let s = 0; s < 3; s++) {
+            ARENA.alliedMinions.push({
+              x: p.x + (s - 1) * 28,
+              y: p.y + 20,
+              radius: 12,
+              hp: 150,
+              maxHp: 150,
+              atk: Math.floor((stats.max_atk || 30) * 0.9),
+              speed: 2.8,
+              heroClass: "wraith_king",
+              name: "Скелет"
+            });
+          }
           spawnFloatingText(boss.x, boss.y - 45, `👑 АРМИЯ СКЕЛЕТОВ! -${dmg}`, "#10b981");
           return;
         } else if (hClass === "pudge") {
-          // Rot: Choking Poison AoE on boss
+          // Rot & Dismember: toxic miasma & meat cleaver chops
           const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 4.8 * ultMultiplier));
           p.rotActive = 180;
+          ARENA.specialEffects.push({
+            type: "pudge_dismember",
+            fromX: p.x,
+            fromY: p.y,
+            x: boss.x,
+            y: boss.y,
+            timer: 45,
+            maxTimer: 45,
+            dmg: dmg
+          });
           spawnFloatingText(boss.x, boss.y - 45, `☣️ ЧУМНАЯ ГНИЛЬ! -${dmg}`, "#22c55e");
           return;
         } else if (hClass === "anti_mage") {
           // Mana Void: Arcane implosion on boss!
           const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 5.6 * ultMultiplier));
+          ARENA.specialEffects.push({
+            type: "mana_void",
+            x: boss.x,
+            y: boss.y,
+            timer: 40,
+            maxTimer: 40,
+            dmg: dmg
+          });
           ARENA.cameraTrauma = 0.9;
           spawnFloatingText(boss.x, boss.y - 45, `💥 ВЗРЫВ МАНЫ! -${dmg}`, "#38bdf8");
           return;
@@ -6261,19 +6466,8 @@
       ARENA.player.y = 620;
     }
 
-    // 3. Start loop immediately with zero delay!
-    ARENA.running = true;
-    function loop() {
-      if (!ARENA.running) return;
-      try {
-        updateArena();
-        renderArena();
-      } catch (err) {
-        console.error("Arena animation frame error:", err);
-      }
-      ARENA.animId = requestAnimationFrame(loop);
-    }
-    ARENA.animId = requestAnimationFrame(loop);
+    // 3. Start unified, authoritative arena loop
+    startArenaLoop();
 
     spawnFloatingText(ARENA.width / 2, 75, `👑 БОЙ С БОССОМ: ${b.name}! 👑`, "#ef4444");
     triggerHaptic("heavy");
@@ -8441,8 +8635,8 @@
 
     const ctx = ARENA.ctx;
     if (!ctx) return;
-    const clientW = canvas.clientWidth || (canvas.getBoundingClientRect && canvas.getBoundingClientRect().width) || 360;
-    const clientH = canvas.clientHeight || (canvas.getBoundingClientRect && canvas.getBoundingClientRect().height) || (ARENA.topDownMode || ARENA.isRaidBossBattle ? 520 : 320);
+    const clientW = ARENA.cachedClientW || (canvas.clientWidth > 50 ? canvas.clientWidth : 360);
+    const clientH = ARENA.cachedClientH || (ARENA.topDownMode || ARENA.isRaidBossBattle ? 520 : 320);
     const w = ARENA.width || clientW || 360;
     const h = ARENA.height || clientH || 320;
     const time = ARENA.frameCount || 0;
@@ -8471,16 +8665,17 @@
       ctx.fillStyle = "#09090b";
       ctx.fillRect(-60, -60, 520 + 120, 720 + 120);
 
-      // 2. Tactical Tile Grid (Spacious Arena)
+      // 2. Tactical Tile Grid (Batched single path stroke for 60 FPS performance)
       ctx.strokeStyle = "rgba(71, 85, 105, 0.20)";
       ctx.lineWidth = 1;
-      const tileSize = 44;
-      for (let tx = 0; tx <= 520; tx += tileSize) {
-        ctx.beginPath(); ctx.moveTo(tx, 0); ctx.lineTo(tx, 720); ctx.stroke();
+      ctx.beginPath();
+      for (let tx = 0; tx <= 520; tx += 44) {
+        ctx.moveTo(tx, 0); ctx.lineTo(tx, 720);
       }
-      for (let ty = 0; ty <= 720; ty += tileSize) {
-        ctx.beginPath(); ctx.moveTo(0, ty); ctx.lineTo(520, ty); ctx.stroke();
+      for (let ty = 0; ty <= 720; ty += 44) {
+        ctx.moveTo(0, ty); ctx.lineTo(520, ty);
       }
+      ctx.stroke();
 
       // 3. Glowing Perimeter Hazard Walls
       ctx.strokeStyle = "rgba(234, 179, 8, 0.50)";
@@ -9266,6 +9461,476 @@
         ctx.moveTo(randX - 25, randY - 20);
         ctx.lineTo(randX + 25, randY + 20);
         ctx.stroke();
+      } else if (fx.type === "topdown_meteor") {
+        // --- INVOKER CHAOS METEOR (Падающая огненная "котлета") ---
+        ctx.save();
+        const prog = 1 - (fx.timer / (fx.maxTimer || 50));
+        if (prog < 0.65) {
+          // Flight phase: flaming asteroid hurtles from sky with trailing embers
+          const ang = Math.atan2(fx.targetY - fx.startY, fx.targetX - fx.startX);
+          const cos = Math.cos(ang);
+          const sin = Math.sin(ang);
+
+          // Fiery tail
+          const tailLen = 65;
+          const grad = ctx.createLinearGradient(fx.x - cos * tailLen, fx.y - sin * tailLen, fx.x, fx.y);
+          grad.addColorStop(0, "rgba(234, 88, 12, 0)");
+          grad.addColorStop(0.5, "rgba(249, 115, 22, 0.7)");
+          grad.addColorStop(1, "rgba(254, 240, 138, 0.95)");
+          ctx.strokeStyle = grad;
+          ctx.lineWidth = 20;
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.moveTo(fx.x - cos * tailLen, fx.y - sin * tailLen);
+          ctx.lineTo(fx.x, fx.y);
+          ctx.stroke();
+
+          // Core burning fireball
+          ctx.fillStyle = "#f97316";
+          ctx.beginPath();
+          ctx.arc(fx.x, fx.y, 22, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = "#fef08a";
+          ctx.beginPath();
+          ctx.arc(fx.x, fx.y, 14, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Fiery spark particles flying backwards
+          for (let s = 0; s < 4; s++) {
+            const spDist = 15 + ((fx.timer * 7 + s * 16) % 55);
+            const spX = fx.x - cos * spDist + (Math.sin(s * 2 + fx.timer) * 8);
+            const spY = fx.y - sin * spDist + (Math.cos(s * 2 + fx.timer) * 8);
+            ctx.fillStyle = s % 2 === 0 ? "#ea580c" : "#fef08a";
+            ctx.beginPath();
+            ctx.arc(spX, spY, 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else {
+          // Impact & crater explosion phase
+          const impactProg = (prog - 0.65) / 0.35;
+          const alpha = 1 - impactProg;
+
+          // Scorched crater on the ground
+          ctx.fillStyle = `rgba(12, 10, 9, ${0.75 * alpha})`;
+          ctx.beginPath();
+          ctx.ellipse(fx.targetX, fx.targetY + 8, 48, 22, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Expanding explosion fireball
+          const expR = 24 + impactProg * 65;
+          const expGrad = ctx.createRadialGradient(fx.targetX, fx.targetY, 6, fx.targetX, fx.targetY, expR);
+          expGrad.addColorStop(0, `rgba(254, 240, 138, ${0.9 * alpha})`);
+          expGrad.addColorStop(0.4, `rgba(249, 115, 22, ${0.8 * alpha})`);
+          expGrad.addColorStop(0.8, `rgba(220, 38, 38, ${0.6 * alpha})`);
+          expGrad.addColorStop(1, "rgba(220, 38, 38, 0)");
+          ctx.fillStyle = expGrad;
+          ctx.beginPath();
+          ctx.arc(fx.targetX, fx.targetY, expR, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Expanding shockwave ring
+          ctx.strokeStyle = `rgba(251, 146, 60, ${0.85 * alpha})`;
+          ctx.lineWidth = 3.5;
+          ctx.beginPath();
+          ctx.arc(fx.targetX, fx.targetY, expR * 1.15, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.restore();
+
+      } else if (fx.type === "blade_fury") {
+        // --- JUGGERNAUT BLADE FURY / BLADE DANCE (Золотой вихрь клинков) ---
+        ctx.save();
+        const spinAng = (ARENA.frameCount || 0) * 0.35;
+        const bAlpha = fx.timer < 10 ? fx.timer / 10 : 0.85;
+        ctx.translate(fx.x, fx.y);
+
+        // Golden spinning energy ring
+        ctx.strokeStyle = `rgba(245, 158, 11, ${0.75 * bAlpha})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, fx.radius || 48, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // 4 curved crescent blades swirling
+        for (let b = 0; b < 4; b++) {
+          const ba = spinAng + (b * Math.PI) / 2;
+          ctx.save();
+          ctx.rotate(ba);
+          ctx.strokeStyle = `rgba(254, 240, 138, ${0.95 * bAlpha})`;
+          ctx.lineWidth = 3.5;
+          ctx.beginPath();
+          ctx.arc(0, 0, (fx.radius || 48) - 4, 0, Math.PI * 0.45);
+          ctx.stroke();
+          ctx.restore();
+        }
+        ctx.restore();
+
+      } else if (fx.type === "topdown_omnislash") {
+        // --- JUGGERNAUT OMNISLASH (Молниеносные золотые удары по боссу) ---
+        ctx.save();
+        const boss = ARENA.bossEntity;
+        const cx = boss ? boss.x : fx.x;
+        const cy = boss ? boss.y : fx.y;
+
+        // Render recorded slash trails
+        if (fx.slashArcs) {
+          for (let s = 0; s < fx.slashArcs.length; s++) {
+            const arc = fx.slashArcs[s];
+            const cos = Math.cos(arc.angle);
+            const sin = Math.sin(arc.angle);
+            const len = 42;
+
+            ctx.strokeStyle = "rgba(250, 204, 21, 0.9)";
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(arc.x - cos * len, arc.y - sin * len);
+            ctx.lineTo(arc.x + cos * len, arc.y + sin * len);
+            ctx.stroke();
+
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(arc.x - cos * len, arc.y - sin * len);
+            ctx.lineTo(arc.x + cos * len, arc.y + sin * len);
+            ctx.stroke();
+          }
+        }
+
+        // Central slash impact glow
+        ctx.strokeStyle = "rgba(245, 158, 11, 0.8)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 38, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+
+      } else if (fx.type === "dagger_throw") {
+        // --- PHANTOM ASSASSIN STIFLING DAGGER (Летящий теневой кинжал) ---
+        ctx.save();
+        ctx.translate(fx.x, fx.y);
+        ctx.rotate(fx.angle !== undefined ? fx.angle : 0);
+
+        // Neon cyan/crimson blur trail
+        ctx.strokeStyle = "rgba(244, 63, 94, 0.65)";
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(-22, 0);
+        ctx.lineTo(0, 0);
+        ctx.stroke();
+
+        // Dagger blade
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.moveTo(12, 0);
+        ctx.lineTo(-6, -4);
+        ctx.lineTo(-2, 0);
+        ctx.lineTo(-6, 4);
+        ctx.closePath();
+        ctx.fill();
+
+        // Glowing crimson tip
+        ctx.fillStyle = "#f43f5e";
+        ctx.beginPath();
+        ctx.arc(12, 0, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+      } else if (fx.type === "slash_burst") {
+        // --- PA COUP DE GRACE CRITICAL SPARK BURST ---
+        ctx.save();
+        const prog = 1 - (fx.timer / (fx.maxTimer || 16));
+        const alpha = 1 - prog;
+        const rad = 10 + prog * 28;
+        ctx.strokeStyle = `rgba(244, 63, 94, ${alpha})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(fx.x, fx.y, rad, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.9})`;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(fx.x - rad, fx.y - rad);
+        ctx.lineTo(fx.x + rad, fx.y + rad);
+        ctx.moveTo(fx.x + rad, fx.y - rad);
+        ctx.lineTo(fx.x - rad, fx.y + rad);
+        ctx.stroke();
+        ctx.restore();
+
+      } else if (fx.type === "coup_de_grace") {
+        // --- PHANTOM ASSASSIN COUP DE GRACE (Кровавый разрез босса x6.5) ---
+        ctx.save();
+        const prog = 1 - (fx.timer / (fx.maxTimer || 35));
+        const alpha = 1 - prog;
+
+        // Giant crimson diagonal slash across boss
+        ctx.strokeStyle = `rgba(220, 38, 38, ${0.95 * alpha})`;
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(fx.x - 55, fx.y - 45);
+        ctx.lineTo(fx.x + 55, fx.y + 45);
+        ctx.stroke();
+
+        ctx.strokeStyle = `rgba(254, 202, 202, ${0.9 * alpha})`;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(fx.x - 55, fx.y - 45);
+        ctx.lineTo(fx.x + 55, fx.y + 45);
+        ctx.stroke();
+
+        // Blood droplets spray
+        for (let d = 0; d < 8; d++) {
+          const dropX = fx.x + Math.sin(d * 1.3) * (20 + prog * 45);
+          const dropY = fx.y + Math.cos(d * 1.3) * (15 + prog * 35);
+          ctx.fillStyle = `rgba(185, 28, 28, ${alpha})`;
+          ctx.beginPath();
+          ctx.arc(dropX, dropY, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+
+      } else if (fx.type === "shadowraze") {
+        // --- SHADOW FIEND SHADOWRAZE (Инфернальный темный столб душ) ---
+        ctx.save();
+        const prog = 1 - (fx.timer / (fx.maxTimer || 32));
+        const alpha = fx.timer < 8 ? fx.timer / 8 : (prog < 0.25 ? prog / 0.25 : 1 - (prog - 0.25) / 0.75);
+
+        // Ground dark runic circle
+        ctx.fillStyle = `rgba(88, 28, 135, ${0.4 * alpha})`;
+        ctx.beginPath();
+        ctx.ellipse(fx.x, fx.y + 8, (fx.radius || 46) * prog, ((fx.radius || 46) * 0.45) * prog, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Vertical erupting soul pillar
+        const pillarH = 75 * prog;
+        const grad = ctx.createLinearGradient(fx.x, fx.y + 8, fx.x, fx.y + 8 - pillarH);
+        grad.addColorStop(0, `rgba(168, 85, 247, ${0.85 * alpha})`);
+        grad.addColorStop(0.5, `rgba(107, 33, 168, ${0.75 * alpha})`);
+        grad.addColorStop(1, `rgba(30, 27, 75, ${0.2 * alpha})`);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.ellipse(fx.x, fx.y + 8 - pillarH / 2, 24 * (1 - prog * 0.3), pillarH / 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Soul fire core
+        ctx.strokeStyle = `rgba(233, 213, 255, ${0.9 * alpha})`;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(fx.x, fx.y + 8);
+        ctx.lineTo(fx.x, fx.y + 8 - pillarH);
+        ctx.stroke();
+        ctx.restore();
+
+      } else if (fx.type === "requiem_of_souls") {
+        // --- SHADOW FIEND REQUIEM OF SOULS (Расширяющееся кольцо из 12 духов) ---
+        ctx.save();
+        const prog = 1 - (fx.timer / (fx.maxTimer || 45));
+        const alpha = 1 - prog;
+        const ringRadius = 25 + prog * 180;
+
+        // Expanding dark mist ring
+        ctx.strokeStyle = `rgba(168, 85, 247, ${0.65 * alpha})`;
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        ctx.arc(fx.x, fx.y, ringRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // 12 flying dark souls in 360 degrees
+        for (let s = 0; s < 12; s++) {
+          const sa = (s * Math.PI * 2) / 12 + (prog * 0.5);
+          const sx = fx.x + Math.cos(sa) * ringRadius;
+          const sy = fx.y + Math.sin(sa) * ringRadius;
+
+          // Soul head
+          ctx.fillStyle = `rgba(192, 132, 252, ${0.95 * alpha})`;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 5, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Soul tail directed towards center
+          ctx.strokeStyle = `rgba(126, 34, 206, ${0.7 * alpha})`;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(sx - Math.cos(sa) * 16, sy - Math.sin(sa) * 16);
+          ctx.stroke();
+        }
+        ctx.restore();
+
+      } else if (fx.type === "meat_hook") {
+        // --- PUDGE MEAT HOOK (Железная цепь с зазубренным крюком к боссу) ---
+        ctx.save();
+        const hx = fx.curX !== undefined ? fx.curX : fx.toX;
+        const hy = fx.curY !== undefined ? fx.curY : fx.toY;
+        const ang = Math.atan2(hy - fx.fromY, hx - fx.fromX);
+        const dist = Math.hypot(hx - fx.fromX, hy - fx.fromY);
+        const linkCount = Math.max(3, Math.floor(dist / 14));
+
+        // Chain links
+        ctx.strokeStyle = "#94a3b8";
+        ctx.lineWidth = 3.5;
+        for (let l = 0; l <= linkCount; l++) {
+          const lx = fx.fromX + Math.cos(ang) * (l * 14);
+          const ly = fx.fromY + Math.sin(ang) * (l * 14);
+          ctx.beginPath();
+          ctx.ellipse(lx, ly, 6, 3, ang, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        // Curved Meat Hook Head
+        ctx.translate(hx, hy);
+        ctx.rotate(ang);
+        ctx.fillStyle = "#cbd5e1";
+        ctx.beginPath();
+        ctx.moveTo(0, -6);
+        ctx.lineTo(16, 0);
+        ctx.lineTo(8, 12);
+        ctx.lineTo(4, 8);
+        ctx.lineTo(8, 0);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = "#ef4444";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+
+      } else if (fx.type === "pudge_dismember") {
+        // --- PUDGE DISMEMBER & ROT (Ядовитое облако и удары тесаком) ---
+        ctx.save();
+        const prog = 1 - (fx.timer / (fx.maxTimer || 45));
+        const alpha = 1 - prog;
+
+        // Toxic Green Poison Miasma
+        ctx.fillStyle = `rgba(34, 197, 94, ${0.32 * alpha})`;
+        ctx.beginPath();
+        ctx.arc(fx.x, fx.y, 55, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Poison bubbling particles
+        for (let b = 0; b < 6; b++) {
+          const bx = fx.x + Math.sin(b * 1.5 + fx.timer * 0.4) * 35;
+          const by = fx.y + Math.cos(b * 1.5 + fx.timer * 0.4) * 35;
+          ctx.fillStyle = `rgba(134, 239, 172, ${0.85 * alpha})`;
+          ctx.beginPath();
+          ctx.arc(bx, by, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Red butcher cleaver slashes on boss
+        ctx.strokeStyle = `rgba(239, 68, 68, ${0.9 * alpha})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(fx.x - 25, fx.y - 20);
+        ctx.lineTo(fx.x + 25, fx.y + 20);
+        ctx.stroke();
+        ctx.restore();
+
+      } else if (fx.type === "wraithfire") {
+        // --- WRAITH KING WRAITHFIRE BLAST (Призрачный пылающий череп) ---
+        ctx.save();
+        ctx.translate(fx.x, fx.y);
+
+        // Spectral green flame trail
+        ctx.strokeStyle = "rgba(16, 185, 129, 0.75)";
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.arc(0, 0, 14, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Glowing green skull orb
+        ctx.fillStyle = "#10b981";
+        ctx.beginPath();
+        ctx.arc(0, 0, 10, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#a7f3d0";
+        ctx.beginPath();
+        ctx.arc(0, 0, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Eye sockets
+        ctx.fillStyle = "#064e3b";
+        ctx.beginPath();
+        ctx.arc(-3, -2, 1.8, 0, Math.PI * 2);
+        ctx.arc(3, -2, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+      } else if (fx.type === "wk_skeletons") {
+        // --- WRAITH KING SKELETON SUMMON AURA ---
+        ctx.save();
+        const alpha = Math.min(1.0, fx.timer / 30);
+        ctx.strokeStyle = `rgba(16, 185, 129, ${0.65 * alpha})`;
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([8, 4]);
+        ctx.beginPath();
+        ctx.arc(fx.x, fx.y, 42, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+
+      } else if (fx.type === "mana_slash") {
+        // --- ANTI-MAGE DUAL MANA BLADE STRIKE ---
+        ctx.save();
+        const prog = 1 - (fx.timer / (fx.maxTimer || 24));
+        const alpha = 1 - prog;
+
+        ctx.strokeStyle = `rgba(56, 189, 248, ${0.95 * alpha})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(fx.x - 30, fx.y - 25);
+        ctx.lineTo(fx.x + 30, fx.y + 25);
+        ctx.moveTo(fx.x + 30, fx.y - 25);
+        ctx.lineTo(fx.x - 30, fx.y + 25);
+        ctx.stroke();
+
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.9 * alpha})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(fx.x - 30, fx.y - 25);
+        ctx.lineTo(fx.x + 30, fx.y + 25);
+        ctx.moveTo(fx.x + 30, fx.y - 25);
+        ctx.lineTo(fx.x - 30, fx.y + 25);
+        ctx.stroke();
+        ctx.restore();
+
+      } else if (fx.type === "mana_void") {
+        // --- ANTI-MAGE MANA VOID (Коллапсирующая сфера маны и взрыв) ---
+        ctx.save();
+        const prog = 1 - (fx.timer / (fx.maxTimer || 40));
+
+        if (prog < 0.5) {
+          // Implosion phase: void sphere condenses inward
+          const imploseR = 60 * (1 - prog * 1.5);
+          ctx.fillStyle = `rgba(147, 51, 234, ${0.5 + prog})`;
+          ctx.beginPath();
+          ctx.arc(fx.x, fx.y, Math.max(6, imploseR), 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = "#38bdf8";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(fx.x, fx.y, Math.max(10, imploseR + 10), 0, Math.PI * 2);
+          ctx.stroke();
+        } else {
+          // Detonation phase: massive electric shockwave explosion
+          const expProg = (prog - 0.5) / 0.5;
+          const expRad = 15 + expProg * 90;
+          ctx.strokeStyle = `rgba(56, 189, 248, ${0.9 * (1 - expProg)})`;
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.arc(fx.x, fx.y, expRad, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.strokeStyle = `rgba(168, 85, 247, ${0.8 * (1 - expProg)})`;
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(fx.x, fx.y, expRad * 0.75, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.restore();
       }
     }
 
@@ -10628,31 +11293,12 @@
               <span>${ARENA.topDownMode || ARENA.isRaidBossBattle ? "🕹️ Top-Down" : "🛣️ Сайд-вид"}</span>
             </button>
 
-            ${!ARENA.isRaidBossBattle ? `
-            <button onclick="window.RPG.startRaidBossActionBattle('roshan')"
-              title="Мгновенно начать 2D Бой с Боссом (Brawl 2D)!"
-              class="h-7 px-2.5 rounded-full bg-gradient-to-r from-red-600 to-amber-600 border border-amber-400 text-white font-black text-[10px] flex items-center gap-1.5 shadow-lg active:scale-95 transition-all animate-pulse">
-              <span>👑 В БОЙ С БОССОМ!</span>
-            </button>
-            ` : `
+            ${ARENA.isRaidBossBattle ? `
             <button onclick="window.RPG.exitRaidBossBattle()"
               class="h-7 px-2.5 rounded-full bg-slate-900/90 border border-slate-700 text-slate-300 font-bold text-[10px] flex items-center gap-1.5 shadow-lg active:scale-95 transition-all">
               <span>✕ В лобби боссов</span>
             </button>
-            `}
-          </div>
-
-          <!-- Squad Mode / Solo Duel Toggle Badge -->
-          <div class="absolute top-3 right-3 z-20">
-            <button id="rpg-btn-party-toggle"
-              onclick="window.RPG.toggleBossPartyMode()"
-              title="Переключить режим битвы с боссом: 3 Героя (Отряд) или 1v1 (Соло)"
-              class="h-7 px-2.5 rounded-full bg-slate-900/85 border border-slate-700/80 hover:border-amber-400/60 text-white font-extrabold text-[10px] flex items-center gap-1.5 shadow-lg backdrop-blur-md active:scale-95 transition-all">
-              <span class="text-xs">${(ARENA.bossPartyMode || "trio") === "trio" ? "👥" : "👤"}</span>
-              <span class="${(ARENA.bossPartyMode || "trio") === "trio" ? "text-emerald-400" : "text-purple-400"}">
-                ${(ARENA.bossPartyMode || "trio") === "trio" ? "Отряд: 3" : "Соло: 1"}
-              </span>
-            </button>
+            ` : ""}
           </div>
 
           <!-- Virtual Touch Joystick (Bottom Left, clear of action buttons) -->

@@ -32,3 +32,5 @@ logs/
 Thumbs.db
 scratch/
 *.exe
+*.zip
+*.patch

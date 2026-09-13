@@ -323,6 +323,7 @@
     prevMath18Task: prevMath18Task,
     randomMath18Task: randomMath18Task,
     toggleMath18Solution: toggleMath18Solution,
+    resetSolution: function() { math18ShowSolution = false; },
     viewPhoto: viewPhoto
   };
 })();

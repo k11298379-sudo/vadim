@@ -188,8 +188,8 @@ async def get_upcoming_or_fallback_dates(
 
     cur = from_date
     while len(dates) < limit:
-        # Пропускаем выходные (субботу 6 и воскресенье 7) — для ДЗ пятидневка
-        if cur.isoweekday() not in (6, 7) and cur not in dates:
+        # Пропускаем воскресенье (7), субботу для физики и уже имеющиеся даты
+        if cur.isoweekday() != 7 and not (is_physics and cur.isoweekday() == 6) and cur not in dates:
             dates.append(cur)
         cur += timedelta(days=1)
 
