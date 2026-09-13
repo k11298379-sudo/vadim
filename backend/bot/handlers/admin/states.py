@@ -78,6 +78,8 @@ class BellWizardStates(StatesGroup):
     choosing_duration = State()
     choosing_break = State()
     choosing_lunch = State()
+    configuring_breaks = State()
+    editing_single_break = State()
     confirm_save = State()
 
 
