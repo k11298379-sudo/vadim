@@ -19,6 +19,7 @@ async def setup_bot_commands(bot: Bot):
     try:
         commands = [
             BotCommand(command="start", description="Запустить бота"),
+            BotCommand(command="now", description="⏳ Какой сейчас урок?"),
             BotCommand(command="fact", description="💡 Интересный факт")
         ]
         await bot.set_my_commands(commands=commands, scope=BotCommandScopeAllPrivateChats())
