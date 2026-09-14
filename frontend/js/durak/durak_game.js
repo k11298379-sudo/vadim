@@ -186,7 +186,21 @@
     if (btnNew) btnNew.addEventListener('click', () => ctx.exitToMenu());
 
     const btnExit = container.querySelector('#dk-btn-exit');
-    if (btnExit) btnExit.addEventListener('click', () => ctx.exitToMenu());
+    if (btnExit) {
+      btnExit.addEventListener('click', async () => {
+        const s = ctx.getState();
+        if (!isGameOver(s) && s && s.stake > 0) {
+          const isOnline = s.player_ids && (!s.bot_indices || !s.bot_indices.includes(-1)) && s.player_ids.length > 1;
+          const msg = isOnline
+            ? 'Вы уверены, что хотите выйти? Вам будет засчитано поражение, а ставка перейдет сопернику.'
+            : 'Вы уверены, что хотите выйти? Ваша ставка будет возвращена.';
+          if (typeof confirm !== 'undefined' && !confirm(msg)) {
+            return;
+          }
+        }
+        await ctx.exitToMenu();
+      });
+    }
   }
 
   async function doAttack(ctx, container) {
@@ -237,7 +251,7 @@
   }
 
   // ── WebSocket
-  function connectWS(roomId, uid, onStateUpdate, onWaitingUpdate) {
+  function connectWS(roomId, uid, onStateUpdate, onWaitingUpdate, onCanceled, onOpponentLeft) {
     disconnectWS();
     const protocol = (typeof window !== "undefined" && window.location && window.location.protocol === 'https:') ? 'wss:' : 'ws:';
     const host = (typeof window !== "undefined" && window.location && window.location.host) ? window.location.host : 'localhost';
@@ -257,6 +271,13 @@
           onStateUpdate(data.state);
         } else if (data.type === 'waiting' && onWaitingUpdate) {
           onWaitingUpdate(data.players, data.stake);
+        } else if (data.type === 'canceled') {
+          if (typeof alert !== 'undefined' && data.message) alert(data.message);
+          if (onCanceled) onCanceled();
+        } else if (data.type === 'opponent_left') {
+          if (typeof alert !== 'undefined') alert('Соперник покинул игру. Победа присуждена вам!');
+          if (onOpponentLeft) onOpponentLeft(data);
+          else if (onStateUpdate && data.state) onStateUpdate(data.state);
         }
       } catch (e) {}
     };

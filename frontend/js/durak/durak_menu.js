@@ -223,10 +223,11 @@
     });
   }
 
-  function renderWaiting(container, roomId, players, stake, onCancel) {
+  function renderWaiting(container, roomId, players, stake, onCancel, isCreator = true) {
     if (!container) return;
     const stakeText = stake > 0 ? `<div class="dk-waiting__stake">💰 Ставка: <b>${stake} 🪙</b></div>` : '';
     const shareUrl = `${window.location.origin}/app?room=${roomId}&game=durak`;
+    const exitBtnText = isCreator ? '✕ Отменить комнату' : '✕ Выйти из комнаты';
     container.innerHTML = `
       <div class="dk-waiting">
         <div class="dk-waiting__title">⏳ Ожидание игроков…</div>
@@ -239,7 +240,7 @@
           <button type="button" class="dk-btn" id="dk-share-tg" style="background:#0284c7; color:#fff; font-weight:700; padding:10px; border-radius:12px;">✈️ Поделиться в Telegram</button>
         </div>
 
-        <button class="dk-btn dk-btn--exit" id="dk-cancel-room">✕ Отменить комнату</button>
+        <button class="dk-btn dk-btn--exit" id="dk-cancel-room">${exitBtnText}</button>
       </div>`;
 
     const copyBtn = container.querySelector('#dk-copy-link');

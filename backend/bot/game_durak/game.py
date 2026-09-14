@@ -1,70 +1,11 @@
 """
-Игра «Дурак» — pure-Python логика.
-Не зависит от Telegram/FastAPI — можно тестировать отдельно.
-
-Правила: стандартный «Подкидной Дурак».
-- Колода 36 карт (6..Туз), козырь — масть нижней карты.
-- Ход: атакующий бросает карту, защищающийся отбивает или берёт.
-- Победитель тот, кто первым избавился от карт.
-- Проигравший («дурак») — последний с картами.
+Игровая логика «Дурака» (партии, ходы, правила).
 """
 import random
 import uuid
 from typing import Optional
 
-SUITS = ["♠", "♥", "♦", "♣"]
-RANKS = ["6", "7", "8", "9", "10", "J", "Q", "K", "A"]
-RANK_ORDER = {r: i for i, r in enumerate(RANKS)}
-
-
-class Card:
-    __slots__ = ("suit", "rank")
-
-    def __init__(self, suit: str, rank: str):
-        self.suit = suit
-        self.rank = rank
-
-    def beats(self, other: "Card", trump: str) -> bool:
-        """Может ли эта карта побить other?"""
-        if self.suit == other.suit:
-            return RANK_ORDER[self.rank] > RANK_ORDER[other.rank]
-        if self.suit == trump and other.suit != trump:
-            return True
-        return False
-
-    def to_dict(self) -> dict:
-        return {"suit": self.suit, "rank": self.rank}
-
-    @staticmethod
-    def from_dict(d: dict) -> "Card":
-        return Card(d["suit"], d["rank"])
-
-    def __repr__(self) -> str:
-        return f"{self.rank}{self.suit}"
-
-    def __eq__(self, other) -> bool:
-        return isinstance(other, Card) and self.suit == other.suit and self.rank == other.rank
-
-    def __hash__(self):
-        return hash((self.suit, self.rank))
-
-
-class Deck:
-    def __init__(self):
-        self._cards = [Card(s, r) for s in SUITS for r in RANKS]
-        random.shuffle(self._cards)
-
-    def deal(self, count: int) -> list[Card]:
-        taken = self._cards[:count]
-        self._cards = self._cards[count:]
-        return taken
-
-    def __len__(self) -> int:
-        return len(self._cards)
-
-    @property
-    def trump_card(self) -> Optional[Card]:
-        return self._cards[-1] if self._cards else None
+from .cards import Card, Deck, SUITS, RANKS, RANK_ORDER
 
 
 class DurakGame:
@@ -109,6 +50,7 @@ class DurakGame:
         self.winner: Optional[int] = None  # None пока игра идёт
         self.loser: Optional[int] = None
         self.beaten: list[dict] = []  # сыгранные карты (отбой)
+        self.finished_order: list[int] = []  # порядок выхода игроков (без карт при пустой колоде)
 
     # ------------------------------------------------------------------
     # Вспомогательные
@@ -136,7 +78,7 @@ class DurakGame:
                 return nxt
         return self.player_ids[(self.player_ids.index(pid) + 1) % len(self.player_ids)]
 
-    def _refill_hands(self):
+    def _refill_hands(self) -> None:
         """Дотянуть карты до 6 после каждого хода (сначала атакующий)."""
         order = [self.current_attacker] + [
             p for p in self.player_ids if p != self.current_attacker and p != self.current_defender
@@ -146,16 +88,28 @@ class DurakGame:
             while self.deck and len(self.hands[pid]) < 6:
                 self.hands[pid].append(self.deck.pop(0))
 
+    def _update_finished_players(self) -> None:
+        """Зафиксировать порядок выхода игроков из игры (когда колода пуста)."""
+        if self.deck:
+            return
+        for pid in self.player_ids:
+            if not self.hands[pid] and pid not in self.finished_order:
+                self.finished_order.append(pid)
+
     def _check_game_over(self) -> bool:
         """Проверить, закончилась ли игра."""
         if self.deck:
             return False
+        self._update_finished_players()
         players_with_cards = [p for p in self.player_ids if self.hands[p]]
         if len(players_with_cards) <= 1:
             if len(players_with_cards) == 1:
                 self.loser = players_with_cards[0]
-            winners = [p for p in self.player_ids if not self.hands[p]]
-            self.winner = winners[0] if winners else None
+                self.winner = self.finished_order[0] if self.finished_order else None
+            else:
+                # Все сбросили карты одновременно -> ничья
+                self.loser = None
+                self.winner = None
             self.phase = "done"
             return True
         return False
@@ -227,7 +181,10 @@ class DurakGame:
         # Если все карты на столе отбиты → атакующий может подкинуть или завершить ход
         all_closed = all(s["defend"] is not None for s in self.table)
         if all_closed:
-            self.phase = "attack"  # атакующий может подкинуть или передать ход
+            # Если колода пуста и у атакующего не осталось карт — авто-отбой
+            if not self.deck and not self.hands[self.current_attacker]:
+                return self.pass_attack(self.current_attacker)
+            self.phase = "attack"
         return {"ok": True}
 
     def take(self, defender_id: int) -> dict:
@@ -250,7 +207,8 @@ class DurakGame:
         self.current_attacker = new_attacker
 
         self._refill_hands()
-        self._check_game_over()
+        if self._check_game_over():
+            return {"ok": True}
         self.phase = "attack"
         return {"ok": True}
 
@@ -277,7 +235,8 @@ class DurakGame:
         self.current_attacker = new_attacker
 
         self._refill_hands()
-        self._check_game_over()
+        if self._check_game_over():
+            return {"ok": True}
         self.phase = "attack"
         return {"ok": True}
 
@@ -288,18 +247,15 @@ class DurakGame:
     def bot_move(self) -> Optional[dict]:
         """
         Выполнить ход за бота. Возвращает описание действия или None.
-        Эвристика:
-        - Атака: бросить наименьшую некозырную карту (или наименьшую козырную).
-        - Защита: отбить наименьшей подходящей картой (предпочтительно некозырной).
-        - Взять: если нечем отбить.
         """
+        if self.phase == "done":
+            return None
+
         if self.phase == "attack" and self.current_attacker in self.bot_indices:
             hand = self.hands[self.current_attacker]
             if not hand:
                 return self.pass_attack(self.current_attacker)
 
-            # Найти карту для атаки
-            # Если стол пуст — любая наименьшая; иначе — только подходящего ранга
             if self.table:
                 ranks_on_table = set()
                 for slot in self.table:
@@ -313,7 +269,6 @@ class DurakGame:
             if not candidates:
                 return self.pass_attack(self.current_attacker)
 
-            # Предпочитаем некозырные наименьшие
             non_trump = [c for c in candidates if c["suit"] != self.trump_suit]
             choice = min(non_trump or candidates, key=lambda c: RANK_ORDER[c["rank"]])
             result = self.attack(self.current_attacker, choice)
@@ -321,7 +276,6 @@ class DurakGame:
 
         elif self.phase == "defend" and self.current_defender in self.bot_indices:
             hand = self.hands[self.current_defender]
-            # Найти первый незакрытый слот
             open_slots = [s for s in self.table if s["defend"] is None]
             if not open_slots:
                 return self.pass_attack(self.current_attacker)
@@ -329,7 +283,6 @@ class DurakGame:
             slot = open_slots[0]
             atk_card = Card.from_dict(slot["attack"])
 
-            # Найти наименьшую подходящую карту
             best_def = None
             best_def_dict = None
             for cd in hand:
@@ -339,7 +292,6 @@ class DurakGame:
                         best_def = c
                         best_def_dict = cd
                     else:
-                        # Предпочитаем некозырную; среди равных — наименьшую
                         if best_def.suit == self.trump_suit and c.suit != self.trump_suit:
                             best_def = c
                             best_def_dict = cd
@@ -370,7 +322,7 @@ class DurakGame:
             if for_player_id is None or pid == for_player_id or pid in self.bot_indices:
                 hands_view[str(pid)] = self.hands[pid]
             else:
-                hands_view[str(pid)] = len(self.hands[pid])  # type: ignore  # только количество
+                hands_view[str(pid)] = len(self.hands[pid])  # type: ignore
 
         return {
             "game_id": self.game_id,
@@ -388,4 +340,5 @@ class DurakGame:
             "total_pot": self.total_pot,
             "player_ids": self.player_ids,
             "bot_indices": list(self.bot_indices),
+            "finished_order": list(self.finished_order),
         }

@@ -1,36 +1,33 @@
+"""
+FastAPI роутер игры «Дурак» (эндпоинты и вебсокеты).
+"""
 import asyncio
-import logging
+import json
+import uuid as _uuid
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException, Request, Body, WebSocket, WebSocketDisconnect
-import uuid as _uuid
 
 from backend.db.models import User
 from backend.db.session import async_session_factory
-from backend.db.crud.users import (
-    add_user_coins, get_currency_leaderboard, get_user_by_tg_id
-)
+from backend.db.crud.users import add_user_coins, get_currency_leaderboard, get_user_by_tg_id
 from backend.api.auth import get_optional_webapp_user, extract_viewer_tg_id as _extract_viewer_tg_id
 from backend.bot.game_durak import DurakGame
 
-logger = logging.getLogger(__name__)
+from .state import (
+    _durak_rooms,
+    _get_or_404,
+    _durak_bot_auto_move,
+    _durak_check_settlement,
+    _durak_broadcast,
+    _durak_leave_room,
+)
 
 router = APIRouter(tags=["durak"])
-
-# Storage for Durak games (in-memory)
-# key: room_id, value: {"game": DurakGame|None, "mode": "bot"|"online", "players": [...], "stake": int, "settled": bool, "connections": {}}
-_durak_rooms: dict = {}
-
-
-def _get_or_404(room_id: str) -> dict:
-    room = _durak_rooms.get(room_id)
-    if not room:
-        raise HTTPException(status_code=404, detail="Комната не найдена")
-    return room
 
 
 @router.get("/durak/leaderboard")
 async def durak_leaderboard():
-    """Returns top students by coins balance among those with currency ecosystem enabled."""
+    """Возвращает топ студентов по монетам среди включивших игровую экосистему."""
     async with async_session_factory() as session:
         leaders = await get_currency_leaderboard(session, limit=20)
     return {"leaderboard": leaders}
@@ -43,7 +40,7 @@ async def durak_new(
     user: Optional[User] = Depends(get_optional_webapp_user)
 ):
     """
-    Create a new Durak game.
+    Создание новой игры или комнаты «Дурак».
     mode: "bot" | "online"
     players_count: 2..6
     stake: int >= 0 (ставка на монеты)
@@ -59,7 +56,7 @@ async def durak_new(
 
     stake = max(0, int(payload.get("stake", 0)))
 
-    # If stake > 0, check balance and deduct stake
+    # Проверка баланса и списание ставки
     if stake > 0:
         async with async_session_factory() as session:
             db_user = await get_user_by_tg_id(session, viewer_id)
@@ -69,7 +66,6 @@ async def durak_new(
                 raise HTTPException(status_code=400, detail="Включите игровую экосистему в настройках бота для игры со ставками")
             if (db_user.coins or 0) < stake:
                 raise HTTPException(status_code=400, detail=f"Недостаточно монет. Ваш баланс: {db_user.coins or 0} 🪙")
-            # Deduct stake
             await add_user_coins(session, viewer_id, -stake)
 
     room_id = str(_uuid.uuid4())[:8]
@@ -86,7 +82,6 @@ async def durak_new(
             "connections": {},
         }
         _durak_bot_auto_move(room_id)
-        # Check if bot move finished the game immediately (rare)
         await _durak_check_settlement(room_id)
         return {"room_id": room_id, "state": game.to_state(for_player_id=viewer_id)}
     else:
@@ -108,7 +103,7 @@ async def durak_join(
     payload: Dict[str, Any] = Body(default={}),
     user: Optional[User] = Depends(get_optional_webapp_user)
 ):
-    """Join an online Durak room."""
+    """Присоединение к онлайн-комнате."""
     viewer_id = _extract_viewer_tg_id(user, request, payload=payload) or 0
     room_id = payload.get("room_id", "")
     room = _get_or_404(room_id)
@@ -143,34 +138,23 @@ async def durak_join(
         asyncio.create_task(_durak_broadcast(room_id))
         return {"room_id": room_id, "status": "started", "state": game.to_state(for_player_id=viewer_id)}
 
+    asyncio.create_task(_durak_broadcast(room_id))
     return {"room_id": room_id, "status": "waiting", "players": room["players"], "stake": stake}
 
 
+@router.post("/durak/leave")
 @router.post("/durak/cancel")
-async def durak_cancel(
+async def durak_leave_endpoint(
     request: Request,
     payload: Dict[str, Any] = Body(default={}),
     user: Optional[User] = Depends(get_optional_webapp_user)
 ):
-    """Cancel waiting online room and refund stakes to all waiting players."""
+    """Выход из комнаты или отмена ожидания с возвратом ставки."""
     viewer_id = _extract_viewer_tg_id(user, request, payload=payload) or 0
     room_id = payload.get("room_id", "")
-    room = _get_or_404(room_id)
-
-    if room.get("game") is not None:
-        raise HTTPException(status_code=400, detail="Нельзя отменить уже начавшуюся игру")
-    if room["players"] and viewer_id != room["players"][0]:
-        raise HTTPException(status_code=403, detail="Только создатель комнаты может её отменить")
-
-    stake = room.get("stake", 0)
-    if stake > 0:
-        async with async_session_factory() as session:
-            for pid in room["players"]:
-                if pid > 0:
-                    await add_user_coins(session, pid, stake)
-
-    _durak_rooms.pop(room_id, None)
-    return {"status": "canceled"}
+    if not room_id:
+        return {"ok": True, "status": "left"}
+    return await _durak_leave_room(room_id, viewer_id)
 
 
 @router.get("/durak/state/{room_id}")
@@ -179,11 +163,11 @@ async def durak_state(
     request: Request,
     user: Optional[User] = Depends(get_optional_webapp_user)
 ):
-    """Get current Durak game state."""
+    """Получение текущего состояния игры."""
     room = _get_or_404(room_id)
     viewer_id = _extract_viewer_tg_id(user, request) or 0
 
-    if not room["game"]:
+    if not room.get("game"):
         return {"room_id": room_id, "status": "waiting", "players": room["players"], "stake": room.get("stake", 0)}
 
     return {
@@ -199,7 +183,7 @@ async def durak_move(
     payload: Dict[str, Any] = Body(default={}),
     user: Optional[User] = Depends(get_optional_webapp_user)
 ):
-    """Make a move in Durak. action: attack|defend|take|pass"""
+    """Совершить ход в Дураке: action = attack|defend|take|pass"""
     viewer_id = _extract_viewer_tg_id(user, request, payload=payload) or 0
     room_id = payload.get("room_id", "")
     room = _get_or_404(room_id)
@@ -235,7 +219,7 @@ async def durak_move(
     if room["mode"] == "bot":
         _durak_bot_auto_move(room_id)
 
-    # Check if game reached "done" and settle pot
+    # Проверка завершения партии и выплата банка
     await _durak_check_settlement(room_id)
 
     asyncio.create_task(_durak_broadcast(room_id))
@@ -243,85 +227,9 @@ async def durak_move(
     return {"ok": True, "state": game.to_state(for_player_id=viewer_id)}
 
 
-def _durak_bot_auto_move(room_id: str) -> None:
-    """Execute bot moves until it is the player's turn."""
-    room = _durak_rooms.get(room_id)
-    if not room or not room.get("game"):
-        return
-    game = room["game"]
-    for _ in range(20):
-        if game.phase == "done":
-            break
-        if (game.phase == "attack" and game.current_attacker in game.bot_indices) or \
-           (game.phase == "defend" and game.current_defender in game.bot_indices):
-            mv = game.bot_move()
-            if mv is None:
-                break
-        else:
-            break
-
-
-async def _durak_check_settlement(room_id: str) -> None:
-    """Settle bets and award total pot to the winner upon game finish."""
-    room = _durak_rooms.get(room_id)
-    if not room or not room.get("game"):
-        return
-    game: DurakGame = room["game"]
-    if game.phase != "done" or room.get("settled"):
-        return
-
-    room["settled"] = True
-    stake = room.get("stake", 0)
-    if stake <= 0:
-        return
-
-    mode = room.get("mode", "bot")
-    async with async_session_factory() as session:
-        if game.winner:
-            if mode == "bot":
-                # If human won against bot: receives double stake (their stake + bot's stake)
-                if game.winner > 0:
-                    await add_user_coins(session, game.winner, stake * 2)
-                    logger.info(f"Durak bot game settled: user {game.winner} won {stake * 2} coins!")
-                else:
-                    logger.info(f"Durak bot game settled: bot won, user lost {stake} coins.")
-            else:
-                # Online multiplayer: winner gets the whole pot (stake * num_players)
-                total_pot = stake * len(room["players"])
-                if game.winner > 0:
-                    await add_user_coins(session, game.winner, total_pot)
-                    logger.info(f"Durak online room {room_id} settled: winner {game.winner} received {total_pot} coins!")
-        else:
-            # Draw / no winner: refund stakes to all human players
-            for pid in room["players"]:
-                if pid > 0:
-                    await add_user_coins(session, pid, stake)
-            logger.info(f"Durak room {room_id} ended in draw: refunded {stake} coins to players.")
-
-
-async def _durak_broadcast(room_id: str) -> None:
-    """Send updated state to all connected WebSocket clients."""
-    import json
-    room = _durak_rooms.get(room_id)
-    if not room or not room.get("game"):
-        return
-    game = room["game"]
-    connections = room.get("connections", {})
-    dead = []
-    for pid, ws in connections.items():
-        try:
-            state = game.to_state(for_player_id=pid)
-            await ws.send_text(json.dumps({"type": "state", "state": state}))
-        except Exception:
-            dead.append(pid)
-    for pid in dead:
-        connections.pop(pid, None)
-
-
 @router.websocket("/ws/durak/{room_id}/{user_id}")
 async def durak_ws(websocket: WebSocket, room_id: str, user_id: int):
-    """WebSocket for live Durak game updates."""
-    import json
+    """Вебсокет для онлайн-синхронизации ходов и лобби ожидания."""
     await websocket.accept()
 
     room = _durak_rooms.get(room_id)

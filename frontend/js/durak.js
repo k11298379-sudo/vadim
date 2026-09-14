@@ -100,14 +100,34 @@
       startBotGame,
       createOnlineRoom,
       joinRoom,
-      exitToMenu: () => {
-        window.DURAK_GAME.disconnectWS();
-        _roomId = null;
-        _state = null;
-        _selectedCard = null;
-        window.DURAK_MENU.showMenu(_container, getContext());
-      }
+      leaveCurrentRoom,
+      exitToMenu
     };
+  }
+
+  async function leaveCurrentRoom() {
+    if (_roomId) {
+      const rId = _roomId;
+      _roomId = null;
+      try {
+        await apiPost('/api/durak/leave', { room_id: rId });
+      } catch (e) {
+        console.warn('leave room error', e);
+      }
+    }
+  }
+
+  async function exitToMenu() {
+    if (window.DURAK_GAME && typeof window.DURAK_GAME.disconnectWS === 'function') {
+      window.DURAK_GAME.disconnectWS();
+    }
+    await leaveCurrentRoom();
+    _state = null;
+    _selectedCard = null;
+    await refreshUserCoins();
+    if (_container && window.DURAK_MENU && typeof window.DURAK_MENU.showMenu === 'function') {
+      window.DURAK_MENU.showMenu(_container, getContext());
+    }
   }
 
   async function startBotGame() {
@@ -124,7 +144,8 @@
         _roomId,
         _userId,
         (st) => { _state = st; window.DURAK_GAME.renderGame(_container, getContext()); },
-        null
+        null,
+        () => exitToMenu()
       );
       window.DURAK_GAME.renderGame(_container, getContext());
     } catch (e) {
@@ -141,21 +162,21 @@
         stake: stake
       });
       _roomId = res.room_id;
+      const onCancelRoom = async () => {
+        await exitToMenu();
+      };
       window.DURAK_GAME.connectWS(
         _roomId,
         _userId,
         (st) => { _state = st; window.DURAK_GAME.renderGame(_container, getContext()); },
         (players, stkW) => {
-          window.DURAK_MENU.renderWaiting(_container, _roomId, players, stkW || stake, async () => {
-            try { await apiPost('/api/durak/cancel', { room_id: _roomId }); } catch (err) {}
-            getContext().exitToMenu();
-          });
+          window.DURAK_MENU.renderWaiting(_container, _roomId, players, stkW || stake, onCancelRoom, true);
+        },
+        async () => {
+          await exitToMenu();
         }
       );
-      window.DURAK_MENU.renderWaiting(_container, _roomId, res.players, stake, async () => {
-        try { await apiPost('/api/durak/cancel', { room_id: _roomId }); } catch (err) {}
-        getContext().exitToMenu();
-      });
+      window.DURAK_MENU.renderWaiting(_container, _roomId, res.players, stake, onCancelRoom, true);
     } catch (e) {
       showAlert(`Ошибка: ${e.message}`);
     }
@@ -166,23 +187,25 @@
     _roomId = roomId;
     try {
       const res = await apiPost('/api/durak/join', { room_id: roomId });
+      const onLeaveRoom = async () => {
+        await exitToMenu();
+      };
       window.DURAK_GAME.connectWS(
         _roomId,
         _userId,
         (st) => { _state = st; window.DURAK_GAME.renderGame(_container, getContext()); },
         (players, stkW) => {
-          window.DURAK_MENU.renderWaiting(_container, _roomId, players, stkW || res.stake || 0, async () => {
-            getContext().exitToMenu();
-          });
+          window.DURAK_MENU.renderWaiting(_container, _roomId, players, stkW || res.stake || 0, onLeaveRoom, false);
+        },
+        async () => {
+          await exitToMenu();
         }
       );
       if (res.status === 'started') {
         _state = res.state;
         window.DURAK_GAME.renderGame(_container, getContext());
       } else {
-        window.DURAK_MENU.renderWaiting(_container, _roomId, res.players, res.stake || 0, async () => {
-          getContext().exitToMenu();
-        });
+        window.DURAK_MENU.renderWaiting(_container, _roomId, res.players, res.stake || 0, onLeaveRoom, false);
       }
     } catch (e) {
       showAlert(`Ошибка: ${e.message}`);
@@ -223,6 +246,9 @@
   function destroy() {
     if (window.DURAK_GAME && typeof window.DURAK_GAME.disconnectWS === 'function') {
       window.DURAK_GAME.disconnectWS();
+    }
+    if (_roomId) {
+      leaveCurrentRoom();
     }
     _roomId = null;
     _state = null;
