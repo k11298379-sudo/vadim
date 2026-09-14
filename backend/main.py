@@ -146,10 +146,15 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 logger.warning(f"Could not setup Telegram commands (offline or timeout): {e}")
             logger.info("Starting Telegram Bot long-polling...")
-            try:
-                await dp.start_polling(bot)
-            except Exception as e:
-                logger.warning(f"Telegram polling stopped: {e}")
+            while True:
+                try:
+                    await dp.start_polling(bot, handle_signals=False)
+                    break
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    logger.warning(f"Telegram polling error (retrying in 5s): {e}")
+                    await asyncio.sleep(5)
 
         polling_task = asyncio.create_task(init_telegram_bot())
 
