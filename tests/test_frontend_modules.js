@@ -76,8 +76,15 @@ console.log('app.js and app_lightbox.js tab integration and photo gallery verifi
 
 console.log('=== [4/4] Testing ege.js and games.js execution in mock DOM environment ===');
 // Create a basic window mock
+const mockApi = {
+  getMe: async () => ({ id: 1, full_name: 'Тестер', is_tester: true, coins: 100 }),
+  getGameRoom: async (id) => ({ room_id: id, status: 'waiting', game_type: 'tictactoe' }),
+  joinGameRoom: async (id, name) => ({ room_id: id, status: 'playing', game_type: 'tictactoe' }),
+  getClassmates: async () => []
+};
 const mockWindow = {
   EGE_DATA: egeData,
+  api: mockApi,
   Telegram: {
     WebApp: {
       HapticFeedback: {
@@ -89,6 +96,11 @@ const mockWindow = {
   }
 };
 global.window = mockWindow;
+global.api = mockApi;
+global.fetch = async (url) => ({
+  ok: true,
+  json: async () => ({ room_id: 'test', status: 'waiting', players: [1] })
+});
 const sharedElements = {};
 global.document = {
   getElementById: (id) => {
@@ -158,4 +170,33 @@ assert(typeof mockWindow.GAMES.startSnakeGame === 'function', 'window.GAMES.star
 assert(typeof mockWindow.GAMES.setChessColor === 'function', 'window.GAMES.setChessColor must be defined');
 console.log('window.GAMES module loaded and exports verified!');
 
+console.log('=== [5/5] Testing multiplayer games & online room routing ===');
+['game_2048.js', 'game_tictactoe.js', 'game_snake.js', 'game_tetris.js', 'game_chess.js'].forEach(m => {
+  const p = path.join(__dirname, '../frontend/js/games/', m);
+  if (fs.existsSync(p)) eval(fs.readFileSync(p, 'utf-8'));
+});
+
+['durak_cards.js', 'durak_menu.js', 'durak_game.js'].forEach(m => {
+  const p = path.join(__dirname, '../frontend/js/durak/', m);
+  if (fs.existsSync(p)) eval(fs.readFileSync(p, 'utf-8'));
+});
+eval(fs.readFileSync(path.join(__dirname, '../frontend/js/durak.js'), 'utf-8'));
+
+assert(mockWindow.GAMES_CHESS && typeof mockWindow.GAMES_CHESS.openChessOnlineRoom === 'function', 'window.GAMES_CHESS.openChessOnlineRoom must be defined');
+assert(mockWindow.GAMES_TICTACTOE && typeof mockWindow.GAMES_TICTACTOE.openOnlineRoom === 'function', 'window.GAMES_TICTACTOE.openOnlineRoom must be defined');
+assert(mockWindow.DURAK && typeof mockWindow.DURAK.joinRoom === 'function', 'window.DURAK.joinRoom must be defined');
+
+// Test openOnlineRoom routing
+mockWindow.GAMES.openOnlineRoom('test_chess_room', 'chess');
+assert(mockWindow.GAMES.getCurrentGame() === 'chess', 'openOnlineRoom should switch game to chess');
+
+mockWindow.GAMES.openOnlineRoom('test_durak_room', 'durak');
+assert(mockWindow.GAMES.getCurrentGame() === 'durak', 'openOnlineRoom should switch game to durak');
+
+mockWindow.GAMES.openOnlineRoom('test_ttt_room', 'tictactoe');
+assert(mockWindow.GAMES.getCurrentGame() === 'tictactoe', 'openOnlineRoom should switch game to tictactoe');
+
+console.log('Multiplayer online room opening, game switching and exports verified without ReferenceError!');
+
 console.log('\n🎉 ALL FRONTEND AND EGE TESTS PASSED SUCCESSFULLY! 🚀');
+process.exit(0);

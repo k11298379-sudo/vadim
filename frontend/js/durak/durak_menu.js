@@ -6,6 +6,7 @@
   'use strict';
 
   function showMenu(container, ctx) {
+    if (!container) return;
     const coins = ctx.getUserCoins();
     let selectedStake = ctx.getSelectedStake();
     if (selectedStake > coins) {
@@ -146,6 +147,7 @@
   }
 
   async function showLeaderboard(container, ctx) {
+    if (!container) return;
     container.innerHTML = `
       <div class="dk-menu">
         <div class="dk-menu__title">🏆 Рейтинг богачей</div>
@@ -192,6 +194,7 @@
   }
 
   function showOnlineMenu(container, ctx) {
+    if (!container) return;
     const stake = ctx.getSelectedStake();
     container.innerHTML = `
       <div class="dk-menu">
@@ -223,14 +226,59 @@
   function renderWaiting(container, roomId, players, stake, onCancel) {
     if (!container) return;
     const stakeText = stake > 0 ? `<div class="dk-waiting__stake">💰 Ставка: <b>${stake} 🪙</b></div>` : '';
+    const shareUrl = `${window.location.origin}/app?room=${roomId}&game=durak`;
     container.innerHTML = `
       <div class="dk-waiting">
         <div class="dk-waiting__title">⏳ Ожидание игроков…</div>
         <div class="dk-waiting__count">Подключено: ${players.length}</div>
         ${stakeText}
-        <div class="dk-waiting__hint">Поделитесь кодом комнаты: <b>${roomId}</b></div>
+        <div class="dk-waiting__hint">Код комнаты: <b>${roomId}</b></div>
+        
+        <div style="display:flex; flex-direction:column; gap:8px; width:100%; max-width:280px; margin:12px 0;">
+          <button type="button" class="dk-btn" id="dk-copy-link" style="background:#2563eb; color:#fff; font-weight:700; padding:10px; border-radius:12px;">🔗 Скопировать ссылку</button>
+          <button type="button" class="dk-btn" id="dk-share-tg" style="background:#0284c7; color:#fff; font-weight:700; padding:10px; border-radius:12px;">✈️ Поделиться в Telegram</button>
+        </div>
+
         <button class="dk-btn dk-btn--exit" id="dk-cancel-room">✕ Отменить комнату</button>
       </div>`;
+
+    const copyBtn = container.querySelector('#dk-copy-link');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', async () => {
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(shareUrl);
+          } else {
+            const ta = document.createElement('textarea');
+            ta.value = shareUrl;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+          }
+          copyBtn.textContent = '✅ Ссылка скопирована!';
+          if (window.Telegram?.WebApp?.HapticFeedback) {
+            window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+          }
+          setTimeout(() => { if (copyBtn) copyBtn.textContent = '🔗 Скопировать ссылку'; }, 2500);
+        } catch (e) {
+          prompt('Скопируйте ссылку вручную:', shareUrl);
+        }
+      });
+    }
+
+    const shareBtn = container.querySelector('#dk-share-tg');
+    if (shareBtn) {
+      shareBtn.addEventListener('click', () => {
+        const text = `🃏 Сыграем в Дурака на перемене! Заходи в комнату: ${roomId}`;
+        const tgLink = `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(text)}`;
+        if (window.Telegram?.WebApp?.openTelegramLink) {
+          window.Telegram.WebApp.openTelegramLink(tgLink);
+        } else {
+          window.open(tgLink, '_blank');
+        }
+      });
+    }
 
     const cancelBtn = container.querySelector('#dk-cancel-room');
     if (cancelBtn && onCancel) {

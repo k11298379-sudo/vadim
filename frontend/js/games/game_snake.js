@@ -96,7 +96,8 @@
     if (!window._snakeKeySetup) {
       window._snakeKeySetup = true;
       window.addEventListener("keydown", (e) => {
-        if (currentGame !== "snake" || !snakeRunning) return;
+        const activeG = window.currentGame || (window.GAMES?.getCurrentGame ? window.GAMES.getCurrentGame() : "snake");
+        if (activeG !== "snake" || !snakeRunning) return;
         if (e.key === "ArrowUp" || e.code === "KeyW") setSnakeDir(0, -1);
         else if (e.key === "ArrowDown" || e.code === "KeyS") setSnakeDir(0, 1);
         else if (e.key === "ArrowLeft" || e.code === "KeyA") setSnakeDir(-1, 0);

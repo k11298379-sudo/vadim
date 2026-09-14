@@ -25,6 +25,16 @@
   let chessLocalAutoRotate = true;
   let chessManualFlipped = false;
 
+  function escapeHtml(str) {
+    if (!str) return "";
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
   function toggleChessAutoRotate() {
     chessLocalAutoRotate = !chessLocalAutoRotate;
     if (window.Telegram?.WebApp?.HapticFeedback) {
@@ -682,7 +692,7 @@
   }
 
   async function openChessOnlineRoom(roomId) {
-    currentGame = "chess";
+    if (window.currentGame) window.currentGame = "chess";
     chessRoomId = roomId;
     chessState = "loading";
     renderGames();

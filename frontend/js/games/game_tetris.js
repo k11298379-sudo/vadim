@@ -605,7 +605,8 @@
       window.removeEventListener("keydown", window._tetrisKeyHandler);
     }
     window._tetrisKeyHandler = function (e) {
-      if (currentGame !== "tetris") return;
+      const activeG = window.currentGame || (window.GAMES?.getCurrentGame ? window.GAMES.getCurrentGame() : "tetris");
+      if (activeG !== "tetris") return;
       const key = (e.key || "").toLowerCase();
       const code = e.code || "";
 

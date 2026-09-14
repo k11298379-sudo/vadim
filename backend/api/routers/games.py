@@ -189,7 +189,7 @@ async def invite_opponent_to_game(
                     )
                     btn_text = "♟️ Принять вызов и играть"
                 else:
-                    game_url = f"{base_url}{separator}room={room.room_id}&tg_user_id={opponent_tg_id}"
+                    game_url = f"{base_url}{separator}room={room.room_id}&game=tictactoe&tg_user_id={opponent_tg_id}"
                     invite_text = (
                         f"🎮 <b>{escaped_host_name}</b> бросает тебе вызов в <b>Крестики-нолики</b>!\n\n"
                         f"⚡ Примешь бой на перемене?"

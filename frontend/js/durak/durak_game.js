@@ -239,8 +239,9 @@
   // ── WebSocket
   function connectWS(roomId, uid, onStateUpdate, onWaitingUpdate) {
     disconnectWS();
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const url = `${protocol}//${window.location.host}/api/ws/durak/${roomId}/${uid}`;
+    const protocol = (typeof window !== "undefined" && window.location && window.location.protocol === 'https:') ? 'wss:' : 'ws:';
+    const host = (typeof window !== "undefined" && window.location && window.location.host) ? window.location.host : 'localhost';
+    const url = `${protocol}//${host}/api/ws/durak/${roomId}/${uid}`;
 
     try {
       _ws = new WebSocket(url);
@@ -271,6 +272,9 @@
         clearInterval(_pingInterval);
       }
     }, 25000);
+    if (_pingInterval && typeof _pingInterval.unref === 'function') {
+      _pingInterval.unref();
+    }
   }
 
   function disconnectWS() {

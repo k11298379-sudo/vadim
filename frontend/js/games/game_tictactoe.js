@@ -528,7 +528,7 @@
   }
 
   async function openTTTOnlineRoom(roomId) {
-    currentGame = "tictactoe";
+    if (window.currentGame) window.currentGame = "tictactoe";
     tttMode = "online";
     onlineRoomId = roomId;
     onlineState = "loading";
@@ -560,13 +560,13 @@
   }
 
   async function openOnlineRoom(roomId, gameType) {
-    if (gameType === "chess") {
-      return openChessOnlineRoom(roomId);
+    if (gameType === "chess" && window.GAMES_CHESS && typeof window.GAMES_CHESS.openChessOnlineRoom === "function") {
+      return window.GAMES_CHESS.openChessOnlineRoom(roomId);
     }
     try {
       const room = await api.getGameRoom(roomId);
-      if (room && room.game_type === "chess") {
-        return openChessOnlineRoom(roomId);
+      if (room && room.game_type === "chess" && window.GAMES_CHESS && typeof window.GAMES_CHESS.openChessOnlineRoom === "function") {
+        return window.GAMES_CHESS.openChessOnlineRoom(roomId);
       }
     } catch (e) {}
     return openTTTOnlineRoom(roomId);

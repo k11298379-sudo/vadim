@@ -13,16 +13,35 @@
   let _container = null;
   let _selectedStake = 0;
   let _userCoins = 0;
+  let _pendingRoomId = null;
 
   function getUserId() {
     if (_userId) return _userId;
     if (window.currentUser && window.currentUser.tg_id) return window.currentUser.tg_id;
-    const params = new URLSearchParams(window.location.search);
-    return parseInt(params.get('user_id') || params.get('uid') || '0', 10);
+    try {
+      if (typeof window !== "undefined" && window.location && window.location.search) {
+        const params = new URLSearchParams(window.location.search);
+        return parseInt(params.get('user_id') || params.get('uid') || '0', 10);
+      }
+    } catch (e) {}
+    return 0;
   }
 
   function apiBase() {
-    return window.location.origin;
+    try {
+      if (typeof window !== "undefined" && window.location && window.location.origin) {
+        return window.location.origin;
+      }
+    } catch (e) {}
+    return '';
+  }
+
+  function showAlert(msg) {
+    if (typeof alert !== "undefined") {
+      alert(msg);
+    } else {
+      console.warn(msg);
+    }
   }
 
   async function apiPost(path, body = {}) {
@@ -109,7 +128,7 @@
       );
       window.DURAK_GAME.renderGame(_container, getContext());
     } catch (e) {
-      alert(`Ошибка: ${e.message}`);
+      showAlert(`Ошибка: ${e.message}`);
     }
   }
 
@@ -138,7 +157,7 @@
         getContext().exitToMenu();
       });
     } catch (e) {
-      alert(`Ошибка: ${e.message}`);
+      showAlert(`Ошибка: ${e.message}`);
     }
   }
 
@@ -166,7 +185,7 @@
         });
       }
     } catch (e) {
-      alert(`Ошибка: ${e.message}`);
+      showAlert(`Ошибка: ${e.message}`);
     }
   }
 
@@ -180,9 +199,25 @@
       window.DURAK_CARDS.injectCSS();
     }
     await refreshUserCoins();
+    if (_pendingRoomId) {
+      const pending = _pendingRoomId;
+      _pendingRoomId = null;
+      await joinRoom(pending);
+      return;
+    }
     if (window.DURAK_MENU && typeof window.DURAK_MENU.showMenu === 'function') {
       window.DURAK_MENU.showMenu(_container, getContext());
     }
+  }
+
+  function joinRoomPublic(roomId) {
+    if (!_container) {
+      _pendingRoomId = roomId;
+      const el = document.getElementById('durak-root');
+      if (el) init(el);
+      return;
+    }
+    return joinRoom(roomId);
   }
 
   function destroy() {
@@ -193,7 +228,8 @@
     _state = null;
     _selectedCard = null;
     _container = null;
+    _pendingRoomId = null;
   }
 
-  window.DURAK = { init, destroy };
+  window.DURAK = { init, destroy, joinRoom: joinRoomPublic };
 })();

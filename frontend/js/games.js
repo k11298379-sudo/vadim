@@ -3,6 +3,7 @@
   'use strict';
 
   let currentGame = "2048"; // 'rpg', '2048', 'tictactoe', 'snake', 'tetris', 'chess', 'durak'
+  window.currentGame = currentGame;
   let isTesterUser = false;
   let isCurrencyEnabled = false;
   let userCoins = 0;
@@ -14,19 +15,9 @@
       if (sParams.has("tester")) {
         const val = sParams.get("tester");
         isTesterUser = val === "1" || val === "true";
-        testerChecked = true;
         try { localStorage.setItem("is_tester", isTesterUser ? "1" : "0"); } catch (e) {}
-        if (window.currentUser) {
-          isCurrencyEnabled = Boolean(window.currentUser.currency_ecosystem_enabled);
-          userCoins = Number(window.currentUser.coins || 0);
-        }
-        return isTesterUser;
-      }
-      if (sParams.get("role") === "tester") {
+      } else if (sParams.get("role") === "tester" || localStorage.getItem("is_tester") === "1") {
         isTesterUser = true;
-        testerChecked = true;
-        try { localStorage.setItem("is_tester", "1"); } catch (e) {}
-        return isTesterUser;
       }
     } catch (e) {}
 
@@ -39,43 +30,14 @@
     }
 
     try {
-      const cachedTester = localStorage.getItem("is_tester");
-      if (cachedTester === "1") isTesterUser = true;
-      else if (cachedTester === "0") isTesterUser = false;
-    } catch (e) {}
-
-    try {
-      const apiObj = (typeof window !== "undefined" && window.api) || (typeof api !== "undefined" ? api : null);
-      if (apiObj && typeof apiObj.getMe === "function") {
-        const me = await apiObj.getMe();
-        if (me) {
-          window.currentUser = me;
-          isTesterUser = Boolean(me.is_tester);
-          isCurrencyEnabled = Boolean(me.currency_ecosystem_enabled);
-          userCoins = Number(me.coins || 0);
-          try { localStorage.setItem("is_tester", isTesterUser ? "1" : "0"); } catch (e) {}
-          testerChecked = true;
-          return isTesterUser;
-        }
-      }
-    } catch (e) {}
-
-    try {
-      const sParams = new URLSearchParams(window.location.search);
-      const uid = sParams.get("user_id") || sParams.get("tg_user_id") || sParams.get("uid") || localStorage.getItem("cached_tg_uid");
-      const url = uid ? `/api/me?user_id=${uid}` : `/api/me`;
-      const resp = await fetch(url);
-      if (resp.ok) {
-        const me = await resp.json();
-        if (me) {
-          window.currentUser = me;
-          isTesterUser = Boolean(me.is_tester);
-          isCurrencyEnabled = Boolean(me.currency_ecosystem_enabled);
-          userCoins = Number(me.coins || 0);
-          try { localStorage.setItem("is_tester", isTesterUser ? "1" : "0"); } catch (e) {}
-          testerChecked = true;
-          return isTesterUser;
-        }
+      const apiObj = window.api || (typeof api !== "undefined" ? api : null);
+      const me = (apiObj && typeof apiObj.getMe === "function") ? await apiObj.getMe() : null;
+      if (me) {
+        window.currentUser = me;
+        isTesterUser = Boolean(me.is_tester);
+        isCurrencyEnabled = Boolean(me.currency_ecosystem_enabled);
+        userCoins = Number(me.coins || 0);
+        try { localStorage.setItem("is_tester", isTesterUser ? "1" : "0"); } catch (e) {}
       }
     } catch (e) {}
 
@@ -106,9 +68,7 @@
     if (isTesterUser && currentGame === "2048") {
       currentGame = "rpg";
     }
-    if (currentGame === "durak" && !isCurrencyEnabled) {
-      currentGame = "2048";
-    }
+    window.currentGame = currentGame;
     renderGames();
   }
 
@@ -116,37 +76,37 @@
     const container = document.getElementById("pane-games");
     if (!container) return;
 
-    if (currentGame === "durak" && !isCurrencyEnabled) {
-      currentGame = "2048";
-    }
+    window.currentGame = currentGame;
 
-    let activeTabsCount = 5; // 2048, tictactoe, snake, tetris, chess
-    if (isTesterUser) activeTabsCount += 1;
-    if (isCurrencyEnabled) activeTabsCount += 1;
+    const baseGames = [
+      { id: "2048", icon: "🔢", name: "2048", color: "blue" },
+      { id: "tictactoe", icon: "❌⭕", name: "Крестики", color: "blue" },
+      { id: "snake", icon: "🐍", name: "Змейка", color: "blue" },
+      { id: "tetris", icon: "🧱", name: "Тетрис", color: "blue" },
+      { id: "chess", icon: "♟️", name: "Шахматы", color: "blue" },
+      { id: "durak", icon: "🃏", name: "Дурак", color: "red" },
+    ];
+    const gamesList = isTesterUser
+      ? [{ id: "rpg", icon: "⚔️", name: "natarGRP", color: "amber" }, ...baseGames]
+      : baseGames;
 
-    const gameCountLabel = `${activeTabsCount} игр${isTesterUser ? ' (⚔️ natarGRP)' : ''}`;
+    const gameCountLabel = `${gamesList.length} игр${isTesterUser ? ' (⚔️ natarGRP)' : ''}`;
 
-    const rpgButtonHTML = isTesterUser ? `
-      <button onclick="window.GAMES.switchGame('rpg')" class="py-2 rounded-xl transition-all flex items-center justify-center gap-1 ${
-        currentGame === 'rpg'
-          ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-sm'
-          : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
-      }">
-        <span>⚔️</span>
-        <span class="truncate">natarGRP</span>
-      </button>
-    ` : "";
-
-    const durakButtonHTML = isCurrencyEnabled ? `
-      <button onclick="window.GAMES.switchGame('durak')" class="py-2 rounded-xl transition-all flex items-center justify-center gap-1 ${
-        currentGame === 'durak'
-          ? 'bg-white dark:bg-slate-700 text-red-600 dark:text-red-400 shadow-sm'
-          : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
-      }">
-        <span>🃏</span>
-        <span class="truncate">Дурак</span>
-      </button>
-    ` : "";
+    const tabsHTML = gamesList.map(g => {
+      const isCur = currentGame === g.id;
+      let activeColor = "text-blue-600 dark:text-blue-400";
+      if (g.color === "amber") activeColor = "text-amber-600 dark:text-amber-400";
+      else if (g.color === "red") activeColor = "text-red-600 dark:text-red-400";
+      const activeClass = isCur
+        ? `bg-white dark:bg-slate-700 ${activeColor} shadow-sm`
+        : "text-slate-500 dark:text-slate-400 hover:text-slate-700";
+      return `
+        <button onclick="window.GAMES.switchGame('${g.id}')" class="py-2 rounded-xl transition-all flex items-center justify-center gap-1 ${activeClass}">
+          <span>${g.icon}</span>
+          <span class="truncate">${g.name}</span>
+        </button>
+      `;
+    }).join("");
 
     container.innerHTML = `
       <!-- Header -->
@@ -162,49 +122,8 @@
         </div>
 
         <!-- Games selector tabs -->
-        <div class="gap-1 p-1 rounded-2xl bg-slate-200/70 dark:bg-slate-800/90 text-[10px] font-bold" style="display: grid; grid-template-columns: repeat(${activeTabsCount}, minmax(0, 1fr));">
-          ${rpgButtonHTML}
-          <button onclick="window.GAMES.switchGame('2048')" class="py-2 rounded-xl transition-all flex items-center justify-center gap-1 ${
-            currentGame === '2048'
-              ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
-          }">
-            <span>🔢</span>
-            <span class="truncate">2048</span>
-          </button>
-          <button onclick="window.GAMES.switchGame('tictactoe')" class="py-2 rounded-xl transition-all flex items-center justify-center gap-1 ${
-            currentGame === 'tictactoe'
-              ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
-          }">
-            <span>❌⭕</span>
-            <span class="truncate">Крестики</span>
-          </button>
-          <button onclick="window.GAMES.switchGame('snake')" class="py-2 rounded-xl transition-all flex items-center justify-center gap-1 ${
-            currentGame === 'snake'
-              ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
-          }">
-            <span>🐍</span>
-            <span class="truncate">Змейка</span>
-          </button>
-          <button onclick="window.GAMES.switchGame('tetris')" class="py-2 rounded-xl transition-all flex items-center justify-center gap-1 ${
-            currentGame === 'tetris'
-              ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
-          }">
-            <span>🧱</span>
-            <span class="truncate">Тетрис</span>
-          </button>
-          <button onclick="window.GAMES.switchGame('chess')" class="py-2 rounded-xl transition-all flex items-center justify-center gap-1 ${
-            currentGame === 'chess'
-              ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
-          }">
-            <span>♟️</span>
-            <span class="truncate">Шахматы</span>
-          </button>
-          ${durakButtonHTML}
+        <div class="gap-1 p-1 rounded-2xl bg-slate-200/70 dark:bg-slate-800/90 text-[10px] font-bold" style="display: grid; grid-template-columns: repeat(${gamesList.length}, minmax(0, 1fr));">
+          ${tabsHTML}
         </div>
       </div>
 
@@ -216,9 +135,7 @@
 
     // After DOM update, initialize specific game listeners
     if (currentGame === "rpg") {
-      if (window.RPG && typeof window.RPG.init === "function") {
-        window.RPG.init();
-      }
+      if (window.RPG && typeof window.RPG.init === "function") window.RPG.init();
     } else if (currentGame === "2048") {
       if (window.GAMES_2048) window.GAMES_2048.init();
     } else if (currentGame === "tictactoe") {
@@ -240,6 +157,7 @@
     }
     cleanupCurrentGame();
     currentGame = gameId;
+    window.currentGame = gameId;
     renderGames();
   }
 
@@ -313,52 +231,57 @@
   }
 
   async function openOnlineRoom(roomId, gameType) {
-    if (gameType === "rpg_duel") {
-      currentGame = "rpg";
-      renderGames();
+    if (!roomId) return;
+    let target = (gameType || "").toLowerCase().trim();
+
+    if (!target) {
+      try {
+        if (window.api && typeof window.api.getGameRoom === "function") {
+          const room = await window.api.getGameRoom(roomId);
+          if (room && room.game_type) target = room.game_type;
+        }
+      } catch (e) {}
+      if (!target) {
+        try {
+          const dRes = await fetch(`/api/durak/state/${roomId}`);
+          if (dRes.ok) target = "durak";
+        } catch (e) {}
+      }
+      if (!target) target = "tictactoe";
+    }
+
+    if (target === "rpg_duel") {
+      switchGame("rpg");
       if (window.RPG && typeof window.RPG.openPvPRoom === "function") {
         window.RPG.openPvPRoom(roomId);
       }
       return;
     }
-    if (gameType === "rpg_coop") {
-      currentGame = "rpg";
-      renderGames();
+    if (target === "rpg_coop") {
+      switchGame("rpg");
       if (window.RPG && typeof window.RPG.openCoopRoom === "function") {
         window.RPG.openCoopRoom(roomId);
       }
       return;
     }
-    if (gameType === "chess") {
-      if (window.GAMES_CHESS) return window.GAMES_CHESS.openChessOnlineRoom(roomId);
-    }
-    try {
-      if (window.api && typeof window.api.getGameRoom === "function") {
-        const room = await window.api.getGameRoom(roomId);
-        if (room) {
-          if (room.game_type === "rpg_duel") {
-            currentGame = "rpg";
-            renderGames();
-            if (window.RPG && typeof window.RPG.openPvPRoom === "function") {
-              window.RPG.openPvPRoom(roomId, room);
-            }
-            return;
-          }
-          if (room.game_type === "rpg_coop") {
-            currentGame = "rpg";
-            renderGames();
-            if (window.RPG && typeof window.RPG.openCoopRoom === "function") {
-              window.RPG.openCoopRoom(roomId, room);
-            }
-            return;
-          }
-          if (room.game_type === "chess") {
-            if (window.GAMES_CHESS) return window.GAMES_CHESS.openChessOnlineRoom(roomId);
-          }
-        }
+    if (target === "chess") {
+      switchGame("chess");
+      if (window.GAMES_CHESS && typeof window.GAMES_CHESS.openChessOnlineRoom === "function") {
+        return window.GAMES_CHESS.openChessOnlineRoom(roomId);
       }
-    } catch (e) {}
-    if (window.GAMES_TICTACTOE) return window.GAMES_TICTACTOE.openOnlineRoom(roomId);
+      return;
+    }
+    if (target === "durak") {
+      switchGame("durak");
+      if (window.DURAK && typeof window.DURAK.joinRoom === "function") {
+        return window.DURAK.joinRoom(roomId);
+      }
+      return;
+    }
+    switchGame("tictactoe");
+    if (window.GAMES_TICTACTOE && typeof window.GAMES_TICTACTOE.openOnlineRoom === "function") {
+      return window.GAMES_TICTACTOE.openOnlineRoom(roomId);
+    }
   }
 
   // ПУБЛИЧНЫЙ ФАСАД window.GAMES (100% совместимость со всеми onclick в HTML)

@@ -270,7 +270,8 @@
       window.removeEventListener("keydown", window._2048KeyHandler);
     }
     window._2048KeyHandler = function (e) {
-      if (currentGame !== "2048" || isGameOver2048) return;
+      const activeG = window.currentGame || (window.GAMES?.getCurrentGame ? window.GAMES.getCurrentGame() : "2048");
+      if (activeG !== "2048" || isGameOver2048) return;
       const key = (e.key || "").toLowerCase();
       const code = e.code || "";
 
