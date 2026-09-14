@@ -160,6 +160,8 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
     dodge_chance = 0
     lifesteal = 0
     magic_res = 0
+    damage_block = 0
+    reflect = 0
     flat_hp_regen = 0.0
     flat_mp_regen = 0.0
     w_min = 8
@@ -186,6 +188,8 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
         dodge_chance += sb.get("dodge", 0)
         lifesteal += sb.get("lifesteal", 0)
         magic_res += sb.get("magic_resist", 0)
+        damage_block += sb.get("damage_block", 0) + sb.get("block", 0)
+        reflect += sb.get("reflect", 0)
         flat_hp_regen += sb.get("hp_regen", 0)
         flat_mp_regen += sb.get("mp_regen", 0)
 
@@ -254,6 +258,8 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
         "crit_chance": crit_chance,
         "dodge_chance": dodge_chance,
         "lifesteal": min(60, lifesteal),
+        "damage_block": damage_block,
+        "reflect": min(100, reflect),
         "gear_score": gear_score,
         "primary_attr": cfg["attr"],
         "primary_damage_bonus": int(primary_bonus),

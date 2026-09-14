@@ -78,6 +78,7 @@ async def run_balance_and_wave_tests():
     pvp.players["host"]["crit_chance"] = 0
     pvp.players["opponent"]["defense"] = 20
     pvp.players["opponent"]["is_defending"] = False
+    pvp.players["opponent"]["dodge_chance"] = 0
 
     # Host attacks opponent: base_dmg = 40, opponent def = 20
     # Expected hyperbolic DR = (20 * 0.05) / (1 + 20 * 0.05) = 1.0 / 2.0 = 50%
@@ -96,8 +97,8 @@ async def run_balance_and_wave_tests():
     coop.status = "playing"
     coop.turn = "host"
 
-    coop.players["host"]["hp"] = 1500
-    coop.players["host"]["hp_max"] = 1500
+    coop.players["host"]["hp"] = 150000
+    coop.players["host"]["hp_max"] = 150000
     coop.players["host"]["min_atk"] = 50
     coop.players["host"]["max_atk"] = 50
     coop.players["host"]["crit_chance"] = 0

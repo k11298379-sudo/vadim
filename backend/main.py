@@ -139,10 +139,19 @@ async def lifespan(app: FastAPI):
     # Start Aiogram polling and register command hints in background task
     global polling_task
     if settings.BOT_TOKEN and not settings.BOT_TOKEN.startswith("1234567890:ABCdef"):
-        logger.info("Registering Telegram command autocomplete hints and menu button...")
-        await setup_bot_commands(bot)
-        logger.info("Starting Telegram Bot long-polling...")
-        polling_task = asyncio.create_task(dp.start_polling(bot))
+        async def init_telegram_bot():
+            try:
+                logger.info("Registering Telegram command autocomplete hints and menu button...")
+                await asyncio.wait_for(setup_bot_commands(bot), timeout=5.0)
+            except Exception as e:
+                logger.warning(f"Could not setup Telegram commands (offline or timeout): {e}")
+            logger.info("Starting Telegram Bot long-polling...")
+            try:
+                await dp.start_polling(bot)
+            except Exception as e:
+                logger.warning(f"Telegram polling stopped: {e}")
+
+        polling_task = asyncio.create_task(init_telegram_bot())
 
         # Send deploy completion notification to admin
         if settings.ADMIN_ID:

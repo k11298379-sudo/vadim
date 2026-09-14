@@ -52,11 +52,8 @@
     try {
       localStorage.setItem("is_tester", isTesterUser ? "1" : "0");
     } catch (e) {}
-    if (isTesterUser && (currentGame === "2048" || !currentGame)) {
-      currentGame = "rpg";
-    }
     const container = document.getElementById("pane-games");
-    if (container && (wasTester !== isTesterUser || (isTesterUser && currentGame === "rpg"))) {
+    if (container && wasTester !== isTesterUser) {
       renderGames();
     }
   }
@@ -152,9 +149,6 @@
   }
 
   function switchGame(gameId) {
-    if (gameId === "rpg" && !isTesterUser) {
-      gameId = "2048";
-    }
     cleanupCurrentGame();
     currentGame = gameId;
     window.currentGame = gameId;

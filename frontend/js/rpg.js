@@ -50,6 +50,8 @@
   function formatCompact(num) {
     if (num == null) return "0";
     const n = Math.abs(num);
+    if (n >= 1_000_000_000_000_000) return (num / 1_000_000_000_000_000).toFixed(1) + "Q";
+    if (n >= 1_000_000_000_000) return (num / 1_000_000_000_000).toFixed(1) + "T";
     if (n >= 1_000_000_000) return (num / 1_000_000_000).toFixed(1) + "B";
     if (n >= 1_000_000) return (num / 1_000_000).toFixed(1) + "M";
     if (n >= 10_000) return (num / 1_000).toFixed(1) + "k";
@@ -380,22 +382,307 @@
     "bonus_desc": "❤️ +160 HP | 🔮 +100 MP | ⚔️ +25 Урон | ❄️ Заморозка"
   },
   {
-    "id": "shop_r_satanic_totem",
-    "name": "Демонический Тотем",
+    "id": "shop_w_daedalus",
+    "name": "Даэдалус (Daedalus)",
+    "icon": "🏹",
+    "type": "weapon",
+    "slot": "weapon",
+    "slot_name": "Оружие",
+    "slot_icon": "⚔️",
+    "rarity": "immortal",
+    "price_gold": 4300,
+    "price_gems": 14,
+    "base_min": 85,
+    "base_max": 125,
+    "bonus": {
+      "crit": 30,
+      "crit_mult": 2.5
+    },
+    "bonus_desc": "⚔️ +85..125 Урон | 💥 30% Шанс крита 250%"
+  },
+  {
+    "id": "shop_w_radiance",
+    "name": "Сияние (Radiance)",
+    "icon": "☀️",
+    "type": "weapon",
+    "slot": "weapon",
+    "slot_name": "Оружие",
+    "slot_icon": "⚔️",
+    "rarity": "immortal",
+    "price_gold": 4800,
+    "price_gems": 18,
+    "base_min": 70,
+    "base_max": 95,
+    "bonus": {
+      "radiance_burn": 65,
+      "miss_aura": 17
+    },
+    "bonus_desc": "⚔️ +70..95 Урон | 🔥 Аура: 65 маг. урона/сек | 💨 17% Промах врагов/босса"
+  },
+  {
+    "id": "shop_a_tarasque",
+    "name": "Сердце Тарраска (Heart of Tarrasque)",
+    "icon": "❤️",
+    "type": "armor",
+    "slot": "armor",
+    "slot_name": "Броня",
+    "slot_icon": "🛡️",
+    "rarity": "immortal",
+    "price_gold": 4500,
+    "price_gems": 15,
+    "base_def": 25,
+    "base_hp": 900,
+    "bonus": {
+      "str": 45,
+      "pct_hp_regen": 2.5
+    },
+    "bonus_desc": "🛡️ +25 Броня | ❤️ +900 HP | 🥩 +45 Сила | 💖 +2.5% Макс. HP/сек в бою"
+  },
+  {
+    "id": "shop_r_satanic",
+    "name": "Сатаник (Satanic)",
     "icon": "🩸",
     "type": "relic",
     "slot": "relic",
     "slot_name": "Реликвия",
     "slot_icon": "💍",
-    "rarity": "legendary",
-    "price_gold": 2900,
-    "price_gems": 25,
+    "rarity": "immortal",
+    "price_gold": 4200,
+    "price_gems": 18,
     "bonus": {
-      "lifesteal": 28,
-      "hp": 150,
-      "str": 20
+      "str": 35,
+      "hp": 500,
+      "lifesteal": 30
     },
-    "bonus_desc": "🩸 +28% Вампиризм | ❤️ +150 HP | 🥩 +20 Сила"
+    "bonus_desc": "🥩 +35 Сила | ❤️ +500 HP | 🧛 +30% Вампиризм ото всех атак"
+  },
+  {
+    "id": "shop_a_assault_cuirass",
+    "name": "Кираса Штурма (Assault Cuirass)",
+    "icon": "🛡️",
+    "type": "armor",
+    "slot": "armor",
+    "slot_name": "Броня",
+    "slot_icon": "🛡️",
+    "rarity": "immortal",
+    "price_gold": 4600,
+    "price_gems": 16,
+    "base_def": 28,
+    "base_hp": 300,
+    "bonus": {
+      "atk_speed": 35,
+      "aura_armor": 10,
+      "minus_armor_aura": 10
+    },
+    "bonus_desc": "🛡️ +28 Броня | ⚡ +35% Скор. атаки | 🛡️ Аура: +10 брони герою, -10 брони врагам/боссу"
+  },
+  {
+    "id": "shop_w_butterfly",
+    "name": "Бабочка (Butterfly)",
+    "icon": "🦋",
+    "type": "weapon",
+    "slot": "weapon",
+    "slot_name": "Оружие",
+    "slot_icon": "⚔️",
+    "rarity": "immortal",
+    "price_gold": 4700,
+    "price_gems": 16,
+    "base_min": 60,
+    "base_max": 85,
+    "bonus": {
+      "agi": 35,
+      "dodge": 35,
+      "atk_speed": 35
+    },
+    "bonus_desc": "⚔️ +60..85 Урон | 🏃 +35 Ловкость | 💨 +35% Уворот от босса и крипов | ⚡ +35% Скорость"
+  },
+  {
+    "id": "shop_w_mkb",
+    "name": "Посох Короля Обезьян (MKB)",
+    "icon": "🥢",
+    "type": "weapon",
+    "slot": "weapon",
+    "slot_name": "Оружие",
+    "slot_icon": "⚔️",
+    "rarity": "immortal",
+    "price_gold": 4400,
+    "price_gems": 14,
+    "base_min": 65,
+    "base_max": 90,
+    "bonus": {
+      "atk_speed": 35,
+      "true_strike": 1,
+      "pure_proc": 120
+    },
+    "bonus_desc": "⚔️ +65..90 Урон | ⚡ +35% Скорость | 🎯 True Strike (без промахов) | 💥 75% шанс на +120 чистого урона"
+  },
+  {
+    "id": "shop_w_mjollnir",
+    "name": "Мьёльнир (Mjollnir)",
+    "icon": "⚡",
+    "type": "weapon",
+    "slot": "weapon",
+    "slot_name": "Оружие",
+    "slot_icon": "⚔️",
+    "rarity": "immortal",
+    "price_gold": 4600,
+    "price_gems": 16,
+    "base_min": 65,
+    "base_max": 90,
+    "bonus": {
+      "atk_speed": 40,
+      "lightning_proc": 220
+    },
+    "bonus_desc": "⚔️ +65..90 Урон | ⚡ +40% Скор. атаки | ⚡ 25% Шанс цепной молнии на 220 урона"
+  },
+  {
+    "id": "shop_w_desolator",
+    "name": "Опустошитель (Desolator)",
+    "icon": "🩸",
+    "type": "weapon",
+    "slot": "weapon",
+    "slot_name": "Оружие",
+    "slot_icon": "⚔️",
+    "rarity": "legendary",
+    "price_gold": 3500,
+    "price_gems": 8,
+    "base_min": 65,
+    "base_max": 90,
+    "bonus": {
+      "minus_armor": 10
+    },
+    "bonus_desc": "⚔️ +65..90 Урон | 🩸 Коррозия: -10 брони врагам и боссу при ударе"
+  },
+  {
+    "id": "shop_r_skadi",
+    "name": "Око Скади (Eye of Skadi)",
+    "icon": "❄️",
+    "type": "relic",
+    "slot": "relic",
+    "slot_name": "Реликвия",
+    "slot_icon": "💍",
+    "rarity": "immortal",
+    "price_gold": 4600,
+    "price_gems": 15,
+    "bonus": {
+      "all_stats": 30,
+      "hp": 600,
+      "mp": 600,
+      "frost_slow": 40
+    },
+    "bonus_desc": "🌟 +30 Все характеристики | ❤️ +600 HP | 💧 +600 MP | ❄️ Ледяной удар: -40% скорости бега и атак босса"
+  },
+  {
+    "id": "shop_a_blademail",
+    "name": "Шипастый Доспех (Blade Mail)",
+    "icon": "🛡️",
+    "type": "armor",
+    "slot": "armor",
+    "slot_name": "Броня",
+    "slot_icon": "🛡️",
+    "rarity": "rare",
+    "price_gold": 1800,
+    "price_gems": 0,
+    "base_def": 18,
+    "base_hp": 250,
+    "bonus": {
+      "atk": 25,
+      "reflect": 35
+    },
+    "bonus_desc": "🛡️ +18 Броня | ❤️ +250 HP | ⚔️ +25 Урон | 🪞 Возвратка 35% входящего урона обратно боссу/крипам"
+  },
+  {
+    "id": "shop_a_vanguard",
+    "name": "Авангард (Vanguard)",
+    "icon": "🛡️",
+    "type": "armor",
+    "slot": "armor",
+    "slot_name": "Броня",
+    "slot_icon": "🛡️",
+    "rarity": "rare",
+    "price_gold": 1900,
+    "price_gems": 0,
+    "base_def": 14,
+    "base_hp": 400,
+    "bonus": {
+      "hp_regen": 8,
+      "damage_block": 80
+    },
+    "bonus_desc": "🛡️ +14 Броня | ❤️ +400 HP | 🩹 +8 HP/сек | 🛡️ 70% Шанс заблокировать 80 урона от ударов"
+  },
+  {
+    "id": "shop_r_moon_shard",
+    "name": "Осколок Луны (Moon Shard)",
+    "icon": "🌙",
+    "type": "relic",
+    "slot": "relic",
+    "slot_name": "Реликвия",
+    "slot_icon": "💍",
+    "rarity": "legendary",
+    "price_gold": 3800,
+    "price_gems": 12,
+    "bonus": {
+      "atk_speed": 60
+    },
+    "bonus_desc": "⚡ +60% Скорость атаки | 🌙 Ночной обзор"
+  },
+  {
+    "id": "shop_r_octarine",
+    "name": "Октариновое Ядро (Octarine Core)",
+    "icon": "💎",
+    "type": "relic",
+    "slot": "relic",
+    "slot_name": "Реликвия",
+    "slot_icon": "💍",
+    "rarity": "immortal",
+    "price_gold": 4300,
+    "price_gems": 18,
+    "bonus": {
+      "hp": 500,
+      "mp": 700,
+      "cooldown_reduct": 25,
+      "spell_lifesteal": 25
+    },
+    "bonus_desc": "❤️ +500 HP | 💧 +700 MP | ⏱️ -25% КД скиллов | 🩸 25% Вампиризм от заклинаний"
+  },
+  {
+    "id": "shop_w_khanda",
+    "name": "Кханда (Khanda)",
+    "icon": "🗡️",
+    "type": "weapon",
+    "slot": "weapon",
+    "slot_name": "Оружие",
+    "slot_icon": "⚔️",
+    "rarity": "immortal",
+    "price_gold": 4500,
+    "price_gems": 15,
+    "base_min": 60,
+    "base_max": 85,
+    "bonus": {
+      "hp": 350,
+      "mp": 300,
+      "crit": 20,
+      "empower_spell": 150
+    },
+    "bonus_desc": "⚔️ +60..85 Урон | ❤️ +350 HP | 💧 +300 MP | 💥 Скиллы наносят +150 критического физ. урона"
+  },
+  {
+    "id": "shop_w_rapier",
+    "name": "Божественная Рапира (Divine Rapier)",
+    "icon": "🗡️",
+    "type": "weapon",
+    "slot": "weapon",
+    "slot_name": "Оружие",
+    "slot_icon": "⚔️",
+    "rarity": "immortal",
+    "price_gold": 9000,
+    "price_gems": 40,
+    "base_min": 500,
+    "base_max": 650,
+    "bonus": {
+      "true_strike": 1
+    },
+    "bonus_desc": "⚔️ +500..650 Колоссальный урон | 🎯 True Strike — абсолютное оружие богов"
   },
   {
     "id": "shop_p_healing",
@@ -1732,80 +2019,116 @@
   }
 
 
-  // Anti-one-shot protection and calibrated damage applier for Epic Boss Battles
+  // REAL RPG DAMAGE: Hero ATK vs Boss Defense (no more %-HP cheese!)
   function applyDamageToBoss(boss, rawDmg, isCrit) {
     if (!boss || boss.hp <= 0) return 0;
 
-    // TIER-BASED DAMAGE SCALING: Every boss tier has an exact mathematically calibrated duration!
-    //   Tier 1 (Golem / Floor 1): ~75-85 sec  (intense, strategic battle)
-    //   Tier 2 (Lich):           ~85-95 sec
-    //   Tier 3 (Tormentor):      ~95-110 sec
-    //   Tier 4 (Dragon):         ~110-125 sec
-    //   Tier 5 (Roshan):         ~125-145 sec
-    //   Tier 10 (CK):            ~175-200 sec
-    //   Tier 15 (Enigma):        ~240-270 sec (~4.5 minutes of bullet hell mastery!)
-    const BOSS_TIER_MAP = {
-      golem: 1, lich: 2, tormentor: 3, dragon: 4, roshan: 5,
-      tidehunter: 6, sf_boss: 7, necrophos: 8, invoker_boss: 9, chaos_knight: 10,
-      dark_tormentor: 11, doom: 12, primal_beast: 13, phantom_roshan: 14, enigma: 15
+    const p = ARENA.player;
+    const stats = RPG_STATE.profile?.stats || {};
+    const eq = RPG_STATE.profile?.equipment || {};
+
+      // Boss defense: stored on entity, or fallback by tier
+    const BOSS_DEF_BY_TIER = {
+      golem: 35, lich: 50, tormentor: 75, dragon: 105, pudge_boss: 140,
+      faceless_void: 180, roshan: 230, tidehunter: 290, sf_boss: 370,
+      necrophos: 460, terrorblade: 570, invoker_boss: 700, chaos_knight: 860,
+      dark_tormentor: 1050, storm_spirit: 1300, doom: 1600, primal_beast: 1950,
+      phantom_roshan: 2400, tinker_boss: 3000, enigma: 3800
     };
-    const bId = ((boss.bossType || boss.id || boss.name) || "golem").toLowerCase();
-    let tier = 1;
-    for (const [k, v] of Object.entries(BOSS_TIER_MAP)) {
-      if (bId.includes(k)) { tier = v; break; }
+    let bossDefense = boss.defense !== undefined ? boss.defense : 35;
+    if (!boss.defense) {
+      const bId = ((boss.bossType || boss.id || boss.name) || "golem").toLowerCase();
+      for (const [k, v] of Object.entries(BOSS_DEF_BY_TIER)) {
+        if (bId.includes(k)) { bossDefense = v; break; }
+      }
     }
 
-    // Target duration scales strictly with tier: 75s (Tier 1) up to ~4.5 minutes (Tier 15)
-    const targetSeconds = 75 + (tier - 1) * 12;
-    // Calibrated for realistic multi-character hit density (~18 damage events/sec from player, companions, skills, dots)
-    const targetHits = Math.floor(targetSeconds * 18);
+    // Passive Items on Boss: Desolator & Assault Cuirass Minus Armor
+    const hasDeso = Object.values(eq).some(it => it && (it.name?.includes("Desolator") || it.name?.includes("Опустошитель") || it.bonus?.minus_armor));
+    const hasAC = Object.values(eq).some(it => it && (it.name?.includes("Assault") || it.name?.includes("Штурма") || it.bonus?.minus_armor_aura));
+    if (hasDeso) {
+      if (!boss.desoDebuff) {
+        spawnFloatingText(boss.x, boss.y - 30, "🩸 -10 БРОНИ (DESOLATOR)", "#dc2626");
+      }
+      boss.desoDebuff = 300; // 5 seconds debuff
+    }
+    const totalArmorShred = (boss.desoDebuff > 0 ? 10 : 0) + (hasAC ? 10 : 0);
+    const effectiveArmor = Math.max(0, bossDefense - totalArmorShred);
 
-    // Baseline damage per normal auto-attack hit (% of boss maxHp)
-    const basePctPerHit = 1.0 / targetHits;
-    const baseHitDmg = Math.max(1, Math.floor(boss.maxHp * basePctPerHit));
+    // Hyperbolic armor reduction: DR = armor / (armor + 100)
+    const armorDR = effectiveArmor / (effectiveArmor + 100);
 
-    // Player base attack reference
-    const stats = RPG_STATE.profile?.stats || {};
-    const playerAtk = Math.max(30, Math.floor(((stats.min_atk || 30) + (stats.max_atk || 50)) / 2));
+    // Apply defense reduction to raw damage
+    let afterArmor = Math.max(1, Math.floor(rawDmg * (1.0 - armorDR)));
 
-    // Hit ratio: skills deal 1.5x - 2.8x, companion/DOT ticks deal 0.04x - 0.45x
-    const hitRatio = Math.max(0.04, Math.min(2.8, rawDmg / playerAtk));
+    // Passive Item: MKB True Strike & Pure Bonus (+120 pure damage that ignores armor)
+    const hasMkb = Object.values(eq).some(it => it && (it.name?.includes("Monkey") || it.name?.includes("Обезьян") || it.bonus?.pure_proc));
+    if (hasMkb && Math.random() < 0.75) {
+      afterArmor += 120;
+      spawnFloatingText(boss.x, boss.y - 40, "🎯 MKB +120 ПИРС!", "#38bdf8");
+    }
+
+    // Passive Item: Mjollnir Chain Lightning (25% chance for 220 electric burst)
+    const hasMjollnir = Object.values(eq).some(it => it && (it.name?.includes("Mjollnir") || it.name?.includes("Мьёльнир") || it.bonus?.lightning_proc));
+    if (hasMjollnir && Math.random() < 0.25) {
+      afterArmor += 220;
+      spawnFloatingText(boss.x, boss.y - 35, "⚡ МЬЁЛЬНИР -220!", "#38bdf8");
+      if (!ARENA.shockwaves) ARENA.shockwaves = [];
+      ARENA.shockwaves.push({ x: boss.x, y: boss.y, radius: 15, maxRadius: 55, alpha: 0.9, color: "#38bdf8" });
+    }
+
+    // Passive Item: Eye of Skadi (Slows boss movement and attacks by 40%)
+    const hasSkadi = Object.values(eq).some(it => it && (it.name?.includes("Skadi") || it.name?.includes("Скади") || it.bonus?.frost_slow));
+    if (hasSkadi) {
+      if (!boss.skadiSlow) {
+        spawnFloatingText(boss.x, boss.y - 25, "❄️ СКАДИ -40% СКОРОСТЬ", "#38bdf8");
+      }
+      boss.skadiSlow = 240;
+      boss.speed = Math.max(0.70, (boss.baseSpeed || 1.45) * 0.60);
+    }
 
     // Stagger bonus (+50% damage when boss is staggered / poise broken)
     const staggerMult = boss.isStaggered ? 1.5 : 1.0;
 
-    // Crit multiplier
-    const critMult = isCrit ? 1.3 : 1.0;
+    // Passive Item: Daedalus Crit Multiplier
+    const hasDaedalus = Object.values(eq).some(it => it && (it.name?.includes("Daedalus") || it.name?.includes("Даэдалус") || it.bonus?.crit_mult));
+    let critMult = isCrit ? (hasDaedalus ? 2.5 : 1.5) : 1.0;
 
-    // Base calculated damage
-    const calculatedDmg = Math.floor(baseHitDmg * hitRatio * staggerMult * critMult);
-    const maxAllowedHitDmg = Math.floor(baseHitDmg * 2.5 * (boss.isStaggered ? 1.5 : 1.0));
-    let finalDmg = Math.max(1, Math.min(calculatedDmg, maxAllowedHitDmg));
+    let finalDmg = Math.max(1, Math.floor(afterArmor * staggerMult * critMult));
 
-    // DPS THROTTLE (CEILING PER SECOND):
-    // Prevents autoclickers, rapid taps, Rot ticks, and companion spam from melting boss in seconds!
-    // Normal phase: max 1.35% HP / sec (~74s min TTK under continuous party onslaught)
-    // Staggered phase: max 2.50% HP / sec (~40s min during burst window)
+    // DPS THROTTLE (anti-cheat ceiling per second):
+    // Scales dynamically: max 2.5% HP/sec (normal) or 5.0% HP/sec (staggered)
     const curSec = Math.floor((ARENA.frameCount || 0) / 60);
     if (boss._dmgWindowSec !== curSec) {
       boss._dmgWindowSec = curSec;
       boss._dmgTakenThisSec = 0;
     }
 
-    const secCapPct = boss.isStaggered ? 0.025 : 0.0135;
-    const maxSecDmg = Math.floor(boss.maxHp * secCapPct);
+    const secCapPct = boss.isStaggered ? 0.050 : 0.025;
+    const maxSecDmg = Math.max(5000, Math.floor(boss.maxHp * secCapPct));
     const roomLeft = Math.max(0, maxSecDmg - (boss._dmgTakenThisSec || 0));
 
     if (roomLeft <= 0) {
-      // Ironclad resistance: chips minimum damage so visual clicks, audio, and floating texts still trigger
-      finalDmg = Math.max(1, Math.floor(finalDmg * 0.05));
+      finalDmg = Math.max(1, Math.floor(finalDmg * 0.08));
     } else if (finalDmg > roomLeft) {
       const excess = finalDmg - roomLeft;
-      finalDmg = roomLeft + Math.floor(excess * 0.08);
+      finalDmg = roomLeft + Math.floor(excess * 0.12);
     }
 
     boss._dmgTakenThisSec = (boss._dmgTakenThisSec || 0) + finalDmg;
     boss.hp = Math.max(0, boss.hp - finalDmg);
+
+    // Passive Item: Satanic & General Lifesteal (capped per hit to prevent infinite invulnerability)
+    const lifestealPct = stats.lifesteal || 0;
+    if (p && lifestealPct > 0) {
+      const pMax = p.maxHp || 500;
+      const rawHeal = Math.floor(finalDmg * (lifestealPct / 100));
+      const heal = Math.max(1, Math.min(Math.floor(pMax * 0.08), rawHeal));
+      p.currentHp = Math.min(pMax, p.currentHp + heal);
+      if (ARENA.frameCount % 10 === 0) {
+        spawnFloatingText(p.x, p.y - 25, `+${heal} HP 🩸`, "#22c55e");
+      }
+    }
 
     // BOSS PHASES (Epic Boss Phase Transitions):
     // Phase 2 at 66% HP: Boss Enrages, gains speed and a radial shockwave!
@@ -1813,7 +2136,7 @@
     if (hpRatio <= 0.66 && !boss._phase2Triggered) {
       boss._phase2Triggered = true;
       boss.enrageStage = "angry";
-      boss.speed = (boss.speed || 0.6) * 1.15;
+      boss.speed = (boss.speed || 1.4) * 1.15;
       spawnFloatingText(boss.x, boss.y - 45, "🔥 БОСС ВПАДАЕТ В ЯРОСТЬ! ФАЗА 2!", "#ea580c");
       triggerHaptic("heavy");
       if (ARENA.cameraTrauma !== undefined) ARENA.cameraTrauma = 0.65;
@@ -1824,7 +2147,7 @@
     if (hpRatio <= 0.33 && !boss._phase3Triggered) {
       boss._phase3Triggered = true;
       boss.enrageStage = "enraged";
-      boss.speed = (boss.speed || 0.6) * 1.20;
+      boss.speed = (boss.speed || 1.4) * 1.20;
       spawnFloatingText(boss.x, boss.y - 45, "⚡ СМЕРТЕЛЬНАЯ ФАЗА! БОСС БЕЗУМЕН!", "#ef4444");
       triggerHaptic("heavy");
       if (ARENA.cameraTrauma !== undefined) ARENA.cameraTrauma = 0.85;
@@ -1851,38 +2174,41 @@
   }
 
   function calculateBossAttackDamage(boss, baseMult = 1.0) {
-    if (!boss) return 20;
+    if (!boss) return 50;
     const p = ARENA.player;
-    const pMax = Math.max(100, p.maxHp || 500);
     const stats = RPG_STATE.profile?.stats || {};
     const def = Math.max(0, stats.defense || 5);
 
-    const BOSS_TIERS = {
-      golem: 1, lich: 2, tormentor: 3, dragon: 4, roshan: 5,
-      tidehunter: 6, sf_boss: 7, necrophos: 8, invoker_boss: 9, chaos_knight: 10,
-      dark_tormentor: 11, doom: 12, primal_beast: 13, phantom_roshan: 14, enigma: 15
+    // Real boss attack: from entity, template, or tier scaling fallback
+    const BOSS_TIER_ATK = {
+      golem: 140, lich: 210, tormentor: 320, dragon: 500, pudge_boss: 800,
+      faceless_void: 1250, roshan: 1950, tidehunter: 3000, sf_boss: 4600,
+      necrophos: 7000, terrorblade: 11000, invoker_boss: 17500, chaos_knight: 26500,
+      dark_tormentor: 42000, storm_spirit: 64000, doom: 98000, primal_beast: 150000,
+      phantom_roshan: 230000, tinker_boss: 350000, enigma: 500000
     };
-    const bId = ((boss && (boss.id || boss.bossType || boss.name)) || "golem").toLowerCase();
-    let tier = 1;
-    for (const [k, v] of Object.entries(BOSS_TIERS)) {
-      if (bId.includes(k)) { tier = v; break; }
+    let bossAtk = boss.atk || boss.baseAtk;
+    if (!bossAtk) {
+      const bId = ((boss && (boss.id || boss.bossType || boss.name)) || "golem").toLowerCase();
+      for (const [k, v] of Object.entries(BOSS_TIER_ATK)) {
+        if (bId.includes(k)) { bossAtk = v; break; }
+      }
+      bossAtk = bossAtk || 140;
     }
 
-    // THREATENING BOSS DAMAGE SCALING PER HIT (% of player max HP):
-    // Golem (tier 1): 8% HP per normal hit
-    // Lich (tier 2): 10% HP
-    // Tormentor (tier 3): 12% HP
-    // Dragon (tier 4): 14% HP
-    // Roshan (tier 5): 16% HP (Smashes/Charges deal 24-35%)
-    // Enigma (tier 15): 28% HP
-    const basePct = (0.07 + Math.min(tier, 15) * 0.014) * baseMult;
-    let rawDmg = Math.floor(pMax * basePct);
+    // Phase Enrage multiplier (when boss is enraged/furious/angry)
+    let enrageMult = 1.0;
+    if (boss.enrageStage === "enraged") enrageMult = 1.40;
+    else if (boss.enrageStage === "furious") enrageMult = 1.25;
+    else if (boss.enrageStage === "angry") enrageMult = 1.15;
 
-    // Defense reduction: player armor mitigates up to 45% of damage
-    const dr = Math.min(0.45, (def * 0.025) / (1.0 + def * 0.025));
-    let finalDmg = Math.max(15, Math.floor(rawDmg * (1.0 - dr)));
+    let rawDmg = Math.floor(bossAtk * baseMult * enrageMult);
 
-    if (p.isBlocking) {
+    // Hyperbolic player defense reduction: DR = def / (def + 80), max 80%
+    const dr = Math.min(0.80, (def * 1.0) / (def + 80));
+    let finalDmg = Math.max(10, Math.floor(rawDmg * (1.0 - dr)));
+
+    if (p && p.isBlocking) {
       finalDmg = Math.floor(finalDmg * 0.40);
     }
 
@@ -1893,42 +2219,70 @@
     const p = ARENA.player;
     if (!p || (p.isInvulnerable && p.isInvulnerable > 0)) return 0;
 
-    const pMax = Math.max(100, p.maxHp || 500);
-    const boss = ARENA.bossEntity;
-    const BOSS_TIERS = {
-      golem: 1, lich: 2, tormentor: 3, dragon: 4, roshan: 5,
-      tidehunter: 6, sf_boss: 7, necrophos: 8, invoker_boss: 9, chaos_knight: 10,
-      dark_tormentor: 11, doom: 12, primal_beast: 13, phantom_roshan: 14, enigma: 15
-    };
-    const bId = ((boss && (boss.id || boss.bossType || boss.name)) || "golem").toLowerCase();
-    let tier = 1;
-    for (const [k, v] of Object.entries(BOSS_TIERS)) {
-      if (bId.includes(k)) { tier = v; break; }
+    const stats = RPG_STATE.profile?.stats || {};
+    const eq = RPG_STATE.profile?.equipment || {};
+
+    // 1. Passive Item: Butterfly / Agility Evasion (dodge chance)
+    const dodgeChance = Math.min(70, stats.dodge_chance || 0);
+    if (dodgeChance > 0 && Math.random() * 100 < dodgeChance) {
+      spawnFloatingText(p.x, p.y - 25, "💨 УВОРОТ! (БАБОЧКА)", "#38bdf8");
+      triggerHaptic("light");
+      return 0; // Completely dodge incoming attack!
     }
 
-    // FAIR ANTI-ONE-SHOT CEILING per single hit:
-    // Golem: max 25% player max HP
-    // Roshan: max 38% player max HP
-    // Enigma: max 48% player max HP
-    const maxHitPct = 0.22 + Math.min(tier, 15) * 0.018;
-    const maxDmg = Math.max(25, Math.floor(pMax * maxHitPct));
-    let finalDmg = Math.min(Math.max(1, rawDmg), maxDmg);
+    // 2. Passive Item: Radiance Blind (17% chance boss misses attack)
+    const hasRadiance = Object.values(eq).some(it => it && (it.name?.includes("Radiance") || it.name?.includes("Сияние") || it.bonus?.miss_aura));
+    if (hasRadiance && Math.random() < 0.17) {
+      spawnFloatingText(p.x, p.y - 25, "💨 ПРОМАХ БОССА! (РАДИАНС)", "#f59e0b");
+      triggerHaptic("light");
+      return 0; // Boss blinded!
+    }
+
+    let finalDmg = Math.max(1, rawDmg);
+
+    // 3. Passive Item: Vanguard / Crimson Guard Damage Block (70% chance to block 80 dmg)
+    const damageBlock = stats.damage_block || 0;
+    if (damageBlock > 0 && Math.random() < 0.70) {
+      finalDmg = Math.max(1, finalDmg - damageBlock);
+      spawnFloatingText(p.x, p.y - 20, `🛡️ БЛОК -${damageBlock} (АВАНГАРД)`, "#94a3b8");
+    }
+
+    // 4. Passive Item: Blade Mail Damage Return (Reflect 35% damage back to boss)
+    const reflectPct = stats.reflect || 0;
+    if (reflectPct > 0) {
+      const reflectDmg = Math.max(1, Math.floor(rawDmg * (reflectPct / 100)));
+      if (ARENA.isRaidBossBattle && ARENA.bossEntity && ARENA.bossEntity.hp > 0) {
+        applyDamageToBoss(ARENA.bossEntity, reflectDmg);
+        spawnFloatingText(ARENA.bossEntity.x, ARENA.bossEntity.y - 25, `🪞 ВОЗВРАТКА -${reflectDmg}!`, "#c084fc");
+      } else if (ARENA.creeps && ARENA.creeps.length > 0) {
+        const targetCreep = ARENA.creeps.find(c => c.hp > 0);
+        if (targetCreep) {
+          safeDamageCreep(targetCreep, reflectDmg);
+          spawnFloatingText(targetCreep.x, targetCreep.y - 25, `🪞 ВОЗВРАТКА -${reflectDmg}!`, "#c084fc");
+        }
+      }
+    }
+
+    const pMax = Math.max(100, p.maxHp || 500);
 
     // HEALTH GATE PROTECTION:
-    // If ANY hit would kill player from > 1 HP, save player at 1 HP and grant 1.5s (90 frames) invulnerability!
-    if (p.currentHp > 1 && finalDmg >= p.currentHp && !p._healthGateActive) {
-      p._healthGateActive = true;
-      finalDmg = Math.max(0, p.currentHp - 1);
+    // Only saves player ONCE per 60s from an unexpected lethal hit if they were at high health (>60% HP)
+    // Prevents cheap 1-frame deaths from full HP, but consecutive hits WILL KILL!
+    const nowFrame = ARENA.frameCount || 0;
+    if (p.currentHp > pMax * 0.60 && finalDmg >= p.currentHp && (!p._lastHealthGateFrame || nowFrame - p._lastHealthGateFrame > 3600)) {
+      p._lastHealthGateFrame = nowFrame;
+      finalDmg = Math.max(1, p.currentHp - 1);
       p.currentHp = 1;
-      p.isInvulnerable = 90;
+      p.isInvulnerable = 18; // Brief 0.3s window to react
       spawnFloatingText(p.x, p.y - 30, "🛡️ СПАСЕНИЕ ОТ ВАНШОТА!", "#38bdf8");
+      triggerHaptic("heavy");
       return finalDmg;
-    }
-    if (p.currentHp > pMax * 0.25) {
-      p._healthGateActive = false;
     }
 
     p.currentHp = Math.max(0, p.currentHp - finalDmg);
+    if (p.currentHp <= 0) {
+      handlePlayerArenaDeath();
+    }
     return finalDmg;
   }
 
@@ -1953,6 +2307,27 @@
           }
           return;
         }
+      }
+      if (ARENA.waveState === "boss_defeat") {
+        if (ARENA._bossDefeatRetryBounds) {
+          const rb = ARENA._bossDefeatRetryBounds;
+          if (cx >= rb.x && cx <= rb.x + rb.w && cy >= rb.y && cy <= rb.y + rb.h) {
+            if (ARENA.currentRaidBoss && ARENA.currentRaidBoss.id) {
+              startRaidBossActionBattle(ARENA.currentRaidBoss.id);
+            } else {
+              exitRaidBossBattle();
+            }
+            return;
+          }
+        }
+        if (ARENA._bossDefeatExitBounds) {
+          const eb = ARENA._bossDefeatExitBounds;
+          if (cx >= eb.x && cx <= eb.x + eb.w && cy >= eb.y && cy <= eb.y + eb.h) {
+            exitRaidBossBattle();
+            return;
+          }
+        }
+        return;
       }
       if (ARENA.waveState === "prompt" || ARENA.waveState === "retry_prompt") {
         if (ARENA.waveState === "retry_prompt") {
@@ -2143,6 +2518,12 @@
           confirmNextWave();
         } else if (ARENA.waveState === "retry_prompt") {
           retryCurrentFloor();
+        } else if (ARENA.waveState === "boss_defeat") {
+          if (ARENA.currentRaidBoss && ARENA.currentRaidBoss.id) {
+            startRaidBossActionBattle(ARENA.currentRaidBoss.id);
+          } else {
+            exitRaidBossBattle();
+          }
         } else if (ARENA.blockWindowActive) {
           playerBlock();
         } else if (ARENA.qteActive) {
@@ -2318,19 +2699,28 @@
     // TOP-DOWN ARCHERO-STYLE UPDATE LOOP
     // =========================================================================
     if (ARENA.topDownMode || ARENA.isRaidBossBattle) {
-      // 1. Dynamic, responsive walking speed in 520x720 arena (+2.2 units speed boost)
-      const moveSpeed = 3.35 * (1.0 + Math.min(0.25, (stats.agility || 10) * 0.002));
+      // 0. Update player status effects (Stun, Freeze, Slow, DoTs)
+      if (p.stunTimer > 0) p.stunTimer--;
+      if (p.freezeTimer > 0) p.freezeTimer--;
+      const isImmobilized = (p.stunTimer > 0) || (p.freezeTimer > 0) || p.isFrozenInTime;
 
-      if (ARENA.player.isMoving && (Math.abs(ARENA.joystick.dx) > 0.06 || Math.abs(ARENA.joystick.dy) > 0.06)) {
+      // 1. Dynamic walking speed (slowed if slowTimer active)
+      let moveSpeed = 3.35 * (1.0 + Math.min(0.25, (stats.agility || 10) * 0.002));
+      if (p.slowTimer > 0) {
+        p.slowTimer--;
+        moveSpeed *= (p.slowRatio || 0.45);
+      }
+
+      if (!isImmobilized && ARENA.player.isMoving && (Math.abs(ARENA.joystick.dx) > 0.06 || Math.abs(ARENA.joystick.dy) > 0.06)) {
         p.x += ARENA.joystick.dx * moveSpeed;
         p.y += ARENA.joystick.dy * moveSpeed;
         p.x = Math.max(30, Math.min(490, p.x));
         p.y = Math.max(40, Math.min(680, p.y));
       }
 
-      // Continuous Auto-Fire (Run & Gun) — Continuous fire directly at the boss even while moving!
+      // Continuous Auto-Fire (Run & Gun) — blocked when stunned or frozen!
       const target = (ARENA.bossEntity && ARENA.bossEntity.hp > 0) ? ARENA.bossEntity : (ARENA.creeps.find(c => c.hp > 0) || null);
-      if (target && target.hp > 0) {
+      if (target && target.hp > 0 && !isImmobilized) {
         // Hero faces the boss in combat
         const toTargetAngle = Math.atan2(target.y - p.y, target.x - p.x);
         p.facingAngle = toTargetAngle;
@@ -2338,9 +2728,41 @@
         p.shootCooldown = (p.shootCooldown || 0) - 1;
 
         if (p.shootCooldown <= 0) {
-          fireTopDownAttack(null);
+          if (p.blindTimer > 0) {
+            p.blindTimer--;
+            if (Math.random() < 0.65) {
+              p.shootCooldown = 26;
+              spawnFloatingText(p.x, p.y - 20, "🔴 ПРОМАХ (ОСЛЕПЛЕНИЕ)!", "#ef4444");
+            } else {
+              fireTopDownAttack(null);
+            }
+          } else {
+            fireTopDownAttack(null);
+          }
         }
       }
+
+      // Burn DoT ticking
+      if (p.burnTimer > 0) {
+        p.burnTimer--;
+        if (ARENA.frameCount % 24 === 0) {
+          const bDmg = Math.max(10, p.burnDmg || Math.floor(calculateBossAttackDamage(ARENA.bossEntity, 0.16)));
+          applyDamageToPlayer(bDmg, "burn");
+          spawnFloatingText(p.x, p.y - 20, `🔥 ОЖОГ -${bDmg}`, "#f97316");
+          if (p.currentHp <= 0) { handlePlayerArenaDeath(); return; }
+        }
+      }
+      // Poison DoT ticking
+      if (p.poisonTimer > 0) {
+        p.poisonTimer--;
+        if (ARENA.frameCount % 24 === 0) {
+          const psDmg = Math.max(10, p.poisonDmg || Math.floor(calculateBossAttackDamage(ARENA.bossEntity, 0.16)));
+          applyDamageToPlayer(psDmg, "poison");
+          spawnFloatingText(p.x, p.y - 20, `☣️ ЯД -${psDmg}`, "#84cc16");
+          if (p.currentHp <= 0) { handlePlayerArenaDeath(); return; }
+        }
+      }
+      if (p.silenceTimer > 0) p.silenceTimer--;
 
       // 2. Dash Cooldown & Invulnerability
       if (ARENA.dodgeCooldown > 0) ARENA.dodgeCooldown--;
@@ -2398,101 +2820,13 @@
         }
       }
 
-      // 4. BRAWL STARS BOSS FIGHT AI (Chase, Stomp, Charge Rush, Rocket Barrage, Enrage)
+      // 4. EPIC BOSS ENCOUNTER AI (Dynamic Chase, Signature Abilities & Ultimates)
       const boss = ARENA.bossEntity;
       if (boss && boss.hp > 0) {
-        // Enrage Timer progression
-        boss.enrageTimer = (boss.enrageTimer || 0) + 1;
-        if (boss.enrageTimer > 5400) {
-          boss.enrageStage = "enraged";
-          boss.enraged = true;
-        } else if (boss.enrageTimer > 3600) {
-          boss.enrageStage = "furious";
-        } else if (boss.enrageTimer > 2000) {
-          boss.enrageStage = "angry";
+        if (typeof updateCustomBossAI === "function") {
+          updateCustomBossAI(boss, p, ARENA);
         }
-
-        // Find closest target (player or active companion)
-        let closestTarget = p;
-        let minDist = Math.hypot(p.x - boss.x, p.y - boss.y);
-        for (const comp of (ARENA.bossCompanions || [])) {
-          if (comp.hp > 0) {
-            const d = Math.hypot(comp.x - boss.x, comp.y - boss.y);
-            if (d < minDist) { minDist = d; closestTarget = comp; }
-          }
-        }
-
-        // Decrement cooldowns
-        boss.meleeCooldown = Math.max(0, (boss.meleeCooldown || 0) - 1);
-        boss.chargeCooldown = Math.max(0, (boss.chargeCooldown || 0) - 1);
-        boss.barrageCooldown = Math.max(0, (boss.barrageCooldown || 0) - 1);
-
-        const bSpeedMult = boss.enrageStage === "enraged" ? 1.25 : boss.enrageStage === "furious" ? 1.15 : boss.enrageStage === "angry" ? 1.08 : 1.0;
-
-        // BOSS STATE MACHINE (SLOW, DELIBERATE, READABLE PACING)
-        if (boss.state === "chase" || !boss.state) {
-          boss.state = "chase";
-          // 1. SLOW HEAVY MARCH (speed 0.42 - easily outmaneuvered!)
-          const bAng = Math.atan2(closestTarget.y - boss.y, closestTarget.x - boss.x);
-          const moveSpd = (boss.speed || 0.42) * bSpeedMult;
-          boss.x += Math.cos(bAng) * moveSpd;
-          boss.y += Math.sin(bAng) * moveSpd;
-          boss.facing = Math.cos(bAng) >= 0 ? 1 : -1;
-
-          // Footstep smoke particles
-          if (ARENA.frameCount % 28 === 0) {
-            ARENA.specialEffects.push({
-              x: boss.x + (Math.random() * 20 - 10),
-              y: boss.y + boss.radius * 0.7,
-              timer: 18,
-              type: "smoke"
-            });
-          }
-
-          // Trigger Charge / Таран (Every ~8 sec, 1.1s clear warning beam!)
-          if (boss.chargeCooldown <= 0 && minDist > 80) {
-            boss.state = "telegraph_charge";
-            boss.stateTimer = 68; // ~1.1 seconds warning beam
-            boss.chargeAngle = Math.atan2(p.y - boss.y, p.x - boss.x);
-            // Menacing charge rush: 3.2 px/frame
-            boss.chargeVx = Math.cos(boss.chargeAngle) * 3.2;
-            boss.chargeVy = Math.sin(boss.chargeAngle) * 3.2;
-            boss.chargeCooldown = 480; // 8s cooldown
-            spawnFloatingText(boss.x, boss.y - 35, "⚠️ ТАРАН! РЫВОК В СТОРОНУ!", "#ef4444");
-            triggerHaptic("heavy");
-          }
-          // Trigger Barrage / Ракеты (Every ~6 sec)
-          else if (boss.barrageCooldown <= 0 && minDist > 75) {
-            boss.state = "barrage";
-            boss.stateTimer = 35;
-            boss.barrageCooldown = 360; // 6s cooldown
-            spawnFloatingText(boss.x, boss.y - 30, "🚀 ЗАЛП РАКЕТ!", "#f59e0b");
-            const pAng = Math.atan2(p.y - boss.y, p.x - boss.x);
-            const numRockets = boss.enrageStage === "enraged" ? 5 : 3;
-            for (let r = 0; r < numRockets; r++) {
-              const spread = (r - (numRockets - 1) / 2) * 0.26;
-              const rAng = pAng + spread;
-              ARENA.bossProjectiles.push({
-                x: boss.x + Math.cos(rAng) * (boss.radius + 8),
-                y: boss.y + Math.sin(rAng) * (boss.radius + 8),
-                vx: Math.cos(rAng) * 2.2,
-                vy: Math.sin(rAng) * 2.2,
-                radius: 8.0,
-                color: "#ef4444",
-                timer: 260,
-                dmg: calculateBossAttackDamage(boss, 0.85)
-              });
-            }
-          }
-          // Trigger Melee Strike if close (0.85s windup warning circle)
-          else if (minDist < 60 && boss.meleeCooldown <= 0) {
-            boss.state = "telegraph_melee";
-            boss.stateTimer = 52; // ~0.85s telegraph windup
-            boss.meleeCooldown = 150; // 2.5 seconds between melee attacks
-            spawnFloatingText(boss.x, boss.y - 30, "⚠️ ЗАМАХ!", "#f59e0b");
-          }
-        }
-        else if (boss.state === "telegraph_melee") {
+        if (boss.state === "telegraph_melee") {
           boss.stateTimer--;
           if (boss.stateTimer <= 0) {
             boss.state = "melee_smash";
@@ -2582,8 +2916,8 @@
 
         // Direct contact damage if player touches boss while standing
         if (Math.hypot(p.x - boss.x, p.y - boss.y) < (boss.radius + p.radius) && !p.isInvulnerable) {
-          if ((ARENA.frameCount % 55) === 0) {
-            const rawDmg = calculateBossAttackDamage(boss, 0.40);
+          if ((ARENA.frameCount % 25) === 0) {
+            const rawDmg = calculateBossAttackDamage(boss, 0.65);
             const actualDmg = applyDamageToPlayer(rawDmg, "contact");
             spawnFloatingText(p.x, p.y - 20, `💥 -${actualDmg}`, "#ef4444");
             triggerHaptic("medium");
@@ -2592,7 +2926,7 @@
         }
       }
 
-      // Update Boss Projectiles (Slow Floating Rockets)
+      // Update Boss Projectiles (Floating Rockets & Ability Missiles)
       for (let bpi = ARENA.bossProjectiles.length - 1; bpi >= 0; bpi--) {
         const bp = ARENA.bossProjectiles[bpi];
         bp.x += (bp.vx || 0);
@@ -2601,11 +2935,15 @@
 
         // Hit player (anti-one-shot protected!)
         if (Math.hypot(p.x - bp.x, p.y - bp.y) < (p.radius + bp.radius) && !p.isInvulnerable) {
-          const dmg = bp.dmg || 25;
-          const actualDmg = applyDamageToPlayer(dmg, "rocket");
-          spawnFloatingText(p.x, p.y - 20, `💥 РАКЕТА -${actualDmg}`, "#ef4444");
+          const rawDmg = bp.dmg || calculateBossAttackDamage(ARENA.bossEntity, 0.85);
+          const actualDmg = applyDamageToPlayer(rawDmg, bp.label || "projectile");
+          const lbl = bp.label ? `${bp.label} ` : "💥 СНАРЯД ";
+          spawnFloatingText(p.x, p.y - 20, `${lbl}-${actualDmg}`, bp.color || "#ef4444");
           triggerHaptic("heavy");
-          ARENA.cameraTrauma = Math.min(1.0, (ARENA.cameraTrauma || 0) + 0.2);
+          ARENA.cameraTrauma = Math.min(1.0, (ARENA.cameraTrauma || 0) + 0.25);
+          if (typeof applyStatusEffectToPlayer === "function") {
+            applyStatusEffectToPlayer(bp);
+          }
           ARENA.bossProjectiles.splice(bpi, 1);
           if (p.currentHp <= 0) { handlePlayerArenaDeath(); return; }
           continue;
@@ -2659,35 +2997,84 @@
       p.x = Math.max(25, Math.min(ARENA.width - 25, p.x));
       // Dodge cooldown
       if (ARENA.dodgeCooldown > 0) ARENA.dodgeCooldown--;
-      // Update danger zones
+    }
+
+    // Update danger zones (Global: Top-Down, Raid Bosses, Dungeon Waves, Side-Scroller)
+    if (ARENA.dangerZones && ARENA.dangerZones.length > 0) {
       for (let dz = ARENA.dangerZones.length - 1; dz >= 0; dz--) {
         const zone = ARENA.dangerZones[dz];
         zone.timer--;
         if (zone.timer <= 0) {
-          // Zone expired -> deal damage if player inside
           if (zone.phase === "telegraph") {
             zone.phase = "active";
-            zone.timer = zone.activeFrames || 8;
+            zone.timer = zone.activeFrames || 14;
           } else {
             ARENA.dangerZones.splice(dz, 1);
+            continue;
           }
         }
-        // Active damage zone
+        // Active damage zone collision
         if (zone.phase === "active") {
           let inZone = false;
           if (zone.type === "rect") {
             inZone = p.x > zone.x && p.x < zone.x + zone.w && p.y > zone.y - 30 && p.y < zone.y + zone.h + 30;
           } else if (zone.type === "circle") {
             inZone = Math.hypot(p.x - zone.cx, p.y - zone.cy) < zone.r + p.radius;
+          } else if (zone.type === "line") {
+            const l2 = (zone.x2 - zone.x1) * (zone.x2 - zone.x1) + (zone.y2 - zone.y1) * (zone.y2 - zone.y1);
+            let d = 9999;
+            if (l2 === 0) {
+              d = Math.hypot(p.x - zone.x1, p.y - zone.y1);
+            } else {
+              let t = ((p.x - zone.x1) * (zone.x2 - zone.x1) + (p.y - zone.y1) * (zone.y2 - zone.y1)) / l2;
+              t = Math.max(0, Math.min(1, t));
+              d = Math.hypot(p.x - (zone.x1 + t * (zone.x2 - zone.x1)), p.y - (zone.y1 + t * (zone.y2 - zone.y1)));
+            }
+            inZone = d < ((zone.width || 34) / 2) + p.radius;
+          } else if (zone.type === "cone") {
+            const d = Math.hypot(p.x - (zone.cx || zone.x), p.y - (zone.cy || zone.y));
+            if (d <= (zone.range || zone.length || 180) + p.radius) {
+              let diff = Math.atan2(p.y - (zone.cy || zone.y), p.x - (zone.cx || zone.x)) - (zone.angle || 0);
+              while (diff > Math.PI) diff -= Math.PI * 2;
+              while (diff < -Math.PI) diff += Math.PI * 2;
+              if (Math.abs(diff) <= ((zone.spread || 0.8) / 2)) inZone = true;
+            }
           }
-          if (inZone && !p.isInvulnerable && !zone.hitPlayer) {
-            zone.hitPlayer = true;
-            const rawDmg = Math.floor(zone.damage || (ARENA.bossEntity?.atk || 30));
-            p.currentHp = Math.max(0, p.currentHp - rawDmg);
-            spawnFloatingText(p.x, p.y - 25, "-" + rawDmg, "#ef4444");
-            ARENA.cameraTrauma = 0.5;
-            triggerHaptic("heavy");
-            if (p.currentHp <= 0) { handlePlayerArenaDeath(); return; }
+
+          if (inZone && !p.isInvulnerable) {
+            let shouldHit = false;
+            if (zone.isDot) {
+              zone.lastHitFrame = zone.lastHitFrame || 0;
+              if (ARENA.frameCount - zone.lastHitFrame >= 20) {
+                zone.lastHitFrame = ARENA.frameCount;
+                shouldHit = true;
+              }
+            } else if (!zone.hitPlayer) {
+              zone.hitPlayer = true;
+              shouldHit = true;
+            }
+
+            if (shouldHit) {
+              const rawDmg = Math.floor(zone.damage || calculateBossAttackDamage(ARENA.bossEntity, 1.0));
+              const actualDmg = applyDamageToPlayer(rawDmg, zone.label || "danger_zone");
+              const lbl = zone.label ? `${zone.label} ` : "";
+              spawnFloatingText(p.x, p.y - 25, `${lbl}-${actualDmg}`, zone.color || "#ef4444");
+              ARENA.cameraTrauma = Math.min(1.0, (ARENA.cameraTrauma || 0) + 0.35);
+              triggerHaptic("heavy");
+
+              // Apply CC & Status effects to Player
+              if (typeof applyStatusEffectToPlayer === "function") {
+                if (zone.effect) applyStatusEffectToPlayer(zone.effect);
+                if (zone.stun) applyStatusEffectToPlayer({ stun: zone.stun });
+                if (zone.slow || zone.slowEffect) applyStatusEffectToPlayer({ slow: true, slowDuration: zone.slowDuration || 90, slowRatio: zone.slowRatio || zone.slowEffect || 0.45 });
+                if (zone.silence) applyStatusEffectToPlayer({ silence: zone.silence });
+                if (zone.burn) applyStatusEffectToPlayer({ burn: true, burnDuration: zone.burnDuration, burnDmg: zone.burnDmg });
+                if (zone.poison) applyStatusEffectToPlayer({ poison: true, poisonDuration: zone.poisonDuration, poisonDmg: zone.poisonDmg });
+                if (zone.blind) applyStatusEffectToPlayer({ blind: true, blindDuration: zone.blindDuration });
+              }
+
+              if (p.currentHp <= 0) { handlePlayerArenaDeath(); return; }
+            }
           }
         }
       }
@@ -2702,14 +3089,19 @@
       const eq = RPG_STATE.profile?.equipment || {};
       const hasRadiance = Object.values(eq).some(it => it && (it.name?.includes("Radiance") || it.name?.includes("Сияние") || it.bonus?.radiance_burn));
       if (hasRadiance) {
-        const radDmg = Math.floor((stats.max_atk || 30) * 0.45 + 50);
-        for (const c of ARENA.creeps) {
-          if (c.isBoss) {
-            const rd = applyDamageToBoss(c, radDmg);
-            spawnFloatingText(c.x, c.y - 18, `🔥 РАДИАНС -${rd}`, "#ea580c");
-          } else {
-            c.hp -= radDmg;
-            spawnFloatingText(c.x, c.y - 18, `🔥 РАДИАНС -${radDmg}`, "#ea580c");
+        const radDmg = Math.floor((stats.max_atk || 30) * 0.45 + 65);
+        if (ARENA.isRaidBossBattle && ARENA.bossEntity && ARENA.bossEntity.hp > 0) {
+          const rd = applyDamageToBoss(ARENA.bossEntity, radDmg);
+          spawnFloatingText(ARENA.bossEntity.x, ARENA.bossEntity.y - 18, `🔥 РАДИАНС -${rd}`, "#ea580c");
+        } else {
+          for (const c of ARENA.creeps) {
+            if (c.isBoss) {
+              const rd = applyDamageToBoss(c, radDmg);
+              spawnFloatingText(c.x, c.y - 18, `🔥 РАДИАНС -${rd}`, "#ea580c");
+            } else {
+              c.hp -= radDmg;
+              spawnFloatingText(c.x, c.y - 18, `🔥 РАДИАНС -${radDmg}`, "#ea580c");
+            }
           }
         }
       }
@@ -4595,15 +4987,912 @@
     ARENA.totalCreepsSpawned++;
   }
 
+// ============================================================================
+// 04_boss_abilities_early.js — Signature Attacks & Ultimates for Bosses 1–10
+// (Golem, Lich, Tormentor, Dragon, Pudge, Void, Roshan, Tidehunter, SF, Necro)
+// ============================================================================
+
+function executeBossAbilityEarly(boss, p, bId, abilityType, ARENA) {
+  const pAng = Math.atan2(p.y - boss.y, p.x - boss.x);
+  const dist = Math.hypot(p.x - boss.x, p.y - boss.y);
+
+  // 1. GOLEM: Fissure (Разлом) or Tectonic Seismic Slam (Сейсмовзрыв)
+  if (bId.includes("golem") || bId.includes("голем")) {
+    if (abilityType === "ultimate") {
+      spawnFloatingText(boss.x, boss.y - 35, "🌋 ТЕКТОНИЧЕСКИЙ СЕЙСМОВЗРЫВ!", "#f97316");
+      triggerHaptic("heavy");
+      ARENA.cameraTrauma = 0.8;
+      for (let ring = 1; ring <= 3; ring++) {
+        ARENA.dangerZones.push({
+          type: "circle", cx: boss.x, cy: boss.y, r: ring * 65,
+          timer: ring * 18, phase: "telegraph", activeFrames: 14,
+          damage: calculateBossAttackDamage(boss, 1.4),
+          stun: 60, color: "#f97316", label: "🌋 СЕЙСМОВЗРЫВ (СТАН!)"
+        });
+      }
+    } else {
+      spawnFloatingText(boss.x, boss.y - 30, "🪨 РАЗЛОМ ЗЕМЛИ!", "#facc15");
+      const fx = boss.x + Math.cos(pAng) * 160;
+      const fy = boss.y + Math.sin(pAng) * 160;
+      ARENA.dangerZones.push({
+        type: "line", x1: boss.x, y1: boss.y, x2: fx, y2: fy, width: 36,
+        timer: 35, phase: "telegraph", activeFrames: 12,
+        damage: calculateBossAttackDamage(boss, 0.95),
+        slow: true, slowDuration: 90, slowRatio: 0.4,
+        color: "#ca8a04", label: "🪨 РАЗЛОМ (ЗАМЕДЛЕНИЕ)"
+      });
+    }
+    return true;
+  }
+
+  // 2. LICH: Frost Nova (Ледяной взрыв) or Chain Frost (Цепной Мороз)
+  if (bId.includes("lich") || bId.includes("лич")) {
+    if (abilityType === "ultimate") {
+      spawnFloatingText(boss.x, boss.y - 35, "❄️ ЦЕПНОЙ МОРОЗ (CHAIN FROST)!", "#38bdf8");
+      triggerHaptic("heavy");
+      ARENA.bossProjectiles.push({
+        x: boss.x, y: boss.y,
+        vx: Math.cos(pAng) * 3.6, vy: Math.sin(pAng) * 3.6,
+        radius: 12, color: "#38bdf8", timer: 320,
+        bouncesLeft: 5, isChainFrost: true,
+        dmg: calculateBossAttackDamage(boss, 1.6),
+        stun: 35, slow: true, slowDuration: 120, slowRatio: 0.3,
+        label: "❄️ ЦЕПНОЙ МОРОЗ (СТАН)"
+      });
+    } else {
+      spawnFloatingText(boss.x, boss.y - 30, "🧊 FROST NOVA!", "#0284c7");
+      ARENA.dangerZones.push({
+        type: "circle", cx: p.x, cy: p.y, r: 52,
+        timer: 30, phase: "telegraph", activeFrames: 15,
+        damage: calculateBossAttackDamage(boss, 0.9),
+        slow: true, slowDuration: 100, slowRatio: 0.35,
+        color: "#0284c7", label: "🧊 NOVA (ЗАМЕДЛЕНИЕ)"
+      });
+    }
+    return true;
+  }
+
+  // 3. TORMENTOR: Needle Spread or Reflective Barrier + Resonance Beam
+  if (bId.includes("tormentor") && !bId.includes("dark_tormentor")) {
+    if (abilityType === "ultimate") {
+      spawnFloatingText(boss.x, boss.y - 35, "🔮 РЕЗОНАНСНЫЙ ЛАЗЕР БЕЗДНЫ!", "#e879f9");
+      boss.shieldActive = 180;
+      triggerHaptic("heavy");
+      ARENA.bossTelegraphs.push({
+        type: "rotating_beam", cx: boss.x, cy: boss.y,
+        angle: 0, rotSpeed: 0.04, length: 260, timer: 180,
+        damage: calculateBossAttackDamage(boss, 0.5), color: "#c084fc",
+        burn: true, burnDuration: 90, burnDmg: Math.floor(boss.atk * 0.18)
+      });
+    } else {
+      spawnFloatingText(boss.x, boss.y - 30, "✨ ОСКОЛОЧНЫЙ ЗАЛП!", "#c084fc");
+      for (let n = 0; n < 8; n++) {
+        const ang = (n * Math.PI) / 4;
+        ARENA.bossProjectiles.push({
+          x: boss.x + Math.cos(ang) * 20, y: boss.y + Math.sin(ang) * 20,
+          vx: Math.cos(ang) * 3.2, vy: Math.sin(ang) * 3.2,
+          radius: 7, color: "#e879f9", timer: 180,
+          dmg: calculateBossAttackDamage(boss, 0.75),
+          slow: true, slowDuration: 60, slowRatio: 0.6,
+          label: "✨ ОСКОЛОК"
+        });
+      }
+    }
+    return true;
+  }
+
+  // 4. DRAGON: Fire Breath Cone or Inferno Cataclysm
+  if (bId.includes("dragon") || bId.includes("дракон")) {
+    if (abilityType === "ultimate") {
+      spawnFloatingText(boss.x, boss.y - 35, "🌋 КАТАКЛИЗМ ИНФЕРНО!", "#ef4444");
+      triggerHaptic("heavy");
+      ARENA.cameraTrauma = 0.9;
+      for (let m = 0; m < 5; m++) {
+        const mx = 60 + Math.random() * (ARENA.width - 120);
+        const my = 60 + Math.random() * (ARENA.height - 120);
+        ARENA.dangerZones.push({
+          type: "circle", cx: mx, cy: my, r: 48,
+          timer: 25 + m * 14, phase: "telegraph", activeFrames: 16,
+          damage: calculateBossAttackDamage(boss, 1.25),
+          stun: 45, burn: true, burnDuration: 150, burnDmg: Math.floor(boss.atk * 0.22),
+          color: "#ea580c", label: "🌋 МЕТЕОР (СТАН & ОЖОГ)"
+        });
+      }
+    } else {
+      spawnFloatingText(boss.x, boss.y - 30, "🔥 ОГНЕННОЕ ДЫХАНИЕ!", "#f97316");
+      ARENA.dangerZones.push({
+        type: "cone", cx: boss.x, cy: boss.y, angle: pAng, spread: 0.6, range: 170,
+        timer: 32, phase: "telegraph", activeFrames: 24,
+        damage: calculateBossAttackDamage(boss, 0.85),
+        burn: true, burnDuration: 120, burnDmg: Math.floor(boss.atk * 0.18),
+        color: "#ef4444", label: "🔥 ПЛАМЯ (ОЖОГ)"
+      });
+    }
+    return true;
+  }
+
+  // 5. PUDGE: Meat Hook (Мясницкий крюк) or Dismember (Расчленение)
+  if (bId.includes("pudge") || bId.includes("мясник")) {
+    if (abilityType === "ultimate") {
+      spawnFloatingText(boss.x, boss.y - 35, "🩸 РАСЧЛЕНЕНИЕ (DISMEMBER)!", "#dc2626");
+      triggerHaptic("heavy");
+      ARENA.dangerZones.push({
+        type: "circle", cx: boss.x, cy: boss.y, r: 85,
+        timer: 15, phase: "telegraph", activeFrames: 60, isDot: true,
+        damage: calculateBossAttackDamage(boss, 0.35),
+        poison: true, poisonDuration: 60, slow: true, slowDuration: 60, slowRatio: 0.35,
+        color: "#84cc16", label: "🩸 РАСЧЛЕНЕНИЕ (ЯД & ЗАМЕДЛЕНИЕ)"
+      });
+    } else {
+      spawnFloatingText(boss.x, boss.y - 30, "🪝 МЯСНИЦКИЙ КРЮК!", "#78716c");
+      triggerHaptic("medium");
+      ARENA.bossProjectiles.push({
+        x: boss.x, y: boss.y,
+        vx: Math.cos(pAng) * 5.4, vy: Math.sin(pAng) * 5.4,
+        radius: 10, color: "#a8a29e", timer: 120, isMeatHook: true,
+        originX: boss.x, originY: boss.y,
+        dmg: calculateBossAttackDamage(boss, 1.1),
+        stun: 60, label: "🪝 ХУК (СТАН!)"
+      });
+    }
+    return true;
+  }
+
+  // 6. FACELESS VOID: Time Walk or Chronosphere (Хроносфера)
+  if (bId.includes("faceless_void") || bId.includes("хроно")) {
+    if (abilityType === "ultimate") {
+      spawnFloatingText(boss.x, boss.y - 35, "⏳ ХРОНОСФЕРА (ОСТАНОВКА ВРЕМЕНИ)!", "#a855f7");
+      triggerHaptic("heavy");
+      ARENA.cameraTrauma = 1.0;
+      ARENA.bossTelegraphs.push({
+        type: "chronosphere", cx: p.x, cy: p.y, r: 105,
+        timer: 140, color: "rgba(168, 85, 247, 0.45)"
+      });
+      boss.x = p.x + 25;
+      boss.y = p.y - 25;
+    } else {
+      spawnFloatingText(boss.x, boss.y - 30, "⌛ TIME WALK + BASH!", "#c084fc");
+      boss.x = p.x - Math.cos(pAng) * 45;
+      boss.y = p.y - Math.sin(pAng) * 45;
+      ARENA.dangerZones.push({
+        type: "circle", cx: boss.x, cy: boss.y, r: 55,
+        timer: 24, phase: "telegraph", activeFrames: 10,
+        damage: calculateBossAttackDamage(boss, 1.2),
+        stun: 60, color: "#c084fc", label: "⌛ BASH (СТАН 1с!)"
+      });
+    }
+    return true;
+  }
+
+  // 7. ROSHAN: Ground Slam or Roar of Chaos (Рёв Ярости)
+  if (bId.includes("roshan") && !bId.includes("phantom")) {
+    if (abilityType === "ultimate") {
+      spawnFloatingText(boss.x, boss.y - 35, "🐲 РЁВ ЯРОСТИ РОШАНА!", "#ef4444");
+      triggerHaptic("heavy");
+      ARENA.cameraTrauma = 1.0;
+      if (typeof applyStatusEffectToPlayer === "function") {
+        applyStatusEffectToPlayer({ knockback: true, knockbackAngle: pAng, knockbackDist: 70 });
+      }
+      for (let rc = 0; rc < 4; rc++) {
+        ARENA.dangerZones.push({
+          type: "circle", cx: p.x + (Math.random() * 80 - 40), cy: p.y + (Math.random() * 80 - 40), r: 44,
+          timer: 20 + rc * 12, phase: "telegraph", activeFrames: 14,
+          damage: calculateBossAttackDamage(boss, 1.1),
+          stun: 55, color: "#b45309", label: "⚠️ ОБВАЛ (СТАН!)"
+        });
+      }
+    } else {
+      spawnFloatingText(boss.x, boss.y - 30, "💥 РОШАН-СЛЭМ!", "#ea580c");
+      ARENA.dangerZones.push({
+        type: "circle", cx: boss.x, cy: boss.y, r: 75,
+        timer: 32, phase: "telegraph", activeFrames: 12,
+        damage: calculateBossAttackDamage(boss, 0.95),
+        slow: true, slowDuration: 120, slowRatio: 0.3,
+        color: "#ea580c", label: "💥 СЛЭМ (ЗАМЕДЛЕНИЕ)"
+      });
+    }
+    return true;
+  }
+
+  // 8. TIDEHUNTER: Gush or Ravage (Сокрушительный Раваж)
+  if (bId.includes("tidehunter") || bId.includes("левиафан")) {
+    if (abilityType === "ultimate") {
+      spawnFloatingText(boss.x, boss.y - 35, "🐙 СОКРУШИТЕЛЬНЫЙ РАВАЖ (RAVAGE)!", "#10b981");
+      triggerHaptic("heavy");
+      ARENA.cameraTrauma = 1.0;
+      for (let tr = 1; tr <= 4; tr++) {
+        ARENA.dangerZones.push({
+          type: "circle", cx: boss.x, cy: boss.y, r: tr * 68,
+          timer: tr * 14, phase: "telegraph", activeFrames: 16,
+          damage: calculateBossAttackDamage(boss, 1.35),
+          stun: 90, color: "#059669", label: "🐙 РАВАЖ (ОГЛУШЕНИЕ 1.5с!)"
+        });
+      }
+    } else {
+      spawnFloatingText(boss.x, boss.y - 30, "🌊 ВОДЯНАЯ СТРУЯ (GUSH)!", "#34d399");
+      ARENA.bossProjectiles.push({
+        x: boss.x, y: boss.y,
+        vx: Math.cos(pAng) * 4.2, vy: Math.sin(pAng) * 4.2,
+        radius: 12, color: "#10b981", timer: 140,
+        dmg: calculateBossAttackDamage(boss, 0.85),
+        slow: true, slowDuration: 120, slowRatio: 0.35,
+        label: "🌊 GUSH (ЗАМЕДЛЕНИЕ)"
+      });
+    }
+    return true;
+  }
+
+  // 9. SHADOW FIEND: Shadowraze Trio or Requiem of Souls (Реквием Душ)
+  if (bId.includes("sf_boss") || bId.includes("nevermore")) {
+    if (abilityType === "ultimate") {
+      spawnFloatingText(boss.x, boss.y - 35, "💀 РЕКВИЕМ ДУШ (REQUIEM OF SOULS)!", "#dc2626");
+      triggerHaptic("heavy");
+      ARENA.cameraTrauma = 1.0;
+      for (let s = 0; s < 16; s++) {
+        const sAng = (s * Math.PI * 2) / 16;
+        ARENA.bossProjectiles.push({
+          x: boss.x, y: boss.y,
+          vx: Math.cos(sAng) * 3.4, vy: Math.sin(sAng) * 3.4,
+          radius: 9, color: "#ef4444", timer: 180,
+          dmg: calculateBossAttackDamage(boss, 1.2),
+          silence: 120, slow: true, slowDuration: 120, slowRatio: 0.35,
+          label: "💀 РЕКВИЕМ (САЙЛЕНС 2с!)"
+        });
+      }
+    } else {
+      spawnFloatingText(boss.x, boss.y - 30, "🔥 ТРОЙНОЙ SHADOWRAZE!", "#f87171");
+      const dists = [60, 115, 175];
+      dists.forEach((d, idx) => {
+        const cx = boss.x + Math.cos(pAng) * d;
+        const cy = boss.y + Math.sin(pAng) * d;
+        ARENA.dangerZones.push({
+          type: "circle", cx, cy, r: 42,
+          timer: 18 + idx * 12, phase: "telegraph", activeFrames: 12,
+          damage: calculateBossAttackDamage(boss, 0.95),
+          slow: true, slowDuration: 60, slowRatio: 0.5,
+          color: "#b91c1c", label: `🔥 КОИЛ #${idx + 1}`
+        });
+      });
+    }
+    return true;
+  }
+
+  // 10. NECROPHOS: Death Pulse or Reaper's Scythe (Коса Смерти)
+  if (bId.includes("necrophos") || bId.includes("чумной")) {
+    if (abilityType === "ultimate") {
+      spawnFloatingText(boss.x, boss.y - 35, "☠️ КОСА СМЕРТИ (REAPER'S SCYTHE)!", "#84cc16");
+      triggerHaptic("heavy");
+      const missingPct = Math.max(0, 1.0 - (p.currentHp / (p.maxHp || 400)));
+      const scytheDmg = calculateBossAttackDamage(boss, 1.2 + missingPct * 1.8);
+      ARENA.dangerZones.push({
+        type: "circle", cx: p.x, cy: p.y, r: 60,
+        timer: 45, phase: "telegraph", activeFrames: 15,
+        damage: scytheDmg, stun: 75,
+        color: "#65a30d", label: "💀 КОСА СМЕРТИ (КАЗНЬ!)"
+      });
+    } else {
+      spawnFloatingText(boss.x, boss.y - 30, "💚 ПУЛЬСАЦИЯ СМЕРТИ!", "#a3e635");
+      for (let dp = 0; dp < 8; dp++) {
+        const dpAng = (dp * Math.PI) / 4;
+        ARENA.bossProjectiles.push({
+          x: boss.x, y: boss.y,
+          vx: Math.cos(dpAng) * 2.8, vy: Math.sin(dpAng) * 2.8,
+          radius: 8, color: "#84cc16", timer: 160,
+          dmg: calculateBossAttackDamage(boss, 0.75),
+          poison: true, poisonDuration: 90,
+          label: "💚 ПУЛЬС СМЕРТИ (ЯД)"
+        });
+      }
+    }
+    return true;
+  }
+
+  return false;
+}
+
+// ============================================================================
+// 04_boss_abilities_late.js — Signature Attacks & Ultimates for Bosses 11–20
+// (Terrorblade, Invoker, CK, Dark Tormentor, Storm, Doom, Primal Beast, Phantom Roshan, Tinker, Enigma)
+// ============================================================================
+
+function executeBossAbilityLate(boss, p, bId, abilityType, ARENA) {
+  const pAng = Math.atan2(p.y - boss.y, p.x - boss.x);
+
+  // 11. TERRORBLADE: Conjure Image or Sunder (Разрыв Души)
+  if (bId.includes("terrorblade") || bId.includes("демон бездны")) {
+    if (abilityType === "ultimate") {
+      spawnFloatingText(boss.x, boss.y - 35, "😈 РАЗРЫВ ДУШИ (SUNDER)!", "#a855f7");
+      triggerHaptic("heavy");
+      ARENA.cameraTrauma = 0.7;
+      const siphonDmg = Math.floor(p.currentHp * 0.25);
+      applyDamageToPlayer(siphonDmg, "sunder");
+      boss.hp = Math.min(boss.maxHp, boss.hp + siphonDmg * 150);
+      spawnFloatingText(p.x, p.y - 25, `🩸 SUNDER -${siphonDmg}`, "#a855f7");
+      if (typeof applyStatusEffectToPlayer === "function") {
+        applyStatusEffectToPlayer({ slow: true, slowDuration: 90, slowRatio: 0.4 });
+      }
+    } else {
+      spawnFloatingText(boss.x, boss.y - 30, "👥 ИЛЛЮЗИЯ ТЬМЫ!", "#7c3aed");
+      for (let im = 0; im < 2; im++) {
+        const iAng = pAng + (im === 0 ? -0.4 : 0.4);
+        ARENA.bossProjectiles.push({
+          x: boss.x, y: boss.y,
+          vx: Math.cos(iAng) * 3.8, vy: Math.sin(iAng) * 3.8,
+          radius: 9, color: "#8b5cf6", timer: 150,
+          dmg: calculateBossAttackDamage(boss, 0.7),
+          slow: true, slowDuration: 60, slowRatio: 0.5,
+          label: "👥 ТЕНЕВОЙ БОЛТ"
+        });
+      }
+    }
+    return true;
+  }
+
+  // 12. INVOKER: Chaos Meteor or Sun Strike (Солнечный Удар)
+  if (bId.includes("invoker_boss") || bId.includes("инвокер")) {
+    if (abilityType === "ultimate") {
+      spawnFloatingText(boss.x, boss.y - 35, "☀️ СОЛНЕЧНЫЙ УДАР (SUN STRIKE)!", "#facc15");
+      triggerHaptic("heavy");
+      ARENA.dangerZones.push({
+        type: "circle", cx: p.x, cy: p.y, r: 55,
+        timer: 48, phase: "telegraph", activeFrames: 14,
+        damage: calculateBossAttackDamage(boss, 2.0),
+        burn: true, burnDuration: 120, burnDmg: Math.floor(boss.atk * 0.28),
+        color: "#facc15", label: "☀️ SUN STRIKE (ОЖОГ)"
+      });
+    } else {
+      spawnFloatingText(boss.x, boss.y - 30, "☄️ МЕТЕОР ХАОСА!", "#f97316");
+      const mx = boss.x + Math.cos(pAng) * 220;
+      const my = boss.y + Math.sin(pAng) * 220;
+      ARENA.dangerZones.push({
+        type: "line", x1: boss.x, y1: boss.y, x2: mx, y2: my, width: 48,
+        timer: 36, phase: "telegraph", activeFrames: 24,
+        damage: calculateBossAttackDamage(boss, 1.25),
+        burn: true, burnDuration: 150, burnDmg: Math.floor(boss.atk * 0.22),
+        slow: true, slowDuration: 90, slowRatio: 0.4,
+        color: "#ea580c", label: "☄️ МЕТЕОР (ОЖОГ & ЗАМЕДЛЕНИЕ)"
+      });
+    }
+    return true;
+  }
+
+  // 13. CHAOS KNIGHT: Chaos Bolt or Phantasm (Фантазм)
+  if (bId.includes("chaos_knight") || bId.includes("всадник хаоса")) {
+    if (abilityType === "ultimate") {
+      spawnFloatingText(boss.x, boss.y - 35, "🐎 ФАНТАЗМ ХАОСА (PHANTASM)!", "#f59e0b");
+      triggerHaptic("heavy");
+      for (let c = -1; c <= 1; c++) {
+        const cAng = pAng + c * 0.35;
+        ARENA.bossProjectiles.push({
+          x: boss.x, y: boss.y,
+          vx: Math.cos(cAng) * 4.4, vy: Math.sin(cAng) * 4.4,
+          radius: 14, color: "#f59e0b", timer: 140,
+          dmg: calculateBossAttackDamage(boss, 1.15),
+          slow: true, slowDuration: 75, slowRatio: 0.45,
+          label: "🐎 ФАНТАЗМ"
+        });
+      }
+    } else {
+      spawnFloatingText(boss.x, boss.y - 30, "⚡ CHAOS BOLT!", "#ef4444");
+      const randDmgMult = 0.6 + Math.random() * 0.8;
+      const randStun = Math.floor(45 + Math.random() * 55);
+      ARENA.bossProjectiles.push({
+        x: boss.x, y: boss.y,
+        vx: Math.cos(pAng) * 4.8, vy: Math.sin(pAng) * 4.8,
+        radius: 11, color: "#ef4444", timer: 140,
+        dmg: calculateBossAttackDamage(boss, randDmgMult),
+        stun: randStun, label: `⚡ CHAOS BOLT (СТАН ${Math.round(randStun/60*10)/10}с!)`
+      });
+    }
+    return true;
+  }
+
+  // 14. DARK TORMENTOR: Void Needles or Singularity Pulse (Пульс Сингулярности)
+  if (bId.includes("dark_tormentor") || bId.includes("тёмный терзатель")) {
+    if (abilityType === "ultimate") {
+      spawnFloatingText(boss.x, boss.y - 35, "🌌 ПУЛЬС СИНГУЛЯРНОСТИ!", "#c084fc");
+      triggerHaptic("heavy");
+      ARENA.cameraTrauma = 0.9;
+      p.x = p.x * 0.6 + boss.x * 0.4;
+      p.y = p.y * 0.6 + boss.y * 0.4;
+      ARENA.dangerZones.push({
+        type: "circle", cx: boss.x, cy: boss.y, r: 120,
+        timer: 36, phase: "telegraph", activeFrames: 18,
+        damage: calculateBossAttackDamage(boss, 1.65),
+        stun: 75, color: "#9333ea", label: "🌌 СИНГУЛЯРНОСТЬ (СТАН!)"
+      });
+    } else {
+      spawnFloatingText(boss.x, boss.y - 30, "✨ ШТОРМ ИГЛ БЕЗДНЫ!", "#e9d5ff");
+      for (let n = 0; n < 12; n++) {
+        const nAng = (n * Math.PI * 2) / 12;
+        ARENA.bossProjectiles.push({
+          x: boss.x, y: boss.y,
+          vx: Math.cos(nAng) * 3.6, vy: Math.sin(nAng) * 3.6,
+          radius: 8, color: "#c084fc", timer: 160,
+          dmg: calculateBossAttackDamage(boss, 0.8),
+          silence: 60, label: "✨ ИГЛА (САЙЛЕНС 1с)"
+        });
+      }
+    }
+    return true;
+  }
+
+  // 15. STORM SPIRIT: Static Remnant or Ball Lightning (Шаровая Молния)
+  if (bId.includes("storm_spirit") || bId.includes("громовой")) {
+    if (abilityType === "ultimate") {
+      spawnFloatingText(boss.x, boss.y - 35, "⚡ ШАРОВАЯ МОЛНИЯ (BALL LIGHTNING)!", "#38bdf8");
+      triggerHaptic("heavy");
+      ARENA.cameraTrauma = 0.8;
+      const targetX = p.x + Math.cos(pAng) * 80;
+      const targetY = p.y + Math.sin(pAng) * 80;
+      ARENA.dangerZones.push({
+        type: "line", x1: boss.x, y1: boss.y, x2: targetX, y2: targetY, width: 44,
+        timer: 20, phase: "telegraph", activeFrames: 10,
+        damage: calculateBossAttackDamage(boss, 1.5),
+        stun: 60, color: "#38bdf8", label: "⚡ ШАРОВАЯ МОЛНИЯ (СТАН 1с!)"
+      });
+      boss.x = Math.max(40, Math.min(ARENA.width - 40, targetX));
+      boss.y = Math.max(40, Math.min(ARENA.height - 40, targetY));
+    } else {
+      spawnFloatingText(boss.x, boss.y - 30, "⚡ ЭЛЕКТРО-РЕЗЕРВ (STATIC REMNANT)!", "#facc15");
+      ARENA.dangerZones.push({
+        type: "circle", cx: boss.x, cy: boss.y, r: 60,
+        timer: 15, phase: "telegraph", activeFrames: 120,
+        damage: calculateBossAttackDamage(boss, 0.95),
+        slow: true, slowDuration: 90, slowRatio: 0.35,
+        color: "#facc15", label: "⚡ РЕМНАНТ (ШОК)"
+      });
+    }
+    return true;
+  }
+
+  // 16. DOOM: Scorched Earth or DOOM (Печать Рока)
+  if (bId.includes("doom") || bId.includes("вестник")) {
+    if (abilityType === "ultimate") {
+      spawnFloatingText(boss.x, boss.y - 35, "🔥 ПЕЧАТЬ РОКА (DOOM)!", "#dc2626");
+      triggerHaptic("heavy");
+      ARENA.cameraTrauma = 1.0;
+      p.doomDebuffTimer = 240;
+      if (typeof applyStatusEffectToPlayer === "function") {
+        applyStatusEffectToPlayer({ silence: 240 });
+      }
+      ARENA.dangerZones.push({
+        type: "circle", cx: p.x, cy: p.y, r: 65,
+        timer: 24, phase: "telegraph", activeFrames: 14,
+        damage: calculateBossAttackDamage(boss, 1.4),
+        silence: 240, color: "#7f1d1d", label: "🔥 DOOM (САЙЛЕНС 4с & УРОН!)"
+      });
+    } else {
+      spawnFloatingText(boss.x, boss.y - 30, "🌋 ВЫЖЖЕННАЯ ЗЕМЛЯ (SCORCHED EARTH)!", "#f97316");
+      ARENA.dangerZones.push({
+        type: "circle", cx: boss.x, cy: boss.y, r: 95,
+        timer: 15, phase: "telegraph", activeFrames: 90, isDot: true,
+        damage: calculateBossAttackDamage(boss, 0.4),
+        burn: true, burnDuration: 90, burnDmg: Math.floor(boss.atk * 0.18),
+        color: "#ea580c", label: "🌋 ПЛАМЯ АДА (ОЖОГ)"
+      });
+    }
+    return true;
+  }
+
+  // 17. PRIMAL BEAST: Onslaught Rush or Pulverize (Вбивание в Землю)
+  if (bId.includes("primal_beast") || bId.includes("первобытный")) {
+    if (abilityType === "ultimate") {
+      spawnFloatingText(boss.x, boss.y - 35, "🦣 ВБИВАНИЕ В ЗЕМЛЮ (PULVERIZE)!", "#b45309");
+      triggerHaptic("heavy");
+      ARENA.cameraTrauma = 1.0;
+      for (let pw = 0; pw < 3; pw++) {
+        ARENA.dangerZones.push({
+          type: "circle", cx: boss.x, cy: boss.y, r: 70 + pw * 30,
+          timer: 18 + pw * 16, phase: "telegraph", activeFrames: 14,
+          damage: calculateBossAttackDamage(boss, 1.25),
+          stun: 65, color: "#92400e", label: "🦣 ВБИВАНИЕ (СТАН 1с!)"
+        });
+      }
+    } else {
+      spawnFloatingText(boss.x, boss.y - 30, "💨 НЕИСТОВЫЙ РАЗБЕГ (ONSLAUGHT)!", "#f59e0b");
+      boss.state = "telegraph_charge";
+      boss.stateTimer = 45;
+      boss.chargeAngle = pAng;
+      boss.chargeVx = Math.cos(pAng) * 4.8;
+      boss.chargeVy = Math.sin(pAng) * 4.8;
+    }
+    return true;
+  }
+
+  // 18. PHANTOM ROSHAN: Astral Slam or Astral Tear (Астральный Разрыв)
+  if (bId.includes("phantom_roshan") || bId.includes("призрачный рошан")) {
+    if (abilityType === "ultimate") {
+      spawnFloatingText(boss.x, boss.y - 35, "👻 АСТРАЛЬНЫЙ РАЗРЫВ ХАОСА!", "#34d399");
+      triggerHaptic("heavy");
+      ARENA.cameraTrauma = 1.0;
+      for (let as = 0; as < 8; as++) {
+        const asAng = (as * Math.PI * 2) / 8;
+        ARENA.bossProjectiles.push({
+          x: boss.x, y: boss.y,
+          vx: Math.cos(asAng) * 3.8, vy: Math.sin(asAng) * 3.8,
+          radius: 12, color: "#10b981", timer: 180,
+          dmg: calculateBossAttackDamage(boss, 1.3),
+          silence: 90, slow: true, slowDuration: 90, slowRatio: 0.4,
+          label: "👻 АСТРАЛ (САЙЛЕНС 1.5с)"
+        });
+      }
+    } else {
+      spawnFloatingText(boss.x, boss.y - 30, "💥 АСТРАЛЬНЫЙ SLAM!", "#6ee7b7");
+      ARENA.dangerZones.push({
+        type: "circle", cx: boss.x, cy: boss.y, r: 85,
+        timer: 28, phase: "telegraph", activeFrames: 16,
+        damage: calculateBossAttackDamage(boss, 1.1),
+        slow: true, slowDuration: 120, slowRatio: 0.3,
+        color: "#059669", label: "👻 АСТРАЛЬНЫЙ СЛЭМ"
+      });
+    }
+    return true;
+  }
+
+  // 19. TINKER: Laser Beam or March of the Machines (Марш Роботов)
+  if (bId.includes("tinker_boss") || bId.includes("архиинженер")) {
+    if (abilityType === "ultimate") {
+      spawnFloatingText(boss.x, boss.y - 35, "🤖 МАРШ РОБОТОВ (MARCH OF MACHINES)!", "#facc15");
+      triggerHaptic("heavy");
+      for (let bot = 0; bot < 12; bot++) {
+        const bx = 40 + (bot * (ARENA.width - 80)) / 11;
+        ARENA.bossProjectiles.push({
+          x: bx, y: 15,
+          vx: (Math.random() - 0.5) * 1.2, vy: 2.2 + Math.random() * 0.8,
+          radius: 7, color: "#eab308", timer: 240, isSpiderBot: true,
+          dmg: calculateBossAttackDamage(boss, 0.45),
+          slow: true, slowDuration: 45, slowRatio: 0.5,
+          label: "🤖 РОБОТ-ПАУК"
+        });
+      }
+    } else {
+      spawnFloatingText(boss.x, boss.y - 30, "🔴 ОСЛЕПЛЯЮЩИЙ ЛАЗЕР!", "#ef4444");
+      ARENA.dangerZones.push({
+        type: "line", x1: boss.x, y1: boss.y,
+        x2: boss.x + Math.cos(pAng) * 260, y2: boss.y + Math.sin(pAng) * 260,
+        width: 32, timer: 30, phase: "telegraph", activeFrames: 18,
+        damage: calculateBossAttackDamage(boss, 1.2),
+        blind: true, blindDuration: 150,
+        color: "#ef4444", label: "🔴 ЛАЗЕР (ОСЛЕПЛЕНИЕ 2.5с!)"
+      });
+    }
+    return true;
+  }
+
+  // 20. ENIGMA: Midnight Pulse or BLACK HOLE (Чёрная Дыра)
+  if (bId.includes("enigma") || bId.includes("пожиратель миров")) {
+    if (abilityType === "ultimate") {
+      spawnFloatingText(boss.x, boss.y - 35, "🌌 ЧЁРНАЯ ДЫРА (BLACK HOLE)!", "#6366f1");
+      triggerHaptic("heavy");
+      ARENA.cameraTrauma = 1.0;
+      ARENA.bossTelegraphs.push({
+        type: "black_hole", cx: ARENA.width / 2, cy: ARENA.height / 2,
+        r: 125, timer: 180, color: "#1e1b4b",
+        dmg: calculateBossAttackDamage(boss, 0.45)
+      });
+    } else {
+      spawnFloatingText(boss.x, boss.y - 30, "💜 ПУЛЬС ПОЛУНОЧИ (MIDNIGHT PULSE)!", "#818cf8");
+      ARENA.dangerZones.push({
+        type: "circle", cx: p.x, cy: p.y, r: 90,
+        timer: 20, phase: "telegraph", activeFrames: 90, isDot: true,
+        damage: calculateBossAttackDamage(boss, 0.4),
+        slow: true, slowDuration: 60, slowRatio: 0.4,
+        color: "#4338ca", label: "💜 MIDNIGHT PULSE"
+      });
+    }
+    return true;
+  }
+
+  return false;
+}
+
+// ============================================================================
+// 04_boss_ai_core.js — Boss AI Dispatcher, Ability Rotation & Ultimate Gauge
+// ============================================================================
+
+function updateCustomBossAI(boss, p, ARENA) {
+  if (!boss || boss.hp <= 0) return;
+
+  // Initialize timers if missing
+  if (boss.skillCooldown == null) boss.skillCooldown = 180; // ~3s initial grace
+  if (boss.ultimateMeter == null) boss.ultimateMeter = 0;
+  if (boss.meleeCooldown == null) boss.meleeCooldown = 60;
+  if (!ARENA.bossTelegraphs) ARENA.bossTelegraphs = [];
+
+  const bId = (boss.bossType || boss.boss_id || boss.id || boss.name || "").toLowerCase();
+
+  // Enrage Stages based on Timer or HP
+  boss.enrageTimer = (boss.enrageTimer || 0) + 1;
+  const hpPct = boss.hp / (boss.maxHp || 1);
+  if (boss.enrageTimer > 5400 || hpPct <= 0.15) {
+    boss.enrageStage = "enraged";
+  } else if (boss.enrageTimer > 3600 || hpPct <= 0.40) {
+    boss.enrageStage = "furious";
+  } else if (boss.enrageTimer > 1800 || hpPct <= 0.70) {
+    boss.enrageStage = "angry";
+  }
+
+  const bSpeedMult = boss.enrageStage === "enraged" ? 1.3 : boss.enrageStage === "furious" ? 1.18 : boss.enrageStage === "angry" ? 1.08 : 1.0;
+
+  // Decrement cooldowns & charge Ultimate meter
+  boss.skillCooldown = Math.max(0, boss.skillCooldown - 1);
+  boss.meleeCooldown = Math.max(0, boss.meleeCooldown - 1);
+  boss.chargeCooldown = Math.max(0, (boss.chargeCooldown || 0) - 1);
+  boss.ultimateMeter = Math.min(100, (boss.ultimateMeter || 0) + (boss.enrageStage === "enraged" ? 0.14 : 0.08));
+
+  // Find nearest target (player or active companion)
+  let closestTarget = p;
+  let minDist = Math.hypot(p.x - boss.x, p.y - boss.y);
+  for (const comp of (ARENA.bossCompanions || [])) {
+    if (comp.hp > 0) {
+      const d = Math.hypot(comp.x - boss.x, comp.y - boss.y);
+      if (d < minDist) { minDist = d; closestTarget = comp; }
+    }
+  }
+
+  // Handle Doom debuff on player
+  if (p.doomDebuffTimer > 0) {
+    p.doomDebuffTimer--;
+    if (ARENA.frameCount % 30 === 0) {
+      const dDmg = Math.max(8, Math.floor((p.maxHp || 400) * 0.035));
+      applyDamageToPlayer(dDmg, "doom");
+      spawnFloatingText(p.x, p.y - 20, `🔥 DOOM -${dDmg}`, "#dc2626");
+    }
+  }
+
+  // Update Special Boss Telegraphs (Black Hole & Chronosphere)
+  for (let bti = ARENA.bossTelegraphs.length - 1; bti >= 0; bti--) {
+    const bt = ARENA.bossTelegraphs[bti];
+    bt.timer--;
+
+    // 1. BLACK HOLE PULL
+    if (bt.type === "black_hole") {
+      const dHole = Math.hypot(p.x - bt.cx, p.y - bt.cy);
+      if (dHole < bt.r + 65) {
+        // Gravitational vortex pull towards center
+        const pPullAng = Math.atan2(bt.cy - p.y, bt.cx - p.x);
+        p.x += Math.cos(pPullAng) * 3.4;
+        p.y += Math.sin(pPullAng) * 3.4;
+        applyStatusEffectToPlayer({ silence: 25, slow: true, slowDuration: 25, slowRatio: 0.3 });
+        if (ARENA.frameCount % 20 === 0) {
+          const bhDmg = Math.floor(bt.dmg || calculateBossAttackDamage(boss, 0.45));
+          applyDamageToPlayer(bhDmg, "black_hole");
+          spawnFloatingText(p.x, p.y - 20, `🌌 ЧЁРНАЯ ДЫРА -${bhDmg}`, "#6366f1");
+          ARENA.cameraTrauma = 0.4;
+          triggerHaptic("heavy");
+        }
+      }
+    }
+    // 2. CHRONOSPHERE TIME FREEZE
+    else if (bt.type === "chronosphere") {
+      const dChrono = Math.hypot(p.x - bt.cx, p.y - bt.cy);
+      if (dChrono < bt.r) {
+        p.isFrozenInTime = true;
+        applyStatusEffectToPlayer({ stun: 12 });
+      } else {
+        p.isFrozenInTime = false;
+      }
+    }
+    // 3. ROTATING RESONANCE BEAM
+    else if (bt.type === "rotating_beam") {
+      bt.angle += bt.rotSpeed;
+      const bx2 = bt.cx + Math.cos(bt.angle) * bt.length;
+      const by2 = bt.cy + Math.sin(bt.angle) * bt.length;
+      const lineDist = distToSegment(p.x, p.y, bt.cx, bt.cy, bx2, by2);
+      if (lineDist < p.radius + 14 && (ARENA.frameCount % 20 === 0)) {
+        const bmDmg = Math.floor(bt.damage || calculateBossAttackDamage(boss, 0.6));
+        applyDamageToPlayer(bmDmg, "beam");
+        spawnFloatingText(p.x, p.y - 20, `🔮 ЛАЗЕР -${bmDmg}`, "#e879f9");
+        applyStatusEffectToPlayer({ burn: true, burnDuration: 80, burnDmg: Math.floor(boss.atk * 0.15) });
+      }
+    }
+
+    if (bt.timer <= 0) {
+      if (bt.type === "chronosphere") p.isFrozenInTime = false;
+      ARENA.bossTelegraphs.splice(bti, 1);
+    }
+  }
+
+  // BOSS STATE MACHINE
+  if (boss.state === "chase" || !boss.state) {
+    boss.state = "chase";
+
+    // Dynamic Pursuit
+    const bAng = Math.atan2(closestTarget.y - boss.y, closestTarget.x - boss.x);
+    const moveSpd = (boss.speed || 1.45) * bSpeedMult;
+    boss.x += Math.cos(bAng) * moveSpd;
+    boss.y += Math.sin(bAng) * moveSpd;
+    boss.facing = Math.cos(bAng) >= 0 ? 1 : -1;
+
+    // 1. Trigger Signature ULTIMATE if meter is full (100%)
+    if (boss.ultimateMeter >= 100) {
+      boss.ultimateMeter = 0;
+      boss.skillCooldown = 160;
+      let casted = false;
+      if (typeof executeBossAbilityEarly === "function") {
+        casted = executeBossAbilityEarly(boss, p, bId, "ultimate", ARENA);
+      }
+      if (!casted && typeof executeBossAbilityLate === "function") {
+        casted = executeBossAbilityLate(boss, p, bId, "ultimate", ARENA);
+      }
+      return;
+    }
+
+    // 2. Trigger Signature Normal Ability (every ~4-6 seconds)
+    if (boss.skillCooldown <= 0 && minDist > 60) {
+      boss.skillCooldown = 260;
+      let casted = false;
+      if (typeof executeBossAbilityEarly === "function") {
+        casted = executeBossAbilityEarly(boss, p, bId, "normal", ARENA);
+      }
+      if (!casted && typeof executeBossAbilityLate === "function") {
+        casted = executeBossAbilityLate(boss, p, bId, "normal", ARENA);
+      }
+      if (casted) return;
+    }
+
+    // 3. Trigger Melee Strike if close
+    if (minDist < (boss.radius + p.radius + 24) && boss.meleeCooldown <= 0) {
+      boss.state = "telegraph_melee";
+      boss.stateTimer = 45;
+      boss.meleeCooldown = 90;
+      spawnFloatingText(boss.x, boss.y - 30, "⚠️ ЗАМАХ!", "#f59e0b");
+    }
+  } else if (boss.state === "telegraph_melee") {
+    boss.stateTimer--;
+    if (boss.stateTimer <= 0) {
+      boss.state = "chase";
+      ARENA.cameraTrauma = 0.45;
+      triggerHaptic("heavy");
+      if (Math.hypot(p.x - boss.x, p.y - boss.y) < (boss.radius + p.radius + 28) && !p.isInvulnerable) {
+        const rawDmg = calculateBossAttackDamage(boss, 1.25);
+        const actualDmg = applyDamageToPlayer(rawDmg, "melee");
+        spawnFloatingText(p.x, p.y - 25, `💥 УДАР -${actualDmg}`, "#ef4444");
+        applyStatusEffectToPlayer({ stun: 30 });
+        if (p.currentHp <= 0) { handlePlayerArenaDeath(); return; }
+      }
+    }
+  }
+
+  // Contact damage check
+  if (Math.hypot(p.x - boss.x, p.y - boss.y) < (boss.radius + p.radius) && !p.isInvulnerable) {
+    if ((ARENA.frameCount % 25) === 0) {
+      const rawDmg = calculateBossAttackDamage(boss, 0.65);
+      const actualDmg = applyDamageToPlayer(rawDmg, "contact");
+      spawnFloatingText(p.x, p.y - 20, `💥 -${actualDmg}`, "#ef4444");
+      triggerHaptic("medium");
+      if (p.currentHp <= 0) { handlePlayerArenaDeath(); }
+    }
+  }
+
+  // Handle Chain Frost bounces and Meat Hook pulling
+  updateSpecialProjectiles(ARENA, boss, p);
+}
+
+function applyStatusEffectToPlayer(effect) {
+  if (!effect) return;
+  const p = ARENA.player;
+  if (!p || p.isInvulnerable) return;
+
+  // BKB (Black King Bar) magic immunity blocks all debuffs!
+  if (p.bkbActive > 0) {
+    if (ARENA.frameCount % 30 === 0) spawnFloatingText(p.x, p.y - 30, "🛡️ БКБ (ИММУНИТЕТ)!", "#facc15");
+    return;
+  }
+
+  // 1. STUN
+  const stunFrames = effect.stun || (effect.isStun ? (effect.stunDuration || 60) : 0);
+  if (stunFrames > 0) {
+    if (!p.stunTimer || p.stunTimer < stunFrames) {
+      p.stunTimer = stunFrames;
+      spawnFloatingText(p.x, p.y - 32, "💫 ОГЛУШЕНИЕ!", "#facc15");
+      triggerHaptic("heavy");
+    }
+  }
+
+  // 2. SLOW
+  if (effect.slow || effect.slowEffect) {
+    const sDur = effect.slowDuration || 90;
+    const sRatio = effect.slowRatio || effect.slowEffect || 0.45;
+    if (!p.slowTimer || p.slowTimer < sDur) {
+      p.slowTimer = sDur;
+      p.slowRatio = sRatio;
+      spawnFloatingText(p.x, p.y - 26, "❄️ ЗАМЕДЛЕНИЕ!", "#38bdf8");
+      triggerHaptic("light");
+    }
+  }
+
+  // 3. SILENCE / DOOM
+  const silFrames = effect.silence || effect.silenceDuration || 0;
+  if (silFrames > 0) {
+    if (!p.silenceTimer || p.silenceTimer < silFrames) {
+      p.silenceTimer = silFrames;
+      spawnFloatingText(p.x, p.y - 32, "🔇 БЕЗМОЛВИЕ!", "#c084fc");
+      triggerHaptic("medium");
+    }
+  }
+
+  // 4. BURN DoT
+  if (effect.burn) {
+    p.burnTimer = effect.burnDuration || 120;
+    p.burnDmg = effect.burnDmg || Math.max(10, Math.floor(calculateBossAttackDamage(ARENA.bossEntity, 0.16)));
+    spawnFloatingText(p.x, p.y - 22, "🔥 ОЖОГ!", "#f97316");
+  }
+
+  // 5. POISON DoT
+  if (effect.poison) {
+    p.poisonTimer = effect.poisonDuration || 120;
+    p.poisonDmg = effect.poisonDmg || Math.max(10, Math.floor(calculateBossAttackDamage(ARENA.bossEntity, 0.16)));
+    spawnFloatingText(p.x, p.y - 22, "☣️ ОТРАВЛЕНИЕ!", "#84cc16");
+  }
+
+  // 6. BLIND
+  if (effect.blind) {
+    p.blindTimer = effect.blindDuration || 120;
+    spawnFloatingText(p.x, p.y - 30, "🔴 ОСЛЕПЛЕНИЕ!", "#ef4444");
+  }
+
+  // 7. KNOCKBACK
+  if (effect.knockback && effect.knockbackAngle != null) {
+    const kbDist = effect.knockbackDist || 35;
+    p.x = Math.max(30, Math.min(490, p.x + Math.cos(effect.knockbackAngle) * kbDist));
+    p.y = Math.max(40, Math.min(680, p.y + Math.sin(effect.knockbackAngle) * kbDist));
+  }
+}
+
+function updateSpecialProjectiles(ARENA, boss, p) {
+  for (let pi = ARENA.bossProjectiles.length - 1; pi >= 0; pi--) {
+    const proj = ARENA.bossProjectiles[pi];
+
+    // Chain Frost Bouncing & Impact
+    if (proj.isChainFrost) {
+      if (proj.x <= 20 || proj.x >= ARENA.width - 20) { proj.vx *= -1; proj.bouncesLeft--; }
+      if (proj.y <= 25 || proj.y >= ARENA.height - 25) { proj.vy *= -1; proj.bouncesLeft--; }
+      if (Math.hypot(p.x - proj.x, p.y - proj.y) < (p.radius + proj.radius + 6) && !p.isInvulnerable) {
+        const cDmg = applyDamageToPlayer(proj.dmg || calculateBossAttackDamage(boss, 1.5), "chain_frost");
+        spawnFloatingText(p.x, p.y - 25, `❄️ ЦЕПНОЙ МОРОЗ -${cDmg}`, "#38bdf8");
+        applyStatusEffectToPlayer({ stun: 35, slow: true, slowDuration: 120, slowRatio: 0.35 });
+        proj.bouncesLeft--;
+        proj.vx = -proj.vx;
+        proj.vy = -proj.vy;
+      }
+      if (proj.bouncesLeft <= 0) { ARENA.bossProjectiles.splice(pi, 1); continue; }
+    }
+
+    // Pudge Meat Hook Drag & Stun
+    if (proj.isMeatHook) {
+      if (Math.hypot(p.x - proj.x, p.y - proj.y) < (p.radius + proj.radius + 8)) {
+        p.x = Math.max(30, Math.min(490, boss.x + Math.cos(Math.atan2(p.y - boss.y, p.x - boss.x)) * (boss.radius + 18)));
+        p.y = Math.max(40, Math.min(680, boss.y + Math.sin(Math.atan2(p.y - boss.y, p.x - boss.x)) * (boss.radius + 18)));
+        const hookDmg = applyDamageToPlayer(proj.dmg || calculateBossAttackDamage(boss, 1.25), "meat_hook");
+        spawnFloatingText(p.x, p.y - 25, `🪝 ПРИТЯНУТ ХУКОМ -${hookDmg}!`, "#ef4444");
+        applyStatusEffectToPlayer({ stun: 60 });
+        triggerHaptic("heavy");
+        ARENA.bossProjectiles.splice(pi, 1);
+        continue;
+      }
+    }
+  }
+}
+
+function distToSegment(px, py, x1, y1, x2, y2) {
+  const l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
+  if (l2 === 0) return Math.hypot(px - x1, py - y1);
+  let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (x1 + t * (x2 - x1)), py - (y1 + t * (y2 - y1)));
+}
+
   function spawnBossCreep() {
     const floor = RPG_STATE.profile?.dungeon_floor || 1;
     const floorScale = Math.pow(1.22, Math.max(0, floor - 1));
 
     const bossTypes = [
-      { name: "РОШАН СВИРЕПЫЙ (Roshan)", icon: "🐲", baseHp: 1500000, baseAtk: 50, badgeBg: "#7f1d1d", badgeBorder: "#facc15" },
-      { name: "ДРЕВНИЙ ТЕРЗАТЕЛЬ (Tormentor)", icon: "💎", baseHp: 1400000, baseAtk: 55, badgeBg: "#4a044e", badgeBorder: "#c084fc" },
-      { name: "ЧЕРНЫЙ ДРАКОН ИНФЕРНО", icon: "🌋", baseHp: 1600000, baseAtk: 48, badgeBg: "#7c2d12", badgeBorder: "#ea580c" },
-      { name: "АРХИЛИЧ НЕКРОПОЛЯ", icon: "💀", baseHp: 1300000, baseAtk: 58, badgeBg: "#18181b", badgeBorder: "#e4e4e7" }
+      { name: "РОШАН СВИРЕПЫЙ (Roshan)", icon: "🐲", baseHp: 12000, baseAtk: 80, defense: 35, badgeBg: "#7f1d1d", badgeBorder: "#facc15" },
+      { name: "ДРЕВНИЙ ТЕРЗАТЕЛЬ (Tormentor)", icon: "💎", baseHp: 10000, baseAtk: 75, defense: 30, badgeBg: "#4a044e", badgeBorder: "#c084fc" },
+      { name: "ЧЕРНЫЙ ДРАКОН ИНФЕРНО", icon: "🌋", baseHp: 14000, baseAtk: 85, defense: 40, badgeBg: "#7c2d12", badgeBorder: "#ea580c" },
+      { name: "АРХИЛИЧ НЕКРОПОЛЯ", icon: "💀", baseHp: 9000, baseAtk: 90, defense: 25, badgeBg: "#18181b", badgeBorder: "#e4e4e7" }
     ];
     const bt = bossTypes[Math.floor(Math.random() * bossTypes.length)];
 
@@ -4612,10 +5901,8 @@
     const playerHp = Math.max(400, stats.hp_max || 400);
 
     const calculatedHp = Math.floor(bt.baseHp * floorScale);
-    const calculatedAtk = Math.max(
-      Math.floor(bt.baseAtk * Math.pow(1.20, Math.max(0, floor - 1))),
-      Math.floor(playerHp * 0.10)
-    );
+    const calculatedAtk = Math.floor(bt.baseAtk * Math.pow(1.15, Math.max(0, floor - 1)));
+    const calculatedDef = Math.floor((bt.defense || 25) * Math.pow(1.10, Math.max(0, floor - 1)));
 
     const boss = {
       name: bt.name + (floor > 1 ? ` [Этаж ${floor}]` : ""),
@@ -4630,6 +5917,7 @@
       hp: calculatedHp,
       maxHp: calculatedHp,
       atk: calculatedAtk,
+      defense: calculatedDef,
       isBoss: true,
       isMinion: false,
       shielded: false,
@@ -4978,6 +6266,17 @@
     const hClass = (RPG_STATE.profile?.hero_class || "pudge").toLowerCase();
     const cost = 20;
 
+    if (p.isFrozenInTime || (p.stunTimer && p.stunTimer > 0)) {
+      spawnFloatingText(p.x, p.y - 25, "💫 ОГЛУШЕНИЕ!", "#facc15");
+      triggerHaptic("error");
+      return;
+    }
+    if ((p.silenceTimer && p.silenceTimer > 0) || (p.doomDebuffTimer && p.doomDebuffTimer > 0)) {
+      spawnFloatingText(p.x, p.y - 25, "🔇 БЕЗМОЛВИЕ (СКИЛЛЫ ЗАБЛОКИРОВАНЫ)!", "#c084fc");
+      triggerHaptic("error");
+      return;
+    }
+
     if (ARENA.skill1Cooldown > 0) {
       const sec = Math.ceil(ARENA.skill1Cooldown / 60);
       spawnFloatingText(p.x, p.y - 25, `${skillCfg.skill1Name}: КД ${sec}с`, "#94a3b8");
@@ -5246,6 +6545,17 @@
     const skillCfg = getHeroSkillConfig();
     const hClass = (RPG_STATE.profile?.hero_class || "pudge").toLowerCase();
     const cost = 35;
+
+    if (p.isFrozenInTime || (p.stunTimer && p.stunTimer > 0)) {
+      spawnFloatingText(p.x, p.y - 25, "💫 ОГЛУШЕНИЕ!", "#facc15");
+      triggerHaptic("error");
+      return;
+    }
+    if ((p.silenceTimer && p.silenceTimer > 0) || (p.doomDebuffTimer && p.doomDebuffTimer > 0)) {
+      spawnFloatingText(p.x, p.y - 25, "🔇 БЕЗМОЛВИЕ (УЛЬТА ЗАБЛОКИРОВАНА)!", "#c084fc");
+      triggerHaptic("error");
+      return;
+    }
 
     if (ARENA.ultCooldown > 0) {
       const sec = Math.ceil(ARENA.ultCooldown / 60);
@@ -6020,6 +7330,17 @@
     }
 
     const p = ARENA.player;
+    if (p.isFrozenInTime || (p.stunTimer && p.stunTimer > 0)) {
+      spawnFloatingText(p.x, p.y - 25, "💫 ОГЛУШЕНИЕ!", "#facc15");
+      triggerHaptic("error");
+      return;
+    }
+    if (p.doomDebuffTimer && p.doomDebuffTimer > 0 && act.key !== "bkb") {
+      spawnFloatingText(p.x, p.y - 25, "🔥 DOOM (ПРЕДМЕТЫ ЗАБЛОКИРОВАНЫ)!", "#dc2626");
+      triggerHaptic("error");
+      return;
+    }
+
     const stats = RPG_STATE.profile?.stats || {};
     const cost = act.def.mpCost || 0;
 
@@ -6326,21 +7647,26 @@
     RPG_STATE.coopRoomData = null;
 
     const bossTmpls = {
-      golem: { id: "golem", name: "Древний Гранитный Голем", icon: "🗿", baseHp: 1500000, baseAtk: 110, scale: 1.35, atkPercent: 0.07, gold: 1200, xp: 900, desc: "Каменный колосс глубин" },
-      lich: { id: "lich", name: "Архилич Некрополя", icon: "☠️", baseHp: 3000000, baseAtk: 160, scale: 1.30, atkPercent: 0.08, gold: 1800, xp: 1400, desc: "Владыка темных заклятий" },
-      tormentor: { id: "tormentor", name: "Древний Терзатель (Tormentor)", icon: "🔮", baseHp: 6000000, baseAtk: 230, scale: 1.30, atkPercent: 0.09, gold: 2600, xp: 2000, desc: "Отражающий монолит" },
-      dragon: { id: "dragon", name: "Дракон Инферно", icon: "🌋", baseHp: 10000000, baseAtk: 330, scale: 1.50, atkPercent: 0.10, gold: 3500, xp: 2700, desc: "Огнедышащий титан" },
-      roshan: { id: "roshan", name: "Рошан (Roshan)", icon: "🐲", baseHp: 15000000, baseAtk: 450, scale: 1.45, atkPercent: 0.11, gold: 4800, xp: 3600, desc: "Хозяин Ямы" },
-      tidehunter: { id: "tidehunter", name: "Левиафан Бездны (Tidehunter)", icon: "🐙", baseHp: 20000000, baseAtk: 540, scale: 1.40, atkPercent: 0.12, gold: 6000, xp: 4600, desc: "[СИЛЬНЕЕ РОШАНА!] Владыка пучин с якорным ударом и Раважем" },
-      sf_boss: { id: "sf_boss", name: "Архидемон Nevermore", icon: "💀", baseHp: 26000000, baseAtk: 640, scale: 1.35, atkPercent: 0.13, gold: 7500, xp: 5800, desc: "[СИЛЬНЕЕ РОШАНА!] Пожиратель душ с черными коилами и Реквиемом" },
-      necrophos: { id: "necrophos", name: "Чумной Владыка (Necrophos)", icon: "🧟", baseHp: 33000000, baseAtk: 740, scale: 1.30, atkPercent: 0.14, gold: 9200, xp: 7000, desc: "[СИЛЬНЕЕ РОШАНА!] Аура мора истощает HP, Коса Смерти рубит" },
-      invoker_boss: { id: "invoker_boss", name: "Демиург Арсенала (Invoker)", icon: "🧙‍♂️", baseHp: 42000000, baseAtk: 860, scale: 1.25, atkPercent: 0.15, gold: 11000, xp: 8500, desc: "[СИЛЬНЕЕ РОШАНА!] Повелитель стихий, хаос-метеоров и ЭМИ" },
-      chaos_knight: { id: "chaos_knight", name: "Всадник Хаоса (Chaos Knight)", icon: "🐎", baseHp: 52000000, baseAtk: 990, scale: 1.45, atkPercent: 0.16, gold: 13500, xp: 10200, desc: "[СИЛЬНЕЕ РОШАНА!] Фантомы параллельных миров и криты" },
-      dark_tormentor: { id: "dark_tormentor", name: "Тёмный Терзатель Бездны", icon: "💎", baseHp: 65000000, baseAtk: 1150, scale: 1.40, atkPercent: 0.17, gold: 16500, xp: 12500, desc: "[СИЛЬНЕЕ РОШАНА!] Отражает 45% урона и стреляет шипами тьмы" },
-      doom: { id: "doom", name: "Вестник Апокалипсиса (Lord Doom)", icon: "👹", baseHp: 80000000, baseAtk: 1320, scale: 1.45, atkPercent: 0.18, gold: 20000, xp: 15000, desc: "[СИЛЬНЕЕ РОШАНА!] Владыка Преисподней с чистым уроном и роком" },
-      primal_beast: { id: "primal_beast", name: "Первобытный Титан (Primal Beast)", icon: "🦣", baseHp: 100000000, baseAtk: 1520, scale: 1.60, atkPercent: 0.19, gold: 25000, xp: 18500, desc: "[СИЛЬНЕЕ РОШАНА!] Сокрушитель материков с диким топотом" },
-      phantom_roshan: { id: "phantom_roshan", name: "Призрачный Рошан Хаоса", icon: "👻", baseHp: 125000000, baseAtk: 1750, scale: 1.55, atkPercent: 0.20, gold: 32000, xp: 23000, desc: "[СИЛЬНЕЕ РОШАНА!] Восставший призрак Рошана с астральным Slam" },
-      enigma: { id: "enigma", name: "Пожиратель Миров (Enigma Cosmic)", icon: "🌌", baseHp: 160000000, baseAtk: 2050, scale: 1.35, atkPercent: 0.22, gold: 40000, xp: 29000, desc: "[ФИНАЛЬНЫЙ СВЕРХ-БОСС!] Схлопывает пространство в Черную Дыру" }
+      golem: { id: "golem", name: "Древний Гранитный Голем", icon: "🗿", baseHp: 75000, baseAtk: 140, defense: 35, scale: 1.35, gold: 2000, xp: 1500, desc: "[75 ТЫС. ХП] Каменный колосс глубин" },
+      lich: { id: "lich", name: "Архилич Некрополя", icon: "☠️", baseHp: 225000, baseAtk: 210, defense: 50, scale: 1.30, gold: 3500, xp: 2500, desc: "[225 ТЫС. ХП] Владыка темных заклятий" },
+      tormentor: { id: "tormentor", name: "Древний Терзатель (Tormentor)", icon: "🔮", baseHp: 700000, baseAtk: 320, defense: 75, scale: 1.30, gold: 5000, xp: 4000, desc: "[700 ТЫС. ХП] Отражает 35% урона" },
+      dragon: { id: "dragon", name: "Дракон Инферно", icon: "🌋", baseHp: 2200000, baseAtk: 500, defense: 105, scale: 1.50, gold: 8000, xp: 6000, desc: "[2.2 МЛН ХП] Огнедышащий титан" },
+      pudge_boss: { id: "pudge_boss", name: "Мясник из Чрева (Pudge)", icon: "🪝", baseHp: 7500000, baseAtk: 800, defense: 140, scale: 1.40, gold: 12000, xp: 9000, desc: "[7.5 МЛН ХП] Хук цепью, вонь гнили и пожирание" },
+      faceless_void: { id: "faceless_void", name: "Хроно-Владыка (Faceless Void)", icon: "⏳", baseHp: 25000000, baseAtk: 1250, defense: 180, scale: 1.35, gold: 18000, xp: 14000, desc: "[25 МЛН ХП] Остановка времени и баши" },
+      roshan: { id: "roshan", name: "Рошан (Roshan)", icon: "🐲", baseHp: 85000000, baseAtk: 1950, defense: 230, scale: 1.45, gold: 26000, xp: 20000, desc: "[85 МЛН ХП] Хозяин Ямы, дропает Рапиру и Сыр" },
+      tidehunter: { id: "tidehunter", name: "Левиафан Бездны (Tidehunter)", icon: "🐙", baseHp: 300000000, baseAtk: 3000, defense: 290, scale: 1.40, gold: 40000, xp: 30000, desc: "[300 МЛН ХП] Владыка пучин с якорным ударом и Раважем" },
+      sf_boss: { id: "sf_boss", name: "Архидемон Nevermore", icon: "💀", baseHp: 1000000000, baseAtk: 4600, defense: 370, scale: 1.35, gold: 60000, xp: 45000, desc: "[1 МИЛЛИАРД ХП] Пожиратель душ с черными коилами и Реквиемом" },
+      necrophos: { id: "necrophos", name: "Чумной Владыка (Necrophos)", icon: "🧟", baseHp: 3500000000, baseAtk: 7000, defense: 460, scale: 1.30, gold: 90000, xp: 70000, desc: "[3.5 МЛРД ХП] Аура мора истощает HP, Коса Смерти рубит" },
+      terrorblade: { id: "terrorblade", name: "Демон Бездны (Terrorblade)", icon: "😈", baseHp: 12000000000, baseAtk: 11000, defense: 570, scale: 1.40, gold: 140000, xp: 100000, desc: "[12 МЛРД ХП] Метаморфоза Тьмы и разрыв души Sunder" },
+      invoker_boss: { id: "invoker_boss", name: "Демиург Арсенала (Invoker)", icon: "🧙‍♂️", baseHp: 42000000000, baseAtk: 17500, defense: 700, scale: 1.25, gold: 200000, xp: 150000, desc: "[42 МЛРД ХП] Повелитель стихий, хаос-метеоров и ЭМИ" },
+      chaos_knight: { id: "chaos_knight", name: "Всадник Хаоса (Chaos Knight)", icon: "🐎", baseHp: 150000000000, baseAtk: 26500, defense: 860, scale: 1.45, gold: 300000, xp: 220000, desc: "[150 МЛРД ХП] Фантомы параллельных миров и криты" },
+      dark_tormentor: { id: "dark_tormentor", name: "Тёмный Терзатель Бездны", icon: "💎", baseHp: 550000000000, baseAtk: 42000, defense: 1050, scale: 1.40, gold: 450000, xp: 350000, desc: "[550 МЛРД ХП] Отражает 50% урона и стреляет шипами тьмы" },
+      storm_spirit: { id: "storm_spirit", name: "Громовой Дух (Storm Spirit)", icon: "⚡", baseHp: 2000000000000, baseAtk: 64000, defense: 1300, scale: 1.35, gold: 700000, xp: 500000, desc: "[2 ТРИЛЛИОНА ХП] Молниеносные перелеты через арену и ремнанты" },
+      doom: { id: "doom", name: "Вестник Апокалипсиса (Lord Doom)", icon: "👹", baseHp: 7500000000000, baseAtk: 98000, defense: 1600, scale: 1.45, gold: 1100000, xp: 800000, desc: "[7.5 ТРИЛЛИОНОВ ХП] Владыка Преисподней с роком и пламенем" },
+      primal_beast: { id: "primal_beast", name: "Первобытный Титан (Primal Beast)", icon: "🦣", baseHp: 28000000000000, baseAtk: 150000, defense: 1950, scale: 1.60, gold: 1800000, xp: 1300000, desc: "[28 ТРИЛЛИОНОВ ХП] Сокрушитель материков с диким топотом" },
+      phantom_roshan: { id: "phantom_roshan", name: "Призрачный Рошан Хаоса", icon: "👻", baseHp: 100000000000000, baseAtk: 230000, defense: 2400, scale: 1.55, gold: 3000000, xp: 2200000, desc: "[100 ТРИЛЛИОНОВ ХП] Восставший призрак Рошана с астральным Slam" },
+      tinker_boss: { id: "tinker_boss", name: "Архиинженер (Omega Tinker)", icon: "🤖", baseHp: 350000000000000, baseAtk: 350000, defense: 3000, scale: 1.45, gold: 5000000, xp: 3500000, desc: "[350 ТРИЛЛИОНОВ ХП] Ослепляющий лазер, микроракеты и марш роботов" },
+      enigma: { id: "enigma", name: "Пожиратель Миров (Enigma Cosmic)", icon: "🌌", baseHp: 1200000000000000, baseAtk: 500000, defense: 3800, scale: 1.35, gold: 10000000, xp: 7500000, desc: "[1.2 КВАДРИЛЛИОНА ХП!] Битва на месяц! Схлопывает пространство в Черную Дыру" }
     };
 
     const b = bossTmpls[bossId] || bossTmpls.golem;
@@ -6354,10 +7680,6 @@
     const playerAtk = Math.max(30, Math.floor(((stats.min_atk || 30) + (stats.max_atk || 50)) / 2));
     const playerHp = Math.max(400, stats.hp_max || 400);
 
-    // PROPER BOSS HP SCALING:
-    // Boss HP = baseHp from template (already tier-scaled from 1.5M to 160M)
-    // applyDamageToBoss handles per-tier damage caps so:
-    //   Golem dies in ~30s, Enigma survives ~4 minutes
     const finalHp = b.baseHp;
 
     // 1. CREATE BOSS ENTITY (Slow, heavy, deliberate boss pacing)
@@ -6368,11 +7690,11 @@
       x: 180,
       y: 95,
       radius: Math.floor(30 * (b.scale || 1.15)),
-      speed: 0.65, // Menacing, active movement speed
+      speed: 1.45, // Fast, aggressive boss movement
       hp: finalHp,
       maxHp: finalHp,
-      atk: b.baseAtk || 50,
-      defense: Math.max(25, Math.floor((stats.defense || 10) * 0.65)),
+      atk: b.baseAtk || 140,
+      defense: b.defense !== undefined ? b.defense : 35,
       isBoss: true,
       isRaidBoss: true,
       bossType: b.id,
@@ -6383,9 +7705,9 @@
       maxPoise: 1600,
       state: "chase",
       stateTimer: 0,
-      meleeCooldown: 60, // 1s initial wait
-      chargeCooldown: 220, // 3.6s initial wait before first charge
-      barrageCooldown: 140, // 2.3s initial wait before first barrage
+      meleeCooldown: 40, // 0.65s initial wait
+      chargeCooldown: 120, // 2s initial wait before first charge
+      barrageCooldown: 80, // 1.3s initial wait before first barrage
       chargeAngle: 0,
       chargeVx: 0,
       chargeVy: 0,
@@ -6474,6 +7796,24 @@
   }
 
   function handlePlayerArenaDeath() {
+    if (ARENA.player) {
+      ARENA.player.currentHp = 0;
+      ARENA.player.isInvulnerable = 0;
+    }
+
+    if (ARENA.isRaidBossBattle) {
+      ARENA.waveState = "boss_defeat";
+      triggerHaptic("error");
+      spawnFloatingText(ARENA.width / 2, 95, "💀 ВАШ ГЕРОЙ ПАЛ В РЕЙДЕ!", "#ef4444");
+      ARENA.playerProjectiles = [];
+      ARENA.bossProjectiles = [];
+      if (ARENA.bossEntity) {
+        ARENA.bossEntity.state = "idle";
+        ARENA.bossEntity.stateTimer = 999999;
+      }
+      return;
+    }
+
     ARENA.waveState = "retry_prompt"; // NEVER floor_clear!
     triggerHaptic("error");
     spawnFloatingText(ARENA.width / 2, 100, "💀 ВАШ ГЕРОЙ ПАЛ!", "#ef4444");
@@ -6537,6 +7877,892 @@
     const hClass = (heroClass || "pudge").toLowerCase();
     const bob = Math.sin(time * 0.14) * 2;
     const facing = (p && p.facing !== undefined) ? p.facing : 1;
+// ============================================================================
+// 06_boss_models_early.js — Procedural Vector Models for Bosses 1–6
+// (Golem, Lich, Tormentor, Dragon, Pudge, Faceless Void)
+// ============================================================================
+
+function drawBossModelEarly(ctx, b, bId, time) {
+  const facing = b.facing || 1;
+
+  // 1. GOLEM (Древний Гранитный Голем)
+  if (bId.includes("golem") || bId.includes("голем")) {
+    ctx.save();
+    // Massive rocky torso
+    ctx.fillStyle = "#44403c";
+    ctx.strokeStyle = "#78716c";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.roundRect(-24, -28, 48, 44, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    // Magma / Moss Glowing Cracks
+    ctx.strokeStyle = "#f97316";
+    ctx.lineWidth = 2;
+    ctx.shadowColor = "#ea580c";
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.moveTo(-16, -18); ctx.lineTo(-4, -6); ctx.lineTo(12, -14);
+    ctx.moveTo(-8, 2); ctx.lineTo(6, 12);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Heavy Stone Fists
+    ctx.fillStyle = "#292524";
+    ctx.strokeStyle = "#a8a29e";
+    ctx.lineWidth = 2.5;
+    const fOff = Math.sin(time * 0.15) * 4;
+    ctx.beginPath();
+    ctx.arc(-28 * facing, 2 + fOff, 13, 0, Math.PI * 2);
+    ctx.arc(28 * facing, -2 - fOff, 13, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Glowing Amber Golem Eye Ridge
+    ctx.fillStyle = "#fbbf24";
+    ctx.shadowColor = "#f59e0b";
+    ctx.shadowBlur = 10;
+    ctx.fillRect(-10 * facing, -22, 14 * facing, 4);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    return true;
+  }
+
+  // 2. LICH (Архилич Некрополя)
+  if (bId.includes("lich") || bId.includes("лич")) {
+    const floatBob = Math.sin(time * 0.12) * 4;
+    ctx.save();
+    ctx.translate(0, floatBob);
+
+    // Dark Frost Robes
+    ctx.fillStyle = "#0f172a";
+    ctx.strokeStyle = "#0284c7";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(0, -26);
+    ctx.lineTo(18, 20); ctx.lineTo(10, 24); ctx.lineTo(0, 19); ctx.lineTo(-10, 24); ctx.lineTo(-18, 20);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Skeletal Skull Face
+    ctx.fillStyle = "#e2e8f0";
+    ctx.beginPath();
+    ctx.arc(0, -22, 10, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Golden Lich Crown with Ice Jewels
+    ctx.fillStyle = "#facc15";
+    ctx.beginPath();
+    ctx.moveTo(-9, -28); ctx.lineTo(-5, -36); ctx.lineTo(0, -29); ctx.lineTo(5, -36); ctx.lineTo(9, -28);
+    ctx.closePath();
+    ctx.fill();
+
+    // Glowing Cyan Frost Eyes
+    ctx.fillStyle = "#38bdf8";
+    ctx.shadowColor = "#38bdf8";
+    ctx.shadowBlur = 10;
+    ctx.fillRect(-5, -23, 3, 2.5);
+    ctx.fillRect(2, -23, 3, 2.5);
+
+    // Orbiting Frost Phylactery Spheres
+    for (let s = 0; s < 3; s++) {
+      const oAng = time * 0.08 + s * 2.09;
+      const ox = Math.cos(oAng) * 26;
+      const oy = Math.sin(oAng) * 14 - 10;
+      ctx.fillStyle = "#0284c7";
+      ctx.shadowColor = "#38bdf8";
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      ctx.arc(ox, oy, 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    return true;
+  }
+
+  // 3. TORMENTOR (Древний Терзатель)
+  if (bId.includes("tormentor") && !bId.includes("dark_tormentor")) {
+    const rot = time * 0.035;
+    ctx.save();
+    ctx.rotate(rot);
+    ctx.fillStyle = "#581c87";
+    ctx.strokeStyle = "#e879f9";
+    ctx.lineWidth = 3;
+    ctx.shadowColor = "#c084fc";
+    ctx.shadowBlur = 16;
+    ctx.beginPath();
+    ctx.moveTo(0, -28); ctx.lineTo(24, 0); ctx.lineTo(0, 28); ctx.lineTo(-24, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Inner Glowing Core
+    ctx.fillStyle = "#f5d0fe";
+    ctx.beginPath();
+    ctx.moveTo(0, -14); ctx.lineTo(13, 0); ctx.lineTo(0, 14); ctx.lineTo(-13, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // 4 Orbiting Shard Needles
+    for (let s = 0; s < 4; s++) {
+      const sAng = -rot * 1.8 + s * 1.57;
+      const sx = Math.cos(sAng) * 36;
+      const sy = Math.sin(sAng) * 22;
+      ctx.fillStyle = "#d8b4fe";
+      ctx.beginPath();
+      ctx.moveTo(sx, sy - 7); ctx.lineTo(sx + 5, sy); ctx.lineTo(sx, sy + 7); ctx.lineTo(sx - 5, sy);
+      ctx.closePath();
+      ctx.fill();
+    }
+    return true;
+  }
+
+  // 4. DRAGON (Дракон Инферно)
+  if (bId.includes("dragon") || bId.includes("дракон")) {
+    const wingFlap = Math.sin(time * 0.2) * 12;
+    ctx.save();
+    // Huge Draconic Wings
+    ctx.fillStyle = "#7f1d1d";
+    ctx.strokeStyle = "#ef4444";
+    ctx.lineWidth = 2.5;
+    // Left wing
+    ctx.beginPath();
+    ctx.moveTo(-10, -8);
+    ctx.quadraticCurveTo(-38, -32 + wingFlap, -48, -4 + wingFlap);
+    ctx.lineTo(-24, 8);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Right wing
+    ctx.beginPath();
+    ctx.moveTo(10, -8);
+    ctx.quadraticCurveTo(38, -32 - wingFlap, 48, -4 - wingFlap);
+    ctx.lineTo(24, 8);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+
+    // Armored Scaled Body
+    ctx.fillStyle = "#991b1b";
+    ctx.strokeStyle = "#f87171";
+    ctx.beginPath();
+    ctx.ellipse(0, 4, 18, 22, 0, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+
+    // Horned Dragon Head
+    ctx.fillStyle = "#b91c1c";
+    ctx.beginPath();
+    ctx.moveTo(-10 * facing, -16);
+    ctx.lineTo(16 * facing, -24);
+    ctx.lineTo(10 * facing, -8);
+    ctx.closePath();
+    ctx.fill();
+    // Swept-back Horns
+    ctx.strokeStyle = "#facc15";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-6 * facing, -22); ctx.quadraticCurveTo(-18 * facing, -34, -26 * facing, -30);
+    ctx.stroke();
+
+    // Glowing Lava Breath Throat
+    ctx.fillStyle = "#fbbf24";
+    ctx.shadowColor = "#f97316"; ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.arc(12 * facing, -16, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    return true;
+  }
+
+  // 5. PUDGE (Мясник из Чрева)
+  if (bId.includes("pudge") || bId.includes("мясник")) {
+    ctx.save();
+    // Rotund Stitched Abomination Body
+    ctx.fillStyle = "#57534e";
+    ctx.strokeStyle = "#1c1917";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(0, 4, 25, 26, 0, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+
+    // Stitched Grotesque Flesh Seams
+    ctx.strokeStyle = "#a8a29e";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-12, -10); ctx.lineTo(-4, 14);
+    ctx.moveTo(8, -6); ctx.lineTo(14, 16);
+    ctx.stroke();
+
+    // Bloody Butcher Apron
+    ctx.fillStyle = "#7f1d1d";
+    ctx.beginPath();
+    ctx.moveTo(-14, -8); ctx.lineTo(14, -8); ctx.lineTo(10, 20); ctx.lineTo(-10, 20);
+    ctx.closePath();
+    ctx.fill();
+
+    // Right Hand: Heavy Butcher Cleaver
+    ctx.fillStyle = "#e2e8f0";
+    ctx.strokeStyle = "#991b1b";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.rect(20 * facing, -12, 10 * facing, 22);
+    ctx.fill(); ctx.stroke();
+
+    // Left Hand: Rusted Chain Meat Hook
+    ctx.strokeStyle = "#78716c";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-22 * facing, 2);
+    ctx.lineTo(-32 * facing, -4);
+    ctx.arc(-32 * facing, 4, 8, -Math.PI / 2, Math.PI / 2);
+    ctx.stroke();
+
+    // Monstrous Jaws & Glowing Bile Eyes
+    ctx.fillStyle = "#dc2626";
+    ctx.fillRect(-8 * facing, -20, 5 * facing, 5);
+    ctx.fillStyle = "#84cc16";
+    ctx.shadowColor = "#84cc16"; ctx.shadowBlur = 8;
+    ctx.fillRect(-10 * facing, -26, 4 * facing, 3);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    return true;
+  }
+
+  // 6. FACELESS VOID (Хроно-Владыка)
+  if (bId.includes("faceless_void") || bId.includes("хроно")) {
+    ctx.save();
+    // Time-Warped Violet Humanoid Body
+    ctx.fillStyle = "#581c87";
+    ctx.strokeStyle = "#a855f7";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.roundRect(-14, -18, 28, 36, 6);
+    ctx.fill(); ctx.stroke();
+
+    // Smooth Horned Alien Head (No Face!)
+    ctx.fillStyle = "#3b0764";
+    ctx.beginPath();
+    ctx.moveTo(-12, -22); ctx.quadraticCurveTo(0, -42, 12, -22);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+
+    // Curved Head Ridge / Horn
+    ctx.strokeStyle = "#c084fc";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, -36); ctx.quadraticCurveTo(8 * facing, -48, 14 * facing, -44);
+    ctx.stroke();
+
+    // Glowing Mace of Aeons (Timelock Hammer)
+    const maceBob = Math.sin(time * 0.18) * 3;
+    ctx.fillStyle = "#c084fc";
+    ctx.strokeStyle = "#f3e8ff";
+    ctx.lineWidth = 2;
+    ctx.shadowColor = "#a855f7"; ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.roundRect(16 * facing, -16 + maceBob, 12, 14, 4);
+    ctx.fill(); ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Mace Handle
+    ctx.strokeStyle = "#94a3b8";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(22 * facing, 0 + maceBob); ctx.lineTo(22 * facing, 18 + maceBob);
+    ctx.stroke();
+    ctx.restore();
+    return true;
+  }
+
+  return false;
+}
+
+// ============================================================================
+// 06_boss_models_late.js — Procedural Vector Models for Bosses 14–20
+// (Dark Tormentor, Storm Spirit, Doom, Primal Beast, Phantom Roshan, Tinker, Enigma)
+// ============================================================================
+
+function drawBossModelLate(ctx, b, bId, time) {
+  const facing = b.facing || 1;
+
+  // 14. DARK TORMENTOR (Тёмный Терзатель Бездны)
+  if (bId.includes("dark_tormentor") || bId.includes("тёмный терзатель")) {
+    const rot = time * 0.04;
+    ctx.save();
+    ctx.rotate(-rot);
+    ctx.fillStyle = "#1e1b4b";
+    ctx.strokeStyle = "#c084fc";
+    ctx.lineWidth = 3.5;
+    ctx.shadowColor = "#7c3aed"; ctx.shadowBlur = 18;
+    ctx.beginPath();
+    ctx.moveTo(0, -32); ctx.lineTo(26, 0); ctx.lineTo(0, 32); ctx.lineTo(-26, 0);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Inner Singularity Eye
+    ctx.fillStyle = "#a855f7";
+    ctx.beginPath();
+    ctx.arc(0, 0, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // 6 Orbiting Void Needles
+    for (let s = 0; s < 6; s++) {
+      const sAng = rot * 2.2 + s * (Math.PI / 3);
+      const sx = Math.cos(sAng) * 40;
+      const sy = Math.sin(sAng) * 24;
+      ctx.fillStyle = "#e9d5ff";
+      ctx.fillRect(sx - 3, sy - 3, 6, 6);
+    }
+    return true;
+  }
+
+  // 15. STORM SPIRIT (Громовой Дух)
+  if (bId.includes("storm_spirit") || bId.includes("громовой дух")) {
+    const sBob = Math.sin(time * 0.22) * 4;
+    ctx.save();
+    ctx.translate(0, sBob);
+    // Jovial Electric Djinn Body
+    ctx.fillStyle = "#0284c7";
+    ctx.strokeStyle = "#38bdf8";
+    ctx.lineWidth = 3;
+    ctx.shadowColor = "#38bdf8"; ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.ellipse(0, 2, 22, 24, 0, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+
+    // Silken Vest
+    ctx.fillStyle = "#dc2626";
+    ctx.beginPath();
+    ctx.moveTo(-10, -12); ctx.lineTo(10, -12); ctx.lineTo(6, 14); ctx.lineTo(-6, 14);
+    ctx.closePath();
+    ctx.fill();
+
+    // Whimsical Topknot / Mustache & Crackling Eyes
+    ctx.fillStyle = "#0369a1";
+    ctx.beginPath();
+    ctx.arc(0, -20, 9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#facc15";
+    ctx.fillRect(-5 * facing, -21, 3 * facing, 2.5);
+    ctx.fillRect(2 * facing, -21, 3 * facing, 2.5);
+
+    // Electric Sparks Trailing
+    ctx.strokeStyle = "#facc15";
+    ctx.lineWidth = 2;
+    for (let sp = 0; sp < 4; sp++) {
+      const spAng = time * 0.2 + sp * 1.57;
+      const spx = Math.cos(spAng) * 26;
+      const spy = Math.sin(spAng) * 18;
+      ctx.beginPath();
+      ctx.moveTo(spx, spy); ctx.lineTo(spx + 6, spy - 6); ctx.lineTo(spx + 2, spy - 10);
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    return true;
+  }
+
+  // 16. DOOM (Вестник Апокалипсиса / Lord Doom)
+  if (bId.includes("doom") || bId.includes("вестник")) {
+    ctx.save();
+    // Massive Crimson Demon Torso
+    ctx.fillStyle = "#7f1d1d";
+    ctx.strokeStyle = "#ef4444";
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.roundRect(-18, -22, 36, 42, 6);
+    ctx.fill(); ctx.stroke();
+
+    // Leathery Demonic Wings
+    ctx.fillStyle = "#450a0a";
+    ctx.beginPath();
+    ctx.moveTo(-16 * facing, -12); ctx.lineTo(-44 * facing, -38); ctx.lineTo(-30 * facing, 8);
+    ctx.moveTo(16 * facing, -12); ctx.lineTo(44 * facing, -38); ctx.lineTo(30 * facing, 8);
+    ctx.fill();
+
+    // Curved Horned Helm & Flaming Eyes
+    ctx.fillStyle = "#18181b";
+    ctx.beginPath();
+    ctx.moveTo(-10 * facing, -22); ctx.lineTo(10 * facing, -22); ctx.lineTo(0, -38);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "#f59e0b";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Giant Flaming Sword of Doom
+    const swBob = Math.sin(time * 0.18) * 3;
+    ctx.fillStyle = "#fbbf24";
+    ctx.strokeStyle = "#dc2626";
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = "#f97316"; ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.rect(22 * facing, -34 + swBob, 6, 44);
+    ctx.fill(); ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    return true;
+  }
+
+  // 17. PRIMAL BEAST (Первобытный Титан)
+  if (bId.includes("primal_beast") || bId.includes("первобытный")) {
+    ctx.save();
+    // Colossal Quad-Legged Beast Body
+    ctx.fillStyle = "#78350f";
+    ctx.strokeStyle = "#d97706";
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.ellipse(0, 4, 32, 25, 0, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+
+    // Stone Carapace Plates
+    ctx.fillStyle = "#451a03";
+    for (let p = -2; p <= 2; p++) {
+      ctx.fillRect(p * 10 - 4, -14, 8, 10);
+    }
+
+    // Heavy Horned Battering Snout
+    ctx.fillStyle = "#92400e";
+    ctx.beginPath();
+    ctx.moveTo(16 * facing, -8); ctx.lineTo(34 * facing, 4); ctx.lineTo(18 * facing, 16);
+    ctx.closePath();
+    ctx.fill();
+
+    // Massive Curved Forward Horns
+    ctx.strokeStyle = "#fbbf24";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(22 * facing, -6); ctx.quadraticCurveTo(38 * facing, -24, 46 * facing, -8);
+    ctx.stroke();
+    ctx.restore();
+    return true;
+  }
+
+  // 18. PHANTOM ROSHAN (Призрачный Рошан Хаоса)
+  if (bId.includes("phantom_roshan") || bId.includes("призрачный рошан")) {
+    const fBob = Math.sin(time * 0.14) * 4;
+    ctx.save();
+    ctx.translate(0, fBob);
+    // Ethereal Translucent Ghost Body
+    ctx.fillStyle = "rgba(6, 78, 59, 0.85)";
+    ctx.strokeStyle = "#34d399";
+    ctx.lineWidth = 3;
+    ctx.shadowColor = "#10b981"; ctx.shadowBlur = 22;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 30, 26, 0, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+
+    // Spectral Energy Cracks
+    ctx.strokeStyle = "#6ee7b7";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(-14, -8); ctx.lineTo(-2, 4); ctx.lineTo(16, -6);
+    ctx.moveTo(-8, 8); ctx.lineTo(8, 14);
+    ctx.stroke();
+
+    // Spectral Horns & Eyes
+    ctx.strokeStyle = "#a7f3d0";
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.moveTo(-16 * facing, -16); ctx.quadraticCurveTo(-30 * facing, -34, -16 * facing, -38);
+    ctx.stroke();
+    ctx.fillStyle = "#67e8f9";
+    ctx.shadowColor = "#67e8f9"; ctx.shadowBlur = 12;
+    ctx.fillRect(-14 * facing, -10, 6 * facing, 4);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    return true;
+  }
+
+  // 19. TINKER (Архиинженер / Omega Tinker)
+  if (bId.includes("tinker_boss") || bId.includes("архиинженер")) {
+    ctx.save();
+    // Steampunk Combat Mech Cockpit
+    ctx.fillStyle = "#334155";
+    ctx.strokeStyle = "#facc15";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.roundRect(-22, -22, 44, 40, 8);
+    ctx.fill(); ctx.stroke();
+
+    // Mechanical Goggles Cockpit Viewport
+    ctx.fillStyle = "#0284c7";
+    ctx.shadowColor = "#38bdf8"; ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.arc(0, -6, 11, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Dual Rocket Pods on Shoulders
+    ctx.fillStyle = "#dc2626";
+    ctx.fillRect(-30, -28, 10, 16);
+    ctx.fillRect(20, -28, 10, 16);
+    ctx.fillStyle = "#facc15";
+    ctx.fillRect(-28, -32, 6, 4);
+    ctx.fillRect(22, -32, 6, 4);
+
+    // High-Tech Laser Emitter Arm
+    ctx.strokeStyle = "#94a3b8";
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.moveTo(18 * facing, 6); ctx.lineTo(34 * facing, 6);
+    ctx.stroke();
+    ctx.fillStyle = "#ef4444";
+    ctx.shadowColor = "#ef4444"; ctx.shadowBlur = 8;
+    ctx.fillRect(32 * facing, 3, 5 * facing, 6);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    return true;
+  }
+
+  // 20. ENIGMA (Пожиратель Миров / Enigma Cosmic)
+  if (bId.includes("enigma") || bId.includes("пожиратель миров")) {
+    const eSpin = time * 0.04;
+    ctx.save();
+    // Cosmic Nebula Void Entity
+    ctx.fillStyle = "#1e1b4b";
+    ctx.strokeStyle = "#818cf8";
+    ctx.lineWidth = 3;
+    ctx.shadowColor = "#6366f1"; ctx.shadowBlur = 24;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 26, 30, 0, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+
+    // Swirling Central Singularity in Chest
+    ctx.fillStyle = "#020617";
+    ctx.beginPath();
+    ctx.arc(0, 0, 12, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Orbiting Cosmic Asteroid Fragments
+    for (let a = 0; a < 5; a++) {
+      const aAng = eSpin + a * 1.25;
+      const ax = Math.cos(aAng) * 36;
+      const ay = Math.sin(aAng) * 22;
+      ctx.fillStyle = "#c7d2fe";
+      ctx.beginPath();
+      ctx.arc(ax, ay, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Glowing Star Eyes
+    ctx.fillStyle = "#ffffff";
+    ctx.shadowColor = "#ffffff"; ctx.shadowBlur = 12;
+    ctx.fillRect(-6 * facing, -16, 3 * facing, 3);
+    ctx.fillRect(3 * facing, -16, 3 * facing, 3);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    return true;
+  }
+
+  return false;
+}
+
+// ============================================================================
+// 06_boss_models_mid.js — Procedural Vector Models for Bosses 7–13
+// (Roshan, Tidehunter, SF, Necrophos, Terrorblade, Invoker, Chaos Knight)
+// ============================================================================
+
+function drawBossModelMid(ctx, b, bId, time) {
+  const facing = b.facing || 1;
+
+  // 7. ROSHAN (Рошан Свирепый)
+  if (bId.includes("roshan") && !bId.includes("phantom")) {
+    ctx.save();
+    // Hulking Pit Beast Body
+    ctx.fillStyle = "#451a03";
+    ctx.strokeStyle = "#92400e";
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.ellipse(0, 2, 28, 26, 0, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+
+    // Spiky Rock Carapace on Back
+    ctx.fillStyle = "#292524";
+    ctx.beginPath();
+    ctx.moveTo(-16, -12); ctx.lineTo(-24, -22); ctx.lineTo(-8, -18);
+    ctx.lineTo(0, -26); ctx.lineTo(8, -18); ctx.lineTo(24, -22); ctx.lineTo(16, -12);
+    ctx.closePath();
+    ctx.fill();
+
+    // Massive Curved Demon Horns
+    ctx.strokeStyle = "#ea580c";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(-12 * facing, -18); ctx.quadraticCurveTo(-28 * facing, -38, -14 * facing, -42);
+    ctx.moveTo(12 * facing, -18); ctx.quadraticCurveTo(28 * facing, -38, 14 * facing, -42);
+    ctx.stroke();
+
+    // Glowing Molten Eyes & Maw
+    ctx.fillStyle = "#facc15";
+    ctx.shadowColor = "#ea580c"; ctx.shadowBlur = 12;
+    ctx.fillRect(-8 * facing, -18, 4 * facing, 3);
+    ctx.fillRect(4 * facing, -18, 4 * facing, 3);
+    ctx.fillStyle = "#ef4444";
+    ctx.beginPath();
+    ctx.moveTo(-6 * facing, -8); ctx.lineTo(6 * facing, -8); ctx.lineTo(0, 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    return true;
+  }
+
+  // 8. TIDEHUNTER (Левиафан Бездны)
+  if (bId.includes("tidehunter") || bId.includes("левиафан")) {
+    ctx.save();
+    // Colossal Amphibious Green Body
+    ctx.fillStyle = "#064e3b";
+    ctx.strokeStyle = "#10b981";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(0, 2, 27, 25, 0, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+
+    // Fish-Scale Ridges & Fins
+    ctx.fillStyle = "#047857";
+    ctx.beginPath();
+    ctx.moveTo(-18 * facing, -14); ctx.lineTo(-26 * facing, -20); ctx.lineTo(-14 * facing, -6);
+    ctx.moveTo(18 * facing, -14); ctx.lineTo(26 * facing, -20); ctx.lineTo(14 * facing, -6);
+    ctx.fill();
+
+    // Giant Rusted Heavy Anchor in Arm
+    const aBob = Math.sin(time * 0.16) * 3;
+    ctx.strokeStyle = "#78716c";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(22 * facing, -18 + aBob); ctx.lineTo(22 * facing, 16 + aBob);
+    ctx.arc(22 * facing, 10 + aBob, 10, 0, Math.PI);
+    ctx.stroke();
+
+    // Fierce Yellow Sea-Beast Eyes
+    ctx.fillStyle = "#fef08a";
+    ctx.shadowColor = "#34d399"; ctx.shadowBlur = 8;
+    ctx.fillRect(-8 * facing, -14, 4 * facing, 4);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    return true;
+  }
+
+  // 9. SHADOW FIEND (Архидемон Nevermore)
+  if (bId.includes("sf_boss") || bId.includes("nevermore")) {
+    const sBob = Math.sin(time * 0.2) * 3;
+    ctx.save();
+    ctx.translate(0, sBob);
+
+    // Swirling Shadow Pitch-Black Smoldering Body
+    ctx.fillStyle = "#09090b";
+    ctx.strokeStyle = "#dc2626";
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = "#b91c1c"; ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.moveTo(0, -26);
+    ctx.quadraticCurveTo(20, -10, 14, 16);
+    ctx.quadraticCurveTo(0, 26, -14, 16);
+    ctx.quadraticCurveTo(-20, -10, 0, -26);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+
+    // Glowing Crimson Ribcage
+    ctx.strokeStyle = "#f87171";
+    ctx.lineWidth = 2;
+    for (let r = 0; r < 4; r++) {
+      ctx.beginPath();
+      ctx.moveTo(-10, -12 + r * 6); ctx.lineTo(10, -12 + r * 6);
+      ctx.stroke();
+    }
+
+    // Fiery Horns & Demon Blade Hands
+    ctx.strokeStyle = "#ef4444";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-10 * facing, -24); ctx.lineTo(-18 * facing, -36);
+    ctx.moveTo(10 * facing, -24); ctx.lineTo(18 * facing, -36);
+    // Blade Arms
+    ctx.moveTo(-18 * facing, 2); ctx.lineTo(-32 * facing, 14);
+    ctx.moveTo(18 * facing, 2); ctx.lineTo(32 * facing, 14);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    return true;
+  }
+
+  // 10. NECROPHOS (Чумной Владыка)
+  if (bId.includes("necrophos") || bId.includes("чумной")) {
+    const pBob = Math.sin(time * 0.12) * 3;
+    ctx.save();
+    ctx.translate(0, pBob);
+
+    // Rotten Plague Robes
+    ctx.fillStyle = "#14532d";
+    ctx.strokeStyle = "#84cc16";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, -24); ctx.lineTo(16, 20); ctx.lineTo(-16, 20);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+
+    // Pale Skull Head with Mitre Crown
+    ctx.fillStyle = "#f1f5f9";
+    ctx.beginPath();
+    ctx.arc(0, -20, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#166534";
+    ctx.beginPath();
+    ctx.moveTo(-6, -26); ctx.lineTo(0, -36); ctx.lineTo(6, -26);
+    ctx.closePath();
+    ctx.fill();
+
+    // Venomous Curved Scythe
+    ctx.strokeStyle = "#65a30d";
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.moveTo(14 * facing, -32); ctx.lineTo(14 * facing, 22);
+    ctx.quadraticCurveTo(28 * facing, -38, 36 * facing, -22);
+    ctx.stroke();
+
+    // Swirling Plague Particles
+    for (let p = 0; p < 4; p++) {
+      const pAng = time * 0.1 + p * 1.57;
+      const px = Math.cos(pAng) * 22;
+      const py = Math.sin(pAng) * 12;
+      ctx.fillStyle = "#a3e635";
+      ctx.fillRect(px, py, 2.5, 2.5);
+    }
+    ctx.restore();
+    return true;
+  }
+
+  // 11. TERRORBLADE (Демон Бездны)
+  if (bId.includes("terrorblade") || bId.includes("демон бездны")) {
+    ctx.save();
+    // Fractured Obsidian Torso
+    ctx.fillStyle = "#18181b";
+    ctx.strokeStyle = "#7c3aed";
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = "#8b5cf6"; ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.roundRect(-14, -20, 28, 38, 4);
+    ctx.fill(); ctx.stroke();
+
+    // Dual Arc Curved Crescent Blades
+    ctx.strokeStyle = "#a78bfa";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(-22 * facing, -2, 14, -Math.PI / 2, Math.PI / 2);
+    ctx.arc(22 * facing, -2, 14, Math.PI / 2, -Math.PI / 2);
+    ctx.stroke();
+
+    // Demon Wings
+    ctx.fillStyle = "rgba(109, 40, 217, 0.75)";
+    ctx.beginPath();
+    ctx.moveTo(-12 * facing, -12); ctx.lineTo(-34 * facing, -30); ctx.lineTo(-24 * facing, 2);
+    ctx.moveTo(12 * facing, -12); ctx.lineTo(34 * facing, -30); ctx.lineTo(24 * facing, 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    return true;
+  }
+
+  // 12. INVOKER (Демиург Арсенала)
+  if (bId.includes("invoker_boss") || bId.includes("инвокер") || bId.includes("арсенал")) {
+    const iBob = Math.sin(time * 0.14) * 3;
+    ctx.save();
+    ctx.translate(0, iBob);
+
+    // Regal Cape & Armor
+    ctx.fillStyle = "#7c2d12";
+    ctx.strokeStyle = "#facc15";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, -24); ctx.lineTo(16, 20); ctx.lineTo(-16, 20);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+
+    // High Upturned Regal Mantle Collar
+    ctx.fillStyle = "#facc15";
+    ctx.beginPath();
+    ctx.moveTo(-10, -22); ctx.lineTo(-18, -34); ctx.lineTo(-6, -26);
+    ctx.moveTo(10, -22); ctx.lineTo(18, -34); ctx.lineTo(6, -26);
+    ctx.fill();
+
+    // Majestic Blond Hair & Glowing Eyes
+    ctx.fillStyle = "#fef08a";
+    ctx.beginPath();
+    ctx.arc(0, -22, 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 3 Orbiting Mystic Spheres: Quas (Blue), Wex (Purple), Exort (Orange)
+    const orbs = [
+      { c: "#38bdf8", angOff: 0 },
+      { c: "#c084fc", angOff: 2.09 },
+      { c: "#f97316", angOff: 4.18 }
+    ];
+    for (const o of orbs) {
+      const oAng = time * 0.08 + o.angOff;
+      const ox = Math.cos(oAng) * 26;
+      const oy = Math.sin(oAng) * 14 - 14;
+      ctx.fillStyle = o.c;
+      ctx.shadowColor = o.c; ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.arc(ox, oy, 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    return true;
+  }
+
+  // 13. CHAOS KNIGHT (Всадник Хаоса)
+  if (bId.includes("chaos_knight") || bId.includes("всадник хаоса")) {
+    ctx.save();
+    // Armored Warhorse Torso
+    ctx.fillStyle = "#1e1b4b";
+    ctx.strokeStyle = "#f59e0b";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.ellipse(0, 4, 24, 18, 0, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+
+    // Flaming Mane & Hooves
+    ctx.fillStyle = "#ef4444";
+    ctx.beginPath();
+    ctx.moveTo(12 * facing, -6); ctx.lineTo(24 * facing, -18); ctx.lineTo(18 * facing, -2);
+    ctx.fill();
+
+    // Armored Helm with Spiked Horns
+    ctx.fillStyle = "#0f172a";
+    ctx.beginPath();
+    ctx.moveTo(-6 * facing, -18); ctx.lineTo(6 * facing, -18); ctx.lineTo(0, -32);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "#f59e0b";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Spiked Chaos Flail in Arm
+    const fSpin = time * 0.16;
+    const fx = -20 * facing + Math.cos(fSpin) * 12;
+    const fy = -4 + Math.sin(fSpin) * 12;
+    ctx.strokeStyle = "#d97706";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-16 * facing, 2); ctx.lineTo(fx, fy);
+    ctx.stroke();
+    ctx.fillStyle = "#ef4444";
+    ctx.beginPath();
+    ctx.arc(fx, fy, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    return true;
+  }
+
+  return false;
+}
+
 
     ctx.save();
     ctx.translate(p.x, p.y + bob);
@@ -7210,353 +9436,26 @@
       ctx.save();
       ctx.scale(bScale, bScale);
 
-      const bId = (c.boss_id || c.name || "").toLowerCase();
-            if (bId.includes("dark_tormentor") || bId.includes("тёмный терзатель") || bId.includes("темный терзатель")) {
-        // Dark Void Tormentor
-        const rot = time * 0.04;
-        ctx.save();
-        ctx.rotate(rot);
-        ctx.fillStyle = "#1e1b4b";
-        ctx.strokeStyle = "#a855f7";
-        ctx.lineWidth = 3.5;
-        ctx.shadowColor = "#9333ea";
-        ctx.shadowBlur = 20;
-        ctx.beginPath();
-        ctx.moveTo(0, -30); ctx.lineTo(26, 0); ctx.lineTo(0, 30); ctx.lineTo(-26, 0);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-        // Inner void star
-        ctx.fillStyle = "#581c87";
-        ctx.beginPath();
-        ctx.moveTo(0, -18); ctx.lineTo(16, 0); ctx.lineTo(0, 18); ctx.lineTo(-16, 0);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
+      const bId = (c.bossType || c.boss_id || c.id || c.name || "").toLowerCase();
+      let drawn = false;
+      if (typeof drawBossModelEarly === "function") drawn = drawBossModelEarly(ctx, c, bId, time);
+      if (!drawn && typeof drawBossModelMid === "function") drawn = drawBossModelMid(ctx, c, bId, time);
+      if (!drawn && typeof drawBossModelLate === "function") drawn = drawBossModelLate(ctx, c, bId, time);
 
-        // Orbiting dark shards
-        for (let s = 0; s < 6; s++) {
-          const sAng = -rot * 2.0 + s * (Math.PI / 3);
-          const sx = Math.cos(sAng) * 40;
-          const sy = Math.sin(sAng) * 24;
-          ctx.fillStyle = "#c084fc";
-          ctx.shadowColor = "#c084fc"; ctx.shadowBlur = 10;
-          ctx.beginPath();
-          ctx.moveTo(sx, sy - 8); ctx.lineTo(sx + 6, sy); ctx.lineTo(sx, sy + 8); ctx.lineTo(sx - 6, sy);
-          ctx.closePath();
-          ctx.fill();
-        }
-        ctx.shadowBlur = 0;
-
-      } else if (bId.includes("phantom_roshan") || bId.includes("призрачный рошан")) {
-        // Phantom Roshan (Ethereal Ghost Roshan)
-        ctx.save();
-        ctx.fillStyle = "rgba(6, 78, 59, 0.85)";
-        ctx.strokeStyle = "#34d399";
-        ctx.lineWidth = 3;
-        ctx.shadowColor = "#10b981";
-        ctx.shadowBlur = 22;
-        // Massive ghost body
-        ctx.beginPath();
-        ctx.ellipse(0, 0, 28, 24, 0, 0, Math.PI * 2);
-        ctx.fill(); ctx.stroke();
-        // Ethereal glowing cracks
-        ctx.strokeStyle = "#6ee7b7";
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.moveTo(-14, -8); ctx.lineTo(-2, 4); ctx.lineTo(16, -6);
-        ctx.moveTo(-8, 8); ctx.lineTo(8, 14);
-        ctx.stroke();
-        // Ghostly horned head
-        ctx.fillStyle = "#022c22";
-        ctx.beginPath();
-        ctx.arc(-18, -8, 13, 0, Math.PI * 2);
-        ctx.fill();
-        // Spectral curved horns
-        ctx.strokeStyle = "#a7f3d0";
-        ctx.lineWidth = 3.5;
-        ctx.beginPath();
-        ctx.moveTo(-20, -18); ctx.quadraticCurveTo(-30, -32, -16, -34);
-        ctx.stroke();
-        // Glowing cyan spectral eyes
-        ctx.fillStyle = "#67e8f9";
-        ctx.shadowColor = "#67e8f9"; ctx.shadowBlur = 12;
-        ctx.fillRect(-24, -10, 5, 3);
-        ctx.shadowBlur = 0;
-        ctx.restore();
-
-      } else if (bId.includes("tormentor") || bId.includes("терзатель")) {
-        // Tormentor Crystal Polyhedron
-        const rot = time * 0.03;
-        ctx.save();
-        ctx.rotate(rot);
-        ctx.fillStyle = "#701a75";
-        ctx.strokeStyle = "#e879f9";
-        ctx.lineWidth = 2.5;
-        ctx.shadowColor = "#c084fc";
-        ctx.shadowBlur = 14;
-        ctx.beginPath();
-        ctx.moveTo(0, -26); ctx.lineTo(22, 0); ctx.lineTo(0, 26); ctx.lineTo(-22, 0);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-        // Inner crystal core
-        ctx.fillStyle = "#f5d0fe";
-        ctx.beginPath();
-        ctx.moveTo(0, -14); ctx.lineTo(12, 0); ctx.lineTo(0, 14); ctx.lineTo(-12, 0);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-
-        // Orbiting crystal shards
-        for (let s = 0; s < 4; s++) {
-          const sAng = -rot * 1.5 + s * 1.57;
-          const sx = Math.cos(sAng) * 34;
-          const sy = Math.sin(sAng) * 20;
-          ctx.fillStyle = "#d8b4fe";
-          ctx.beginPath();
-          ctx.moveTo(sx, sy - 6); ctx.lineTo(sx + 5, sy); ctx.lineTo(sx, sy + 6); ctx.lineTo(sx - 5, sy);
-          ctx.closePath();
-          ctx.fill();
-        }
-
-      } else if (bId.includes("archlich") || bId.includes("лич") || bId.includes("некропол")) {
-        // --- ARCHLICH OF THE NECROPOLIS ---
-        const floatBob = Math.sin(time * 0.12) * 3;
-        ctx.save();
-        ctx.translate(0, floatBob);
-
-        // Hovering Dark Hooded Robes
-        ctx.fillStyle = "#0f172a";
-        ctx.strokeStyle = "#0284c7";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(0, -22);
-        ctx.lineTo(16, 18);
-        ctx.lineTo(8, 22);
-        ctx.lineTo(0, 18);
-        ctx.lineTo(-8, 22);
-        ctx.lineTo(-16, 18);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-
-        // Skeletal Skull Face
-        ctx.fillStyle = "#e2e8f0";
-        ctx.beginPath();
-        ctx.arc(0, -18, 9, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Golden Lich Crown
-        ctx.fillStyle = "#facc15";
-        ctx.beginPath();
-        ctx.moveTo(-8, -24); ctx.lineTo(-4, -30); ctx.lineTo(0, -24); ctx.lineTo(4, -30); ctx.lineTo(8, -24);
-        ctx.closePath();
-        ctx.fill();
-
-        // Cyan Glowing Frost Eyes
-        ctx.fillStyle = "#38bdf8";
-        ctx.shadowColor = "#38bdf8";
-        ctx.shadowBlur = 10;
-        ctx.fillRect(-4, -19, 2.5, 2);
-        ctx.fillRect(2, -19, 2.5, 2);
-        ctx.shadowBlur = 0;
-
-        // Floating Frost Void Orb
-        const orbRot = time * 0.08;
-        const orbX = -18;
-        const orbY = -2;
-        ctx.fillStyle = "#0369a1";
-        ctx.shadowColor = "#38bdf8";
-        ctx.shadowBlur = 12;
-        ctx.beginPath();
-        ctx.arc(orbX, orbY, 7, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-
-        for (let os = 0; os < 3; os++) {
-          const oAng = orbRot + os * 2.09;
-          const ox = orbX + Math.cos(oAng) * 12;
-          const oy = orbY + Math.sin(oAng) * 7;
-          ctx.fillStyle = "#bae6fd";
-          ctx.beginPath();
-          ctx.arc(ox, oy, 2, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        ctx.restore();
-
-      } else if (bId.includes("dragon") || bId.includes("дракон")) {
-        // Black Dragon
-        ctx.fillStyle = "#18181b";
-        ctx.strokeStyle = "#ea580c";
-        ctx.lineWidth = 2;
-        // Serpentine body
-        ctx.beginPath();
-        ctx.ellipse(0, 0, 24, 16, 0, 0, Math.PI * 2);
-        ctx.fill(); ctx.stroke();
-        // Dragon Horned Head
-        ctx.beginPath();
-        ctx.moveTo(-16, -6); ctx.lineTo(-30, -14); ctx.lineTo(-24, -22); ctx.lineTo(-14, -18);
-        ctx.closePath();
-        ctx.fill(); ctx.stroke();
-        // Glowing orange eye
-        ctx.fillStyle = "#f97316";
-        ctx.shadowColor = "#f97316"; ctx.shadowBlur = 8;
-        ctx.fillRect(-24, -15, 3.5, 2);
-        ctx.shadowBlur = 0;
-        // Spiked Bat Wings
-        const wingFlap = Math.sin(time * 0.2) * 8;
-        ctx.fillStyle = "#3f1d0b";
-        ctx.beginPath();
-        ctx.moveTo(-6, -10); ctx.lineTo(6, -34 + wingFlap); ctx.lineTo(18, -20); ctx.lineTo(10, -8);
-        ctx.closePath();
-        ctx.fill();
-
-      } else if (bId.includes("tidehunter") || bId.includes("левиафан")) {
-        // --- TIDEHUNTER (Морской Левиафан) ---
-        ctx.fillStyle = "#0f766e";
-        ctx.strokeStyle = "#14b8a6";
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, 26, 22, 0, 0, Math.PI * 2);
-        ctx.fill(); ctx.stroke();
-        ctx.fillStyle = "#042f2e";
-        ctx.beginPath();
-        ctx.moveTo(-10, -18); ctx.lineTo(-6, -26); ctx.lineTo(-2, -18);
-        ctx.moveTo(2, -18); ctx.lineTo(6, -27); ctx.lineTo(10, -18);
-        ctx.fill();
-        ctx.save();
-        ctx.translate(-16, 2);
-        ctx.rotate(-0.4);
-        ctx.strokeStyle = "#94a3b8";
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(0, -22); ctx.lineTo(0, 16);
-        ctx.arc(0, 8, 12, 0, Math.PI, false);
-        ctx.stroke();
-        ctx.restore();
-      } else if (bId.includes("sf_boss") || bId.includes("nevermore") || bId.includes("повелитель душ")) {
-        // --- SHADOW FIEND / NEVERMORE ---
-        ctx.fillStyle = "#09090b";
-        ctx.strokeStyle = "#ef4444";
-        ctx.lineWidth = 2;
-        ctx.shadowColor = "#ef4444";
-        ctx.shadowBlur = 14;
-        ctx.beginPath();
-        ctx.moveTo(0, -26); ctx.lineTo(18, 14); ctx.lineTo(6, 20); ctx.lineTo(0, 16); ctx.lineTo(-6, 20); ctx.lineTo(-18, 14);
-        ctx.closePath();
-        ctx.fill(); ctx.stroke();
-        ctx.fillStyle = "#f97316";
-        ctx.beginPath();
-        ctx.arc(0, -6, 8, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = "#dc2626";
-        ctx.beginPath();
-        ctx.moveTo(-6, -22); ctx.lineTo(-14, -34); ctx.lineTo(-2, -26);
-        ctx.moveTo(6, -22); ctx.lineTo(14, -34); ctx.lineTo(2, -26);
-        ctx.fill();
-      } else if (bId.includes("doom") || bId.includes("апокалипсис")) {
-        // --- DOOM (Вестник Апокалипсиса) ---
-        ctx.fillStyle = "#7f1d1d";
-        ctx.strokeStyle = "#ea580c";
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, 24, 20, 0, 0, Math.PI * 2);
-        ctx.fill(); ctx.stroke();
-        ctx.save();
-        ctx.translate(-18, -4);
-        ctx.strokeStyle = "#fbbf24";
-        ctx.lineWidth = 3.5;
-        ctx.shadowColor = "#f59e0b";
-        ctx.shadowBlur = 16;
-        ctx.beginPath();
-        ctx.moveTo(0, 14); ctx.lineTo(0, -32);
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-        ctx.restore();
-        ctx.fillStyle = "rgba(220, 38, 38, 0.75)";
-        ctx.beginPath();
-        ctx.moveTo(0, -10); ctx.lineTo(24, -30); ctx.lineTo(14, -12); ctx.lineTo(28, -8); ctx.lineTo(8, 6);
-        ctx.fill();
-      } else if (bId.includes("enigma") || bId.includes("пожиратель миров")) {
-        // --- ENIGMA ---
-        const rot = time * 0.05;
-        ctx.save();
-        ctx.rotate(rot);
-        ctx.fillStyle = "#1e1b4b";
-        ctx.strokeStyle = "#818cf8";
-        ctx.lineWidth = 3;
-        ctx.shadowColor = "#6366f1";
-        ctx.shadowBlur = 18;
-        ctx.beginPath();
-        ctx.arc(0, 0, 22, 0, Math.PI * 2);
-        ctx.fill(); ctx.stroke();
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = "#000000";
-        ctx.beginPath();
-        ctx.arc(0, 0, 12, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      } else if (bId.includes("invoker_boss") || bId.includes("магистр")) {
-        // --- INVOKER ARSENAL MAGUS ---
-        ctx.fillStyle = "#451a03";
-        ctx.beginPath();
-        ctx.moveTo(0, -22); ctx.lineTo(16, 18); ctx.lineTo(-16, 18);
-        ctx.closePath(); ctx.fill();
-        const oRot = time * 0.07;
-        const orbCols = ["#38bdf8", "#c084fc", "#f97316"];
-        for (let i = 0; i < 3; i++) {
-          const ang = oRot + (i * Math.PI * 2 / 3);
-          const ox = Math.cos(ang) * 20;
-          const oy = Math.sin(ang) * 12 - 14;
-          ctx.fillStyle = orbCols[i];
-          ctx.shadowColor = orbCols[i];
-          ctx.shadowBlur = 10;
-          ctx.beginPath();
-          ctx.arc(ox, oy, 5, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.shadowBlur = 0;
-      } else {
-        // Roshan / Titan / Ancient Golem
+      if (!drawn) {
+        // Fallback Colossus Brute
         ctx.fillStyle = "#334155";
         ctx.strokeStyle = "#ea580c";
         ctx.lineWidth = 2.5;
-        // Massive hunched stone body
         ctx.beginPath();
         ctx.ellipse(0, 0, 26, 22, 0, 0, Math.PI * 2);
         ctx.fill(); ctx.stroke();
-        // Fiery lava cracks
         ctx.strokeStyle = "#f97316";
         ctx.lineWidth = 2;
-        ctx.shadowColor = "#f97316"; ctx.shadowBlur = 8;
         ctx.beginPath();
         ctx.moveTo(-12, -8); ctx.lineTo(-2, 4); ctx.lineTo(14, -6);
-        ctx.moveTo(-6, 8); ctx.lineTo(6, 12);
         ctx.stroke();
-        ctx.shadowBlur = 0;
-        // Heavy horned beast head
-        ctx.fillStyle = "#1e293b";
-        ctx.beginPath();
-        ctx.arc(-16, -8, 12, 0, Math.PI * 2);
-        ctx.fill();
-        // Curved beast horns
-        ctx.strokeStyle = "#d97706";
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(-18, -16); ctx.quadraticCurveTo(-26, -28, -14, -30);
-        ctx.stroke();
-        // Burning red eyes
-        ctx.fillStyle = "#ef4444";
-        ctx.shadowColor = "#ef4444"; ctx.shadowBlur = 8;
-        ctx.fillRect(-22, -10, 4, 2.5);
-        ctx.shadowBlur = 0;
       }
-
       ctx.restore();
 
     } else if (type.includes("defender")) {
@@ -8920,17 +10819,31 @@
             ctx.arc(dz.cx, dz.cy, dz.r * progress, 0, Math.PI * 2);
             ctx.fillStyle = "rgba(220, 38, 38, 0.4)";
             ctx.fill();
+          } else if (dz.type === "line") {
+            ctx.strokeStyle = dz.color || "#ef4444";
+            ctx.lineWidth = dz.width || 24;
+            ctx.beginPath();
+            ctx.moveTo(dz.x1, dz.y1);
+            ctx.lineTo(dz.x2, dz.y2);
+            ctx.stroke();
+          } else if (dz.type === "cone") {
+            ctx.fillStyle = dz.color ? `${dz.color}44` : "rgba(239, 68, 68, 0.35)";
+            ctx.beginPath();
+            ctx.moveTo(dz.cx, dz.cy);
+            ctx.arc(dz.cx, dz.cy, dz.range || 150, dz.angle - dz.spread / 2, dz.angle + dz.spread / 2);
+            ctx.closePath();
+            ctx.fill();
           }
           // Warning Exclamation Marker
           ctx.font = "bold 13px sans-serif";
           ctx.fillStyle = "#facc15";
           ctx.textAlign = "center";
-          const tx = dz.type === "rect" ? (dz.x + dz.w / 2) : dz.cx;
-          const ty = dz.type === "rect" ? (dz.y + dz.h / 2 + 5) : (dz.cy + 5);
-          ctx.fillText("⚠️", tx, ty);
+          const tx = dz.type === "rect" ? (dz.x + dz.w / 2) : (dz.type === "line" ? ((dz.x1 + dz.x2) / 2) : dz.cx);
+          const ty = dz.type === "rect" ? (dz.y + dz.h / 2 + 5) : (dz.type === "line" ? ((dz.y1 + dz.y2) / 2) : (dz.cy + 5));
+          ctx.fillText(dz.label || "⚠️", tx, ty);
         } else if (dz.phase === "active") {
           // Impact detonation flash!
-          ctx.shadowColor = "#ef4444";
+          ctx.shadowColor = dz.color || "#ef4444";
           ctx.shadowBlur = 18;
           if (dz.type === "rect") {
             ctx.fillStyle = "rgba(254, 202, 202, 0.85)";
@@ -8946,11 +10859,29 @@
             ctx.strokeStyle = "#ffffff";
             ctx.lineWidth = 3;
             ctx.stroke();
+          } else if (dz.type === "line") {
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = (dz.width || 24) + 6;
+            ctx.beginPath();
+            ctx.moveTo(dz.x1, dz.y1);
+            ctx.lineTo(dz.x2, dz.y2);
+            ctx.stroke();
+          } else if (dz.type === "cone") {
+            ctx.fillStyle = "rgba(254, 202, 202, 0.85)";
+            ctx.beginPath();
+            ctx.moveTo(dz.cx, dz.cy);
+            ctx.arc(dz.cx, dz.cy, dz.range || 150, dz.angle - dz.spread / 2, dz.angle + dz.spread / 2);
+            ctx.closePath();
+            ctx.fill();
           }
           ctx.shadowBlur = 0;
         }
         ctx.restore();
       }
+    }
+
+    if (typeof renderSpecialBossTelegraphs === "function") {
+      renderSpecialBossTelegraphs(ctx, ARENA, time);
     }
 
     // ---- 6. PICKUPS & TELEGRAPHS & SHOCKWAVES ----
@@ -9251,6 +11182,67 @@
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.radius + 10, 0, Math.PI * 2);
       ctx.stroke();
+    }
+
+    // --- VISUAL PLAYER STATUS EFFECTS (STUN, SLOW, SILENCE, DOOM, DOTs) ---
+    if (p.slowTimer > 0) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.85)";
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius + 7, time * 0.003, time * 0.003 + Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+    if (p.burnTimer > 0) {
+      ctx.save();
+      ctx.fillStyle = "rgba(249, 115, 22, 0.35)";
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius + 5 + Math.sin(time * 0.01) * 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    if (p.poisonTimer > 0) {
+      ctx.save();
+      ctx.fillStyle = "rgba(132, 204, 22, 0.35)";
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius + 4 + Math.cos(time * 0.01) * 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    if (p.stunTimer > 0 || p.isFrozenInTime) {
+      ctx.save();
+      for (let s = 0; s < 3; s++) {
+        const sAng = (time * 0.006) + (s * Math.PI * 2 / 3);
+        const sx = p.x + Math.cos(sAng) * (p.radius + 6);
+        const sy = p.y - p.radius - 28 + Math.sin(sAng) * 4;
+        ctx.fillStyle = "#facc15";
+        ctx.beginPath();
+        ctx.arc(sx, sy, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.font = "bold 9px sans-serif";
+      ctx.fillStyle = "#facc15";
+      ctx.textAlign = "center";
+      ctx.fillText(p.isFrozenInTime ? "⏳ СТОП-ВРЕМЯ" : "💫 СТАН", p.x, p.y - p.radius - 32);
+      ctx.restore();
+    }
+    if (p.silenceTimer > 0 || p.doomDebuffTimer > 0) {
+      ctx.save();
+      ctx.font = "bold 9px sans-serif";
+      ctx.fillStyle = p.doomDebuffTimer > 0 ? "#ef4444" : "#c084fc";
+      ctx.textAlign = "center";
+      ctx.fillText(p.doomDebuffTimer > 0 ? "🔥 DOOM" : "🔇 САЙЛЕНС", p.x, p.y - p.radius - 32);
+      ctx.restore();
+    }
+    if (p.blindTimer > 0) {
+      ctx.save();
+      ctx.font = "bold 8.5px sans-serif";
+      ctx.fillStyle = "#ef4444";
+      ctx.textAlign = "center";
+      ctx.fillText("🔴 ОСЛЕПЛЕНИЕ", p.x, p.y - p.radius - 22);
+      ctx.restore();
     }
 
     // RENDER DASH GHOST AFTERIMAGES BEHIND PLAYER
@@ -9936,7 +11928,26 @@
 
     // ---- 12. BOSS & ENEMY PROJECTILES ----
     for (const proj of ARENA.bossProjectiles) {
-      drawProceduralProjectile(ctx, { x: proj.x, y: proj.y, isBossFireball: true }, time);
+      if (proj.isMeatHook) {
+        ctx.save();
+        ctx.fillStyle = "#78716c";
+        ctx.strokeStyle = "#e2e8f0";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(proj.x, proj.y, proj.radius || 10, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+        ctx.restore();
+      } else if (proj.isSpiderBot) {
+        ctx.save();
+        ctx.fillStyle = "#eab308";
+        ctx.fillRect(proj.x - 5, proj.y - 4, 10, 8);
+        ctx.strokeStyle = "#713f12";
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(proj.x - 5, proj.y - 4, 10, 8);
+        ctx.restore();
+      } else {
+        drawProceduralProjectile(ctx, { x: proj.x, y: proj.y, color: proj.color, radius: proj.radius, isBossFireball: true }, time);
+      }
     }
     if (ARENA.enemyProjectiles) {
       for (const proj of ARENA.enemyProjectiles) {
@@ -10173,6 +12184,67 @@
 
       ctx.restore();
       ARENA._promptBtnBounds = { x: btnX, y: btnY, w: btnW, h: btnH };
+    }
+
+    // ---- 18b. BOSS DEFEAT OVERLAY (On Raid Boss Defeat / Player Death) ----
+    if (ARENA.waveState === "boss_defeat") {
+      ctx.save();
+      ctx.fillStyle = "rgba(0,0,0,0.78)";
+      ctx.fillRect(0, 0, w, h);
+
+      const cardW = 290, cardH = 175;
+      const cx = w / 2 - cardW / 2, cy = h / 2 - cardH / 2;
+
+      ctx.fillStyle = "rgba(15, 23, 42, 0.96)";
+      ctx.beginPath();
+      safeRoundRect(ctx, cx, cy, cardW, cardH, 16);
+      ctx.fill();
+      ctx.strokeStyle = "#ef4444";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      safeRoundRect(ctx, cx, cy, cardW, cardH, 16);
+      ctx.stroke();
+
+      ctx.font = "bold 16px sans-serif";
+      ctx.fillStyle = "#ef4444";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("💀 ВЫ ПОГИБЛИ В БИТВЕ С БОССОМ!", w / 2, cy + 26);
+
+      const bEntity = ARENA.bossEntity;
+      const hpPct = bEntity && bEntity.maxHp ? Math.max(0, Math.min(100, Math.round((bEntity.hp / bEntity.maxHp) * 100))) : 0;
+      const remHp = bEntity ? formatCompact(bEntity.hp) : "0";
+      const totalHp = bEntity ? formatCompact(bEntity.maxHp) : "0";
+      ctx.font = "12px sans-serif";
+      ctx.fillStyle = "#e2e8f0";
+      ctx.fillText(`У босса осталось: ${hpPct}% HP (${remHp} / ${totalHp})`, w / 2, cy + 50);
+      ctx.font = "10.5px sans-serif";
+      ctx.fillStyle = "#94a3b8";
+      ctx.fillText("Прокачайте героя, подберите билд и повторите!", w / 2, cy + 68);
+
+      // Button 1: Попробовать снова
+      const btnX = w / 2 - 110, btnY = cy + 92, btnW = 220, btnH = 34;
+      ctx.fillStyle = "#ef4444";
+      ctx.beginPath();
+      safeRoundRect(ctx, btnX, btnY, btnW, btnH, 10);
+      ctx.fill();
+      ctx.font = "bold 12.5px sans-serif";
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText("🔄 Попробовать снова", w / 2, btnY + btnH / 2);
+
+      // Button 2: В лобби боссов
+      const exitBtnX = w / 2 - 110, exitBtnY = cy + 132, exitBtnW = 220, exitBtnH = 30;
+      ctx.fillStyle = "#334155";
+      ctx.beginPath();
+      safeRoundRect(ctx, exitBtnX, exitBtnY, exitBtnW, exitBtnH, 8);
+      ctx.fill();
+      ctx.font = "bold 11.5px sans-serif";
+      ctx.fillStyle = "#cbd5e1";
+      ctx.fillText("🚪 В лобби боссов", w / 2, exitBtnY + exitBtnH / 2);
+
+      ctx.restore();
+      ARENA._bossDefeatRetryBounds = { x: btnX, y: btnY, w: btnW, h: btnH };
+      ARENA._bossDefeatExitBounds = { x: exitBtnX, y: exitBtnY, w: exitBtnW, h: exitBtnH };
     }
 
     // ---- 19. FLOOR CLEAR OVERLAY ----
@@ -10551,6 +12623,130 @@
       </div>
     `;
   }
+
+// ============================================================================
+// 07_boss_telegraphs.js — Rendering Unique Boss Visual Telegraphs & Ultimates
+// (Black Hole, Chronosphere, Resonance Laser, Chains, and Special VFX)
+// ============================================================================
+
+function renderSpecialBossTelegraphs(ctx, ARENA, time) {
+  if (!ARENA.bossTelegraphs) return;
+
+  for (const bt of ARENA.bossTelegraphs) {
+    ctx.save();
+
+    // 1. BLACK HOLE (Чёрная Дыра Энигмы)
+    if (bt.type === "black_hole") {
+      const bhPulse = 1 + Math.sin(time * 0.1) * 0.05;
+      const r = bt.r * bhPulse;
+
+      // Outer Gravitational Accretion Disk
+      const grad = ctx.createRadialGradient(bt.cx, bt.cy, r * 0.2, bt.cx, bt.cy, r);
+      grad.addColorStop(0, "rgba(2, 6, 23, 0.95)");
+      grad.addColorStop(0.45, "rgba(88, 28, 135, 0.75)");
+      grad.addColorStop(0.85, "rgba(99, 102, 241, 0.4)");
+      grad.addColorStop(1, "rgba(99, 102, 241, 0)");
+
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(bt.cx, bt.cy, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Swirling Event Horizon Rings
+      ctx.strokeStyle = "rgba(168, 85, 247, 0.6)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(bt.cx, bt.cy, r * 0.65, time * 0.08, time * 0.08 + Math.PI * 1.5);
+      ctx.stroke();
+
+      // Pure Void Center
+      ctx.fillStyle = "#000000";
+      ctx.beginPath();
+      ctx.arc(bt.cx, bt.cy, r * 0.35, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Infalling Star Matter
+      for (let s = 0; s < 6; s++) {
+        const sAng = -time * 0.12 + s * 1.05;
+        const sDist = r * (0.4 + ((time * 0.02 + s * 0.15) % 0.55));
+        ctx.fillStyle = "#e0e7ff";
+        ctx.beginPath();
+        ctx.arc(bt.cx + Math.cos(sAng) * sDist, bt.cy + Math.sin(sAng) * sDist, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // 2. CHRONOSPHERE (Хроносфера Войда)
+    else if (bt.type === "chronosphere") {
+      const r = bt.r;
+      // Translucent Violet Sphere
+      ctx.fillStyle = "rgba(88, 28, 135, 0.35)";
+      ctx.beginPath();
+      ctx.arc(bt.cx, bt.cy, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Glowing Temporal Grid Outline
+      ctx.strokeStyle = "#c084fc";
+      ctx.lineWidth = 3;
+      ctx.shadowColor = "#a855f7";
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.arc(bt.cx, bt.cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Floating Clock Hour Hand in Center
+      ctx.strokeStyle = "#f3e8ff";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(bt.cx, bt.cy);
+      ctx.lineTo(bt.cx + Math.cos(time * 0.04) * (r * 0.6), bt.cy + Math.sin(time * 0.04) * (r * 0.6));
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
+    // 3. ROTATING RESONANCE BEAM (Терзатель)
+    else if (bt.type === "rotating_beam") {
+      const bx2 = bt.cx + Math.cos(bt.angle) * bt.length;
+      const by2 = bt.cy + Math.sin(bt.angle) * bt.length;
+
+      ctx.strokeStyle = bt.color || "#e879f9";
+      ctx.lineWidth = 8;
+      ctx.shadowColor = "#c084fc";
+      ctx.shadowBlur = 16;
+      ctx.beginPath();
+      ctx.moveTo(bt.cx, bt.cy);
+      ctx.lineTo(bx2, by2);
+      ctx.stroke();
+
+      // Inner Core White Beam
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(bt.cx, bt.cy);
+      ctx.lineTo(bx2, by2);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
+    ctx.restore();
+  }
+
+  // Draw Pudge Hook Chains if projectile is Meat Hook
+  for (const proj of (ARENA.bossProjectiles || [])) {
+    if (proj.isMeatHook && proj.originX != null) {
+      ctx.save();
+      ctx.strokeStyle = "#78716c";
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(proj.originX, proj.originY);
+      ctx.lineTo(proj.x, proj.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+  }
+}
 
   function renderRoot() {
     const container = document.getElementById("rpg-root");
@@ -11534,16 +13730,21 @@
       lich: { tag: "Нежить", color: "border-cyan-500/60 bg-cyan-500/5" },
       tormentor: { tag: "Магический", color: "border-purple-500/60 bg-purple-500/5" },
       dragon: { tag: "Рейдовый", color: "border-rose-500/60 bg-rose-500/5" },
+      pudge_boss: { tag: "Мясник", color: "border-emerald-600/60 bg-emerald-600/5" },
+      faceless_void: { tag: "Хронос", color: "border-purple-600/60 bg-purple-600/5" },
       roshan: { tag: "Хозяин Ямы", color: "border-amber-500/60 bg-amber-500/5" },
       tidehunter: { tag: "Сверх-Ранг", color: "border-teal-500/60 bg-teal-500/5" },
       sf_boss: { tag: "Сверх-Ранг", color: "border-red-600/60 bg-red-600/5" },
       necrophos: { tag: "Сверх-Ранг", color: "border-emerald-600/60 bg-emerald-600/5" },
+      terrorblade: { tag: "Сверх-Ранг", color: "border-violet-700/60 bg-violet-700/5" },
       invoker_boss: { tag: "Сверх-Ранг", color: "border-yellow-500/60 bg-yellow-500/5" },
       chaos_knight: { tag: "Сверх-Ранг", color: "border-amber-600/60 bg-amber-600/5" },
       dark_tormentor: { tag: "Сверх-Ранг", color: "border-purple-700/60 bg-purple-700/5" },
+      storm_spirit: { tag: "Сверх-Ранг", color: "border-sky-500/60 bg-sky-500/5" },
       doom: { tag: "Сверх-Ранг", color: "border-orange-600/60 bg-orange-600/5" },
       primal_beast: { tag: "Сверх-Ранг", color: "border-red-700/60 bg-red-700/5" },
       phantom_roshan: { tag: "Сверх-Ранг", color: "border-cyan-400/60 bg-cyan-400/5" },
+      tinker_boss: { tag: "Сверх-Босс", color: "border-yellow-600/60 bg-yellow-600/5" },
       enigma: { tag: "Финальный Босс", color: "border-indigo-600/60 bg-indigo-600/5" }
     };
 
@@ -11552,27 +13753,32 @@
           id: b.id,
           name: b.name,
           icon: b.icon || "🗿",
-          hp: `${b.max_hp ? b.max_hp.toLocaleString('ru-RU') : (b.hp || 50000)} HP`,
+          hp: b.hp_display ? `${b.hp_display} HP` : `${formatCompact(b.max_hp || b.hp)} HP`,
           desc: b.desc || "Могущественный рейд-босс",
           tag: (TAG_MAP[b.id] || {}).tag || "Рейдовый",
           color: (TAG_MAP[b.id] || {}).color || "border-purple-500/60 bg-purple-500/5"
         }))
       : [
-          { id: "golem", name: "Древний Гранитный Голем", icon: "🗿", hp: "1,500,000 HP", desc: "Гигант из древнего гранита с тяжелыми разломами земли.", tag: "Начальный", color: "border-stone-500/60 bg-stone-500/5" },
-          { id: "lich", name: "Архилич Некрополя", icon: "☠️", hp: "3,000,000 HP", desc: "Владыка темных заклятий, ледяных сфер и телепортации.", tag: "Нежить", color: "border-cyan-500/60 bg-cyan-500/5" },
-          { id: "tormentor", name: "Древний Терзатель", icon: "🔮", hp: "6,000,000 HP", desc: "Отражает входящий урон кристальным панцирем. Дропает Shard!", tag: "Магический", color: "border-purple-500/60 bg-purple-500/5" },
-          { id: "dragon", name: "Дракон Инферно", icon: "🌋", hp: "10,000,000 HP", desc: "Испепеляет арену потоками лавы и огненными взмахами крыльев.", tag: "Рейдовый", color: "border-rose-500/60 bg-rose-500/5" },
-          { id: "roshan", name: "Рошан Свирепый (Roshan)", icon: "🐲", hp: "15,000,000 HP", desc: "КУЛЬТОВЫЙ ХОЗЯИН ЯМЫ! Дропает Aegis of the Immortal, Сыр и Divine Rapier!", tag: "Хозяин Ямы", color: "border-amber-500/60 bg-amber-500/5" },
-          { id: "tidehunter", name: "Левиафан Бездны (Tidehunter)", icon: "🐙", hp: "20,000,000 HP", desc: "[СИЛЬНЕЕ РОШАНА!] Владыка пучин. Чешуя Кракена гасит урон, Раваж сносит арену.", tag: "Сверх-Ранг", color: "border-teal-500/60 bg-teal-500/5" },
-          { id: "sf_boss", name: "Архидемон Nevermore", icon: "💀", hp: "26,000,000 HP", desc: "[СИЛЬНЕЕ РОШАНА!] Собирает легион душ. Тройные коилы и взрывной Реквием Душ!", tag: "Сверх-Ранг", color: "border-red-600/60 bg-red-600/5" },
-          { id: "necrophos", name: "Чумной Владыка (Necrophos)", icon: "🧟", hp: "33,000,000 HP", desc: "[СИЛЬНЕЕ РОШАНА!] Аура чумы истощает здоровье, а Коса Смерти наносит сокрушительный удар!", tag: "Сверх-Ранг", color: "border-emerald-600/60 bg-emerald-600/5" },
-          { id: "invoker_boss", name: "Демиург Арсенала (Invoker)", icon: "🧙‍♂️", hp: "42,000,000 HP", desc: "[СИЛЬНЕЕ РОШАНА!] Повелитель всех стихий. Обрушивает хаос-метеоры и звуковые взрывы!", tag: "Сверх-Ранг", color: "border-yellow-500/60 bg-yellow-500/5" },
-          { id: "chaos_knight", name: "Всадник Хаоса (Chaos Knight)", icon: "🐎", hp: "52,000,000 HP", desc: "[СИЛЬНЕЕ РОШАНА!] Призывает фантомные иллюзии и пробивает непредсказуемыми критами!", tag: "Сверх-Ранг", color: "border-amber-600/60 bg-amber-600/5" },
-          { id: "dark_tormentor", name: "Тёмный Терзатель Бездны", icon: "💎", hp: "65,000,000 HP", desc: "[СИЛЬНЕЕ РОШАНА!] Мутировавший Терзатель Тьмы. Отражает 45% урона и стреляет шипами бездны!", tag: "Сверх-Ранг", color: "border-purple-700/60 bg-purple-700/5" },
-          { id: "doom", name: "Вестник Апокалипсиса (Lord Doom)", icon: "👹", hp: "80,000,000 HP", desc: "[СИЛЬНЕЕ РОШАНА!] Дьявольский лорд преисподней. Чистый урон и печать безмолвия!", tag: "Сверх-Ранг", color: "border-orange-600/60 bg-orange-600/5" },
-          { id: "primal_beast", name: "Первобытный Титан (Primal Beast)", icon: "🦣", hp: "100,000,000 HP", desc: "[СИЛЬНЕЕ РОШАНА!] Неукротимый сокрушитель материков с яростным топотом и тараном!", tag: "Сверх-Ранг", color: "border-red-700/60 bg-red-700/5" },
-          { id: "phantom_roshan", name: "Призрачный Рошан Хаоса", icon: "👻", hp: "125,000,000 HP", desc: "[СИЛЬНЕЕ РОШАНА!] Восставший из Бездны призрак Рошана. Астральный Slam и эктоплазма!", tag: "Сверх-Ранг", color: "border-cyan-400/60 bg-cyan-400/5" },
-          { id: "enigma", name: "Пожиратель Миров (Enigma Cosmic)", icon: "🌌", hp: "160,000,000 HP", desc: "[ФИНАЛЬНЫЙ СВЕРХ-БОСС! 160 МЛН!] Мастер гравитации. Схлопывает арену в Черную Дыру!", tag: "Финальный Босс", color: "border-indigo-600/60 bg-indigo-600/5" }
+          { id: "golem", name: "Древний Гранитный Голем", icon: "🗿", hp: "75,000 HP", desc: "[75k HP] Гигант из древнего гранита с тяжелыми разломами земли.", tag: "Начальный", color: "border-stone-500/60 bg-stone-500/5" },
+          { id: "lich", name: "Архилич Некрополя", icon: "☠️", hp: "225,000 HP", desc: "[225k HP] Владыка темных заклятий, ледяных сфер и телепортации.", tag: "Нежить", color: "border-cyan-500/60 bg-cyan-500/5" },
+          { id: "tormentor", name: "Древний Терзатель", icon: "🔮", hp: "700,000 HP", desc: "[700k HP] Отражает входящий урон кристальным панцирем. Дропает Shard!", tag: "Магический", color: "border-purple-500/60 bg-purple-500/5" },
+          { id: "dragon", name: "Дракон Инферно", icon: "🌋", hp: "2.2M HP", desc: "[2.2M HP] Испепеляет арену потоками лавы и огненными взмахами крыльев.", tag: "Рейдовый", color: "border-rose-500/60 bg-rose-500/5" },
+          { id: "pudge_boss", name: "Мясник из Чрева (Pudge)", icon: "🪝", hp: "7.5M HP", desc: "[7.5M HP] Тесак, ржавый крюк цепью и отравляющая вонь гнили.", tag: "Мясник", color: "border-emerald-600/60 bg-emerald-600/5" },
+          { id: "faceless_void", name: "Хроно-Владыка (Faceless Void)", icon: "⏳", hp: "25M HP", desc: "[25M HP] Повелитель времени, двойные баши и купол Хроносферы.", tag: "Хронос", color: "border-purple-600/60 bg-purple-600/5" },
+          { id: "roshan", name: "Рошан Свирепый (Roshan)", icon: "🐲", hp: "85M HP", desc: "[85M HP] КУЛЬТОВЫЙ ХОЗЯИН ЯМЫ! Дропает Aegis of the Immortal, Сыр и Divine Rapier!", tag: "Хозяин Ямы", color: "border-amber-500/60 bg-amber-500/5" },
+          { id: "tidehunter", name: "Левиафан Бездны (Tidehunter)", icon: "🐙", hp: "300M HP", desc: "[300M HP] Владыка пучин. Чешуя Кракена гасит урон, Раваж сносит арену.", tag: "Сверх-Ранг", color: "border-teal-500/60 bg-teal-500/5" },
+          { id: "sf_boss", name: "Архидемон Nevermore", icon: "💀", hp: "1B HP", desc: "[1 МИЛЛИАРД HP] Собирает легион душ. Тройные коилы и Реквием Душ!", tag: "Сверх-Ранг", color: "border-red-600/60 bg-red-600/5" },
+          { id: "necrophos", name: "Чумной Владыка (Necrophos)", icon: "🧟", hp: "3.5B HP", desc: "[3.5 МИЛЛИАРДА HP] Аура чумы истощает здоровье, Коса Смерти рубит наповал!", tag: "Сверх-Ранг", color: "border-emerald-600/60 bg-emerald-600/5" },
+          { id: "terrorblade", name: "Демон Бездны (Terrorblade)", icon: "😈", hp: "12B HP", desc: "[12 МИЛЛИАРДОВ HP] Метаморфоза в крылатого демона и разрыв души Sunder!", tag: "Сверх-Ранг", color: "border-violet-700/60 bg-violet-700/5" },
+          { id: "invoker_boss", name: "Демиург Арсенала (Invoker)", icon: "🧙‍♂️", hp: "42B HP", desc: "[42 МИЛЛИАРДА HP] Повелитель всех стихий. Обрушивает хаос-метеоры!", tag: "Сверх-Ранг", color: "border-yellow-500/60 bg-yellow-500/5" },
+          { id: "chaos_knight", name: "Всадник Хаоса (Chaos Knight)", icon: "🐎", hp: "150B HP", desc: "[150 МИЛЛИАРДОВ HP] Призывает фантомы и пробивает непредсказуемыми критами!", tag: "Сверх-Ранг", color: "border-amber-600/60 bg-amber-600/5" },
+          { id: "dark_tormentor", name: "Тёмный Терзатель Бездны", icon: "💎", hp: "550B HP", desc: "[550 МИЛЛИАРДОВ HP] Мутировавший Терзатель Тьмы с отражением урона!", tag: "Сверх-Ранг", color: "border-purple-700/60 bg-purple-700/5" },
+          { id: "storm_spirit", name: "Громовой Дух (Storm Spirit)", icon: "⚡", hp: "2T HP", desc: "[2 ТРИЛЛИОНА HP] Молниеносные перелеты через всю арену и статические мины!", tag: "Сверх-Ранг", color: "border-sky-500/60 bg-sky-500/5" },
+          { id: "doom", name: "Вестник Апокалипсиса (Lord Doom)", icon: "👹", hp: "7.5T HP", desc: "[7.5 ТРИЛЛИОНОВ HP] Владыка преисподней с чистым уроном и роком!", tag: "Сверх-Ранг", color: "border-orange-600/60 bg-orange-600/5" },
+          { id: "primal_beast", name: "Первобытный Титан (Primal Beast)", icon: "🦣", hp: "28T HP", desc: "[28 ТРИЛЛИОНОВ HP] Неукротимый сокрушитель материков с яростным топотом!", tag: "Сверх-Ранг", color: "border-red-700/60 bg-red-700/5" },
+          { id: "phantom_roshan", name: "Призрачный Рошан Хаоса", icon: "👻", hp: "100T HP", desc: "[100 ТРИЛЛИОНОВ HP] Восставший из Бездны призрак Рошана с астральным Slam!", tag: "Сверх-Ранг", color: "border-cyan-400/60 bg-cyan-400/5" },
+          { id: "tinker_boss", name: "Архиинженер (Omega Tinker)", icon: "🤖", hp: "350T HP", desc: "[350 ТРИЛЛИОНОВ HP] Лазер, шквал ракет и марш сотен боевых роботов!", tag: "Сверх-Босс", color: "border-yellow-600/60 bg-yellow-600/5" },
+          { id: "enigma", name: "Пожиратель Миров (Enigma Cosmic)", icon: "🌌", hp: "1.2Q HP", desc: "[1.2 КВАДРИЛЛИОНА HP!] Битва на месяц нон-стоп! Схлопывает арену в Черную Дыру!", tag: "Финальный Босс", color: "border-indigo-600/60 bg-indigo-600/5" }
         ];
 
     return `

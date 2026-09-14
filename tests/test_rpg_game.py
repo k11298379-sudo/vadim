@@ -250,8 +250,8 @@ async def run_rpg_tests():
     )
     assert isinstance(solo_room, RPGCoopBossRoom)
     assert solo_room.is_solo is True
-    # Scaled HP: Roshan 15,000,000 * 0.45 = 6,750,000
-    assert solo_room.boss["hp"] == 6750000
+    # Scaled HP: Roshan 85,000,000 * 0.45 = 38,250,000
+    assert solo_room.boss["hp"] == 38250000
     solo_room.players["host"]["hp"] = 50000
     assert solo_room.players["player_2"]["tg_id"] is None
     assert solo_room.players["player_3"]["tg_id"] is None

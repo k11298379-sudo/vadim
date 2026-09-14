@@ -8,6 +8,7 @@ if hasattr(sys.stdout, "reconfigure"):
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./data/test_rpg.db"
 
+import pytest
 from httpx import AsyncClient, ASGITransport
 from backend.main import app
 from backend.db.session import init_db, get_db_session
@@ -21,10 +22,16 @@ from backend.db.crud.rpg import (
     calculate_character_effective_stats,
     serialize_character_profile
 )
+from backend.api.rpg_bosses import RAID_BOSSES
 
 
-async def test_rpg_ecosystem_suite():
-    print("\n=== [1/5] Testing Shop Catalog & Purchases (/shop, /shop/buy) ===")
+def test_rpg_ecosystem():
+    asyncio.run(run_rpg_ecosystem_suite())
+
+
+async def run_rpg_ecosystem_suite():
+    await init_db()
+    print("\n=== [1/6] Testing Shop Catalog & Purchases (/shop, /shop/buy) ===")
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         # 1. Check shop catalog
@@ -39,7 +46,7 @@ async def test_rpg_ecosystem_suite():
         session = await anext(gen)
         try:
             char = await get_or_create_rpg_character(session, user_id=1)
-            char.gold = 5000
+            char.gold = 50000
             char.gems = 100
             char.inventory = []
             await session.commit()
@@ -140,7 +147,7 @@ async def test_rpg_ecosystem_suite():
         assert bought_armor["uid"] in inv_uids, "Previous equipped armor must be preserved in inventory after class switch!"
         print("[OK] Class switch preserved previous equipment in inventory without deletion!")
 
-        print("\n=== [5/5] Testing Hyperbolic Armor Formula Mathematics ===")
+        print("\n=== [5/6] Testing Hyperbolic Armor Formula Mathematics ===")
         for def_val in [0, 5, 10, 20, 50, 100]:
             dr = (def_val * 0.05) / (1.0 + def_val * 0.05)
             ehp_multiplier = 1.0 + def_val * 0.05
@@ -152,10 +159,49 @@ async def test_rpg_ecosystem_suite():
 
         print("[OK] Hyperbolic armor mathematics strictly verified!")
 
+        print("\n=== [6/6] Testing Boss Roster, Halved HP Scaling & Dota Passives ===")
+        # 1. Verify Raid Boss API endpoint
+        r = await client.get("/api/rpg/bosses")
+        assert r.status_code == 200, f"Bosses API failed: {r.text}"
+        bosses_data = r.json()
+        boss_map = {b["id"]: b for b in bosses_data}
+
+        # Check new Dota bosses are in roster
+        expected_new_bosses = ["pudge_boss", "faceless_void", "terrorblade", "storm_spirit", "tinker_boss"]
+        for b_id in expected_new_bosses:
+            assert b_id in boss_map, f"New boss {b_id} missing from /api/rpg/bosses!"
+            print(f"[OK] Boss '{boss_map[b_id]['name']}' verified in roster: HP={boss_map[b_id]['max_hp']:,}, ATK={boss_map[b_id]['atk_min']}-{boss_map[b_id]['atk_max']}, DEF={boss_map[b_id]['defense']}")
+
+        # Check Geometric Progression HP scaling (Golem x15 = 75k, Enigma = 1.2 Quadrillion)
+        assert boss_map["golem"]["max_hp"] == 75_000, f"Golem HP mismatch: {boss_map['golem']['max_hp']}"
+        assert boss_map["roshan"]["max_hp"] == 85_000_000, f"Roshan HP mismatch: {boss_map['roshan']['max_hp']}"
+        assert boss_map["enigma"]["max_hp"] == 1_200_000_000_000_000, f"Enigma HP mismatch: {boss_map['enigma']['max_hp']}"
+        print(f"[OK] Geometric HP progression verified: Golem=75k, Roshan=85M, Enigma=1.2Q HP (1+ month non-stop battle)!")
+
+        # 2. Buy Vanguard & test damage block in effective stats
+        r = await client.post("/api/rpg/shop/buy", json={"item_id": "shop_a_vanguard"})
+        assert r.status_code == 200, f"Failed to buy Vanguard: {r.text}"
+        bought_vg = r.json()["item"]
+        assert bought_vg.get("bonus", {}).get("damage_block") == 70, f"Vanguard damage_block missing: {bought_vg}"
+
+        r = await client.post("/api/rpg/inventory/equip", json={"item_uid": bought_vg["uid"]})
+        assert r.status_code == 200
+        prof = r.json()["profile"]
+        assert prof["equipment"]["armor"]["uid"] == bought_vg["uid"]
+        assert prof["stats"]["damage_block"] == 70, f"Effective stats damage_block mismatch: {prof['stats']}"
+        print(f"[OK] Vanguard equipped! Effective damage block verified: {prof['stats']['damage_block']}.")
+
+        # 3. Buy Mjollnir & verify weapon stats
+        r = await client.post("/api/rpg/shop/buy", json={"item_id": "shop_w_mjollnir"})
+        assert r.status_code == 200, f"Failed to buy Mjollnir: {r.text}"
+        bought_mj = r.json()["item"]
+        assert bought_mj["rarity"] == "immortal"
+        print(f"[OK] Mjollnir bought! ATK: {bought_mj.get('base_min')}..{bought_mj.get('base_max')}, bonus: {bought_mj.get('bonus')}.")
+
     print("\n=======================================================")
     print(">>> ALL RPG ECOSYSTEM INTEGRATION TESTS PASSED! <<<")
     print("=======================================================\n")
 
 
 if __name__ == "__main__":
-    asyncio.run(test_rpg_ecosystem_suite())
+    asyncio.run(run_rpg_ecosystem_suite())
