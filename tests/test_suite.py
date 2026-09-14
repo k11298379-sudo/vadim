@@ -285,10 +285,16 @@ async def test_database_and_crud():
         print("[OK] Duty roster clearing verified.")
 
         # 9. Test Permanent Schedule Update Freezing Past Dates
-        await save_bulk_permanent_schedule(session, 1, [(1, "Алгебра"), (2, "Физика")])
+        from sqlalchemy import delete, select
+        from backend.db.models import Schedule
         past_monday = date(2026, 9, 7)
         future_monday = date(2026, 9, 21)
+        await session.execute(delete(Schedule).where(Schedule.specific_date == past_monday))
+        await session.commit()
+        await save_bulk_permanent_schedule(session, 1, [(1, "Алгебра"), (2, "Физика")])
 
+        await session.execute(delete(Schedule).where(Schedule.specific_date == past_monday))
+        await session.commit()
         from backend.db.crud import freeze_past_schedules_for_weekday
         await freeze_past_schedules_for_weekday(session, 1, up_to_date=date(2026, 9, 14))
         await save_bulk_permanent_schedule(session, 1, [(1, "Химия"), (2, "Биология")])
