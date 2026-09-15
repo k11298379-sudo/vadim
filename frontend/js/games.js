@@ -82,7 +82,9 @@
       { id: "tetris", icon: "🧱", name: "Тетрис", color: "blue" },
       { id: "chess", icon: "♟️", name: "Шахматы", color: "blue" },
       { id: "durak", icon: "🃏", name: "Дурак", color: "red" },
+      { id: "blackjack", icon: "♠️", name: "21 Очко", color: "red" },
     ];
+
     const gamesList = isTesterUser
       ? [{ id: "rpg", icon: "⚔️", name: "natarGRP", color: "amber" }, ...baseGames]
       : baseGames;
@@ -145,6 +147,8 @@
       if (window.GAMES_CHESS) window.GAMES_CHESS.init();
     } else if (currentGame === "durak") {
       initDurak();
+    } else if (currentGame === "blackjack") {
+      initBlackjack();
     }
   }
 
@@ -160,24 +164,13 @@
       if (typeof window.RPG.leavePvPRoom === "function") window.RPG.leavePvPRoom();
       if (typeof window.RPG.leaveCoopRoom === "function") window.RPG.leaveCoopRoom();
     }
-    if (window.GAMES_2048 && typeof window.GAMES_2048.cleanup === 'function') {
-      window.GAMES_2048.cleanup();
-    }
-    if (window.GAMES_TICTACTOE && typeof window.GAMES_TICTACTOE.cleanup === 'function') {
-      window.GAMES_TICTACTOE.cleanup();
-    }
-    if (window.GAMES_SNAKE && typeof window.GAMES_SNAKE.cleanup === 'function') {
-      window.GAMES_SNAKE.cleanup();
-    }
-    if (window.GAMES_TETRIS && typeof window.GAMES_TETRIS.cleanup === 'function') {
-      window.GAMES_TETRIS.cleanup();
-    }
-    if (window.GAMES_CHESS && typeof window.GAMES_CHESS.cleanup === 'function') {
-      window.GAMES_CHESS.cleanup();
-    }
-    if (window.DURAK && typeof window.DURAK.destroy === 'function') {
-      window.DURAK.destroy();
-    }
+    if (window.GAMES_2048 && typeof window.GAMES_2048.cleanup === 'function') window.GAMES_2048.cleanup();
+    if (window.GAMES_TICTACTOE && typeof window.GAMES_TICTACTOE.cleanup === 'function') window.GAMES_TICTACTOE.cleanup();
+    if (window.GAMES_SNAKE && typeof window.GAMES_SNAKE.cleanup === 'function') window.GAMES_SNAKE.cleanup();
+    if (window.GAMES_TETRIS && typeof window.GAMES_TETRIS.cleanup === 'function') window.GAMES_TETRIS.cleanup();
+    if (window.GAMES_CHESS && typeof window.GAMES_CHESS.cleanup === 'function') window.GAMES_CHESS.cleanup();
+    if (window.DURAK && typeof window.DURAK.destroy === 'function') window.DURAK.destroy();
+    if (window.BLACKJACK && typeof window.BLACKJACK.cleanup === 'function') window.BLACKJACK.cleanup();
   }
 
   function renderActiveGame() {
@@ -188,9 +181,29 @@
     if (currentGame === "tetris") return window.GAMES_TETRIS ? window.GAMES_TETRIS.renderHTML() : "";
     if (currentGame === "chess") return window.GAMES_CHESS ? window.GAMES_CHESS.renderHTML() : "";
     if (currentGame === "durak") return renderDurakHTML();
+    if (currentGame === "blackjack") return renderBlackjackHTML();
     return "";
   }
 
+  // BLACKJACK bridge
+  function renderBlackjackHTML() {
+    return `<div id="blackjack-root" style="min-height:400px;"></div>`;
+  }
+
+  function initBlackjack() {
+    const el = document.getElementById('blackjack-root');
+    if (!el) return;
+    if (typeof window.BLACKJACK !== 'undefined') {
+      window.BLACKJACK.init(el);
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = '/static/js/blackjack.js?v=20260915_1';
+    s.onload = () => {
+      if (window.BLACKJACK) window.BLACKJACK.init(el);
+    };
+    document.head.appendChild(s);
+  }
 
   // DURAK bridge
   function renderDurakHTML() {
@@ -246,30 +259,22 @@
 
     if (target === "rpg_duel") {
       switchGame("rpg");
-      if (window.RPG && typeof window.RPG.openPvPRoom === "function") {
-        window.RPG.openPvPRoom(roomId);
-      }
+      if (window.RPG?.openPvPRoom) window.RPG.openPvPRoom(roomId);
       return;
     }
     if (target === "rpg_coop") {
       switchGame("rpg");
-      if (window.RPG && typeof window.RPG.openCoopRoom === "function") {
-        window.RPG.openCoopRoom(roomId);
-      }
+      if (window.RPG?.openCoopRoom) window.RPG.openCoopRoom(roomId);
       return;
     }
     if (target === "chess") {
       switchGame("chess");
-      if (window.GAMES_CHESS && typeof window.GAMES_CHESS.openChessOnlineRoom === "function") {
-        return window.GAMES_CHESS.openChessOnlineRoom(roomId);
-      }
+      if (window.GAMES_CHESS?.openChessOnlineRoom) return window.GAMES_CHESS.openChessOnlineRoom(roomId);
       return;
     }
     if (target === "durak") {
       switchGame("durak");
-      if (window.DURAK && typeof window.DURAK.joinRoom === "function") {
-        return window.DURAK.joinRoom(roomId);
-      }
+      if (window.DURAK?.joinRoom) return window.DURAK.joinRoom(roomId);
       return;
     }
     switchGame("tictactoe");
@@ -336,6 +341,10 @@
     backToChessLobby: () => window.GAMES_CHESS && window.GAMES_CHESS.backToChessLobby(),
     filterChessClassmates: (q) => window.GAMES_CHESS && window.GAMES_CHESS.filterChessClassmates(q),
     refreshChessClassmates: () => window.GAMES_CHESS && window.GAMES_CHESS.loadChessClassmates(),
-    setChessColor: (c) => window.GAMES_CHESS && window.GAMES_CHESS.setChessColor(c)
+    setChessColor: (c) => window.GAMES_CHESS && window.GAMES_CHESS.setChessColor(c),
+
+    // Blackjack (21 Очко)
+    initBlackjack: () => window.BLACKJACK && typeof window.BLACKJACK.init === 'function' && window.BLACKJACK.init()
   };
 })();
+
