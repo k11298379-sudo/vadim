@@ -313,7 +313,10 @@ async def test_database_and_crud():
         print("[OK] Permanent schedule updates affect only future dates (past dates frozen) verified.")
 
         # 9b. Test 1 September and Earlier Dates Exclusion (No Lessons)
+        sept8_test = date(2026, 9, 8)
         await save_bulk_permanent_schedule(session, 2, [(1, "Геометрия"), (2, "Информатика")])
+        await session.execute(delete(Schedule).where(Schedule.specific_date == sept8_test))
+        await session.commit()
         await freeze_past_schedules_for_weekday(session, 2, up_to_date=date(2026, 9, 15))
 
         # Verify September 1st and August return NO schedule (empty list)
