@@ -83,6 +83,8 @@
       { id: "chess", icon: "♟️", name: "Шахматы", color: "blue" },
       { id: "durak", icon: "🃏", name: "Дурак", color: "red" },
       { id: "blackjack", icon: "♠️", name: "21 Очко", color: "red" },
+      { id: "roulette", icon: "🎡", name: "Рулетка", color: "red" },
+      { id: "dice", icon: "🎲", name: "Кости", color: "red" },
     ];
 
     const gamesList = isTesterUser
@@ -100,7 +102,7 @@
         ? `bg-white dark:bg-slate-700 ${activeColor} shadow-sm`
         : "text-slate-500 dark:text-slate-400 hover:text-slate-700";
       return `
-        <button onclick="window.GAMES.switchGame('${g.id}')" class="py-2 rounded-xl transition-all flex items-center justify-center gap-1 ${activeClass}">
+        <button onclick="window.GAMES.switchGame('${g.id}')" class="py-2 px-2.5 rounded-xl transition-all flex items-center justify-center gap-1 shrink-0 ${activeClass}">
           <span>${g.icon}</span>
           <span class="truncate">${g.name}</span>
         </button>
@@ -121,7 +123,7 @@
         </div>
 
         <!-- Games selector tabs -->
-        <div class="gap-1 p-1 rounded-2xl bg-slate-200/70 dark:bg-slate-800/90 text-[10px] font-bold" style="display: grid; grid-template-columns: repeat(${gamesList.length}, minmax(0, 1fr));">
+        <div class="gap-1 p-1 rounded-2xl bg-slate-200/70 dark:bg-slate-800/90 text-[10px] font-bold flex overflow-x-auto no-scrollbar">
           ${tabsHTML}
         </div>
       </div>
@@ -149,6 +151,10 @@
       initDurak();
     } else if (currentGame === "blackjack") {
       initBlackjack();
+    } else if (currentGame === "roulette") {
+      initRoulette();
+    } else if (currentGame === "dice") {
+      initDice();
     }
   }
 
@@ -164,13 +170,15 @@
       if (typeof window.RPG.leavePvPRoom === "function") window.RPG.leavePvPRoom();
       if (typeof window.RPG.leaveCoopRoom === "function") window.RPG.leaveCoopRoom();
     }
-    if (window.GAMES_2048 && typeof window.GAMES_2048.cleanup === 'function') window.GAMES_2048.cleanup();
-    if (window.GAMES_TICTACTOE && typeof window.GAMES_TICTACTOE.cleanup === 'function') window.GAMES_TICTACTOE.cleanup();
-    if (window.GAMES_SNAKE && typeof window.GAMES_SNAKE.cleanup === 'function') window.GAMES_SNAKE.cleanup();
-    if (window.GAMES_TETRIS && typeof window.GAMES_TETRIS.cleanup === 'function') window.GAMES_TETRIS.cleanup();
-    if (window.GAMES_CHESS && typeof window.GAMES_CHESS.cleanup === 'function') window.GAMES_CHESS.cleanup();
-    if (window.DURAK && typeof window.DURAK.destroy === 'function') window.DURAK.destroy();
-    if (window.BLACKJACK && typeof window.BLACKJACK.cleanup === 'function') window.BLACKJACK.cleanup();
+    if (window.GAMES_2048?.cleanup) window.GAMES_2048.cleanup();
+    if (window.GAMES_TICTACTOE?.cleanup) window.GAMES_TICTACTOE.cleanup();
+    if (window.GAMES_SNAKE?.cleanup) window.GAMES_SNAKE.cleanup();
+    if (window.GAMES_TETRIS?.cleanup) window.GAMES_TETRIS.cleanup();
+    if (window.GAMES_CHESS?.cleanup) window.GAMES_CHESS.cleanup();
+    if (window.DURAK?.destroy) window.DURAK.destroy();
+    if (window.BLACKJACK?.cleanup) window.BLACKJACK.cleanup();
+    if (window.ROULETTE?.cleanup) window.ROULETTE.cleanup();
+    if (window.DICE?.cleanup) window.DICE.cleanup();
   }
 
   function renderActiveGame() {
@@ -182,7 +190,31 @@
     if (currentGame === "chess") return window.GAMES_CHESS ? window.GAMES_CHESS.renderHTML() : "";
     if (currentGame === "durak") return renderDurakHTML();
     if (currentGame === "blackjack") return renderBlackjackHTML();
+    if (currentGame === "roulette") return `<div id="roulette-root" style="min-height:400px;"></div>`;
+    if (currentGame === "dice") return `<div id="dice-root" style="min-height:400px;"></div>`;
     return "";
+  }
+
+  // ROULETTE bridge
+  function initRoulette() {
+    const el = document.getElementById('roulette-root');
+    if (!el) return;
+    if (typeof window.ROULETTE !== 'undefined') { window.ROULETTE.init(el); return; }
+    const s = document.createElement('script');
+    s.src = '/static/js/roulette.js?v=20260915_1';
+    s.onload = () => { if (window.ROULETTE) window.ROULETTE.init(el); };
+    document.head.appendChild(s);
+  }
+
+  // DICE bridge
+  function initDice() {
+    const el = document.getElementById('dice-root');
+    if (!el) return;
+    if (typeof window.DICE !== 'undefined') { window.DICE.init(el); return; }
+    const s = document.createElement('script');
+    s.src = '/static/js/dice.js?v=20260915_1';
+    s.onload = () => { if (window.DICE) window.DICE.init(el); };
+    document.head.appendChild(s);
   }
 
   // BLACKJACK bridge
@@ -204,6 +236,7 @@
     };
     document.head.appendChild(s);
   }
+
 
   // DURAK bridge
   function renderDurakHTML() {
@@ -294,57 +327,59 @@
     cleanup: cleanupCurrentGame,
 
     // natarGRP RPG
-    initRPG: () => window.RPG && typeof window.RPG.init === "function" && window.RPG.init(),
+    initRPG: () => window.RPG?.init?.(),
 
     // 2048
-    reset2048: () => window.GAMES_2048 && window.GAMES_2048.reset(),
+    reset2048: () => window.GAMES_2048?.reset?.(),
 
     // Tic-Tac-Toe
-    setTTTMode: (m) => window.GAMES_TICTACTOE && window.GAMES_TICTACTOE.setTTTMode(m),
-    cellClickTTT: (i) => window.GAMES_TICTACTOE && window.GAMES_TICTACTOE.cellClickTTT(i),
-    resetTTT: () => window.GAMES_TICTACTOE && window.GAMES_TICTACTOE.resetTTT(),
+    setTTTMode: (m) => window.GAMES_TICTACTOE?.setTTTMode(m),
+    cellClickTTT: (i) => window.GAMES_TICTACTOE?.cellClickTTT(i),
+    resetTTT: () => window.GAMES_TICTACTOE?.resetTTT(),
     openOnlineRoom: openOnlineRoom,
-    inviteClassmate: (id, n) => window.GAMES_TICTACTOE && window.GAMES_TICTACTOE.inviteClassmate(id, n),
-    makeOnlineMove: (i) => window.GAMES_TICTACTOE && window.GAMES_TICTACTOE.makeOnlineMove(i),
-    requestRematch: () => window.GAMES_TICTACTOE && window.GAMES_TICTACTOE.requestRematch(),
-    cancelOnlineGame: () => window.GAMES_TICTACTOE && window.GAMES_TICTACTOE.cancelOnlineGame(),
-    leaveOnlineGame: () => window.GAMES_TICTACTOE && window.GAMES_TICTACTOE.leaveOnlineGame(),
-    backToLobby: () => window.GAMES_TICTACTOE && window.GAMES_TICTACTOE.backToLobby(),
-    filterClassmates: (q) => window.GAMES_TICTACTOE && window.GAMES_TICTACTOE.filterClassmates(q),
-    refreshClassmates: () => window.GAMES_TICTACTOE && window.GAMES_TICTACTOE.loadClassmates(),
+    inviteClassmate: (id, n) => window.GAMES_TICTACTOE?.inviteClassmate(id, n),
+    makeOnlineMove: (i) => window.GAMES_TICTACTOE?.makeOnlineMove(i),
+    requestRematch: () => window.GAMES_TICTACTOE?.requestRematch(),
+    cancelOnlineGame: () => window.GAMES_TICTACTOE?.cancelOnlineGame(),
+    leaveOnlineGame: () => window.GAMES_TICTACTOE?.leaveOnlineGame(),
+    backToLobby: () => window.GAMES_TICTACTOE?.backToLobby(),
+    filterClassmates: (q) => window.GAMES_TICTACTOE?.filterClassmates(q),
+    refreshClassmates: () => window.GAMES_TICTACTOE?.loadClassmates(),
 
-    // Snake
-    startSnakeGame: () => window.GAMES_SNAKE && window.GAMES_SNAKE.startSnakeGame(),
-    setSnakeDir: (d) => window.GAMES_SNAKE && window.GAMES_SNAKE.setSnakeDir(d),
+    // Snake & Tetris
+    startSnakeGame: () => window.GAMES_SNAKE?.startSnakeGame(),
+    setSnakeDir: (d) => window.GAMES_SNAKE?.setSnakeDir(d),
+    startTetrisGame: () => window.GAMES_TETRIS?.startTetrisGame(),
+    toggleTetrisPause: () => window.GAMES_TETRIS?.toggleTetrisPause(),
+    tetrisMoveLeft: () => window.GAMES_TETRIS?.tetrisMoveLeft(),
+    tetrisMoveRight: () => window.GAMES_TETRIS?.tetrisMoveRight(),
+    tetrisRotate: () => window.GAMES_TETRIS?.tetrisRotate(),
+    tetrisSoftDrop: () => window.GAMES_TETRIS?.tetrisSoftDrop(),
+    tetrisHardDrop: () => window.GAMES_TETRIS?.tetrisHardDrop(),
 
-    // Tetris
-    startTetrisGame: () => window.GAMES_TETRIS && window.GAMES_TETRIS.startTetrisGame(),
-    toggleTetrisPause: () => window.GAMES_TETRIS && window.GAMES_TETRIS.toggleTetrisPause(),
-    tetrisMoveLeft: () => window.GAMES_TETRIS && window.GAMES_TETRIS.tetrisMoveLeft(),
-    tetrisMoveRight: () => window.GAMES_TETRIS && window.GAMES_TETRIS.tetrisMoveRight(),
-    tetrisRotate: () => window.GAMES_TETRIS && window.GAMES_TETRIS.tetrisRotate(),
-    tetrisSoftDrop: () => window.GAMES_TETRIS && window.GAMES_TETRIS.tetrisSoftDrop(),
-    tetrisHardDrop: () => window.GAMES_TETRIS && window.GAMES_TETRIS.tetrisHardDrop(),
+    // Chess
+    startLocalChessGame: () => window.GAMES_CHESS?.startLocalChessGame(),
+    toggleChessAutoRotate: () => window.GAMES_CHESS?.toggleChessAutoRotate(),
+    flipChessBoardManual: () => window.GAMES_CHESS?.flipChessBoardManual(),
+    openChessOnlineRoom: (c) => window.GAMES_CHESS?.openChessOnlineRoom(c),
+    inviteChessClassmate: (id, n) => window.GAMES_CHESS?.inviteChessClassmate(id, n),
+    chessSquareClick: (r, c) => window.GAMES_CHESS?.chessSquareClick(r, c),
+    choosePromotion: (p) => window.GAMES_CHESS?.choosePromotion(p),
+    resignChessGame: () => window.GAMES_CHESS?.resignChessGame(),
+    requestChessRematch: () => window.GAMES_CHESS?.requestChessRematch(),
+    cancelChessGame: () => window.GAMES_CHESS?.cancelChessGame(),
+    leaveChessGame: () => window.GAMES_CHESS?.leaveChessGame(),
+    backToChessLobby: () => window.GAMES_CHESS?.backToChessLobby(),
+    filterChessClassmates: (q) => window.GAMES_CHESS?.filterChessClassmates(q),
+    refreshChessClassmates: () => window.GAMES_CHESS?.loadChessClassmates(),
+    setChessColor: (c) => window.GAMES_CHESS?.setChessColor(c),
 
-    // Chess (Online & Local 2-Player)
-    startLocalChessGame: () => window.GAMES_CHESS && window.GAMES_CHESS.startLocalChessGame(),
-    toggleChessAutoRotate: () => window.GAMES_CHESS && window.GAMES_CHESS.toggleChessAutoRotate(),
-    flipChessBoardManual: () => window.GAMES_CHESS && window.GAMES_CHESS.flipChessBoardManual(),
-    openChessOnlineRoom: (c) => window.GAMES_CHESS && window.GAMES_CHESS.openChessOnlineRoom(c),
-    inviteChessClassmate: (id, n) => window.GAMES_CHESS && window.GAMES_CHESS.inviteChessClassmate(id, n),
-    chessSquareClick: (r, c) => window.GAMES_CHESS && window.GAMES_CHESS.chessSquareClick(r, c),
-    choosePromotion: (p) => window.GAMES_CHESS && window.GAMES_CHESS.choosePromotion(p),
-    resignChessGame: () => window.GAMES_CHESS && window.GAMES_CHESS.resignChessGame(),
-    requestChessRematch: () => window.GAMES_CHESS && window.GAMES_CHESS.requestChessRematch(),
-    cancelChessGame: () => window.GAMES_CHESS && window.GAMES_CHESS.cancelChessGame(),
-    leaveChessGame: () => window.GAMES_CHESS && window.GAMES_CHESS.leaveChessGame(),
-    backToChessLobby: () => window.GAMES_CHESS && window.GAMES_CHESS.backToChessLobby(),
-    filterChessClassmates: (q) => window.GAMES_CHESS && window.GAMES_CHESS.filterChessClassmates(q),
-    refreshChessClassmates: () => window.GAMES_CHESS && window.GAMES_CHESS.loadChessClassmates(),
-    setChessColor: (c) => window.GAMES_CHESS && window.GAMES_CHESS.setChessColor(c),
-
-    // Blackjack (21 Очко)
-    initBlackjack: () => window.BLACKJACK && typeof window.BLACKJACK.init === 'function' && window.BLACKJACK.init()
+    // Casino games
+    initBlackjack: () => window.BLACKJACK?.init(),
+    initRoulette: () => window.ROULETTE?.init(),
+    initDice: () => window.DICE?.init()
   };
 })();
+
+
 
