@@ -2,7 +2,9 @@
 (function () {
   'use strict';
 
-  let currentGame = "2048"; // 'rpg', '2048', 'tictactoe', 'snake', 'tetris', 'chess', 'durak'
+  let currentGame = "2048"; // 'rpg', '2048', 'tictactoe', 'snake', 'tetris', 'chess', 'casino'
+  let currentCasinoSubGame = "durak"; // 'durak', 'blackjack', 'roulette', 'dice'
+  const CASINO_SUBGAMES = ["durak", "blackjack", "roulette", "dice"];
   window.currentGame = currentGame;
   let isTesterUser = false;
   let isCurrencyEnabled = false;
@@ -11,14 +13,10 @@
 
   async function checkTesterStatus() {
     try {
-      const sParams = new URLSearchParams(window.location.search);
-      if (sParams.has("tester")) {
-        const val = sParams.get("tester");
-        isTesterUser = val === "1" || val === "true";
-        try { localStorage.setItem("is_tester", isTesterUser ? "1" : "0"); } catch (e) {}
-      } else if (sParams.get("role") === "tester" || localStorage.getItem("is_tester") === "1") {
-        isTesterUser = true;
-      }
+      const p = new URLSearchParams(window.location.search);
+      if (p.has("tester")) isTesterUser = p.get("tester") === "1" || p.get("tester") === "true";
+      else if (p.get("role") === "tester" || localStorage.getItem("is_tester") === "1") isTesterUser = true;
+      try { localStorage.setItem("is_tester", isTesterUser ? "1" : "0"); } catch (e) {}
     } catch (e) {}
 
     if (window.currentUser && typeof window.currentUser.is_tester !== "undefined") {
@@ -40,7 +38,6 @@
         try { localStorage.setItem("is_tester", isTesterUser ? "1" : "0"); } catch (e) {}
       }
     } catch (e) {}
-
     testerChecked = true;
     return isTesterUser;
   }
@@ -81,10 +78,7 @@
       { id: "snake", icon: "🐍", name: "Змейка", color: "blue" },
       { id: "tetris", icon: "🧱", name: "Тетрис", color: "blue" },
       { id: "chess", icon: "♟️", name: "Шахматы", color: "blue" },
-      { id: "durak", icon: "🃏", name: "Дурак", color: "red" },
-      { id: "blackjack", icon: "♠️", name: "21 Очко", color: "red" },
-      { id: "roulette", icon: "🎡", name: "Рулетка", color: "red" },
-      { id: "dice", icon: "🎲", name: "Кости", color: "red" },
+      { id: "casino", icon: "🎰", name: "Казино", color: "red" },
     ];
 
     const gamesList = isTesterUser
@@ -135,121 +129,139 @@
     `;
 
     // After DOM update, initialize specific game listeners
-    if (currentGame === "rpg") {
-      if (window.RPG && typeof window.RPG.init === "function") window.RPG.init();
-    } else if (currentGame === "2048") {
-      if (window.GAMES_2048) window.GAMES_2048.init();
-    } else if (currentGame === "tictactoe") {
-      if (window.GAMES_TICTACTOE) window.GAMES_TICTACTOE.init();
-    } else if (currentGame === "snake") {
-      if (window.GAMES_SNAKE) window.GAMES_SNAKE.init();
-    } else if (currentGame === "tetris") {
-      if (window.GAMES_TETRIS) window.GAMES_TETRIS.init();
-    } else if (currentGame === "chess") {
-      if (window.GAMES_CHESS) window.GAMES_CHESS.init();
-    } else if (currentGame === "durak") {
-      initDurak();
-    } else if (currentGame === "blackjack") {
-      initBlackjack();
-    } else if (currentGame === "roulette") {
-      initRoulette();
-    } else if (currentGame === "dice") {
-      initDice();
-    }
+    if (currentGame === "rpg") window.RPG?.init?.();
+    else if (currentGame === "2048") window.GAMES_2048?.init?.();
+    else if (currentGame === "tictactoe") window.GAMES_TICTACTOE?.init?.();
+    else if (currentGame === "snake") window.GAMES_SNAKE?.init?.();
+    else if (currentGame === "tetris") window.GAMES_TETRIS?.init?.();
+    else if (currentGame === "chess") window.GAMES_CHESS?.init?.();
+    else if (currentGame === "casino") initCasinoSubGame();
+  }
+
+  function initCasinoSubGame() {
+    if (currentCasinoSubGame === "durak") initDurak();
+    else if (currentCasinoSubGame === "blackjack") initBlackjack();
+    else if (currentCasinoSubGame === "roulette") initRoulette();
+    else if (currentCasinoSubGame === "dice") initDice();
   }
 
   function switchGame(gameId) {
+    if (CASINO_SUBGAMES.includes(gameId)) {
+      currentCasinoSubGame = gameId;
+      gameId = "casino";
+    }
     cleanupCurrentGame();
     currentGame = gameId;
     window.currentGame = gameId;
     renderGames();
   }
 
+  function switchCasinoSubGame(subGameId) {
+    if (!CASINO_SUBGAMES.includes(subGameId)) return;
+    cleanupCurrentGame();
+    currentCasinoSubGame = subGameId;
+    renderGames();
+  }
+
   function cleanupCurrentGame() {
-    if (window.RPG) {
-      if (typeof window.RPG.leavePvPRoom === "function") window.RPG.leavePvPRoom();
-      if (typeof window.RPG.leaveCoopRoom === "function") window.RPG.leaveCoopRoom();
-    }
-    if (window.GAMES_2048?.cleanup) window.GAMES_2048.cleanup();
-    if (window.GAMES_TICTACTOE?.cleanup) window.GAMES_TICTACTOE.cleanup();
-    if (window.GAMES_SNAKE?.cleanup) window.GAMES_SNAKE.cleanup();
-    if (window.GAMES_TETRIS?.cleanup) window.GAMES_TETRIS.cleanup();
-    if (window.GAMES_CHESS?.cleanup) window.GAMES_CHESS.cleanup();
-    if (window.DURAK?.destroy) window.DURAK.destroy();
-    if (window.BLACKJACK?.cleanup) window.BLACKJACK.cleanup();
-    if (window.ROULETTE?.cleanup) window.ROULETTE.cleanup();
-    if (window.DICE?.cleanup) window.DICE.cleanup();
+    window.RPG?.leavePvPRoom?.();
+    window.RPG?.leaveCoopRoom?.();
+    window.GAMES_2048?.cleanup?.();
+    window.GAMES_TICTACTOE?.cleanup?.();
+    window.GAMES_SNAKE?.cleanup?.();
+    window.GAMES_TETRIS?.cleanup?.();
+    window.GAMES_CHESS?.cleanup?.();
+    window.DURAK?.destroy?.();
+    window.BLACKJACK?.cleanup?.();
+    window.ROULETTE?.cleanup?.();
+    window.DICE?.cleanup?.();
   }
 
   function renderActiveGame() {
     if (currentGame === "rpg") return `<div id="rpg-root"></div>`;
-    if (currentGame === "2048") return window.GAMES_2048 ? window.GAMES_2048.renderHTML() : "";
-    if (currentGame === "tictactoe") return window.GAMES_TICTACTOE ? window.GAMES_TICTACTOE.renderHTML() : "";
-    if (currentGame === "snake") return window.GAMES_SNAKE ? window.GAMES_SNAKE.renderHTML() : "";
-    if (currentGame === "tetris") return window.GAMES_TETRIS ? window.GAMES_TETRIS.renderHTML() : "";
-    if (currentGame === "chess") return window.GAMES_CHESS ? window.GAMES_CHESS.renderHTML() : "";
-    if (currentGame === "durak") return renderDurakHTML();
-    if (currentGame === "blackjack") return renderBlackjackHTML();
-    if (currentGame === "roulette") return `<div id="roulette-root" style="min-height:400px;"></div>`;
-    if (currentGame === "dice") return `<div id="dice-root" style="min-height:400px;"></div>`;
+    if (currentGame === "2048") return window.GAMES_2048?.renderHTML?.() || "";
+    if (currentGame === "tictactoe") return window.GAMES_TICTACTOE?.renderHTML?.() || "";
+    if (currentGame === "snake") return window.GAMES_SNAKE?.renderHTML?.() || "";
+    if (currentGame === "tetris") return window.GAMES_TETRIS?.renderHTML?.() || "";
+    if (currentGame === "chess") return window.GAMES_CHESS?.renderHTML?.() || "";
+    if (currentGame === "casino") return renderCasinoHTML();
     return "";
   }
 
-  // ROULETTE bridge
+  function renderCasinoHTML() {
+    const subTabs = [
+      { id: "durak", icon: "🃏", name: "Дурак" },
+      { id: "blackjack", icon: "♠️", name: "21 Очко" },
+      { id: "roulette", icon: "🎡", name: "Рулетка" },
+      { id: "dice", icon: "🎲", name: "Кости" },
+    ];
+    const tabsHTML = subTabs.map(st => {
+      const isCur = currentCasinoSubGame === st.id;
+      const activeClass = isCur
+        ? "bg-white dark:bg-slate-700 text-red-600 dark:text-red-400 shadow-sm"
+        : "text-slate-500 dark:text-slate-400 hover:text-slate-700";
+      return `
+        <button onclick="window.GAMES.switchCasinoSubGame('${st.id}')" class="flex-1 py-1.5 px-2 rounded-xl transition-all flex items-center justify-center gap-1 shrink-0 ${activeClass}">
+          <span>${st.icon}</span>
+          <span class="truncate">${st.name}</span>
+        </button>
+      `;
+    }).join("");
+
+    let subHtml = "";
+    if (currentCasinoSubGame === "durak") subHtml = `<div id="durak-root" style="min-height:400px;"></div>`;
+    else if (currentCasinoSubGame === "blackjack") subHtml = `<div id="blackjack-root" style="min-height:400px;"></div>`;
+    else if (currentCasinoSubGame === "roulette") subHtml = `<div id="roulette-root" style="min-height:400px;"></div>`;
+    else if (currentCasinoSubGame === "dice") subHtml = `<div id="dice-root" style="min-height:400px;"></div>`;
+
+    return `
+      <div class="space-y-3">
+        <div class="flex items-center justify-between gap-1 p-1 rounded-2xl bg-slate-200/70 dark:bg-slate-800/90 text-[11px] font-bold">
+          ${tabsHTML}
+        </div>
+        <div id="casino-active-container">
+          ${subHtml}
+        </div>
+      </div>
+    `;
+  }
+
+  function loadScript(src, cb) {
+    if (typeof document === 'undefined' || typeof document.createElement !== 'function') {
+      if (cb) cb();
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = src;
+    if (cb) s.onload = cb;
+    if (document.head) document.head.appendChild(s);
+  }
+
   function initRoulette() {
     const el = document.getElementById('roulette-root');
     if (!el) return;
-    if (typeof window.ROULETTE !== 'undefined') { window.ROULETTE.init(el); return; }
-    const s = document.createElement('script');
-    s.src = '/static/js/roulette.js?v=20260915_1';
-    s.onload = () => { if (window.ROULETTE) window.ROULETTE.init(el); };
-    document.head.appendChild(s);
+    if (window.ROULETTE) return window.ROULETTE.init(el);
+    loadScript('/static/js/roulette.js?v=20260915_1', () => window.ROULETTE?.init(el));
   }
 
-  // DICE bridge
   function initDice() {
     const el = document.getElementById('dice-root');
     if (!el) return;
-    if (typeof window.DICE !== 'undefined') { window.DICE.init(el); return; }
-    const s = document.createElement('script');
-    s.src = '/static/js/dice.js?v=20260915_1';
-    s.onload = () => { if (window.DICE) window.DICE.init(el); };
-    document.head.appendChild(s);
-  }
-
-  // BLACKJACK bridge
-  function renderBlackjackHTML() {
-    return `<div id="blackjack-root" style="min-height:400px;"></div>`;
+    if (window.DICE) return window.DICE.init(el);
+    loadScript('/static/js/dice.js?v=20260915_1', () => window.DICE?.init(el));
   }
 
   function initBlackjack() {
     const el = document.getElementById('blackjack-root');
     if (!el) return;
-    if (typeof window.BLACKJACK !== 'undefined') {
-      window.BLACKJACK.init(el);
-      return;
-    }
-    const s = document.createElement('script');
-    s.src = '/static/js/blackjack.js?v=20260915_1';
-    s.onload = () => {
-      if (window.BLACKJACK) window.BLACKJACK.init(el);
-    };
-    document.head.appendChild(s);
-  }
-
-
-  // DURAK bridge
-  function renderDurakHTML() {
-    return `<div id="durak-root" style="min-height:400px;"></div>`;
+    if (window.BLACKJACK) return window.BLACKJACK.init(el);
+    loadScript('/static/js/blackjack.js?v=20260915_1', () => window.BLACKJACK?.init(el));
   }
 
   function initDurak() {
     const el = document.getElementById('durak-root');
     if (!el) return;
-    if (typeof window.DURAK !== 'undefined') {
-      window.DURAK.init(el);
-      return;
-    }
+    if (window.DURAK) return window.DURAK.init(el);
     const scripts = [
       '/static/js/durak/durak_cards.js?v=20260911_2',
       '/static/js/durak/durak_menu.js?v=20260911_2',
@@ -258,14 +270,8 @@
     ];
     let idx = 0;
     function loadNext() {
-      if (idx >= scripts.length) {
-        if (window.DURAK) window.DURAK.init(el);
-        return;
-      }
-      const s = document.createElement('script');
-      s.src = scripts[idx++];
-      s.onload = loadNext;
-      document.head.appendChild(s);
+      if (idx >= scripts.length) return window.DURAK?.init(el);
+      loadScript(scripts[idx++], loadNext);
     }
     loadNext();
   }
@@ -306,7 +312,8 @@
       return;
     }
     if (target === "durak") {
-      switchGame("durak");
+      currentCasinoSubGame = "durak";
+      switchGame("casino");
       if (window.DURAK?.joinRoom) return window.DURAK.joinRoom(roomId);
       return;
     }
@@ -320,8 +327,10 @@
   window.GAMES = {
     init: initGames,
     switchGame: switchGame,
+    switchCasinoSubGame: switchCasinoSubGame,
     render: renderGames,
-    getCurrentGame: () => currentGame,
+    getCurrentGame: () => (currentGame === "casino" ? currentCasinoSubGame : currentGame),
+    getCasinoSubGame: () => currentCasinoSubGame,
     updateTesterStatus: updateTesterStatus,
     checkTesterStatus: checkTesterStatus,
     cleanup: cleanupCurrentGame,
@@ -329,10 +338,8 @@
     // natarGRP RPG
     initRPG: () => window.RPG?.init?.(),
 
-    // 2048
+    // 2048 & Tic-Tac-Toe
     reset2048: () => window.GAMES_2048?.reset?.(),
-
-    // Tic-Tac-Toe
     setTTTMode: (m) => window.GAMES_TICTACTOE?.setTTTMode(m),
     cellClickTTT: (i) => window.GAMES_TICTACTOE?.cellClickTTT(i),
     resetTTT: () => window.GAMES_TICTACTOE?.resetTTT(),
@@ -380,6 +387,3 @@
     initDice: () => window.DICE?.init()
   };
 })();
-
-
-

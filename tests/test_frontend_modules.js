@@ -196,7 +196,16 @@ assert(mockWindow.GAMES.getCurrentGame() === 'durak', 'openOnlineRoom should swi
 mockWindow.GAMES.openOnlineRoom('test_ttt_room', 'tictactoe');
 assert(mockWindow.GAMES.getCurrentGame() === 'tictactoe', 'openOnlineRoom should switch game to tictactoe');
 
-console.log('Multiplayer online room opening, game switching and exports verified without ReferenceError!');
+mockWindow.GAMES.switchGame('casino');
+assert(mockWindow.GAMES.getCasinoSubGame() === 'durak', 'default casino subgame should be durak');
+mockWindow.GAMES.switchCasinoSubGame('blackjack');
+assert(mockWindow.GAMES.getCasinoSubGame() === 'blackjack', 'should switch to blackjack');
+mockWindow.GAMES.switchCasinoSubGame('roulette');
+assert(mockWindow.GAMES.getCasinoSubGame() === 'roulette', 'should switch to roulette');
+mockWindow.GAMES.switchCasinoSubGame('dice');
+assert(mockWindow.GAMES.getCasinoSubGame() === 'dice', 'should switch to dice');
+
+console.log('Multiplayer online room opening, game switching, casino sub-tabs and exports verified without ReferenceError!');
 
 console.log('\n🎉 ALL FRONTEND AND EGE TESTS PASSED SUCCESSFULLY! 🚀');
 process.exit(0);

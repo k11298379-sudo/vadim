@@ -18,6 +18,7 @@ from backend.db.crud import (
 from backend.bot.keyboards.inline import (
     get_homework_keyboard, get_subjects_keyboard, get_homework_item_keyboard
 )
+from backend.bot.services.notifier import format_copyable_desc
 
 router = Router(name="homework_router")
 
@@ -45,11 +46,11 @@ async def send_homework_card(
     title_str = f" — *{escape_md(hw.title)}*" if hw.title else ""
     title_plain = f" — {hw.title}" if hw.title else ""
     
-    desc_escaped = escape_md(hw.description)
+    desc_formatted = format_copyable_desc(hw.description)
     caption = (
         f"{status_icon} **{hw.subject.name}**{title_str}\n"
         f"📅 **Сдать до:** `{date_str}`\n\n"
-        f"{desc_escaped}"
+        f"{desc_formatted}"
     )
     caption_plain = (
         f"{status_icon} {hw.subject.name}{title_plain}\n"
