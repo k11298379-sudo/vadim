@@ -30,10 +30,10 @@ def compute_combat_scales(floor: int) -> Tuple[float, float, float, float]:
     Returns (floor_scale, creep_scale, creep_atk_scale, boss_atk_scale)
     used for exponential scaling of enemy stats.
     """
-    floor_scale = 1.42 ** max(0, floor - 1)
-    creep_scale = 1.28 ** max(0, floor - 1)
-    creep_atk_scale = 1.23 ** max(0, floor - 1)
-    boss_atk_scale = 1.26 ** max(0, floor - 1)
+    floor_scale = 1.18 ** max(0, floor - 1)
+    creep_scale = 1.18 ** max(0, floor - 1)
+    creep_atk_scale = 1.15 ** max(0, floor - 1)
+    boss_atk_scale = 1.18 ** max(0, floor - 1)
     return floor_scale, creep_scale, creep_atk_scale, boss_atk_scale
 
 

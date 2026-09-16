@@ -2374,8 +2374,8 @@
     const floor = RPG_STATE.profile?.dungeon_floor || 1;
     const wave = ARENA.waveNumber || 1;
     // Balanced Exponential Scaling: HP scales with 1.28^floor, ATK scales with 1.23^floor
-    const scaleHp = Math.pow(1.28, Math.max(0, floor - 1)) * (1.0 + (wave - 1) * 0.05);
-    const scaleAtk = Math.pow(1.23, Math.max(0, floor - 1)) * (1.0 + (wave - 1) * 0.04);
+    const scaleHp = Math.pow(1.18, Math.max(0, floor - 1)) * (1.0 + (wave - 1) * 0.05);
+    const scaleAtk = Math.pow(1.15, Math.max(0, floor - 1)) * (1.0 + (wave - 1) * 0.04);
 
     let pool = [];
     // Dynamic Creep Hierarchy based on Dungeon Floor

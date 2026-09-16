@@ -5037,8 +5037,8 @@ loadRpgImages();
     const floor = RPG_STATE.profile?.dungeon_floor || 1;
     const wave = ARENA.waveNumber || 1;
     // Balanced Exponential Scaling: HP scales with 1.28^floor, ATK scales with 1.23^floor
-    const scaleHp = Math.pow(1.28, Math.max(0, floor - 1)) * (1.0 + (wave - 1) * 0.05);
-    const scaleAtk = Math.pow(1.23, Math.max(0, floor - 1)) * (1.0 + (wave - 1) * 0.04);
+    const scaleHp = Math.pow(1.18, Math.max(0, floor - 1)) * (1.0 + (wave - 1) * 0.05);
+    const scaleAtk = Math.pow(1.15, Math.max(0, floor - 1)) * (1.0 + (wave - 1) * 0.04);
 
     let pool = [];
     // Dynamic Creep Hierarchy based on Dungeon Floor
@@ -6120,8 +6120,8 @@ function distToSegment(px, py, x1, y1, x2, y2) {
     const floor = RPG_STATE.profile?.dungeon_floor || 1;
     
     // Scale identically to creeps but x15 stronger
-    const scaleHp = Math.pow(1.28, Math.max(0, floor - 1)) * (1.0 + 19 * 0.05); // wave 20 multiplier
-    const scaleAtk = Math.pow(1.23, Math.max(0, floor - 1)) * (1.0 + 19 * 0.04);
+    const scaleHp = Math.pow(1.18, Math.max(0, floor - 1)) * (1.0 + 19 * 0.05); // wave 20 multiplier
+    const scaleAtk = Math.pow(1.15, Math.max(0, floor - 1)) * (1.0 + 19 * 0.04);
     
     // Base creep stats for floor 20 is around 260 HP, 16 ATK. We multiply by 15!
     const baseHp = 260 * 15;

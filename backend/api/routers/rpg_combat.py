@@ -7,8 +7,8 @@ from backend.db.session import get_db_session
 from backend.db.models import User
 from backend.api.auth import get_optional_webapp_user
 from backend.db.crud.rpg import (
-    DOTA_CREEPS_POOL,
-    DOTA_FLOOR_BOSSES,
+    NATAR_CREEPS_POOL,
+    NATAR_FLOOR_BOSSES,
     get_or_create_rpg_character,
     serialize_character_profile,
     calculate_character_effective_stats,
@@ -124,13 +124,13 @@ async def slash_creep_wave_endpoint(
     wave_num = (char.dungeon_cleared % 20) + 1
     is_boss_wave = (wave_num == 20)
 
-    floor_scale = (1.42 ** max(0, floor - 1))
-    creep_scale = (1.28 ** max(0, floor - 1))
-    creep_atk_scale = (1.23 ** max(0, floor - 1))
-    boss_atk_scale = (1.26 ** max(0, floor - 1))
+    floor_scale = (1.18 ** max(0, floor - 1))
+    creep_scale = (1.18 ** max(0, floor - 1))
+    creep_atk_scale = (1.15 ** max(0, floor - 1))
+    boss_atk_scale = (1.18 ** max(0, floor - 1))
 
     if is_boss_wave:
-        target_template = random.choice(DOTA_FLOOR_BOSSES)
+        target_template = NATAR_FLOOR_BOSSES[min(len(NATAR_FLOOR_BOSSES) - 1, max(0, floor - 1))]
         enemy_name = f"{target_template['name']} [Этаж {floor}]"
         enemy_icon = target_template["icon"]
         enemy_hp = int(target_template["base_hp"] * floor_scale)
@@ -139,9 +139,9 @@ async def slash_creep_wave_endpoint(
         base_gold = int(target_template["gold"] * (1.0 + (floor - 1) * 0.15))
         base_xp = int(target_template["xp"] * (1.0 + (floor - 1) * 0.15))
     else:
-        available_creeps = [c for c in DOTA_CREEPS_POOL if c.get("floor_min", 1) <= floor]
+        available_creeps = [c for c in NATAR_CREEPS_POOL if c.get("floor_min", 1) <= floor]
         if not available_creeps:
-            available_creeps = DOTA_CREEPS_POOL
+            available_creeps = NATAR_CREEPS_POOL
         target_template = random.choice(available_creeps)
         creep_count = random.randint(2, 4)
         enemy_name = f"Пачка: {creep_count}x {target_template['name']}"

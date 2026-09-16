@@ -2,8 +2,8 @@
     const floor = RPG_STATE.profile?.dungeon_floor || 1;
     
     // Scale identically to creeps but x15 stronger
-    const scaleHp = Math.pow(1.28, Math.max(0, floor - 1)) * (1.0 + 19 * 0.05); // wave 20 multiplier
-    const scaleAtk = Math.pow(1.23, Math.max(0, floor - 1)) * (1.0 + 19 * 0.04);
+    const scaleHp = Math.pow(1.18, Math.max(0, floor - 1)) * (1.0 + 19 * 0.05); // wave 20 multiplier
+    const scaleAtk = Math.pow(1.15, Math.max(0, floor - 1)) * (1.0 + 19 * 0.04);
     
     // Base creep stats for floor 20 is around 260 HP, 16 ATK. We multiply by 15!
     const baseHp = 260 * 15;
