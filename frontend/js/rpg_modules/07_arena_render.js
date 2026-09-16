@@ -6,6 +6,12 @@
       bindArenaCanvas(canvas);
     }
 
+    const curW = canvas.clientWidth;
+    const curH = canvas.clientHeight;
+    if (curW > 50 && curH > 50 && (Math.abs(curW - (ARENA.cachedClientW || 0)) > 2 || Math.abs(curH - (ARENA.cachedClientH || 0)) > 2)) {
+      bindArenaCanvas(canvas);
+    }
+
     const ctx = ARENA.ctx;
     if (!ctx) return;
     const clientW = ARENA.cachedClientW || (canvas.clientWidth > 50 ? canvas.clientWidth : 360);
@@ -1616,13 +1622,14 @@
     }
 
     // ---- 18. RETRY PROMPT OVERLAY (On Death — NEVER auto clear!) ----
+    // ---- 18. RETRY PROMPT OVERLAY (On Death in Wave / Dungeon) ----
     if (ARENA.waveState === "retry_prompt") {
       ctx.save();
-      ctx.fillStyle = "rgba(0,0,0,0.7)";
-      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = "rgba(0,0,0,0.75)";
+      ctx.fillRect(0, 0, clientW, clientH);
 
-      const cardW = 270, cardH = 135;
-      const cx = w / 2 - cardW / 2, cy = h / 2 - cardH / 2;
+      const cardW = Math.min(clientW - 24, 270), cardH = 135;
+      const cx = Math.round((clientW - cardW) / 2), cy = Math.round((clientH - cardH) / 2);
 
       ctx.fillStyle = "rgba(15, 23, 42, 0.95)";
       ctx.beginPath();
@@ -1638,13 +1645,14 @@
       ctx.fillStyle = "#ef4444";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("💀 ВАШ ГЕРОЙ ПАЛ!", w / 2, cy + 28);
+      ctx.fillText("💀 ВАШ ГЕРОЙ ПАЛ!", clientW / 2, cy + 28);
 
       ctx.font = "11.5px sans-serif";
       ctx.fillStyle = "#94a3b8";
-      ctx.fillText("Этаж не зачищен! Начните заново с 1-й волны.", w / 2, cy + 52);
+      ctx.fillText("Этаж не зачищен! Начните заново с 1-й волны.", clientW / 2, cy + 52);
 
-      const btnX = w / 2 - 95, btnY = cy + 78, btnW = 190, btnH = 38;
+      const btnW = Math.min(cardW - 32, 190);
+      const btnX = Math.round((clientW - btnW) / 2), btnY = cy + 78, btnH = 38;
       ctx.fillStyle = "#ef4444";
       ctx.beginPath();
       safeRoundRect(ctx, btnX, btnY, btnW, btnH, 12);
@@ -1654,7 +1662,7 @@
       ctx.fillStyle = "#ffffff";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("🔄 Начать заново (1-я волна)", w / 2, btnY + btnH / 2);
+      ctx.fillText("🔄 Начать заново (1-я волна)", clientW / 2, btnY + btnH / 2);
 
       ctx.restore();
       ARENA._promptBtnBounds = { x: btnX, y: btnY, w: btnW, h: btnH };
@@ -1664,10 +1672,10 @@
     if (ARENA.waveState === "boss_defeat") {
       ctx.save();
       ctx.fillStyle = "rgba(0,0,0,0.78)";
-      ctx.fillRect(0, 0, w, h);
+      ctx.fillRect(0, 0, clientW, clientH);
 
-      const cardW = 290, cardH = 175;
-      const cx = w / 2 - cardW / 2, cy = h / 2 - cardH / 2;
+      const cardW = Math.min(clientW - 24, 290), cardH = 175;
+      const cx = Math.round((clientW - cardW) / 2), cy = Math.round((clientH - cardH) / 2);
 
       ctx.fillStyle = "rgba(15, 23, 42, 0.96)";
       ctx.beginPath();
@@ -1683,7 +1691,7 @@
       ctx.fillStyle = "#ef4444";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("💀 ВЫ ПОГИБЛИ В БИТВЕ С БОССОМ!", w / 2, cy + 26);
+      ctx.fillText("💀 ВЫ ПОГИБЛИ В БИТВЕ С БОССОМ!", clientW / 2, cy + 26);
 
       const bEntity = ARENA.bossEntity;
       const hpPct = bEntity && bEntity.maxHp ? Math.max(0, Math.min(100, Math.round((bEntity.hp / bEntity.maxHp) * 100))) : 0;
@@ -1691,30 +1699,32 @@
       const totalHp = bEntity ? formatCompact(bEntity.maxHp) : "0";
       ctx.font = "12px sans-serif";
       ctx.fillStyle = "#e2e8f0";
-      ctx.fillText(`У босса осталось: ${hpPct}% HP (${remHp} / ${totalHp})`, w / 2, cy + 50);
+      ctx.fillText(`У босса осталось: ${hpPct}% HP (${remHp} / ${totalHp})`, clientW / 2, cy + 50);
       ctx.font = "10.5px sans-serif";
       ctx.fillStyle = "#94a3b8";
-      ctx.fillText("Прокачайте героя, подберите билд и повторите!", w / 2, cy + 68);
+      ctx.fillText("Прокачайте героя, подберите билд и повторите!", clientW / 2, cy + 68);
 
       // Button 1: Попробовать снова
-      const btnX = w / 2 - 110, btnY = cy + 92, btnW = 220, btnH = 34;
+      const btnW = Math.min(cardW - 32, 220);
+      const btnX = Math.round((clientW - btnW) / 2), btnY = cy + 92, btnH = 34;
       ctx.fillStyle = "#ef4444";
       ctx.beginPath();
       safeRoundRect(ctx, btnX, btnY, btnW, btnH, 10);
       ctx.fill();
       ctx.font = "bold 12.5px sans-serif";
       ctx.fillStyle = "#ffffff";
-      ctx.fillText("🔄 Попробовать снова", w / 2, btnY + btnH / 2);
+      ctx.fillText("🔄 Попробовать снова", clientW / 2, btnY + btnH / 2);
 
-      // Button 2: В лобби боссов
-      const exitBtnX = w / 2 - 110, exitBtnY = cy + 132, exitBtnW = 220, exitBtnH = 30;
+      // Button 2: В лобби боссов / Начать с волны 1
+      const exitBtnW = btnW;
+      const exitBtnX = btnX, exitBtnY = cy + 132, exitBtnH = 30;
       ctx.fillStyle = "#334155";
       ctx.beginPath();
       safeRoundRect(ctx, exitBtnX, exitBtnY, exitBtnW, exitBtnH, 8);
       ctx.fill();
       ctx.font = "bold 11.5px sans-serif";
       ctx.fillStyle = "#cbd5e1";
-      ctx.fillText("🚪 В лобби боссов", w / 2, exitBtnY + exitBtnH / 2);
+      ctx.fillText(ARENA.isRaidBossBattle ? "🚪 В лобби боссов" : "🚪 Начать с волны 1", clientW / 2, exitBtnY + exitBtnH / 2);
 
       ctx.restore();
       ARENA._bossDefeatRetryBounds = { x: btnX, y: btnY, w: btnW, h: btnH };
@@ -1725,12 +1735,12 @@
     if (ARENA.waveState === "floor_clear") {
       ctx.save();
       ctx.fillStyle = "rgba(0,0,0,0.6)";
-      ctx.fillRect(0, 0, w, h);
+      ctx.fillRect(0, 0, clientW, clientH);
       ctx.font = "bold 22px sans-serif";
       ctx.fillStyle = "#22c55e";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("👑 ЭТАЖ 20/20 ЗАЧИЩЕН!", w / 2, h / 2 - 10);
+      ctx.fillText("👑 ЭТАЖ 20/20 ЗАЧИЩЕН!", clientW / 2, clientH / 2 - 10);
       ctx.font = "12px sans-serif";
       ctx.fillStyle = "#94a3b8";
       ctx.fillText("Награды начислены! Следующий этаж ждёт...", w / 2, h / 2 + 20);

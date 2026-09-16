@@ -265,7 +265,7 @@
   }
 
   function setupArenaListeners(canvas) {
-    function handleCanvasTap(cx, cy) {
+    function handleCanvasTap(cx, cy, sx, sy) {
       if (ARENA.waveState === "boss_victory") {
         if (RPG_STATE.lastBossChestReward) {
           openChestModal(RPG_STATE.lastBossChestReward);
@@ -289,19 +289,27 @@
       if (ARENA.waveState === "boss_defeat") {
         if (ARENA._bossDefeatRetryBounds) {
           const rb = ARENA._bossDefeatRetryBounds;
-          if (cx >= rb.x && cx <= rb.x + rb.w && cy >= rb.y && cy <= rb.y + rb.h) {
-            if (ARENA.currentRaidBoss && ARENA.currentRaidBoss.id) {
+          const hit = (sx !== undefined && sx >= rb.x && sx <= rb.x + rb.w && sy >= rb.y && sy <= rb.y + rb.h) ||
+                      (cx >= rb.x && cx <= rb.x + rb.w && cy >= rb.y && cy <= rb.y + rb.h);
+          if (hit) {
+            if (ARENA.isRaidBossBattle && ARENA.currentRaidBoss && ARENA.currentRaidBoss.id) {
               startRaidBossActionBattle(ARENA.currentRaidBoss.id);
             } else {
-              exitRaidBossBattle();
+              retryCurrentFloor();
             }
             return;
           }
         }
         if (ARENA._bossDefeatExitBounds) {
           const eb = ARENA._bossDefeatExitBounds;
-          if (cx >= eb.x && cx <= eb.x + eb.w && cy >= eb.y && cy <= eb.y + eb.h) {
-            exitRaidBossBattle();
+          const hit = (sx !== undefined && sx >= eb.x && sx <= eb.x + eb.w && sy >= eb.y && sy <= eb.y + eb.h) ||
+                      (cx >= eb.x && cx <= eb.x + eb.w && cy >= eb.y && cy <= eb.y + eb.h);
+          if (hit) {
+            if (ARENA.isRaidBossBattle) {
+              exitRaidBossBattle();
+            } else {
+              retryCurrentFloor();
+            }
             return;
           }
         }
@@ -372,13 +380,19 @@
     }
 
     canvas.onclick = (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
       const { cx, cy } = getEventArenaCoords(e.clientX, e.clientY);
-      handleCanvasTap(cx, cy);
+      handleCanvasTap(cx, cy, sx, sy);
     };
 
     canvas.ontouchstart = (e) => {
       e.preventDefault();
       const touch = e.changedTouches[0];
+      const rect = canvas.getBoundingClientRect();
+      const sx = touch.clientX - rect.left;
+      const sy = touch.clientY - rect.top;
       const { cx, cy } = getEventArenaCoords(touch.clientX, touch.clientY);
 
       // Only in legacy side-scroller boss mode, bottom 40% moves left/right
@@ -392,7 +406,7 @@
         return;
       }
 
-      handleCanvasTap(cx, cy);
+      handleCanvasTap(cx, cy, sx, sy);
     };
 
     // Boss arena movement: touchmove for continuous direction

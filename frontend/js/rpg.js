@@ -1734,7 +1734,7 @@
 
     const rect = canvas.getBoundingClientRect();
     const dpr = Math.min(2, (typeof window !== "undefined" && window.devicePixelRatio && window.devicePixelRatio > 0) ? window.devicePixelRatio : 1);
-    const isTopDown = !!(ARENA.topDownMode || ARENA.isRaidBossBattle);
+    const isTopDown = !!(ARENA.topDownMode || ARENA.isRaidBossBattle || ARENA.isBossActive);
     const clientW = rect.width > 50 ? rect.width : (canvas.clientWidth > 50 ? canvas.clientWidth : 360);
     const clientH = isTopDown ? 520 : (rect.height > 50 ? rect.height : 320);
     // In Top-Down Brawl mode, arena logical space is a spacious 520x720 battlefield!
@@ -2287,7 +2287,7 @@
   }
 
   function setupArenaListeners(canvas) {
-    function handleCanvasTap(cx, cy) {
+    function handleCanvasTap(cx, cy, sx, sy) {
       if (ARENA.waveState === "boss_victory") {
         if (RPG_STATE.lastBossChestReward) {
           openChestModal(RPG_STATE.lastBossChestReward);
@@ -2311,19 +2311,27 @@
       if (ARENA.waveState === "boss_defeat") {
         if (ARENA._bossDefeatRetryBounds) {
           const rb = ARENA._bossDefeatRetryBounds;
-          if (cx >= rb.x && cx <= rb.x + rb.w && cy >= rb.y && cy <= rb.y + rb.h) {
-            if (ARENA.currentRaidBoss && ARENA.currentRaidBoss.id) {
+          const hit = (sx !== undefined && sx >= rb.x && sx <= rb.x + rb.w && sy >= rb.y && sy <= rb.y + rb.h) ||
+                      (cx >= rb.x && cx <= rb.x + rb.w && cy >= rb.y && cy <= rb.y + rb.h);
+          if (hit) {
+            if (ARENA.isRaidBossBattle && ARENA.currentRaidBoss && ARENA.currentRaidBoss.id) {
               startRaidBossActionBattle(ARENA.currentRaidBoss.id);
             } else {
-              exitRaidBossBattle();
+              retryCurrentFloor();
             }
             return;
           }
         }
         if (ARENA._bossDefeatExitBounds) {
           const eb = ARENA._bossDefeatExitBounds;
-          if (cx >= eb.x && cx <= eb.x + eb.w && cy >= eb.y && cy <= eb.y + eb.h) {
-            exitRaidBossBattle();
+          const hit = (sx !== undefined && sx >= eb.x && sx <= eb.x + eb.w && sy >= eb.y && sy <= eb.y + eb.h) ||
+                      (cx >= eb.x && cx <= eb.x + eb.w && cy >= eb.y && cy <= eb.y + eb.h);
+          if (hit) {
+            if (ARENA.isRaidBossBattle) {
+              exitRaidBossBattle();
+            } else {
+              retryCurrentFloor();
+            }
             return;
           }
         }
@@ -2394,13 +2402,19 @@
     }
 
     canvas.onclick = (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
       const { cx, cy } = getEventArenaCoords(e.clientX, e.clientY);
-      handleCanvasTap(cx, cy);
+      handleCanvasTap(cx, cy, sx, sy);
     };
 
     canvas.ontouchstart = (e) => {
       e.preventDefault();
       const touch = e.changedTouches[0];
+      const rect = canvas.getBoundingClientRect();
+      const sx = touch.clientX - rect.left;
+      const sy = touch.clientY - rect.top;
       const { cx, cy } = getEventArenaCoords(touch.clientX, touch.clientY);
 
       // Only in legacy side-scroller boss mode, bottom 40% moves left/right
@@ -2414,7 +2428,7 @@
         return;
       }
 
-      handleCanvasTap(cx, cy);
+      handleCanvasTap(cx, cy, sx, sy);
     };
 
     // Boss arena movement: touchmove for continuous direction
@@ -5958,6 +5972,22 @@ function distToSegment(px, py, x1, y1, x2, y2) {
     if ((ARENA.bossPartyMode || "trio") === "trio") {
       initBossCompanions();
     }
+
+    // Force full render of the DOM to show the Boss Fight header & expand canvas to 520px
+    RPG_STATE._forceFullRender = true;
+    renderRoot();
+    RPG_STATE._forceFullRender = false;
+
+    const canvas = document.getElementById("rpg-action-canvas");
+    if (canvas) {
+      bindArenaCanvas(canvas);
+      ARENA.width = 520;
+      ARENA.height = 720;
+      boss.x = 260;
+      boss.y = 140;
+      ARENA.player.x = 260;
+      ARENA.player.y = 620;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -7518,12 +7548,18 @@ function distToSegment(px, py, x1, y1, x2, y2) {
     ARENA.blockWindowActive = false;
     ARENA.qteActive = false;
     ARENA.bossArenaMode = false;
+    ARENA.topDownMode = false;
     ARENA.moveInput = { left: false, right: false };
     ARENA.dangerZones = [];
     ARENA.player.x = 65;
+    ARENA.player.y = ARENA.roadY - 18;
     ARENA.player.isInvulnerable = 0;
     ARENA.waveState = "fighting";
     triggerHaptic("medium");
+
+    RPG_STATE._forceFullRender = true;
+    renderRoot();
+    RPG_STATE._forceFullRender = false;
   }
 
   async function handleFloorCleared() {
@@ -7801,10 +7837,10 @@ function distToSegment(px, py, x1, y1, x2, y2) {
       ARENA.player.isInvulnerable = 0;
     }
 
-    if (ARENA.isRaidBossBattle) {
+    if (ARENA.isRaidBossBattle || ARENA.isBossActive) {
       ARENA.waveState = "boss_defeat";
       triggerHaptic("error");
-      spawnFloatingText(ARENA.width / 2, 95, "💀 ВАШ ГЕРОЙ ПАЛ В РЕЙДЕ!", "#ef4444");
+      spawnFloatingText(ARENA.width / 2, 95, "💀 ВАШ ГЕРОЙ ПАЛ В БИТВЕ С БОССОМ!", "#ef4444");
       ARENA.playerProjectiles = [];
       ARENA.bossProjectiles = [];
       if (ARENA.bossEntity) {
@@ -10122,12 +10158,6 @@ function drawBossModelMid(ctx, b, bId, time) {
     ctx.textBaseline = "middle";
     ctx.fillText(rank, x - 16, y - 2);
     ctx.shadowBlur = 0;
-
-    // Subtitle
-    ctx.font = "bold 7px sans-serif";
-    ctx.fillStyle = "#ffffff";
-    ctx.fillText(cfg.title, x + 16, y - 8);
-
     // Style Meter Progress Bar
     const prog = Math.max(0, Math.min(1, styleMeter.progress || 0));
     ctx.fillStyle = "rgba(0,0,0,0.6)";
@@ -10529,6 +10559,12 @@ function drawBossModelMid(ctx, b, bId, time) {
     if (!canvas) return;
 
     if (ARENA.canvas !== canvas || !ARENA.ctx) {
+      bindArenaCanvas(canvas);
+    }
+
+    const curW = canvas.clientWidth;
+    const curH = canvas.clientHeight;
+    if (curW > 50 && curH > 50 && (Math.abs(curW - (ARENA.cachedClientW || 0)) > 2 || Math.abs(curH - (ARENA.cachedClientH || 0)) > 2)) {
       bindArenaCanvas(canvas);
     }
 
@@ -12142,13 +12178,14 @@ function drawBossModelMid(ctx, b, bId, time) {
     }
 
     // ---- 18. RETRY PROMPT OVERLAY (On Death — NEVER auto clear!) ----
+    // ---- 18. RETRY PROMPT OVERLAY (On Death in Wave / Dungeon) ----
     if (ARENA.waveState === "retry_prompt") {
       ctx.save();
-      ctx.fillStyle = "rgba(0,0,0,0.7)";
-      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = "rgba(0,0,0,0.75)";
+      ctx.fillRect(0, 0, clientW, clientH);
 
-      const cardW = 270, cardH = 135;
-      const cx = w / 2 - cardW / 2, cy = h / 2 - cardH / 2;
+      const cardW = Math.min(clientW - 24, 270), cardH = 135;
+      const cx = Math.round((clientW - cardW) / 2), cy = Math.round((clientH - cardH) / 2);
 
       ctx.fillStyle = "rgba(15, 23, 42, 0.95)";
       ctx.beginPath();
@@ -12164,13 +12201,14 @@ function drawBossModelMid(ctx, b, bId, time) {
       ctx.fillStyle = "#ef4444";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("💀 ВАШ ГЕРОЙ ПАЛ!", w / 2, cy + 28);
+      ctx.fillText("💀 ВАШ ГЕРОЙ ПАЛ!", clientW / 2, cy + 28);
 
       ctx.font = "11.5px sans-serif";
       ctx.fillStyle = "#94a3b8";
-      ctx.fillText("Этаж не зачищен! Начните заново с 1-й волны.", w / 2, cy + 52);
+      ctx.fillText("Этаж не зачищен! Начните заново с 1-й волны.", clientW / 2, cy + 52);
 
-      const btnX = w / 2 - 95, btnY = cy + 78, btnW = 190, btnH = 38;
+      const btnW = Math.min(cardW - 32, 190);
+      const btnX = Math.round((clientW - btnW) / 2), btnY = cy + 78, btnH = 38;
       ctx.fillStyle = "#ef4444";
       ctx.beginPath();
       safeRoundRect(ctx, btnX, btnY, btnW, btnH, 12);
@@ -12180,7 +12218,7 @@ function drawBossModelMid(ctx, b, bId, time) {
       ctx.fillStyle = "#ffffff";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("🔄 Начать заново (1-я волна)", w / 2, btnY + btnH / 2);
+      ctx.fillText("🔄 Начать заново (1-я волна)", clientW / 2, btnY + btnH / 2);
 
       ctx.restore();
       ARENA._promptBtnBounds = { x: btnX, y: btnY, w: btnW, h: btnH };
@@ -12190,10 +12228,10 @@ function drawBossModelMid(ctx, b, bId, time) {
     if (ARENA.waveState === "boss_defeat") {
       ctx.save();
       ctx.fillStyle = "rgba(0,0,0,0.78)";
-      ctx.fillRect(0, 0, w, h);
+      ctx.fillRect(0, 0, clientW, clientH);
 
-      const cardW = 290, cardH = 175;
-      const cx = w / 2 - cardW / 2, cy = h / 2 - cardH / 2;
+      const cardW = Math.min(clientW - 24, 290), cardH = 175;
+      const cx = Math.round((clientW - cardW) / 2), cy = Math.round((clientH - cardH) / 2);
 
       ctx.fillStyle = "rgba(15, 23, 42, 0.96)";
       ctx.beginPath();
@@ -12209,7 +12247,7 @@ function drawBossModelMid(ctx, b, bId, time) {
       ctx.fillStyle = "#ef4444";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("💀 ВЫ ПОГИБЛИ В БИТВЕ С БОССОМ!", w / 2, cy + 26);
+      ctx.fillText("💀 ВЫ ПОГИБЛИ В БИТВЕ С БОССОМ!", clientW / 2, cy + 26);
 
       const bEntity = ARENA.bossEntity;
       const hpPct = bEntity && bEntity.maxHp ? Math.max(0, Math.min(100, Math.round((bEntity.hp / bEntity.maxHp) * 100))) : 0;
@@ -12217,30 +12255,32 @@ function drawBossModelMid(ctx, b, bId, time) {
       const totalHp = bEntity ? formatCompact(bEntity.maxHp) : "0";
       ctx.font = "12px sans-serif";
       ctx.fillStyle = "#e2e8f0";
-      ctx.fillText(`У босса осталось: ${hpPct}% HP (${remHp} / ${totalHp})`, w / 2, cy + 50);
+      ctx.fillText(`У босса осталось: ${hpPct}% HP (${remHp} / ${totalHp})`, clientW / 2, cy + 50);
       ctx.font = "10.5px sans-serif";
       ctx.fillStyle = "#94a3b8";
-      ctx.fillText("Прокачайте героя, подберите билд и повторите!", w / 2, cy + 68);
+      ctx.fillText("Прокачайте героя, подберите билд и повторите!", clientW / 2, cy + 68);
 
       // Button 1: Попробовать снова
-      const btnX = w / 2 - 110, btnY = cy + 92, btnW = 220, btnH = 34;
+      const btnW = Math.min(cardW - 32, 220);
+      const btnX = Math.round((clientW - btnW) / 2), btnY = cy + 92, btnH = 34;
       ctx.fillStyle = "#ef4444";
       ctx.beginPath();
       safeRoundRect(ctx, btnX, btnY, btnW, btnH, 10);
       ctx.fill();
       ctx.font = "bold 12.5px sans-serif";
       ctx.fillStyle = "#ffffff";
-      ctx.fillText("🔄 Попробовать снова", w / 2, btnY + btnH / 2);
+      ctx.fillText("🔄 Попробовать снова", clientW / 2, btnY + btnH / 2);
 
-      // Button 2: В лобби боссов
-      const exitBtnX = w / 2 - 110, exitBtnY = cy + 132, exitBtnW = 220, exitBtnH = 30;
+      // Button 2: В лобби боссов / Начать с волны 1
+      const exitBtnW = btnW;
+      const exitBtnX = btnX, exitBtnY = cy + 132, exitBtnH = 30;
       ctx.fillStyle = "#334155";
       ctx.beginPath();
       safeRoundRect(ctx, exitBtnX, exitBtnY, exitBtnW, exitBtnH, 8);
       ctx.fill();
       ctx.font = "bold 11.5px sans-serif";
       ctx.fillStyle = "#cbd5e1";
-      ctx.fillText("🚪 В лобби боссов", w / 2, exitBtnY + exitBtnH / 2);
+      ctx.fillText(ARENA.isRaidBossBattle ? "🚪 В лобби боссов" : "🚪 Начать с волны 1", clientW / 2, exitBtnY + exitBtnH / 2);
 
       ctx.restore();
       ARENA._bossDefeatRetryBounds = { x: btnX, y: btnY, w: btnW, h: btnH };
@@ -12251,12 +12291,12 @@ function drawBossModelMid(ctx, b, bId, time) {
     if (ARENA.waveState === "floor_clear") {
       ctx.save();
       ctx.fillStyle = "rgba(0,0,0,0.6)";
-      ctx.fillRect(0, 0, w, h);
+      ctx.fillRect(0, 0, clientW, clientH);
       ctx.font = "bold 22px sans-serif";
       ctx.fillStyle = "#22c55e";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("👑 ЭТАЖ 20/20 ЗАЧИЩЕН!", w / 2, h / 2 - 10);
+      ctx.fillText("👑 ЭТАЖ 20/20 ЗАЧИЩЕН!", clientW / 2, clientH / 2 - 10);
       ctx.font = "12px sans-serif";
       ctx.fillStyle = "#94a3b8";
       ctx.fillText("Награды начислены! Следующий этаж ждёт...", w / 2, h / 2 + 20);
@@ -12776,7 +12816,12 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
     const raidStateChanged = RPG_STATE._lastRenderedRaidBattle !== isRaidState;
     RPG_STATE._lastRenderedRaidBattle = isRaidState;
 
-    if (!RPG_STATE._forceFullRender && !raidStateChanged && existingCanvas && viewContainer && RPG_STATE.activeTab === "farm" && RPG_STATE.farmMode === "arena") {
+    // Also track farm boss state (wave boss enables topDown mode → canvas must resize to 520px)
+    const isFarmBossActive = !!(ARENA.isBossActive && !ARENA.isRaidBossBattle);
+    const bossStateChanged = RPG_STATE._lastFarmBossActive !== isFarmBossActive;
+    RPG_STATE._lastFarmBossActive = isFarmBossActive;
+
+    if (!RPG_STATE._forceFullRender && !raidStateChanged && !bossStateChanged && existingCanvas && viewContainer && RPG_STATE.activeTab === "farm" && RPG_STATE.farmMode === "arena") {
       const topNav = document.getElementById("rpg-top-nav");
       if (topNav) {
         topNav.outerHTML = renderTopNavBarHTML();
@@ -12859,13 +12904,15 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
     `;
 
     if (RPG_STATE.activeTab === "farm" && RPG_STATE.farmMode === "arena") {
-      const c = document.getElementById("rpg-action-canvas");
-      if (c) {
-        bindArenaCanvas(c);
-        if (!ARENA.running) {
-          startArenaLoop();
+      requestAnimationFrame(() => {
+        const c = document.getElementById("rpg-action-canvas");
+        if (c) {
+          bindArenaCanvas(c);
+          if (!ARENA.running) {
+            startArenaLoop();
+          }
         }
-      }
+      });
     }
   }
 
@@ -13479,27 +13526,23 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
       <div class="space-y-2">
                 <!-- Canvas Arena Element -->
         <div class="relative w-full rounded-3xl overflow-hidden border-2 border-amber-500/40 shadow-2xl bg-slate-950">
-          <canvas id="rpg-action-canvas" class="w-full ${ARENA.isRaidBossBattle || ARENA.topDownMode ? 'h-[520px]' : 'h-[320px]'} block cursor-crosshair"></canvas>
+          <canvas id="rpg-action-canvas"
+                  style="height: ${ARENA.isRaidBossBattle || ARENA.topDownMode || ARENA.isBossActive ? 520 : 320}px; min-height: ${ARENA.isRaidBossBattle || ARENA.topDownMode || ARENA.isBossActive ? 520 : 320}px;"
+                  class="w-full ${ARENA.isRaidBossBattle || ARENA.topDownMode || ARENA.isBossActive ? 'h-[520px]' : 'h-[320px]'} block cursor-crosshair"></canvas>
 
-          <!-- Top-Down / Classic Side View Mode Switcher -->
-          <div class="absolute top-3 left-3 z-20 flex items-center gap-1.5">
-            <button onclick="window.RPG.toggleTopDownArenaMode()"
-              title="Переключить вид: Top-Down шутер (с джойстиком) или классическая 2D-тропа"
-              class="h-7 px-2.5 rounded-full bg-slate-900/85 border border-slate-700/80 hover:border-amber-400/60 text-white font-black text-[10px] flex items-center gap-1.5 shadow-lg backdrop-blur-md active:scale-95 transition-all">
-              <span>${ARENA.topDownMode || ARENA.isRaidBossBattle ? "🕹️ Top-Down" : "🛣️ Сайд-вид"}</span>
-            </button>
-
-            ${ARENA.isRaidBossBattle ? `
+          <!-- Raid Boss Exit Button (only during active raid boss battle) -->
+          ${ARENA.isRaidBossBattle ? `
+          <div class="absolute top-3 left-3 z-20">
             <button onclick="window.RPG.exitRaidBossBattle()"
               class="h-7 px-2.5 rounded-full bg-slate-900/90 border border-slate-700 text-slate-300 font-bold text-[10px] flex items-center gap-1.5 shadow-lg active:scale-95 transition-all">
               <span>✕ В лобби боссов</span>
             </button>
-            ` : ""}
           </div>
+          ` : ""}
 
-          <!-- Virtual Touch Joystick (Bottom Left, clear of action buttons) -->
+          <!-- Virtual Touch Joystick (Bottom Left, only shown during boss fights) -->
           <div id="rpg-virtual-joystick-zone"
-               class="absolute bottom-3 left-3 w-24 h-24 flex items-center justify-center pointer-events-auto z-30 select-none touch-none">
+               class="absolute bottom-3 left-3 w-24 h-24 flex items-center justify-center pointer-events-auto z-30 select-none touch-none ${ARENA.isBossActive || ARENA.isRaidBossBattle ? '' : 'hidden'}">
             <div id="rpg-joystick-base" class="relative w-20 h-20 rounded-full border-2 border-amber-400/50 bg-slate-900/80 shadow-2xl flex items-center justify-center backdrop-blur-md ring-2 ring-amber-500/20">
               <span class="absolute top-1 text-[9px] text-amber-300/50">▲</span>
               <span class="absolute bottom-1 text-[9px] text-amber-300/50">▼</span>
@@ -13511,8 +13554,8 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
             </div>
           </div>
 
-          <!-- Potion button (above joystick) -->
-          <div class="absolute bottom-28 left-3 z-20">
+          <!-- Potion button (above joystick, only shown during boss fights) -->
+          <div class="absolute bottom-28 left-3 z-20 ${ARENA.isBossActive || ARENA.isRaidBossBattle ? '' : 'hidden'}">
             <button onclick="window.RPG.usePotionAction()" title="Зелье / Сыр [F / 1]" class="w-10 h-10 rounded-2xl bg-emerald-600/95 border-2 border-emerald-300 text-white font-bold text-lg flex items-center justify-center shadow-lg active:scale-90 transition-transform">
               🧪
             </button>
@@ -13544,12 +13587,14 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
                 <span class="text-[8px] font-bold mt-0.5">АТАК</span>
               </button>
 
-              <!-- Dash / Roll Button -->
+              <!-- Dash / Roll Button (only shown during boss fights) -->
+              ${ARENA.isBossActive || ARENA.isRaidBossBattle ? `
               <button onclick="window.RPG.playerDashRollAction()" title="Рывок / Кувырок [Shift / C]"
                 class="w-11 h-11 rounded-2xl ${ARENA.dodgeCooldown > 0 ? 'bg-slate-800/80 border border-slate-700 opacity-60' : 'bg-gradient-to-r from-sky-500 to-cyan-500 border-2 border-sky-300 shadow-sky-500/40'} text-white font-black text-sm flex flex-col items-center justify-center shadow-lg active:scale-90 transition-all">
                 <span class="text-base">🌀</span>
                 <span class="text-[8px] leading-tight font-bold">${ARENA.dodgeCooldown > 0 ? Math.ceil(ARENA.dodgeCooldown / 60) + 'с' : 'Рывок'}</span>
               </button>
+              ` : ''}
             </div>
           </div>
         </div>
@@ -13557,7 +13602,7 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
         <!-- Controls Guide Toolbar -->
         <div class="p-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-[10.5px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center justify-between gap-2">
           <div class="flex items-center gap-1.5">
-            <span>🕹️ <b>Top-Down Бой</b>: джойстик — бег с авто-прицелом в босса, [⚔️ Атака] — огонь, [🌀 Рывок] — уворот!</span>
+            <span>${ARENA.isBossActive || ARENA.isRaidBossBattle ? '🕹️ <b>Top-Down Бой</b>: джойстик — бег с авто-прицелом в босса, [⚔️ Атака] — огонь, [🌀 Рывок] — уворот!' : '⚔️ <b>Защита тропы</b>: [⚔️ Атака] — удар по крипам, навыки заряжаются автоматически'}</span>
           </div>
           <div class="flex items-center gap-2">
             <!-- Auto-Attack ON / OFF Toggle Button (Wave/Dungeon/Arena) -->

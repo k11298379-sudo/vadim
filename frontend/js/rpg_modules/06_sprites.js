@@ -1357,12 +1357,6 @@
     ctx.textBaseline = "middle";
     ctx.fillText(rank, x - 16, y - 2);
     ctx.shadowBlur = 0;
-
-    // Subtitle
-    ctx.font = "bold 7px sans-serif";
-    ctx.fillStyle = "#ffffff";
-    ctx.fillText(cfg.title, x + 16, y - 8);
-
     // Style Meter Progress Bar
     const prog = Math.max(0, Math.min(1, styleMeter.progress || 0));
     ctx.fillStyle = "rgba(0,0,0,0.6)";

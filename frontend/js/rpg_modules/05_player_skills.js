@@ -72,6 +72,22 @@
     if ((ARENA.bossPartyMode || "trio") === "trio") {
       initBossCompanions();
     }
+
+    // Force full render of the DOM to show the Boss Fight header & expand canvas to 520px
+    RPG_STATE._forceFullRender = true;
+    renderRoot();
+    RPG_STATE._forceFullRender = false;
+
+    const canvas = document.getElementById("rpg-action-canvas");
+    if (canvas) {
+      bindArenaCanvas(canvas);
+      ARENA.width = 520;
+      ARENA.height = 720;
+      boss.x = 260;
+      boss.y = 140;
+      ARENA.player.x = 260;
+      ARENA.player.y = 620;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1632,12 +1648,18 @@
     ARENA.blockWindowActive = false;
     ARENA.qteActive = false;
     ARENA.bossArenaMode = false;
+    ARENA.topDownMode = false;
     ARENA.moveInput = { left: false, right: false };
     ARENA.dangerZones = [];
     ARENA.player.x = 65;
+    ARENA.player.y = ARENA.roadY - 18;
     ARENA.player.isInvulnerable = 0;
     ARENA.waveState = "fighting";
     triggerHaptic("medium");
+
+    RPG_STATE._forceFullRender = true;
+    renderRoot();
+    RPG_STATE._forceFullRender = false;
   }
 
   async function handleFloorCleared() {
@@ -1915,10 +1937,10 @@
       ARENA.player.isInvulnerable = 0;
     }
 
-    if (ARENA.isRaidBossBattle) {
+    if (ARENA.isRaidBossBattle || ARENA.isBossActive) {
       ARENA.waveState = "boss_defeat";
       triggerHaptic("error");
-      spawnFloatingText(ARENA.width / 2, 95, "💀 ВАШ ГЕРОЙ ПАЛ В РЕЙДЕ!", "#ef4444");
+      spawnFloatingText(ARENA.width / 2, 95, "💀 ВАШ ГЕРОЙ ПАЛ В БИТВЕ С БОССОМ!", "#ef4444");
       ARENA.playerProjectiles = [];
       ARENA.bossProjectiles = [];
       if (ARENA.bossEntity) {

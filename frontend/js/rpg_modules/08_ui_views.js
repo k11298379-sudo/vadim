@@ -26,7 +26,12 @@
     const raidStateChanged = RPG_STATE._lastRenderedRaidBattle !== isRaidState;
     RPG_STATE._lastRenderedRaidBattle = isRaidState;
 
-    if (!RPG_STATE._forceFullRender && !raidStateChanged && existingCanvas && viewContainer && RPG_STATE.activeTab === "farm" && RPG_STATE.farmMode === "arena") {
+    // Also track farm boss state (wave boss enables topDown mode → canvas must resize to 520px)
+    const isFarmBossActive = !!(ARENA.isBossActive && !ARENA.isRaidBossBattle);
+    const bossStateChanged = RPG_STATE._lastFarmBossActive !== isFarmBossActive;
+    RPG_STATE._lastFarmBossActive = isFarmBossActive;
+
+    if (!RPG_STATE._forceFullRender && !raidStateChanged && !bossStateChanged && existingCanvas && viewContainer && RPG_STATE.activeTab === "farm" && RPG_STATE.farmMode === "arena") {
       const topNav = document.getElementById("rpg-top-nav");
       if (topNav) {
         topNav.outerHTML = renderTopNavBarHTML();
@@ -109,13 +114,15 @@
     `;
 
     if (RPG_STATE.activeTab === "farm" && RPG_STATE.farmMode === "arena") {
-      const c = document.getElementById("rpg-action-canvas");
-      if (c) {
-        bindArenaCanvas(c);
-        if (!ARENA.running) {
-          startArenaLoop();
+      requestAnimationFrame(() => {
+        const c = document.getElementById("rpg-action-canvas");
+        if (c) {
+          bindArenaCanvas(c);
+          if (!ARENA.running) {
+            startArenaLoop();
+          }
         }
-      }
+      });
     }
   }
 
@@ -729,27 +736,23 @@
       <div class="space-y-2">
                 <!-- Canvas Arena Element -->
         <div class="relative w-full rounded-3xl overflow-hidden border-2 border-amber-500/40 shadow-2xl bg-slate-950">
-          <canvas id="rpg-action-canvas" class="w-full ${ARENA.isRaidBossBattle || ARENA.topDownMode ? 'h-[520px]' : 'h-[320px]'} block cursor-crosshair"></canvas>
+          <canvas id="rpg-action-canvas"
+                  style="height: ${ARENA.isRaidBossBattle || ARENA.topDownMode || ARENA.isBossActive ? 520 : 320}px; min-height: ${ARENA.isRaidBossBattle || ARENA.topDownMode || ARENA.isBossActive ? 520 : 320}px;"
+                  class="w-full ${ARENA.isRaidBossBattle || ARENA.topDownMode || ARENA.isBossActive ? 'h-[520px]' : 'h-[320px]'} block cursor-crosshair"></canvas>
 
-          <!-- Top-Down / Classic Side View Mode Switcher -->
-          <div class="absolute top-3 left-3 z-20 flex items-center gap-1.5">
-            <button onclick="window.RPG.toggleTopDownArenaMode()"
-              title="Переключить вид: Top-Down шутер (с джойстиком) или классическая 2D-тропа"
-              class="h-7 px-2.5 rounded-full bg-slate-900/85 border border-slate-700/80 hover:border-amber-400/60 text-white font-black text-[10px] flex items-center gap-1.5 shadow-lg backdrop-blur-md active:scale-95 transition-all">
-              <span>${ARENA.topDownMode || ARENA.isRaidBossBattle ? "🕹️ Top-Down" : "🛣️ Сайд-вид"}</span>
-            </button>
-
-            ${ARENA.isRaidBossBattle ? `
+          <!-- Raid Boss Exit Button (only during active raid boss battle) -->
+          ${ARENA.isRaidBossBattle ? `
+          <div class="absolute top-3 left-3 z-20">
             <button onclick="window.RPG.exitRaidBossBattle()"
               class="h-7 px-2.5 rounded-full bg-slate-900/90 border border-slate-700 text-slate-300 font-bold text-[10px] flex items-center gap-1.5 shadow-lg active:scale-95 transition-all">
               <span>✕ В лобби боссов</span>
             </button>
-            ` : ""}
           </div>
+          ` : ""}
 
-          <!-- Virtual Touch Joystick (Bottom Left, clear of action buttons) -->
+          <!-- Virtual Touch Joystick (Bottom Left, only shown during boss fights) -->
           <div id="rpg-virtual-joystick-zone"
-               class="absolute bottom-3 left-3 w-24 h-24 flex items-center justify-center pointer-events-auto z-30 select-none touch-none">
+               class="absolute bottom-3 left-3 w-24 h-24 flex items-center justify-center pointer-events-auto z-30 select-none touch-none ${ARENA.isBossActive || ARENA.isRaidBossBattle ? '' : 'hidden'}">
             <div id="rpg-joystick-base" class="relative w-20 h-20 rounded-full border-2 border-amber-400/50 bg-slate-900/80 shadow-2xl flex items-center justify-center backdrop-blur-md ring-2 ring-amber-500/20">
               <span class="absolute top-1 text-[9px] text-amber-300/50">▲</span>
               <span class="absolute bottom-1 text-[9px] text-amber-300/50">▼</span>
@@ -761,8 +764,8 @@
             </div>
           </div>
 
-          <!-- Potion button (above joystick) -->
-          <div class="absolute bottom-28 left-3 z-20">
+          <!-- Potion button (above joystick, only shown during boss fights) -->
+          <div class="absolute bottom-28 left-3 z-20 ${ARENA.isBossActive || ARENA.isRaidBossBattle ? '' : 'hidden'}">
             <button onclick="window.RPG.usePotionAction()" title="Зелье / Сыр [F / 1]" class="w-10 h-10 rounded-2xl bg-emerald-600/95 border-2 border-emerald-300 text-white font-bold text-lg flex items-center justify-center shadow-lg active:scale-90 transition-transform">
               🧪
             </button>
@@ -794,12 +797,14 @@
                 <span class="text-[8px] font-bold mt-0.5">АТАК</span>
               </button>
 
-              <!-- Dash / Roll Button -->
+              <!-- Dash / Roll Button (only shown during boss fights) -->
+              ${ARENA.isBossActive || ARENA.isRaidBossBattle ? `
               <button onclick="window.RPG.playerDashRollAction()" title="Рывок / Кувырок [Shift / C]"
                 class="w-11 h-11 rounded-2xl ${ARENA.dodgeCooldown > 0 ? 'bg-slate-800/80 border border-slate-700 opacity-60' : 'bg-gradient-to-r from-sky-500 to-cyan-500 border-2 border-sky-300 shadow-sky-500/40'} text-white font-black text-sm flex flex-col items-center justify-center shadow-lg active:scale-90 transition-all">
                 <span class="text-base">🌀</span>
                 <span class="text-[8px] leading-tight font-bold">${ARENA.dodgeCooldown > 0 ? Math.ceil(ARENA.dodgeCooldown / 60) + 'с' : 'Рывок'}</span>
               </button>
+              ` : ''}
             </div>
           </div>
         </div>
@@ -807,7 +812,7 @@
         <!-- Controls Guide Toolbar -->
         <div class="p-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-[10.5px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center justify-between gap-2">
           <div class="flex items-center gap-1.5">
-            <span>🕹️ <b>Top-Down Бой</b>: джойстик — бег с авто-прицелом в босса, [⚔️ Атака] — огонь, [🌀 Рывок] — уворот!</span>
+            <span>${ARENA.isBossActive || ARENA.isRaidBossBattle ? '🕹️ <b>Top-Down Бой</b>: джойстик — бег с авто-прицелом в босса, [⚔️ Атака] — огонь, [🌀 Рывок] — уворот!' : '⚔️ <b>Защита тропы</b>: [⚔️ Атака] — удар по крипам, навыки заряжаются автоматически'}</span>
           </div>
           <div class="flex items-center gap-2">
             <!-- Auto-Attack ON / OFF Toggle Button (Wave/Dungeon/Arena) -->
