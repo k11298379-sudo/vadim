@@ -874,6 +874,7 @@
   }
 
   function toggleAdminModal(open) {
+    triggerHaptic("light");
     RPG_STATE.adminModalOpen = (open !== undefined) ? open : !RPG_STATE.adminModalOpen;
     renderRoot();
   }

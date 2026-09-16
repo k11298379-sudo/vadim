@@ -1,3 +1,25 @@
+  function renderAllModalsHTML() {
+    return `
+      <!-- Item Inspection Modal -->
+      ${RPG_STATE.inspectedItem ? renderItemModalHTML(RPG_STATE.inspectedItem) : ""}
+
+      <!-- Forge Modal -->
+      ${RPG_STATE.forgeItem ? renderForgeModalHTML(RPG_STATE.forgeItem) : ""}
+
+      <!-- Chest Opening Modal -->
+      ${RPG_STATE.activeChestModal ? renderChestModalHTML(RPG_STATE.activeChestModal) : ""}
+
+      <!-- Shop Modal -->
+      ${RPG_STATE.shopModalOpen ? renderShopModalHTML() : ""}
+
+      <!-- Slot Quick Equip Modal -->
+      ${RPG_STATE.slotFilterModal ? renderSlotFilterModalHTML(RPG_STATE.slotFilterModal) : ""}
+
+      <!-- Admin Dev Modal -->
+      ${(isUserAdmin() && RPG_STATE.adminModalOpen) ? renderAdminModalHTML() : ""}
+    `;
+  }
+
   function renderRoot() {
     const container = document.getElementById("rpg-root");
     if (!container) return;
@@ -46,13 +68,7 @@
       }
       const modalsEl = document.getElementById("rpg-modals-container");
       if (modalsEl) {
-        modalsEl.innerHTML = `
-          ${RPG_STATE.inspectedItem ? renderItemModalHTML(RPG_STATE.inspectedItem) : ""}
-          ${RPG_STATE.forgeItem ? renderForgeModalHTML(RPG_STATE.forgeItem) : ""}
-          ${RPG_STATE.activeChestModal ? renderChestModalHTML(RPG_STATE.activeChestModal) : ""}
-          ${RPG_STATE.shopModalOpen ? renderShopModalHTML() : ""}
-          ${RPG_STATE.slotFilterModal ? renderSlotFilterModalHTML(RPG_STATE.slotFilterModal) : ""}
-        `;
+        modalsEl.innerHTML = renderAllModalsHTML();
       }
       if (ARENA.canvas !== existingCanvas || !ARENA.ctx) {
         bindArenaCanvas(existingCanvas);
@@ -90,23 +106,7 @@
 
       <!-- Modals Container -->
       <div id="rpg-modals-container">
-        <!-- Item Inspection Modal -->
-        ${RPG_STATE.inspectedItem ? renderItemModalHTML(RPG_STATE.inspectedItem) : ""}
-
-        <!-- Forge Modal -->
-        ${RPG_STATE.forgeItem ? renderForgeModalHTML(RPG_STATE.forgeItem) : ""}
-
-        <!-- Chest Opening Modal -->
-        ${RPG_STATE.activeChestModal ? renderChestModalHTML(RPG_STATE.activeChestModal) : ""}
-
-        <!-- Shop Modal -->
-        ${RPG_STATE.shopModalOpen ? renderShopModalHTML() : ""}
-
-        <!-- Slot Quick Equip Modal -->
-        ${RPG_STATE.slotFilterModal ? renderSlotFilterModalHTML(RPG_STATE.slotFilterModal) : ""}
-
-        <!-- Admin Dev Modal -->
-        ${(isUserAdmin() && RPG_STATE.adminModalOpen) ? renderAdminModalHTML() : ""}
+        ${renderAllModalsHTML()}
       </div>
 
       <!-- Admin Floating Pill Badge (Bottom-left) -->

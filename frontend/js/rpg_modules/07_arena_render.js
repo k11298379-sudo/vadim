@@ -2040,7 +2040,7 @@
     const currentSlotLabel = activeTestSlot ? `🧪 Тест #${activeTestSlot}` : `👑 Админ`;
 
     return `
-      <div class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4" onclick="if (event.target === this) window.RPG.toggleAdminModal(false)">
         <div class="w-full max-w-sm rounded-3xl bg-slate-900 border-2 border-amber-400/80 p-4 shadow-2xl space-y-3.5 text-white animate-scale-up">
           <div class="flex items-center justify-between border-b border-slate-700/80 pb-2.5">
             <div class="flex items-center gap-2">
