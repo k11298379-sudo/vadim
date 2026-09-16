@@ -1,12 +1,22 @@
   function spawnBossCreep() {
     const floor = RPG_STATE.profile?.dungeon_floor || 1;
-    const floorScale = Math.pow(1.22, Math.max(0, floor - 1));
+    
+    // Scale identically to creeps but x15 stronger
+    const scaleHp = Math.pow(1.28, Math.max(0, floor - 1)) * (1.0 + 19 * 0.05); // wave 20 multiplier
+    const scaleAtk = Math.pow(1.23, Math.max(0, floor - 1)) * (1.0 + 19 * 0.04);
+    
+    // Base creep stats for floor 20 is around 260 HP, 16 ATK. We multiply by 15!
+    const baseHp = 260 * 15;
+    const baseAtk = 16 * 8; // x8 ATK so it doesn't one-shot instantly but still hurts
 
     const bossTypes = [
-      { name: "РОШАН СВИРЕПЫЙ (Roshan)", icon: "🐲", baseHp: 12000, baseAtk: 80, defense: 35, badgeBg: "#7f1d1d", badgeBorder: "#facc15" },
-      { name: "ДРЕВНИЙ ТЕРЗАТЕЛЬ (Tormentor)", icon: "💎", baseHp: 10000, baseAtk: 75, defense: 30, badgeBg: "#4a044e", badgeBorder: "#c084fc" },
-      { name: "ЧЕРНЫЙ ДРАКОН ИНФЕРНО", icon: "🌋", baseHp: 14000, baseAtk: 85, defense: 40, badgeBg: "#7c2d12", badgeBorder: "#ea580c" },
-      { name: "АРХИЛИЧ НЕКРОПОЛЯ", icon: "💀", baseHp: 9000, baseAtk: 90, defense: 25, badgeBg: "#18181b", badgeBorder: "#e4e4e7" }
+      { id: "golem", name: "Древний Гранитный Голем", icon: "🗿", badgeBg: "#334155", badgeBorder: "#94a3b8" },
+      { id: "lich", name: "Архилич Некрополя", icon: "☠️", badgeBg: "#18181b", badgeBorder: "#e4e4e7" },
+      { id: "tormentor", name: "Древний Терзатель", icon: "🔮", badgeBg: "#4a044e", badgeBorder: "#c084fc" },
+      { id: "dragon", name: "Дракон Инферно", icon: "🌋", badgeBg: "#7c2d12", badgeBorder: "#ea580c" },
+      { id: "pudge_boss", name: "Мясник из Чрева", icon: "🪝", badgeBg: "#064e3b", badgeBorder: "#34d399" },
+      { id: "faceless_void", name: "Хроно-Владыка", icon: "⏳", badgeBg: "#312e81", badgeBorder: "#818cf8" },
+      { id: "roshan", name: "Рошан", icon: "🐲", badgeBg: "#7f1d1d", badgeBorder: "#facc15" }
     ];
     const bt = bossTypes[Math.floor(Math.random() * bossTypes.length)];
 
@@ -14,9 +24,9 @@
     const playerAtk = Math.max(30, Math.floor(((stats.min_atk || 30) + (stats.max_atk || 50)) / 2));
     const playerHp = Math.max(400, stats.hp_max || 400);
 
-    const calculatedHp = Math.floor(bt.baseHp * floorScale);
-    const calculatedAtk = Math.floor(bt.baseAtk * Math.pow(1.15, Math.max(0, floor - 1)));
-    const calculatedDef = Math.floor((bt.defense || 25) * Math.pow(1.10, Math.max(0, floor - 1)));
+    const calculatedHp = Math.floor(baseHp * scaleHp);
+    const calculatedAtk = Math.floor(baseAtk * scaleAtk);
+    const calculatedDef = Math.floor(35 * Math.pow(1.10, Math.max(0, floor - 1)));
 
     const boss = {
       name: bt.name + (floor > 1 ? ` [Этаж ${floor}]` : ""),
@@ -378,7 +388,10 @@
     const stats = RPG_STATE.profile?.stats || {};
     const skillCfg = getHeroSkillConfig();
     const hClass = (RPG_STATE.profile?.hero_class || "pudge").toLowerCase();
-    const cost = 20;
+    let cost = 20;
+    if (p.croakTimer > 0) {
+      cost = Math.floor(cost * 0.4); // 3-й скилл Ларго: -60% расхода маны!
+    }
 
     if (p.isFrozenInTime || (p.stunTimer && p.stunTimer > 0)) {
       spawnFloatingText(p.x, p.y - 25, "💫 ОГЛУШЕНИЕ!", "#facc15");
@@ -398,13 +411,14 @@
       return;
     }
     if (p.currentMp < cost) {
-      spawnFloatingText(p.x, p.y - 25, "Мало маны (нужно 20 MP)!", "#94a3b8");
+      spawnFloatingText(p.x, p.y - 25, `Мало маны (нужно ${cost} MP)!`, "#94a3b8");
       triggerHaptic("error");
       return;
     }
 
     p.currentMp -= cost;
-    ARENA.skill1Cooldown = skillCfg.skill1Cd;
+    const cdReduct1 = 1.0 - ((RPG_STATE.profile?.talents?.cooldown || 0) * 0.06);
+    ARENA.skill1Cooldown = Math.floor(skillCfg.skill1Cd * cdReduct1);
     triggerHaptic("heavy");
 
     // TOP-DOWN 360° BOSS TARGETING FOR ALL SKILLS
@@ -511,6 +525,25 @@
           ARENA.specialEffects.push({ type: "mana_slash", x: boss.x, y: boss.y, timer: 24, maxTimer: 24, dmg: dmg });
           spawnFloatingText(boss.x, boss.y - 30, `⚡ ВЫПАД ИЗ ТЕНИ! -${dmg}`, "#38bdf8");
           ARENA.cameraTrauma = 0.5;
+          return;
+        } else if (hClass === "leshrac") {
+          // Croak of Genius (3-й скилл Ларго): -60% расхода маны + эхо-урон + восстановление маны
+          p.croakTimer = 480; // 8 sec
+          p.currentMp = Math.min(p.maxMp, p.currentMp + 45);
+          const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 3.4));
+          boss.stunTimer = Math.max(boss.stunTimer || 0, 60); // 1.0s ministun
+          ARENA.specialEffects.push({
+            type: "croak_blast",
+            x: boss.x,
+            y: boss.y,
+            radius: 85,
+            timer: 30,
+            maxTimer: 30,
+            color: "#a855f7"
+          });
+          ARENA.cameraTrauma = 0.5;
+          spawnFloatingText(p.x, p.y - 35, "🎵 КВАКАНЬЕ ГЕНИЯ! (+45 MP, ЭХО)", "#c084fc");
+          spawnFloatingText(boss.x, boss.y - 30, `🎶 РЕХО-УРОН! -${dmg}`, "#facc15");
           return;
         }
       }
@@ -647,6 +680,40 @@
       }
       return;
     }
+
+    // 8. LARGO: Diabolic Edict (Магическое эхо)
+    if (hClass === "leshrac") {
+      p.edictTimer = 180; // 3 sec (60 fps * 3)
+      p.edictDmgMult = 0.55;
+      
+      ARENA.specialEffects.push({
+        type: "edict_aura",
+        x: p.x,
+        y: p.y,
+        radius: 200,
+        timer: 180,
+        maxTimer: 180,
+        color: "#c084fc"
+      });
+      ARENA.cameraTrauma = Math.min(1.0, ARENA.cameraTrauma + 0.3);
+      spawnFloatingText(p.x, p.y - 35, "🎵 МАГИЧЕСКОЕ ЭХО!", "#c084fc");
+
+
+      for (const c of ARENA.creeps) {
+        if (Math.abs(c.x - targetX) < radius) {
+          if (c.archetype === "defender") {
+            c.shieldBrokenTimer = 240;
+            c.state = "stagger";
+            c.staggerTimer = 90;
+            c.stateTimer = 90;
+          }
+          safeDamageCreep(c, dmg, false);
+          c.attackCooldown = -60; // 1s ministun
+          spawnFloatingText(c.x, c.y - 20, `🎶 -${dmg} РЕХО!`, "#facc15");
+        }
+      }
+      return;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -658,7 +725,10 @@
     const stats = RPG_STATE.profile?.stats || {};
     const skillCfg = getHeroSkillConfig();
     const hClass = (RPG_STATE.profile?.hero_class || "pudge").toLowerCase();
-    const cost = 35;
+    let cost = 35;
+    if (p.croakTimer > 0) {
+      cost = Math.floor(cost * 0.4); // 3-й скилл Ларго: -60% расхода маны!
+    }
 
     if (p.isFrozenInTime || (p.stunTimer && p.stunTimer > 0)) {
       spawnFloatingText(p.x, p.y - 25, "💫 ОГЛУШЕНИЕ!", "#facc15");
@@ -671,6 +741,98 @@
       return;
     }
 
+    // LARGO TOGGLE ULTIMATE: AMPHIBIAN RHAPSODY (ВКЛ / ВЫКЛ)
+    if (hClass === "leshrac") {
+      if (p.largoRhapsodyActive) {
+        // Выключение ульты
+        p.largoRhapsodyActive = false;
+        ARENA.ultCooldown = 30; // 0.5с защита от двойного клика
+        spawnFloatingText(p.x, p.y - 35, "🛑 РАПСОДИЯ ВЫКЛЮЧЕНА", "#94a3b8");
+        triggerHaptic("light");
+        const ultEl = document.getElementById("rpg-cd-ult");
+        if (ultEl) ultEl.textContent = "ВКЛ";
+        return;
+      } else {
+        // Включение ульты
+        if (ARENA.ultCooldown > 0) {
+          const sec = Math.ceil(ARENA.ultCooldown / 60);
+          spawnFloatingText(p.x, p.y - 25, `КД ${sec}с`, "#94a3b8");
+          triggerHaptic("error");
+          return;
+        }
+        let tickMpCost = 5;
+        if (p.croakTimer > 0) tickMpCost = Math.floor(tickMpCost * 0.4);
+        if (p.currentMp < tickMpCost) {
+          spawnFloatingText(p.x, p.y - 25, `Мало маны (нужно ${tickMpCost} MP)!`, "#94a3b8");
+          triggerHaptic("error");
+          return;
+        }
+
+        p.largoRhapsodyActive = true;
+        p.largoRhapsodyTickTimer = 30; // 0.5 сек между тактами
+        p.largoRhapsodyDmgMult = 1.0 + ((stats.ult_boost || 0) / 100.0);
+        ARENA.ultCooldown = 30; // 0.5с перезарядка на переключение
+
+        // Мгновенный первый такт при включении
+        p.currentMp -= tickMpCost;
+        spawnFloatingText(p.x, p.y - 48, `⚡ -${tickMpCost} MP`, "#38bdf8");
+
+        const ultMult = p.largoRhapsodyDmgMult;
+        const spellAmp = (stats.spell_amp !== undefined ? stats.spell_amp : ((p.maxMp || 100) * 0.2));
+        const healAmt = Math.max(12, Math.floor((p.maxHp * 0.03) + ((stats.int || 20) * 0.55)));
+        p.currentHp = Math.min(p.maxHp, p.currentHp + healAmt);
+        spawnFloatingText(p.x, p.y - 30, `💚 +${healAmt} ХП (РАПСОДИЯ)`, "#22c55e");
+
+        if (!ARENA.specialEffects) ARENA.specialEffects = [];
+        ARENA.specialEffects.push({
+          type: "rhapsody_beat",
+          x: p.x,
+          y: p.y,
+          radius: 25,
+          maxRadius: 280,
+          timer: 28,
+          maxTimer: 28,
+          color: "#22c55e"
+        });
+        ARENA.cameraTrauma = Math.min(1.0, (ARENA.cameraTrauma || 0) + 0.3);
+        triggerHaptic("heavy");
+
+        const pulseDmg = Math.floor(((stats.max_atk || 30) * 0.7 + spellAmp * 0.25) * ultMult);
+        if (ARENA.topDownMode || ARENA.isRaidBossBattle) {
+          if (ARENA.bossEntity && ARENA.bossEntity.hp > 0) {
+            const dist = Math.hypot(ARENA.bossEntity.x - p.x, ARENA.bossEntity.y - p.y);
+            if (dist <= 280) {
+              const actualDmg = applyDamageToBoss(ARENA.bossEntity, pulseDmg);
+              spawnFloatingText(ARENA.bossEntity.x, ARENA.bossEntity.y - 25, `🐸 -${actualDmg} РАПСОДИЯ`, "#a855f7");
+            }
+          }
+          for (const c of ARENA.creeps) {
+            const dist = Math.hypot(c.x - p.x, c.y - p.y);
+            if (dist <= 280) {
+              if (c.isBoss) {
+                applyDamageToBoss(c, pulseDmg);
+              } else {
+                c.hp -= pulseDmg;
+              }
+              spawnFloatingText(c.x, c.y - 15, `🐸 -${pulseDmg}`, "#a855f7");
+            }
+          }
+        } else {
+          for (const c of ARENA.creeps) {
+            if (Math.abs(c.x - p.x) <= 320) {
+              safeDamageCreep(c, pulseDmg, false);
+              spawnFloatingText(c.x, c.y - 15, `🐸 -${pulseDmg} РАПСОДИЯ`, "#a855f7");
+            }
+          }
+        }
+
+        spawnFloatingText(p.x, p.y - 65, "🐸 РАПСОДИЯ ВКЛ (Каждые 0.5с: хил, урон, -MP)", "#22c55e");
+        const ultEl = document.getElementById("rpg-cd-ult");
+        if (ultEl) ultEl.textContent = "ВЫКЛ";
+        return;
+      }
+    }
+
     if (ARENA.ultCooldown > 0) {
       const sec = Math.ceil(ARENA.ultCooldown / 60);
       spawnFloatingText(p.x, p.y - 25, `Ульта: КД ${sec}с`, "#94a3b8");
@@ -678,7 +840,7 @@
       return;
     }
     if (p.currentMp < cost) {
-      spawnFloatingText(p.x, p.y - 25, "Мало маны (нужно 35 MP)!", "#94a3b8");
+      spawnFloatingText(p.x, p.y - 25, `Мало маны (нужно ${cost} MP)!`, "#94a3b8");
       triggerHaptic("error");
       return;
     }
@@ -827,7 +989,7 @@
     if (hClass === "invoker") {
       const spellAmpPct = (stats.spell_amp !== undefined ? stats.spell_amp : ((p.maxMp || 100) * 0.2));
       const manaBonus = 1.0 + (spellAmpPct / 100) + (p.currentMp ? (p.currentMp / p.maxMp) * 0.3 : 0);
-      const meteorDmg = Math.floor((stats.max_atk || 30) * 4.8 * manaBonus * ultMultiplier);
+      const meteorDmg = Math.floor((stats.max_atk || 30) * 3.2 * manaBonus * ultMultiplier);
       if (!ARENA.playerProjectiles) ARENA.playerProjectiles = [];
 
       ARENA.playerProjectiles.push({
@@ -1761,26 +1923,26 @@
     RPG_STATE.coopRoomData = null;
 
     const bossTmpls = {
-      golem: { id: "golem", name: "Древний Гранитный Голем", icon: "🗿", baseHp: 75000, baseAtk: 140, defense: 35, scale: 1.35, gold: 2000, xp: 1500, desc: "[75 ТЫС. ХП] Каменный колосс глубин" },
-      lich: { id: "lich", name: "Архилич Некрополя", icon: "☠️", baseHp: 225000, baseAtk: 210, defense: 50, scale: 1.30, gold: 3500, xp: 2500, desc: "[225 ТЫС. ХП] Владыка темных заклятий" },
-      tormentor: { id: "tormentor", name: "Древний Терзатель (Tormentor)", icon: "🔮", baseHp: 700000, baseAtk: 320, defense: 75, scale: 1.30, gold: 5000, xp: 4000, desc: "[700 ТЫС. ХП] Отражает 35% урона" },
-      dragon: { id: "dragon", name: "Дракон Инферно", icon: "🌋", baseHp: 2200000, baseAtk: 500, defense: 105, scale: 1.50, gold: 8000, xp: 6000, desc: "[2.2 МЛН ХП] Огнедышащий титан" },
-      pudge_boss: { id: "pudge_boss", name: "Мясник из Чрева (Pudge)", icon: "🪝", baseHp: 7500000, baseAtk: 800, defense: 140, scale: 1.40, gold: 12000, xp: 9000, desc: "[7.5 МЛН ХП] Хук цепью, вонь гнили и пожирание" },
-      faceless_void: { id: "faceless_void", name: "Хроно-Владыка (Faceless Void)", icon: "⏳", baseHp: 25000000, baseAtk: 1250, defense: 180, scale: 1.35, gold: 18000, xp: 14000, desc: "[25 МЛН ХП] Остановка времени и баши" },
-      roshan: { id: "roshan", name: "Рошан (Roshan)", icon: "🐲", baseHp: 85000000, baseAtk: 1950, defense: 230, scale: 1.45, gold: 26000, xp: 20000, desc: "[85 МЛН ХП] Хозяин Ямы, дропает Рапиру и Сыр" },
-      tidehunter: { id: "tidehunter", name: "Левиафан Бездны (Tidehunter)", icon: "🐙", baseHp: 300000000, baseAtk: 3000, defense: 290, scale: 1.40, gold: 40000, xp: 30000, desc: "[300 МЛН ХП] Владыка пучин с якорным ударом и Раважем" },
-      sf_boss: { id: "sf_boss", name: "Архидемон Nevermore", icon: "💀", baseHp: 1000000000, baseAtk: 4600, defense: 370, scale: 1.35, gold: 60000, xp: 45000, desc: "[1 МИЛЛИАРД ХП] Пожиратель душ с черными коилами и Реквиемом" },
-      necrophos: { id: "necrophos", name: "Чумной Владыка (Necrophos)", icon: "🧟", baseHp: 3500000000, baseAtk: 7000, defense: 460, scale: 1.30, gold: 90000, xp: 70000, desc: "[3.5 МЛРД ХП] Аура мора истощает HP, Коса Смерти рубит" },
-      terrorblade: { id: "terrorblade", name: "Демон Бездны (Terrorblade)", icon: "😈", baseHp: 12000000000, baseAtk: 11000, defense: 570, scale: 1.40, gold: 140000, xp: 100000, desc: "[12 МЛРД ХП] Метаморфоза Тьмы и разрыв души Sunder" },
-      invoker_boss: { id: "invoker_boss", name: "Демиург Арсенала (Invoker)", icon: "🧙‍♂️", baseHp: 42000000000, baseAtk: 17500, defense: 700, scale: 1.25, gold: 200000, xp: 150000, desc: "[42 МЛРД ХП] Повелитель стихий, хаос-метеоров и ЭМИ" },
-      chaos_knight: { id: "chaos_knight", name: "Всадник Хаоса (Chaos Knight)", icon: "🐎", baseHp: 150000000000, baseAtk: 26500, defense: 860, scale: 1.45, gold: 300000, xp: 220000, desc: "[150 МЛРД ХП] Фантомы параллельных миров и криты" },
-      dark_tormentor: { id: "dark_tormentor", name: "Тёмный Терзатель Бездны", icon: "💎", baseHp: 550000000000, baseAtk: 42000, defense: 1050, scale: 1.40, gold: 450000, xp: 350000, desc: "[550 МЛРД ХП] Отражает 50% урона и стреляет шипами тьмы" },
-      storm_spirit: { id: "storm_spirit", name: "Громовой Дух (Storm Spirit)", icon: "⚡", baseHp: 2000000000000, baseAtk: 64000, defense: 1300, scale: 1.35, gold: 700000, xp: 500000, desc: "[2 ТРИЛЛИОНА ХП] Молниеносные перелеты через арену и ремнанты" },
-      doom: { id: "doom", name: "Вестник Апокалипсиса (Lord Doom)", icon: "👹", baseHp: 7500000000000, baseAtk: 98000, defense: 1600, scale: 1.45, gold: 1100000, xp: 800000, desc: "[7.5 ТРИЛЛИОНОВ ХП] Владыка Преисподней с роком и пламенем" },
-      primal_beast: { id: "primal_beast", name: "Первобытный Титан (Primal Beast)", icon: "🦣", baseHp: 28000000000000, baseAtk: 150000, defense: 1950, scale: 1.60, gold: 1800000, xp: 1300000, desc: "[28 ТРИЛЛИОНОВ ХП] Сокрушитель материков с диким топотом" },
-      phantom_roshan: { id: "phantom_roshan", name: "Призрачный Рошан Хаоса", icon: "👻", baseHp: 100000000000000, baseAtk: 230000, defense: 2400, scale: 1.55, gold: 3000000, xp: 2200000, desc: "[100 ТРИЛЛИОНОВ ХП] Восставший призрак Рошана с астральным Slam" },
-      tinker_boss: { id: "tinker_boss", name: "Архиинженер (Omega Tinker)", icon: "🤖", baseHp: 350000000000000, baseAtk: 350000, defense: 3000, scale: 1.45, gold: 5000000, xp: 3500000, desc: "[350 ТРИЛЛИОНОВ ХП] Ослепляющий лазер, микроракеты и марш роботов" },
-      enigma: { id: "enigma", name: "Пожиратель Миров (Enigma Cosmic)", icon: "🌌", baseHp: 1200000000000000, baseAtk: 500000, defense: 3800, scale: 1.35, gold: 10000000, xp: 7500000, desc: "[1.2 КВАДРИЛЛИОНА ХП!] Битва на месяц! Схлопывает пространство в Черную Дыру" }
+      golem: { id: "golem", name: "Древний Гранитный Голем", icon: "🗿", baseHp: 75000, baseAtk: 416, defense: 35, scale: 1.35, gold: 2000, xp: 1500, desc: "[75 ТЫС. ХП] Каменный колосс глубин" },
+      lich: { id: "lich", name: "Архилич Некрополя", icon: "☠️", baseHp: 225000, baseAtk: 1250, defense: 50, scale: 1.30, gold: 3500, xp: 2500, desc: "[225 ТЫС. ХП] Владыка темных заклятий" },
+      tormentor: { id: "tormentor", name: "Древний Терзатель (Tormentor)", icon: "🔮", baseHp: 700000, baseAtk: 3888, defense: 75, scale: 1.30, gold: 5000, xp: 4000, desc: "[700 ТЫС. ХП] Отражает 35% урона" },
+      dragon: { id: "dragon", name: "Дракон Инферно", icon: "🌋", baseHp: 2200000, baseAtk: 12222, defense: 105, scale: 1.50, gold: 8000, xp: 6000, desc: "[2.2 МЛН ХП] Огнедышащий титан" },
+      pudge_boss: { id: "pudge_boss", name: "Мясник из Чрева (Pudge)", icon: "🪝", baseHp: 7500000, baseAtk: 41666, defense: 140, scale: 1.40, gold: 12000, xp: 9000, desc: "[7.5 МЛН ХП] Хук цепью, вонь гнили и пожирание" },
+      faceless_void: { id: "faceless_void", name: "Хроно-Владыка (Faceless Void)", icon: "⏳", baseHp: 25000000, baseAtk: 138888, defense: 180, scale: 1.35, gold: 18000, xp: 14000, desc: "[25 МЛН ХП] Остановка времени и баши" },
+      roshan: { id: "roshan", name: "Рошан (Roshan)", icon: "🐲", baseHp: 85000000, baseAtk: 472222, defense: 230, scale: 1.45, gold: 26000, xp: 20000, desc: "[85 МЛН ХП] Хозяин Ямы, дропает Рапиру и Сыр" },
+      tidehunter: { id: "tidehunter", name: "Левиафан Бездны (Tidehunter)", icon: "🐙", baseHp: 300000000, baseAtk: 1666666, defense: 290, scale: 1.40, gold: 40000, xp: 30000, desc: "[300 МЛН ХП] Владыка пучин с якорным ударом и Раважем" },
+      sf_boss: { id: "sf_boss", name: "Архидемон Nevermore", icon: "💀", baseHp: 1000000000, baseAtk: 5555555, defense: 370, scale: 1.35, gold: 60000, xp: 45000, desc: "[1 МИЛЛИАРД ХП] Пожиратель душ с черными коилами и Реквиемом" },
+      necrophos: { id: "necrophos", name: "Чумной Владыка (Necrophos)", icon: "🧟", baseHp: 3500000000, baseAtk: 19444444, defense: 460, scale: 1.30, gold: 90000, xp: 70000, desc: "[3.5 МЛРД ХП] Аура мора истощает HP, Коса Смерти рубит" },
+      terrorblade: { id: "terrorblade", name: "Демон Бездны (Terrorblade)", icon: "😈", baseHp: 12000000000, baseAtk: 66666666, defense: 570, scale: 1.40, gold: 140000, xp: 100000, desc: "[12 МЛРД ХП] Метаморфоза Тьмы и разрыв души Sunder" },
+      invoker_boss: { id: "invoker_boss", name: "Демиург Арсенала (Invoker)", icon: "🧙‍♂️", baseHp: 42000000000, baseAtk: 233333333, defense: 700, scale: 1.25, gold: 200000, xp: 150000, desc: "[42 МЛРД ХП] Повелитель стихий, хаос-метеоров и ЭМИ" },
+      chaos_knight: { id: "chaos_knight", name: "Всадник Хаоса (Chaos Knight)", icon: "🐎", baseHp: 150000000000, baseAtk: 833333333, defense: 860, scale: 1.45, gold: 300000, xp: 220000, desc: "[150 МЛРД ХП] Фантомы параллельных миров и криты" },
+      dark_tormentor: { id: "dark_tormentor", name: "Тёмный Терзатель Бездны", icon: "💎", baseHp: 550000000000, baseAtk: 3055555555, defense: 1050, scale: 1.40, gold: 450000, xp: 350000, desc: "[550 МЛРД ХП] Отражает 50% урона и стреляет шипами тьмы" },
+      storm_spirit: { id: "storm_spirit", name: "Громовой Дух (Storm Spirit)", icon: "⚡", baseHp: 2000000000000, baseAtk: 11111111111, defense: 1300, scale: 1.35, gold: 700000, xp: 500000, desc: "[2 ТРИЛЛИОНА ХП] Молниеносные перелеты через арену и ремнанты" },
+      doom: { id: "doom", name: "Вестник Апокалипсиса (Lord Doom)", icon: "👹", baseHp: 7500000000000, baseAtk: 41666666666, defense: 1600, scale: 1.45, gold: 1100000, xp: 800000, desc: "[7.5 ТРИЛЛИОНОВ ХП] Владыка Преисподней с роком и пламенем" },
+      primal_beast: { id: "primal_beast", name: "Первобытный Титан (Primal Beast)", icon: "🦣", baseHp: 28000000000000, baseAtk: 155555555555, defense: 1950, scale: 1.60, gold: 1800000, xp: 1300000, desc: "[28 ТРИЛЛИОНОВ ХП] Сокрушитель материков с диким топотом" },
+      phantom_roshan: { id: "phantom_roshan", name: "Призрачный Рошан Хаоса", icon: "👻", baseHp: 100000000000000, baseAtk: 555555555555, defense: 2400, scale: 1.55, gold: 3000000, xp: 2200000, desc: "[100 ТРИЛЛИОНОВ ХП] Восставший призрак Рошана с астральным Slam" },
+      tinker_boss: { id: "tinker_boss", name: "Архиинженер (Omega Tinker)", icon: "🤖", baseHp: 350000000000000, baseAtk: 1944444444444, defense: 3000, scale: 1.45, gold: 5000000, xp: 3500000, desc: "[350 ТРИЛЛИОНОВ ХП] Ослепляющий лазер, микроракеты и марш роботов" },
+      enigma: { id: "enigma", name: "Пожиратель Миров (Enigma Cosmic)", icon: "🌌", baseHp: 1200000000000000, baseAtk: 6666666666666, defense: 3800, scale: 1.35, gold: 10000000, xp: 7500000, desc: "[1.2 КВАДРИЛЛИОНА ХП!] Битва на месяц! Схлопывает пространство в Черную Дыру" }
     };
 
     const b = bossTmpls[bossId] || bossTmpls.golem;
@@ -1910,6 +2072,19 @@
   }
 
   function handlePlayerArenaDeath() {
+    // AEGIS OF THE IMMORTAL RESURRECTION PASSIVE
+    const relic = RPG_STATE.profile?.equipment?.relic;
+    const isAegis = relic && (String(relic.name || "").toLowerCase().includes("aegis") || String(relic.name || "").toLowerCase().includes("эгида") || relic.icon === "🛡️" || relic.icon === "🥚");
+    if (isAegis && !ARENA.aegisUsed && ARENA.player) {
+      ARENA.aegisUsed = true;
+      const pMax = ARENA.player.maxHp || 500;
+      ARENA.player.currentHp = Math.floor(pMax * 0.65);
+      ARENA.player.isInvulnerable = 60;
+      spawnFloatingText(ARENA.player.x, ARENA.player.y - 35, "✨ ВОСКРЕШЕНИЕ ЭГИДОЙ! (+65% HP)", "#facc15");
+      triggerHaptic("heavy");
+      return;
+    }
+
     if (ARENA.player) {
       ARENA.player.currentHp = 0;
       ARENA.player.isInvulnerable = 0;
@@ -1964,6 +2139,7 @@
       p.xp -= needed;
       p.level = (p.level || 1) + 1;
       p.stat_points = (p.stat_points || 0) + 1;
+      if (p.level % 5 === 0) p.talent_points = (p.talent_points || 0) + 1;
       showLevelUpToast(p.level);
       spawnFloatingText(ARENA.player.x + 30, ARENA.player.y - 45, `🎉 УРОВЕНЬ ${p.level}! (+1 очко)`, "#facc15");
     }
@@ -1990,4 +2166,4 @@
     time = (time != null ? time : (ARENA.frameCount || 0));
     const hClass = (heroClass || "pudge").toLowerCase();
     const bob = Math.sin(time * 0.14) * 2;
-    const facing = (p && p.facing !== undefined) ? p.facing : 1;
+    const facing = (p && p.facing !== undefined) ? p.facing : 1;

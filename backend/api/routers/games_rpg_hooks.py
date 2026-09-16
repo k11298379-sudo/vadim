@@ -83,14 +83,24 @@ def get_rpg_invite_details(room: Any, game_type: str, base_url: str, separator: 
     return "", "", ""
 
 async def handle_rpg_room_joined(room: Any, session: AsyncSession, user: Optional[User], user_name: str):
-    if room and getattr(room, "game_type", None) == "rpg_duel" and hasattr(room, "sync_character_data"):
+    if not room or not hasattr(room, "sync_character_data"):
+        return
+
+    g_type = getattr(room, "game_type", None)
+    if g_type in ["rpg_duel", "rpg_coop"]:
         try:
             from backend.db.crud.rpg import get_or_create_rpg_character, serialize_character_profile
             char = await get_or_create_rpg_character(session, user_id=user.id if user else 1)
             prof = serialize_character_profile(char, user_name=user_name)
-            room.sync_character_data("opponent", prof)
+
+            if g_type == "rpg_duel":
+                room.sync_character_data("opponent", prof)
+            elif g_type == "rpg_coop":
+                role = room.get_player_role(user.tg_id if user else 0)
+                if role:
+                    room.sync_character_data(role, prof)
         except Exception as e:
-            logger.warning(f"Could not sync opponent duel stats: {e}")
+            logger.warning(f"Could not sync stats for {g_type}: {e}")
 
 async def handle_rpg_room_moved(room: Any, session: AsyncSession, user: Optional[User]):
     if room and getattr(room, "game_type", None) == "rpg_coop" and room.status == "finished" and room.winner == "heroes":

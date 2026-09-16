@@ -231,10 +231,10 @@ const api = {
       method: "POST",
       body: JSON.stringify({ stat: statName, ...extra })
     }),
-  equipRpgItem: (itemUid) =>
+  equipRpgItem: (itemUid, targetSlot) =>
     apiRequest("/api/rpg/inventory/equip", {
       method: "POST",
-      body: JSON.stringify({ item_uid: itemUid })
+      body: JSON.stringify({ item_uid: itemUid, slot: targetSlot })
     }),
   unequipRpgItem: (slotOrUid) =>
     apiRequest("/api/rpg/inventory/unequip", {
@@ -246,6 +246,11 @@ const api = {
       method: "POST",
       body: JSON.stringify({ item_uid: itemUid })
     }),
+  doRebirth: () => apiRequest("/api/rpg/rebirth", { method: "POST" }),
+  upgradeTalent: (talentId) => apiRequest("/api/rpg/talents/upgrade", {
+    method: "POST",
+    body: JSON.stringify({ talent_id: talentId })
+  }),
   getRpgShop: () => apiRequest("/api/rpg/shop"),
   buyRpgShopItem: (itemId) =>
     apiRequest("/api/rpg/shop/buy", {

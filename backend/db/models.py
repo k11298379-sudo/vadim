@@ -214,6 +214,11 @@ class RPGCharacter(Base):
     # Inventory list of item dicts
     inventory: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
 
+    # Endgame RPG Progression
+    rebirths: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    talent_points: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    talents: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}", nullable=False)
+
     # Progress stats
     dungeon_floor: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     dungeon_cleared: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

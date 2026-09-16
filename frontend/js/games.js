@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  let currentGame = "2048"; // 'rpg', '2048', 'tictactoe', 'snake', 'tetris', 'chess', 'durak'
+  let currentGame = "rpg"; // 'rpg', '2048', 'tictactoe', 'snake', 'tetris', 'chess', 'durak'
   window.currentGame = currentGame;
   let isTesterUser = false;
   let isCurrencyEnabled = false;
@@ -83,9 +83,7 @@
       { id: "chess", icon: "♟️", name: "Шахматы", color: "blue" },
       { id: "durak", icon: "🃏", name: "Дурак", color: "red" },
     ];
-    const gamesList = isTesterUser
-      ? [{ id: "rpg", icon: "⚔️", name: "natarGRP", color: "amber" }, ...baseGames]
-      : baseGames;
+    const gamesList = [{ id: "rpg", icon: "⚔️", name: "natarGRP", color: "amber" }, ...baseGames];
 
     const gameCountLabel = `${gamesList.length} игр${isTesterUser ? ' (⚔️ natarGRP)' : ''}`;
 

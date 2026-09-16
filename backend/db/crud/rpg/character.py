@@ -138,11 +138,9 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
     agi_val = int(char.agility)
     int_val = int(char.intelligence)
 
-    # Equipment slots
+    # Equipment slots (supports both legacy weapon/armor/relic and generic slot_1..slot_6)
     eq = char.equipment or {}
-    weapon = eq.get("weapon")
-    armor = eq.get("armor")
-    relic = eq.get("relic")
+    equipped_items = [it for it in eq.values() if it and isinstance(it, dict)]
 
     # Accumulate all equipment bonuses
     gear_str = 0
@@ -166,10 +164,9 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
     flat_mp_regen = 0.0
     w_min = 8
     w_max = 14
+    has_custom_weapon = False
 
-    for slot_item in (weapon, armor, relic):
-        if not slot_item:
-            continue
+    for slot_item in equipped_items:
         sb = slot_item.get("bonus", {})
         all_s = sb.get("all_stats", 0)
         gear_str += sb.get("str", 0) + all_s
@@ -193,14 +190,26 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
         flat_hp_regen += sb.get("hp_regen", 0)
         flat_mp_regen += sb.get("mp_regen", 0)
 
-    if weapon:
-        w_min = weapon.get("min_atk") or weapon.get("base_min") or 8
-        w_max = weapon.get("max_atk") or weapon.get("base_max") or 14
+        # Inherent item defense / hp / attack stats
+        item_type = slot_item.get("type") or slot_item.get("slot")
+        if item_type == "weapon" or "min_atk" in slot_item:
+            if not has_custom_weapon:
+                w_min = slot_item.get("min_atk") or slot_item.get("base_min") or 8
+                w_max = slot_item.get("max_atk") or slot_item.get("base_max") or 14
+                has_custom_weapon = True
+            else:
+                w_min += slot_item.get("min_atk") or slot_item.get("base_min") or 0
+                w_max += slot_item.get("max_atk") or slot_item.get("base_max") or 0
 
-    if armor:
-        flat_def += armor.get("defense") or armor.get("base_def") or armor.get("def") or 0
-        flat_hp += armor.get("hp_bonus") or armor.get("base_hp") or 0
+        if item_type == "armor" or "defense" in slot_item:
+            flat_def += slot_item.get("defense") or slot_item.get("base_def") or slot_item.get("def") or 0
+            flat_hp += slot_item.get("hp_bonus") or slot_item.get("base_hp") or 0
 
+
+    if canonical_class == "wraith_king":
+        lifesteal += 15
+    if canonical_class == "pudge":
+        flat_hp_regen += 2.5
     total_str = str_val + gear_str
     total_agi = agi_val + gear_agi
     total_int = int_val + gear_int
@@ -245,6 +254,19 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
     is_mage = canonical_class in ("invoker", "mage", "wizard")
     damage_type = "magical" if is_mage else "physical"
 
+    # Endgame RPG multipliers
+    rebirths = getattr(char, "rebirths", 0)
+    rebirth_mult = 1.0 + (rebirths * 0.1)
+    
+    talents = getattr(char, "talents", {})
+    talent_lifesteal = talents.get("lifesteal", 0) * 2
+    talent_dodge = talents.get("dodge", 0) * 4
+
+    # Apply rebirth multiplier to core stats
+    stat_hp = int(stat_hp * rebirth_mult)
+    total_min_atk = int(total_min_atk * rebirth_mult)
+    total_max_atk = int(total_max_atk * rebirth_mult)
+
     return {
         "hp_max": stat_hp,
         "mp_max": stat_mp,
@@ -256,18 +278,18 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
         "attack_speed": stat_atk_speed,
         "magic_resist": magic_res,
         "crit_chance": crit_chance,
-        "dodge_chance": dodge_chance,
-        "lifesteal": min(60, lifesteal),
+        "dodge_chance": dodge_chance + talent_dodge,
+        "lifesteal": min(60, lifesteal + talent_lifesteal),
         "damage_block": damage_block,
         "reflect": min(100, reflect),
         "gear_score": gear_score,
-        "primary_attr": cfg["attr"],
+        "primary_attr": cfg.get("attr", "Сила"),
         "primary_damage_bonus": int(primary_bonus),
         "spell_amp": spell_amp,
         "ult_boost": ult_boost,
         "ult_cd_reduct": min(60, ult_cd_reduct),
         "damage_type": damage_type,
-        "skill": cfg["skill"],
+        "skill": cfg.get("skill", {"name": "Навык", "icon": "⚡", "mp_cost": 20, "desc": "Навык героя"}),
         "base_strength": str_val,
         "base_agility": agi_val,
         "base_intelligence": int_val,
@@ -315,6 +337,9 @@ def serialize_character_profile(char: RPGCharacter, user_name: str = "") -> Dict
         "gold": char.gold,
         "gems": char.gems,
         "stat_points": getattr(char, "stat_points", 0),
+        "rebirths": getattr(char, "rebirths", 0),
+        "talent_points": getattr(char, "talent_points", 0),
+        "talents": getattr(char, "talents", {}),
         "strength": stats["total_strength"],
         "agility": stats["total_agility"],
         "intelligence": stats["total_intelligence"],

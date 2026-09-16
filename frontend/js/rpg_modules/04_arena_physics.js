@@ -18,6 +18,7 @@
     // Always update physical loot coins & falling legendary chest
     updatePhysicalCoins();
     updateFallingChest();
+    updatePetLogic();
 
     // Sync DOM action buttons smoothly (cooldowns & block alert)
     if (ARENA.frameCount % 6 === 0) {
@@ -31,11 +32,31 @@
       }
       const ultEl = document.getElementById("rpg-cd-ult");
       if (ultEl) {
-        const ultSec = ARENA.ultCooldown > 0 ? Math.ceil(ARENA.ultCooldown / 60) : 0;
-        const txt = ultSec > 0 ? `${ultSec}с` : "Ульта";
+        let txt = "Ульта";
+        const hClass = (RPG_STATE.profile?.hero_class || "").toLowerCase();
+        if (hClass === "leshrac") {
+          if (p.largoRhapsodyActive) {
+            txt = "ВЫКЛ";
+          } else {
+            const ultSec = ARENA.ultCooldown > 0 ? Math.ceil(ARENA.ultCooldown / 60) : 0;
+            txt = ultSec > 0 ? `${ultSec}с` : "ВКЛ";
+          }
+        } else {
+          const ultSec = ARENA.ultCooldown > 0 ? Math.ceil(ARENA.ultCooldown / 60) : 0;
+          txt = ultSec > 0 ? `${ultSec}с` : "Ульта";
+        }
         if (ultEl.textContent !== txt) ultEl.textContent = txt;
         const btnUlt = document.getElementById("rpg-btn-ult");
-        if (btnUlt) btnUlt.style.opacity = ultSec > 0 ? "0.6" : "1";
+        if (btnUlt) {
+          if (hClass === "leshrac" && p.largoRhapsodyActive) {
+            btnUlt.style.opacity = "1";
+            btnUlt.style.borderColor = "#22c55e";
+          } else {
+            const ultSec = ARENA.ultCooldown > 0 ? Math.ceil(ARENA.ultCooldown / 60) : 0;
+            btnUlt.style.opacity = ultSec > 0 ? "0.6" : "1";
+            btnUlt.style.borderColor = "";
+          }
+        }
       }
 
       // Sync Active Item Cooldowns
@@ -474,6 +495,7 @@
       }
     }
 
+
     // Passive Regen
     p.currentHp = Math.min(p.maxHp, p.currentHp + (stats.hp_regen || 1) / 60);
     p.currentMp = Math.min(p.maxMp, p.currentMp + (stats.mp_regen || 1) / 60);
@@ -539,6 +561,92 @@
     if (p.fleshHeapActive > 0) p.fleshHeapActive--;
     if (p.bladeDanceActive > 0) p.bladeDanceActive--;
     if (p.counterspellActive > 0) p.counterspellActive--;
+    if (p.croakTimer > 0) p.croakTimer--;
+
+    // Largo Amphibian Rhapsody: переключаемая стойка (ВКЛ / ВЫКЛ, длится бесконечно пока есть мана).
+    // Каждые 0.5 секунды (30 кадров) тратит ману, хилит Ларго и наносит AoE-урон вокруг!
+    if (p.largoRhapsodyActive) {
+      if (!p.largoRhapsodyTickTimer || p.largoRhapsodyTickTimer <= 0) {
+        p.largoRhapsodyTickTimer = 30; // 0.5 сек при 60 FPS
+      }
+      p.largoRhapsodyTickTimer--;
+
+      if (p.largoRhapsodyTickTimer <= 0) {
+        p.largoRhapsodyTickTimer = 30; // Сброс таймера на следующие 0.5 секунды
+
+        // Расход маны за тик: 5 MP (или -60% при активном Кваканье Гения -> 2 MP!)
+        let tickCost = 5;
+        if (p.croakTimer > 0) {
+          tickCost = Math.floor(tickCost * 0.4); // 2 MP
+        }
+
+        // Проверка: хватает ли маны на очередной такт
+        if (p.currentMp < tickCost) {
+          p.largoRhapsodyActive = false;
+          spawnFloatingText(p.x, p.y - 30, "Мана закончилась! Рапсодия выключена", "#94a3b8");
+          triggerHaptic("error");
+        } else {
+          p.currentMp -= tickCost;
+          spawnFloatingText(p.x, p.y - 48, `⚡ -${tickCost} MP`, "#38bdf8");
+
+          let ultMult = p.largoRhapsodyDmgMult || 1.0;
+          if (p.edictTimer > 0) {
+            ultMult += 2.5; // +250% урон от ульты пока активен 1 скилл
+          }
+          const spellAmp = (stats.spell_amp !== undefined ? stats.spell_amp : ((p.maxMp || 100) * 0.2));
+
+          // 1. Исцеление Ларго (разделено на 4 для тика 0.5с): +3% макс. HP + INT * 0.55
+          const healAmt = Math.max(12, Math.floor((p.maxHp * 0.03) + ((stats.int || 20) * 0.55)));
+          p.currentHp = Math.min(p.maxHp, p.currentHp + healAmt);
+          spawnFloatingText(p.x, p.y - 30, `💚 +${healAmt} ХП (РАПСОДИЯ)`, "#22c55e");
+
+          // 2. Гармоническая визуальная волна
+          if (!ARENA.specialEffects) ARENA.specialEffects = [];
+          ARENA.specialEffects.push({
+            type: "rhapsody_beat",
+            x: p.x,
+            y: p.y,
+            radius: 25,
+            maxRadius: 280,
+            timer: 28,
+            maxTimer: 28,
+            color: "#22c55e"
+          });
+          ARENA.cameraTrauma = Math.min(1.0, (ARENA.cameraTrauma || 0) + 0.25);
+          triggerHaptic("medium");
+
+          // 3. AoE-урон всем врагам вокруг в радиусе 280px (или линии в 2D) (разделено на 4)
+          const pulseDmg = Math.floor(((stats.max_atk || 30) * 0.7 + spellAmp * 0.25) * ultMult);
+          if (ARENA.topDownMode || ARENA.isRaidBossBattle) {
+            if (ARENA.bossEntity && ARENA.bossEntity.hp > 0) {
+              const dist = Math.hypot(ARENA.bossEntity.x - p.x, ARENA.bossEntity.y - p.y);
+              if (dist <= 280) {
+                const actualDmg = applyDamageToBoss(ARENA.bossEntity, pulseDmg);
+                spawnFloatingText(ARENA.bossEntity.x, ARENA.bossEntity.y - 25, `🐸 -${actualDmg} РАПСОДИЯ`, "#a855f7");
+              }
+            }
+            for (const c of ARENA.creeps) {
+              const dist = Math.hypot(c.x - p.x, c.y - p.y);
+              if (dist <= 280) {
+                if (c.isBoss) {
+                  applyDamageToBoss(c, pulseDmg);
+                } else {
+                  c.hp -= pulseDmg;
+                }
+                spawnFloatingText(c.x, c.y - 15, `🐸 -${pulseDmg}`, "#a855f7");
+              }
+            }
+          } else {
+            for (const c of ARENA.creeps) {
+              if (Math.abs(c.x - p.x) <= 320) {
+                safeDamageCreep(c, pulseDmg, false);
+                spawnFloatingText(c.x, c.y - 15, `🐸 -${pulseDmg} РАПСОДИЯ`, "#a855f7");
+              }
+            }
+          }
+        }
+      }
+    }
 
     // Pudge Rot effect: ticks every 15 frames while active
     if (p.rotActive > 0) {
@@ -2380,4 +2488,65 @@
     });
     ARENA.totalCreepsSpawned++;
   }
-
+
+  function updatePetLogic() {
+    const p = ARENA.player;
+    if (!p) return;
+    const petId = localStorage.getItem("rpg_active_pet") || "dragon";
+    if (!ARENA.pet) {
+      ARENA.pet = { x: p.x - 25, y: p.y - 25, timer: 0 };
+    }
+    const pet = ARENA.pet;
+    pet.type = petId;
+    
+    // Smooth trailing physics behind the player
+    const targetX = p.x - (p.facing === "left" ? -30 : 30);
+    const targetY = p.y - 26 + Math.sin((ARENA.frameCount || 0) * 0.08) * 6;
+    pet.x += (targetX - pet.x) * 0.12;
+    pet.y += (targetY - pet.y) * 0.12;
+    
+    pet.timer = (pet.timer || 0) + 1;
+    
+    // Pet Action every ~2.5 - 3 seconds (150-180 frames)
+    if (petId === "dragon") {
+      if (pet.timer >= 150) {
+        pet.timer = 0;
+        const target = ARENA.bossEntity || (ARENA.creeps && ARENA.creeps[0]);
+        if (target && target.hp > 0) {
+          const dmg = 250 + Math.floor(Math.random() * 150);
+          if (ARENA.playerProjectiles) {
+            ARENA.playerProjectiles.push({
+              x: pet.x,
+              y: pet.y,
+              vx: (target.x - pet.x) * 0.08,
+              vy: (target.y - pet.y) * 0.08,
+              speed: 7,
+              target: target,
+              dmg: dmg,
+              color: "#f97316",
+              radius: 6,
+              isMagic: true,
+              isCrit: true,
+              isPetShot: true
+            });
+          }
+          spawnFloatingText(pet.x, pet.y - 14, "🔥 ДРАКОН!", "#f97316");
+        }
+      }
+    } else if (petId === "fairy") {
+      if (pet.timer >= 180) {
+        pet.timer = 0;
+        const heal = 45;
+        p.currentHp = Math.min(p.maxHp, (p.currentHp || p.maxHp) + heal);
+        p.currentMp = Math.min(p.maxMp, (p.currentMp || p.maxMp) + 15);
+        spawnFloatingText(p.x, p.y - 20, `💚 +${heal} HP`, "#22c55e");
+      }
+    } else if (petId === "wolf") {
+      if (pet.timer >= 240) {
+        pet.timer = 0;
+        spawnFloatingText(pet.x, pet.y - 14, "🐺 ВОЙ ЯРОСТИ!", "#38bdf8");
+      }
+    }
+  }
+
+

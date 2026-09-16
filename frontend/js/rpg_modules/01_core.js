@@ -980,6 +980,14 @@
       if (eq.weapon?.uid === itemUid) item = eq.weapon;
       else if (eq.armor?.uid === itemUid) item = eq.armor;
       else if (eq.relic?.uid === itemUid) item = eq.relic;
+      else {
+        for (let i = 1; i <= 6; i++) {
+          if (eq[`slot_${i}`]?.uid === itemUid) {
+            item = eq[`slot_${i}`];
+            break;
+          }
+        }
+      }
     }
     if (item) {
       RPG_STATE.inspectedItem = item;
@@ -993,10 +1001,10 @@
     renderRoot();
   }
 
-  async function equipItem(itemUid) {
+  async function equipItem(itemUid, targetSlot) {
     try {
       triggerHaptic("medium");
-      const res = await api.equipRpgItem(itemUid);
+      const res = await api.equipRpgItem(itemUid, targetSlot || RPG_STATE.slotFilterModal);
       if (res.profile) {
         RPG_STATE.profile = res.profile;
         syncArenaPlayerStats();

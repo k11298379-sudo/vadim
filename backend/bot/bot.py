@@ -23,7 +23,9 @@ def create_bot_and_dispatcher() -> tuple[Bot, Dispatcher]:
     token = settings.BOT_TOKEN if (settings.BOT_TOKEN and ":" in settings.BOT_TOKEN) else "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
     
     session = None
-    if settings.TELEGRAM_API_SERVER:
+    if settings.TELEGRAM_PROXY:
+        session = AiohttpSession(proxy=settings.TELEGRAM_PROXY)
+    elif settings.TELEGRAM_API_SERVER:
         server = TelegramAPIServer.from_base(settings.TELEGRAM_API_SERVER.rstrip("/"))
         session = AiohttpSession(api=server)
 

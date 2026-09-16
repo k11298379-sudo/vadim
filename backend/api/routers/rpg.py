@@ -1,4 +1,4 @@
-﻿import random
+import random
 import uuid
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException, Body
@@ -92,21 +92,28 @@ async def select_hero_class_endpoint(
     char.intelligence = cfg["int"]
     char.vitality = cfg.get("vit", cfg["str"])
 
-    starter_w = dict(cfg["starter_weapon"])
-    starter_w["uid"] = f"w_{hero_id[:4]}_{str(uuid.uuid4())[:6]}"
-    starter_a = dict(cfg["starter_armor"])
-    starter_a["uid"] = f"a_{hero_id[:4]}_{str(uuid.uuid4())[:6]}"
+    starter_w = dict(cfg.get("starter_weapon", {}))
+    if starter_w:
+        starter_w["uid"] = f"w_{hero_id[:4]}_{str(uuid.uuid4())[:6]}"
+        starter_w["slot"] = "slot_1"
+        
+    starter_a = dict(cfg.get("starter_armor", {}))
+    if starter_a:
+        starter_a["uid"] = f"a_{hero_id[:4]}_{str(uuid.uuid4())[:6]}"
+        starter_a["slot"] = "slot_2"
 
     inventory = list(char.inventory or [])
     eq = dict(char.equipment or {})
 
-    for slot_k in ["weapon", "armor"]:
-        old_it = eq.get(slot_k)
-        if old_it and len(inventory) < 30:
-            inventory.append(old_it)
-
-    eq["weapon"] = starter_w
-    eq["armor"] = starter_a
+    for slot_k, item in eq.items():
+        if item and len(inventory) < 200:
+            inventory.append(item)
+    
+    eq = {}
+    if starter_w:
+        eq["slot_1"] = starter_w
+    if starter_a:
+        eq["slot_2"] = starter_a
     char.equipment = eq
     char.inventory = inventory
     flag_modified(char, "equipment")
@@ -149,9 +156,10 @@ async def equip_item_endpoint(
     """Equips a Dota item from inventory."""
     user_id = user.id if user else 1
     item_uid = payload.get("item_uid", "")
+    target_slot = payload.get("slot") or payload.get("target_slot")
 
     char = await get_or_create_rpg_character(session, user_id=user_id)
-    ok, msg = await equip_item_for_character(session, char, item_uid)
+    ok, msg = await equip_item_for_character(session, char, item_uid, target_slot=target_slot)
     if not ok:
         raise HTTPException(status_code=400, detail=msg)
 
@@ -333,3 +341,60 @@ async def buy_shop_item_endpoint(
         "item": item,
         "profile": serialize_character_profile(char, user_name=user_name)
     }
+
+
+@rpg_router.post("/rebirth")
+async def rebirth_endpoint(
+    user: Optional[User] = Depends(get_optional_webapp_user),
+    session: AsyncSession = Depends(get_db_session)
+):
+    user_id = user.id if user else 1
+    user_name = user.display_name if user else "Герой natarGRP"
+    char = await get_or_create_rpg_character(session, user_id=user_id)
+    
+    if char.level < 100:
+        raise HTTPException(status_code=400, detail="Нужен 100 уровень для перерождения!")
+    
+    char.level = 1
+    char.xp = 0
+    char.rebirths += 1
+    await session.commit()
+    
+    return {"status": "ok", "profile": serialize_character_profile(char, user_name=user_name)}
+
+
+@rpg_router.post("/talents/upgrade")
+async def upgrade_talent_endpoint(
+    payload: Dict[str, Any] = Body(...),
+    user: Optional[User] = Depends(get_optional_webapp_user),
+    session: AsyncSession = Depends(get_db_session)
+):
+    user_id = user.id if user else 1
+    user_name = user.display_name if user else "Герой natarGRP"
+    char = await get_or_create_rpg_character(session, user_id=user_id)
+    
+    talent_id = payload.get("talent_id")
+    if not talent_id:
+        raise HTTPException(status_code=400, detail="Missing talent_id")
+        
+    if char.talent_points <= 0:
+        raise HTTPException(status_code=400, detail="Нет очков талантов!")
+        
+    talents = dict(char.talents or {})
+    current_lvl = talents.get(talent_id, 0)
+    
+    # Cap talents at level 5
+    if current_lvl >= 5:
+        raise HTTPException(status_code=400, detail="Талант максимального уровня!")
+        
+    talents[talent_id] = current_lvl + 1
+    char.talents = talents
+    char.talent_points -= 1
+    
+    # Since we modify a JSON column in SQLAlchemy, we need to flag it as modified
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(char, "talents")
+    
+    await session.commit()
+    
+    return {"status": "ok", "profile": serialize_character_profile(char, user_name=user_name)}

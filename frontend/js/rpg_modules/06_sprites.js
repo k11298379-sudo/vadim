@@ -30,6 +30,16 @@
       ctx.fill();
     }
 
+    if (typeof RPG_ASSETS !== "undefined" && RPG_ASSETS.heroes[hClass]) {
+      const heroAsset = RPG_ASSETS.heroes[hClass];
+      if (heroAsset && heroAsset.complete && heroAsset.naturalWidth > 0) {
+        const size = p.radius * 5.0; // adjust scale
+        ctx.drawImage(heroAsset, -size / 2, -size / 1.1, size, size);
+        ctx.restore();
+        return;
+      }
+    }
+
     // Class-specific Procedural Vector Geometry
     if (hClass.includes("pudge")) {
       // --- PUDGE (Мясник) ---
@@ -670,6 +680,25 @@
       const bScale = (c.radius || 44) / 28;
       ctx.save();
       ctx.scale(bScale, bScale);
+
+      if (typeof RPG_ASSETS !== "undefined") {
+        const bIdKey = (c.bossType || c.boss_id || c.id || c.name || "").toLowerCase();
+        let assetKey = null;
+        if (bIdKey.includes("roshan") || bIdKey.includes("рошан")) assetKey = "roshan";
+        else if (bIdKey.includes("terrorblade") || bIdKey.includes("террорблейд")) assetKey = "terrorblade";
+        else if (bIdKey.includes("void") || bIdKey.includes("хроно") || bIdKey.includes("faceless")) assetKey = "faceless_void";
+
+        if (assetKey && RPG_ASSETS.bosses && RPG_ASSETS.bosses[assetKey]) {
+          const bossAsset = RPG_ASSETS.bosses[assetKey];
+          if (bossAsset && bossAsset.complete && bossAsset.naturalWidth > 0) {
+            // Need to unscale because we scale later, or just draw with proper coords
+            const size = 110; 
+            ctx.drawImage(bossAsset, -size / 2, -size / 1.1, size, size);
+            ctx.restore();
+            return;
+          }
+        }
+      }
 
       const bId = (c.bossType || c.boss_id || c.id || c.name || "").toLowerCase();
       let drawn = false;
@@ -1618,7 +1647,7 @@
     if (!boss) return;
 
     const bannerX = 8;
-    const bannerY = 7;
+    const bannerY = 56; // Опустили вниз, чтобы не перекрывалось кнопками (было 7)
     const bannerW = w - 16;
     const bannerH = 48;
 
@@ -1758,4 +1787,4 @@
 
     ctx.restore();
   }
-
+

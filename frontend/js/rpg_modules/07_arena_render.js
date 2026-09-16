@@ -658,6 +658,44 @@
       ctx.stroke();
     }
 
+    // Largo Croak of Genius Echo Aura
+    if (p.croakTimer > 0) {
+      const pulse = Math.sin((ARENA.frameCount || 0) * 0.25) * 3;
+      ctx.strokeStyle = "rgba(192, 132, 252, 0.85)";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius + 9 + pulse, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Largo Amphibian Rhapsody Aura (активна пока включена ульта)
+    if (p.largoRhapsodyActive || p.largoRhapsodyTimer > 0) {
+      const spin = (ARENA.frameCount || 0) * 0.08;
+      const pulse = Math.sin((ARENA.frameCount || 0) * 0.15) * 4;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.strokeStyle = "rgba(34, 197, 94, 0.85)";
+      ctx.lineWidth = 3;
+      ctx.setLineDash([8, 6]);
+      ctx.beginPath();
+      ctx.arc(0, 0, p.radius + 16 + pulse, spin, spin + Math.PI * 2);
+      ctx.stroke();
+
+      // Golden harmonic outer ring
+      ctx.strokeStyle = "rgba(250, 204, 21, 0.6)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.arc(0, 0, p.radius + 22 - pulse * 0.5, -spin * 1.5, -spin * 1.5 + Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      // Spawns soft floating musical notes around Largo
+      if ((ARENA.frameCount || 0) % 45 === 0) {
+        spawnFloatingText(p.x + (Math.random() - 0.5) * 30, p.y - 15, "🎶", "#4ade80");
+      }
+    }
+
     // --- VISUAL PLAYER STATUS EFFECTS (STUN, SLOW, SILENCE, DOOM, DOTs) ---
     if (p.slowTimer > 0) {
       ctx.save();
@@ -761,6 +799,24 @@
       ctx.beginPath();
       ctx.arc(0, 0, sa.radius, -Math.PI * 0.4, Math.PI * 0.4);
       ctx.stroke();
+      ctx.restore();
+    }
+
+    // ---- 9.1 ACTIVE BATTLE PET (FAMILIAR) ----
+    if (ARENA.pet) {
+      ctx.save();
+      const pet = ARENA.pet;
+      const petIcon = pet.type === "fairy" ? "🧚" : (pet.type === "wolf" ? "🐺" : "🐉");
+      // Gentle floating shadow/glow
+      ctx.fillStyle = pet.type === "fairy" ? "rgba(34, 197, 94, 0.25)" : (pet.type === "wolf" ? "rgba(56, 189, 248, 0.25)" : "rgba(249, 115, 22, 0.25)");
+      ctx.beginPath();
+      ctx.arc(pet.x, pet.y + 12, 10, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.font = "20px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(petIcon, pet.x, pet.y);
       ctx.restore();
     }
 
@@ -927,6 +983,76 @@
         ctx.moveTo(randX - 25, randY - 20);
         ctx.lineTo(randX + 25, randY + 20);
         ctx.stroke();
+      } else if (fx.type === "croak_blast") {
+        // --- LARGO CROAK OF GENIUS (Музыкальная звуковая волна) ---
+        ctx.save();
+        const prog = 1 - (fx.timer / (fx.maxTimer || 35));
+        const alpha = Math.max(0, fx.timer / (fx.maxTimer || 35));
+        ctx.shadowColor = "#c084fc";
+        ctx.shadowBlur = 20;
+        ctx.strokeStyle = `rgba(192, 132, 252, ${alpha * 0.9})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.ellipse(fx.x, fx.y, fx.radius * prog, (fx.radius * 0.45) * prog, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Musical note symbols floating up
+        const notes = ["🎵", "🎶", "🐸", "✨"];
+        for (let s = 0; s < 3; s++) {
+          const nX = fx.x + Math.sin(prog * 8 + s * 2) * (fx.radius * 0.6 * prog);
+          const nY = fx.y - (prog * 50 + s * 12);
+          ctx.font = "16px sans-serif";
+          ctx.fillText(notes[s % notes.length], nX - 8, nY);
+        }
+        ctx.restore();
+      } else if (fx.type === "rhapsody_beat") {
+        // --- LARGO AMPHIBIAN RHAPSODY BEAT (Каждую секунду: зеленое исцеление + золотой урон) ---
+        ctx.save();
+        const prog = 1 - (fx.timer / (fx.maxTimer || 35));
+        const alpha = Math.max(0, fx.timer / (fx.maxTimer || 35));
+        
+        // Healing green inner ring
+        ctx.shadowColor = "#22c55e";
+        ctx.shadowBlur = 25;
+        ctx.strokeStyle = `rgba(34, 197, 94, ${alpha * 0.9})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.ellipse(fx.x, fx.y, (fx.radius * 0.6) * prog, (fx.radius * 0.3) * prog, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Golden shockwave outer ring
+        ctx.shadowColor = "#facc15";
+        ctx.shadowBlur = 20;
+        ctx.strokeStyle = `rgba(250, 204, 21, ${alpha * 0.85})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.ellipse(fx.x, fx.y, fx.radius * prog, (fx.radius * 0.45) * prog, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Floating musical notes
+        const notes = ["🎵", "🎶", "💚", "✨", "🐸"];
+        for (let s = 0; s < 4; s++) {
+          const ang = (s * Math.PI / 2) + prog * 2;
+          const nX = fx.x + Math.cos(ang) * (fx.radius * 0.7 * prog);
+          const nY = fx.y + Math.sin(ang) * (fx.radius * 0.35 * prog) - (prog * 30);
+          ctx.font = "15px sans-serif";
+          ctx.fillText(notes[s % notes.length], nX - 7, nY);
+        }
+        ctx.restore();
+      } else if (fx.type === "rhapsody_aura") {
+        // --- LARGO CONTINUOUS AURA ---
+        const p = ARENA.player;
+        if (p && p.largoRhapsodyTimer > 0) {
+          ctx.save();
+          const ang = ((ARENA.frameCount || 0) * 0.06) % (Math.PI * 2);
+          ctx.strokeStyle = "rgba(34, 197, 94, 0.45)";
+          ctx.lineWidth = 2.5;
+          ctx.setLineDash([10, 8]);
+          ctx.beginPath();
+          ctx.ellipse(p.x, p.y + 4, 180, 80, ang, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
       } else if (fx.type === "topdown_meteor") {
         // --- INVOKER CHAOS METEOR (Падающая огненная "котлета") ---
         ctx.save();
@@ -1397,6 +1523,63 @@
           ctx.stroke();
         }
         ctx.restore();
+
+      } else if (fx.type === "croak_blast") {
+        // --- LARGO CROAK OF GENIUS (Акустическая волна кваканья) ---
+        ctx.save();
+        const prog = 1 - (fx.timer / (fx.maxTimer || 30));
+        const alpha = Math.max(0, 1 - prog);
+        const curR = 15 + prog * (fx.radius || 85);
+        ctx.strokeStyle = `rgba(168, 85, 247, ${0.9 * alpha})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(fx.x, fx.y, curR, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = `rgba(216, 180, 254, ${0.7 * alpha})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(fx.x, fx.y, curR * 0.7, 0, Math.PI * 2);
+        ctx.stroke();
+
+        for (let n = 0; n < 3; n++) {
+          const noteAngle = (n * Math.PI * 2 / 3) + prog * 2;
+          const nx = fx.x + Math.cos(noteAngle) * curR * 0.8;
+          const ny = fx.y + Math.sin(noteAngle) * curR * 0.8;
+          ctx.fillStyle = `rgba(250, 204, 21, ${alpha})`;
+          ctx.font = "bold 14px sans-serif";
+          ctx.fillText("🎵", nx - 6, ny);
+        }
+        ctx.restore();
+
+      } else if (fx.type === "rhapsody_beat") {
+        // --- LARGO AMPHIBIAN RHAPSODY BEAT (Гармонический взрыв хила и урона) ---
+        ctx.save();
+        const prog = 1 - (fx.timer / (fx.maxTimer || 25));
+        const alpha = Math.max(0, 1 - prog);
+        const curR = fx.radius + (fx.maxRadius - fx.radius) * prog;
+
+        // Emerald healing pulse
+        ctx.strokeStyle = `rgba(34, 197, 94, ${0.85 * alpha})`;
+        ctx.lineWidth = 4.5;
+        ctx.beginPath();
+        ctx.arc(fx.x, fx.y, curR, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Golden harmonic ring
+        ctx.strokeStyle = `rgba(250, 204, 21, ${0.75 * alpha})`;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(fx.x, fx.y, curR * 0.85, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Central harmonic soft glow
+        ctx.fillStyle = `rgba(74, 222, 128, ${0.2 * alpha})`;
+        ctx.beginPath();
+        ctx.arc(fx.x, fx.y, curR * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
       }
     }
 
@@ -1450,20 +1633,20 @@
     } else {
       ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
       ctx.beginPath();
-      safeRoundRect(ctx, 10, 8, clientW - 20, 28, 12);
+      safeRoundRect(ctx, 10, 56, clientW - 20, 28, 12); // Moved down from 8 to 56
       ctx.fill();
 
       ctx.font = "bold 11px sans-serif";
       ctx.fillStyle = "#facc15";
       ctx.textAlign = "left";
-      ctx.fillText(`Этаж ${RPG_STATE.profile?.dungeon_floor || 1} • Волна ${ARENA.waveNumber}/${ARENA.waveMax}`, 18, 26);
+      ctx.fillText(`Этаж ${RPG_STATE.profile?.dungeon_floor || 1} • Волна ${ARENA.waveNumber}/${ARENA.waveMax}`, 18, 74); // 26 -> 74
 
       ctx.textAlign = "right";
       ctx.fillStyle = "#94a3b8";
       const killLabel = ARENA.isRaidBossBattle
         ? `👑 РЕЙД-БОСС: ${ARENA.bossEntity?.name || "БОСС"}`
         : `Убито: ${ARENA.creepsKilledInWave}/${ARENA.creepsNeededForWave}`;
-      ctx.fillText(killLabel, w - 18, 26);
+      ctx.fillText(killLabel, w - 18, 74); // 26 -> 74
     }
 
     // Skill 1 & Ult CD in HUD
@@ -2097,4 +2280,4 @@
       </div>
     `;
   }
-
+

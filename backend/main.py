@@ -138,7 +138,7 @@ async def lifespan(app: FastAPI):
 
     # Start Aiogram polling and register command hints in background task
     global polling_task
-    if settings.BOT_TOKEN and not settings.BOT_TOKEN.startswith("1234567890:ABCdef"):
+    if settings.ENABLE_BOT_POLLING and settings.BOT_TOKEN and not settings.BOT_TOKEN.startswith("1234567890:ABCdef"):
         async def init_telegram_bot():
             try:
                 logger.info("Registering Telegram command autocomplete hints and menu button...")

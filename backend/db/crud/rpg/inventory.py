@@ -14,10 +14,11 @@ from backend.db.crud.rpg.inventory_sell import sell_item_from_inventory, sell_mu
 async def equip_item_for_character(
     session: AsyncSession,
     char: RPGCharacter,
-    item_uid: str
+    item_uid: str,
+    target_slot: Optional[str] = None
 ) -> Tuple[bool, str]:
-    """Equips an item from inventory to character slot."""
-    inventory = list(char.inventory)
+    """Equips an item from inventory to character slot (1 of 6)."""
+    inventory = list(char.inventory or [])
     target_idx = None
     for idx, it in enumerate(inventory):
         if it.get("uid") == item_uid or (not it.get("uid") and str(it.get("id")) == str(item_uid)):
@@ -32,31 +33,51 @@ async def equip_item_for_character(
         import uuid
         item["uid"] = str(uuid.uuid4())[:8]
 
-    raw_slot = item.get("slot") or item.get("type") or ""
-    slot = str(raw_slot).strip().lower()
-    if slot not in ["weapon", "armor", "relic"]:
+    # Only equippable items (not potions)
+    t = (item.get("type") or item.get("slot") or "").lower()
+    if t in ["potion", "consumable"]:
+        inventory.append(item)
         return False, "Этот предмет нельзя надеть в слот снаряжения."
 
-    item["slot"] = slot
-    item["type"] = slot
-
     equipment = dict(char.equipment or {})
-    old_equipped = equipment.get(slot)
+    slots = ["slot_1", "slot_2", "slot_3", "slot_4", "slot_5", "slot_6"]
+
+    slot_to_use = None
+    if target_slot and str(target_slot).strip():
+        s_clean = str(target_slot).strip().lower()
+        if s_clean in slots or s_clean in ["weapon", "armor", "relic"]:
+            slot_to_use = s_clean
+
+    # Try to find empty slot among slot_1..slot_6
+    if not slot_to_use:
+        for s in slots:
+            if s not in equipment or not equipment[s]:
+                slot_to_use = s
+                break
+
+    # If all slots are occupied and no slot specified, replace slot_1 (or first occupied slot)
+    if not slot_to_use:
+        for s in slots:
+            if s in equipment and equipment[s]:
+                slot_to_use = s
+                break
+        if not slot_to_use:
+            slot_to_use = "slot_1"
+
+    old_equipped = equipment.get(slot_to_use)
     if old_equipped:
-        if not old_equipped.get("slot"):
-            old_equipped["slot"] = slot
-        if not old_equipped.get("type"):
-            old_equipped["type"] = slot
         inventory.append(old_equipped)
 
-    equipment[slot] = item
+    item["slot"] = slot_to_use
+    equipment[slot_to_use] = item
+
     char.equipment = equipment
     char.inventory = inventory
     flag_modified(char, "equipment")
     flag_modified(char, "inventory")
     await session.commit()
     await session.refresh(char)
-    return True, f"Предмет «{item['name']}» успешно надет!"
+    return True, f"Предмет «{item.get('name', 'Снаряжение')}» успешно надет!"
 
 
 async def unequip_item_from_character(
@@ -66,29 +87,36 @@ async def unequip_item_from_character(
 ) -> Tuple[bool, str]:
     """Unequips an item from character equipment slot back into inventory."""
     inventory = list(char.inventory or [])
-    if len(inventory) >= 30:
-        return False, "Инвентарь полон (максимум 30 слотов). Освободите место перед снятием!"
+    if len(inventory) >= 200:
+        return False, "Инвентарь полон (максимум 200 слотов). Освободите место перед снятием!"
 
     equipment = dict(char.equipment or {})
     target_slot = None
+    cleaned = (slot_or_uid or "").strip().lower()
 
-    cleaned = slot_or_uid.strip().lower()
-    if cleaned in ["weapon", "armor", "relic"]:
+    # 1. Direct slot key match (e.g. "slot_1", "slot_2", "weapon", "armor", "relic")
+    if cleaned in equipment and equipment[cleaned]:
         target_slot = cleaned
     else:
-        for s in ["weapon", "armor", "relic"]:
-            if equipment.get(s) and (equipment[s].get("uid") == slot_or_uid or equipment[s].get("type") == slot_or_uid):
-                target_slot = s
-                break
+        # 2. Match by item UID or ID across all keys
+        for s, eq_item in list(equipment.items()):
+            if eq_item and isinstance(eq_item, dict):
+                if str(eq_item.get("uid")) == str(slot_or_uid) or str(eq_item.get("id")) == str(slot_or_uid):
+                    target_slot = s
+                    break
+
+        # 3. Fallback: match by type or slot name
+        if not target_slot and cleaned:
+            for s, eq_item in list(equipment.items()):
+                if eq_item and isinstance(eq_item, dict):
+                    if str(eq_item.get("type", "")).lower() == cleaned or str(eq_item.get("slot", "")).lower() == cleaned:
+                        target_slot = s
+                        break
 
     if not target_slot or not equipment.get(target_slot):
         return False, "В этом слоте нет надетого предмета."
 
     item = equipment.pop(target_slot)
-    if not item.get("slot"):
-        item["slot"] = target_slot
-    if not item.get("type"):
-        item["type"] = target_slot
     inventory.append(item)
 
     char.equipment = equipment

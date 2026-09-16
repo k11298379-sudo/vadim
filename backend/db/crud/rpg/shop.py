@@ -35,8 +35,8 @@ async def buy_item_from_shop(
 ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
     """Buys an item or consumable from the Shop."""
     inventory = list(char.inventory or [])
-    if len(inventory) >= 30:
-        return False, "Инвентарь полон (максимум 30 слотов). Освободите место перед покупкой!", None
+    if len(inventory) >= 200:
+        return False, "Инвентарь полон (максимум 200 слотов). Освободите место перед покупкой!", None
 
     shop_item = next((it for it in NATAR_SHOP_CATALOG if it["id"] == item_id), None)
     if not shop_item:
@@ -115,7 +115,7 @@ async def upgrade_character_base_stat(
         char.stat_points = stat_points - 1
         used_point = True
     else:
-        cost = int(current_val * 20)
+        cost = int((current_val ** 1.35) * 6)
         if char.gold < cost:
             return False, f"Недостаточно золота! Нужно {cost} 🪙 (у вас {char.gold} 🪙) или очки характеристик."
         char.gold -= cost
@@ -152,6 +152,15 @@ async def add_xp_and_gold_to_character(
             char.level += 1
             char.stat_points = getattr(char, "stat_points", 0) + 1
             char.gems += 2
+            if char.level % 5 == 0:
+                char.talent_points = getattr(char, "talent_points", 0) + 1
+            
+            # Apply automatic stat gains
+            hero_cfg = NATAR_HEROES.get(char.hero_class, NATAR_HEROES.get("pudge", {}))
+            char.strength = int(char.strength + hero_cfg.get("str_gain", 2.0))
+            char.agility = int(char.agility + hero_cfg.get("agi_gain", 2.0))
+            char.intelligence = int(char.intelligence + hero_cfg.get("int_gain", 2.0))
+            
             leveled_up = True
         else:
             break

@@ -220,6 +220,18 @@
         ultIcon: "💥",
         ultCd: 840, // 14 sec
         ultDesc: "Колоссальный взрыв маны по скоплению врагов!"
+      },
+      leshrac: {
+        isRanged: true,
+        attackRange: 450,
+        skill1Name: "Кваканье Гения",
+        skill1Icon: "🎵",
+        skill1Cd: 420, // 7 sec
+        skill1Desc: "3-й скилл Ларго: -60% расхода маны + эхо-реверберация урона!",
+        ultName: "Рапсодия",
+        ultIcon: "🐸",
+        ultCd: 30, // 0.5s toggle debounce
+        ultDesc: "Вкл/Выкл: длится бесконечно! Каждые 2 сек тратит ману, наносит урон всем вокруг и хилит Ларго!"
       }
     };
     return configs[hClass] || configs.pudge;
@@ -305,6 +317,8 @@
     ARENA.player.bladeDanceActive = 0;
     ARENA.player.rotActive = 0;
     ARENA.player.counterspellActive = 0;
+    ARENA.player.largoRhapsodyActive = false;
+    ARENA.player.largoRhapsodyTickTimer = 0;
 
     ARENA.skill1Cooldown = 0;
     ARENA.skill1CooldownMax = skillCfg.skill1Cd;
@@ -540,4 +554,4 @@
   }
 
 
-  // REAL RPG DAMAGE: Hero ATK vs Boss Defense (no more %-HP cheese!)
+  // REAL RPG DAMAGE: Hero ATK vs Boss Defense (no more %-HP cheese!)

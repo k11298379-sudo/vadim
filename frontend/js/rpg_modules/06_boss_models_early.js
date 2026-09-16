@@ -5,6 +5,22 @@
 
 function drawBossModelEarly(ctx, b, bId, time) {
   const facing = b.facing || 1;
+  let assetName = null;
+  if (bId.includes("faceless") || bId.includes("войд")) assetName = "faceless_void";
+
+  if (assetName && typeof RPG_ASSETS !== "undefined" && RPG_ASSETS.bosses[assetName]) {
+    const bossAsset = RPG_ASSETS.bosses[assetName];
+    if (bossAsset && bossAsset.complete && bossAsset.naturalWidth > 0) {
+      ctx.save();
+      if (facing === -1) {
+        ctx.scale(-1, 1);
+      }
+      const size = b.radius * 6.0;
+      ctx.drawImage(bossAsset, -size / 2, -size / 1.1, size, size);
+      ctx.restore();
+      return true;
+    }
+  }
 
   // 1. GOLEM (Древний Гранитный Голем)
   if (bId.includes("golem") || bId.includes("голем")) {

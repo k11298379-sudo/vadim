@@ -13,6 +13,14 @@ class Settings(BaseSettings):
         default="",
         description="Custom Telegram Bot API server / reverse proxy (e.g. Cloudflare Worker)"
     )
+    TELEGRAM_PROXY: str = Field(
+        default="http://127.0.0.1:10809",
+        description="HTTP/SOCKS proxy for Telegram Bot API"
+    )
+    ENABLE_BOT_POLLING: bool = Field(
+        default=False,
+        description="Whether to run aiogram long polling in backend"
+    )
     
     PORT: int = Field(default=8000, description="Port to listen on")
     HOST: str = Field(default="0.0.0.0", description="Host to listen on")

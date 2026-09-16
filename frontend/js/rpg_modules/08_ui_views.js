@@ -124,9 +124,8 @@
     const tabs = [
       { id: "farm", name: "Фарм", icon: "⚔️" },
       { id: "hero", name: "Герой", icon: p.class_icon || "🛡️" },
-      { id: "coop", name: "Боссы", icon: "🐉" },
-      { id: "pvp", name: "Дуэли", icon: "🥊" },
-      { id: "leaderboard", name: "Топ", icon: "🏆" }
+      { id: "talents", name: "Таланты", icon: "🧬" },
+      { id: "coop", name: "Боссы", icon: "🐉" }
     ];
 
     const xp = p.xp !== undefined ? p.xp : (p.experience || 0);
@@ -175,7 +174,7 @@
         </div>
 
         <!-- Navigation Subtabs -->
-        <div class="grid grid-cols-5 gap-1 p-1 rounded-2xl bg-slate-200/80 dark:bg-slate-800/90 text-[11px] font-bold">
+        <div class="grid grid-cols-4 gap-1 p-1 rounded-2xl bg-slate-200/80 dark:bg-slate-800/90 text-[11px] font-bold">
           ${tabs
             .map(
               (t) => `
@@ -201,6 +200,8 @@
         return renderFarmTabHTML();
       case "hero":
         return renderHeroProfileHTML();
+      case "talents":
+        return renderTalentsTab();
       case "coop":
         return renderCoopRaidsHTML();
       case "pvp":
@@ -251,6 +252,31 @@
           <div class="w-full h-2.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
             <div class="h-full bg-gradient-to-r from-amber-500 to-yellow-400 transition-all duration-300" style="width: ${xpPct}%"></div>
           </div>
+          <div class="flex items-center justify-between text-xs font-bold mt-2 pt-2 border-t border-slate-200/50 dark:border-slate-700/50">
+            <span class="text-slate-500 dark:text-slate-400">Убито боссов (Рейды)</span>
+            <span class="text-emerald-600 dark:text-emerald-400 font-extrabold">🐉 ${p.boss_kills || 0}</span>
+          </div>
+        </div>
+
+        <!-- REBIRTH & TALENTS SUMMARY CARD -->
+        <div class="theme-card p-3.5 rounded-2xl bg-gradient-to-r from-purple-950/40 via-slate-900 to-indigo-950/40 border border-purple-500/30 shadow-sm space-y-2.5">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="text-xl">🧬</span>
+              <div>
+                <div class="text-xs font-black text-purple-300">Перерождение и Таланты</div>
+                <div class="text-[10px] text-slate-400">Ранг: <b class="text-white">${p.rebirths || 0}</b> (+${(p.rebirths || 0) * 10}% ко всем статам)</div>
+              </div>
+            </div>
+            <button onclick="window.RPG.setSubTab('talents')" class="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 active:scale-95 text-white font-black text-[11px] shadow-sm flex items-center gap-1">
+              <span>Открыть</span>
+              <span>⚡</span>
+            </button>
+          </div>
+          <div class="flex items-center justify-between text-[11px] pt-1.5 border-t border-purple-500/20">
+            <span class="text-slate-400">Доступно очков талантов:</span>
+            <span class="text-emerald-400 font-black">${p.talent_points || 0} очк.</span>
+          </div>
         </div>
 
         <!-- 3 ATTRIBUTES SYSTEM (СИЛА, ЛОВКОСТЬ, ИНТЕЛЛЕКТ) -->
@@ -284,12 +310,12 @@
               <button ${isUpgradingStat ? "disabled" : ""} onclick="window.RPG.upgradeStat('str')" class="px-3.5 py-2 rounded-xl ${isUpgradingStat ? "opacity-50 pointer-events-none" : ""} ${
                 points > 0
                   ? "bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 animate-pulse ring-2 ring-emerald-400/50"
-                  : (p.gold || 0) >= baseStr * 20
+                  : (p.gold || 0) >= Math.floor(Math.pow(baseStr, 1.35) * 6)
                     ? "bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500"
                     : "bg-slate-300 dark:bg-slate-700 opacity-60 cursor-not-allowed"
               } active:scale-90 text-white font-black text-xs shadow-sm flex items-center gap-1">
                 <span>+</span>
-                <span class="text-[10px]">${points > 0 ? "Очко ✨" : `${baseStr * 20} 🪙`}</span>
+                <span class="text-[10px]">${points > 0 ? "Очко ✨" : `${Math.floor(Math.pow(baseStr, 1.35) * 6).toLocaleString()} 🪙`}</span>
               </button>
             </div>
 
@@ -305,12 +331,12 @@
               <button ${isUpgradingStat ? "disabled" : ""} onclick="window.RPG.upgradeStat('agi')" class="px-3.5 py-2 rounded-xl ${isUpgradingStat ? "opacity-50 pointer-events-none" : ""} ${
                 points > 0
                   ? "bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 animate-pulse ring-2 ring-emerald-400/50"
-                  : (p.gold || 0) >= baseAgi * 20
+                  : (p.gold || 0) >= Math.floor(Math.pow(baseAgi, 1.35) * 6)
                     ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500"
                     : "bg-slate-300 dark:bg-slate-700 opacity-60 cursor-not-allowed"
               } active:scale-90 text-white font-black text-xs shadow-sm flex items-center gap-1">
                 <span>+</span>
-                <span class="text-[10px]">${points > 0 ? "Очко ✨" : `${baseAgi * 20} 🪙`}</span>
+                <span class="text-[10px]">${points > 0 ? "Очко ✨" : `${Math.floor(Math.pow(baseAgi, 1.35) * 6).toLocaleString()} 🪙`}</span>
               </button>
             </div>
 
@@ -326,12 +352,12 @@
               <button ${isUpgradingStat ? "disabled" : ""} onclick="window.RPG.upgradeStat('int')" class="px-3.5 py-2 rounded-xl ${isUpgradingStat ? "opacity-50 pointer-events-none" : ""} ${
                 points > 0
                   ? "bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 animate-pulse ring-2 ring-emerald-400/50"
-                  : (p.gold || 0) >= baseInt * 20
+                  : (p.gold || 0) >= Math.floor(Math.pow(baseInt, 1.35) * 6)
                     ? "bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500"
                     : "bg-slate-300 dark:bg-slate-700 opacity-60 cursor-not-allowed"
               } active:scale-90 text-white font-black text-xs shadow-sm flex items-center gap-1">
                 <span>+</span>
-                <span class="text-[10px]">${points > 0 ? "Очко ✨" : `${baseInt * 20} 🪙`}</span>
+                <span class="text-[10px]">${points > 0 ? "Очко ✨" : `${Math.floor(Math.pow(baseInt, 1.35) * 6).toLocaleString()} 🪙`}</span>
               </button>
             </div>
           </div>
@@ -400,9 +426,7 @@
           </h3>
 
           <div class="grid grid-cols-3 gap-2">
-            ${renderEquippedSlotHTML("weapon", "Оружие", "🗡️", eq.weapon)}
-            ${renderEquippedSlotHTML("armor", "Броня", "🛡️", eq.armor)}
-            ${renderEquippedSlotHTML("relic", "Реликвия", "💍", eq.relic)}
+            ${[1,2,3,4,5,6].map(i => renderEquippedSlotHTML('slot_'+i, 'Слот '+i, '🎒', eq['slot_'+i] || (i===1 ? eq.weapon : i===2 ? eq.armor : i===3 ? eq.relic : null))).join('')}
           </div>
         </div>
 
@@ -414,7 +438,7 @@
               <h3 class="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-200">
                 Инвентарь
               </h3>
-              <span class="text-[10px] font-bold text-slate-400">(${inv.length} / 30)</span>
+              <span class="text-[10px] font-bold text-slate-400">(${inv.length} / 60)</span>
             </div>
 
             <!-- Toggle Selection Mode Button -->
@@ -571,7 +595,7 @@
     const p = RPG_STATE.profile || {};
     const eq = p.equipment || {};
     const targetSlot = (item.slot || item.type || "").toLowerCase();
-    const isEquippable = ["weapon", "armor", "relic"].includes(targetSlot);
+    const isEquippable = ["weapon", "armor", "relic"].includes(targetSlot) || targetSlot.startsWith("slot_");
     const currEquipped = isEquippable ? (eq[targetSlot] || eq[item.slot] || eq[item.type]) : null;
     const sellPrice = getItemSellPrice(item);
 
@@ -748,7 +772,7 @@
           </div>
 
           <!-- Virtual Touch Joystick (Bottom Left, clear of action buttons) -->
-          <div id="rpg-virtual-joystick-zone"
+          ${(ARENA.topDownMode || ARENA.isRaidBossBattle) ? `<div id="rpg-virtual-joystick-zone"
                class="absolute bottom-3 left-3 w-24 h-24 flex items-center justify-center pointer-events-auto z-30 select-none touch-none">
             <div id="rpg-joystick-base" class="relative w-20 h-20 rounded-full border-2 border-amber-400/50 bg-slate-900/80 shadow-2xl flex items-center justify-center backdrop-blur-md ring-2 ring-amber-500/20">
               <span class="absolute top-1 text-[9px] text-amber-300/50">▲</span>
@@ -759,13 +783,21 @@
                 <span class="text-xs font-black text-slate-950">🕹️</span>
               </div>
             </div>
-          </div>
+          </div>` : ""}
 
-          <!-- Potion button (above joystick) -->
-          <div class="absolute bottom-28 left-3 z-20">
-            <button onclick="window.RPG.usePotionAction()" title="Зелье / Сыр [F / 1]" class="w-10 h-10 rounded-2xl bg-emerald-600/95 border-2 border-emerald-300 text-white font-bold text-lg flex items-center justify-center shadow-lg active:scale-90 transition-transform">
+          <!-- Active Items (above joystick) -->
+          <div class="absolute bottom-28 left-3 z-20 flex flex-col gap-2">
+            <button ontouchstart="event.preventDefault(); window.RPG.usePotionAction()" onmousedown="event.preventDefault(); window.RPG.usePotionAction()" onclick="window.RPG.usePotionAction()" title="Зелье / Сыр [F / 1]" class="w-10 h-10 rounded-2xl bg-emerald-600/95 border-2 border-emerald-300 text-white font-bold text-lg flex items-center justify-center shadow-lg active:scale-90 transition-transform">
               🧪
             </button>
+            ${(window.RPG.getEquippedActiveItems ? window.RPG.getEquippedActiveItems() : []).map((act, idx) => {
+              const cdSec = act.currentCd > 0 ? Math.ceil(act.currentCd / 60) : 0;
+              return `
+              <button id="rpg-btn-item-${idx}" ontouchstart="event.preventDefault(); window.RPG.useActiveItemAction(${idx})" onmousedown="event.preventDefault(); window.RPG.useActiveItemAction(${idx})" onclick="window.RPG.useActiveItemAction(${idx})" title="${act.name}" class="w-10 h-10 rounded-2xl ${cdSec > 0 ? 'bg-slate-800/80 border border-slate-700 opacity-60' : 'bg-indigo-600/95 border-2 border-indigo-300'} text-white font-bold text-lg flex flex-col items-center justify-center shadow-lg active:scale-90 transition-transform relative">
+                <span class="text-base">${act.def.icon || '✨'}</span>
+                <span id="rpg-cd-item-${idx}" class="text-[8px] font-bold absolute bottom-0.5">${cdSec > 0 ? cdSec + 'с' : ''}</span>
+              </button>`;
+            }).join('')}
           </div>
 
           <!-- Right Action Buttons (Attack, Dash / Roll, Skill 1, Ultimate) -->
@@ -773,13 +805,13 @@
             <!-- Top row: Skill 1 + Ultimate -->
             <div class="flex items-center gap-1.5">
               <!-- Hero Skill 1 Button [E] -->
-              <button id="rpg-btn-skill1" onclick="window.RPG.castSkill1Action()" title="${cfg.skill1Name} [E]" class="w-11 h-11 rounded-2xl ${s1CdSec > 0 ? 'bg-slate-800/80 border border-slate-700 opacity-60' : 'bg-gradient-to-r from-blue-600 to-cyan-600 border-2 border-cyan-400'} text-white font-black text-sm flex flex-col items-center justify-center shadow-lg active:scale-90 transition-transform">
+              <button id="rpg-btn-skill1" ontouchstart="event.preventDefault(); window.RPG.castSkill1Action()" onmousedown="event.preventDefault(); window.RPG.castSkill1Action()" onclick="window.RPG.castSkill1Action()" title="${cfg.skill1Name} [E]" class="w-11 h-11 rounded-2xl ${s1CdSec > 0 ? 'bg-slate-800/80 border border-slate-700 opacity-60' : 'bg-gradient-to-r from-blue-600 to-cyan-600 border-2 border-cyan-400'} text-white font-black text-sm flex flex-col items-center justify-center shadow-lg active:scale-90 transition-transform">
                 <span class="text-base">${cfg.skill1Icon || '⚡'}</span>
                 <span id="rpg-cd-skill1" class="text-[8px] font-bold">${s1CdSec > 0 ? `${s1CdSec}с` : 'Скилл'}</span>
               </button>
 
               <!-- Hero Ultimate Skill Button [Q] -->
-              <button id="rpg-btn-ult" onclick="window.RPG.castUltimateAction()" title="${cfg.ultName} [Q]" class="w-11 h-11 rounded-2xl ${ultCdSec > 0 ? 'bg-slate-800/80 border border-slate-700 opacity-60' : 'bg-gradient-to-r from-purple-600 to-indigo-600 border-2 border-purple-400'} text-white font-black text-sm flex flex-col items-center justify-center shadow-lg active:scale-90 transition-transform">
+              <button id="rpg-btn-ult" ontouchstart="event.preventDefault(); window.RPG.castUltimateAction()" onmousedown="event.preventDefault(); window.RPG.castUltimateAction()" onclick="window.RPG.castUltimateAction()" title="${cfg.ultName} [Q]" class="w-11 h-11 rounded-2xl ${ultCdSec > 0 ? 'bg-slate-800/80 border border-slate-700 opacity-60' : 'bg-gradient-to-r from-purple-600 to-indigo-600 border-2 border-purple-400'} text-white font-black text-sm flex flex-col items-center justify-center shadow-lg active:scale-90 transition-transform">
                 <span class="text-base">${cfg.ultIcon || '🌟'}</span>
                 <span id="rpg-cd-ult" class="text-[8px] font-bold">${ultCdSec > 0 ? `${ultCdSec}с` : 'Ульта'}</span>
               </button>
@@ -788,14 +820,14 @@
             <!-- Bottom row: Attack + Dash -->
             <div class="flex items-center gap-1.5">
               <!-- Attack / Shoot Button [Space / Click] -->
-              <button id="rpg-btn-attack" onclick="window.RPG.playerSlashAttackAction()" title="Атака [Пробел / Клик]"
+              <button id="rpg-btn-attack" ontouchstart="event.preventDefault(); window.RPG.playerSlashAttackAction()" onmousedown="event.preventDefault(); window.RPG.playerSlashAttackAction()" onclick="window.RPG.playerSlashAttackAction()" title="Атака [Пробел / Клик]"
                 class="w-11 h-11 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 border-2 border-amber-300 text-white font-black text-xs flex flex-col items-center justify-center shadow-lg shadow-red-600/40 active:scale-90 transition-transform">
                 <span class="text-base leading-none">⚔️</span>
                 <span class="text-[8px] font-bold mt-0.5">АТАК</span>
               </button>
 
               <!-- Dash / Roll Button -->
-              <button onclick="window.RPG.playerDashRollAction()" title="Рывок / Кувырок [Shift / C]"
+              <button ontouchstart="event.preventDefault(); window.RPG.playerDashRollAction()" onmousedown="event.preventDefault(); window.RPG.playerDashRollAction()" onclick="window.RPG.playerDashRollAction()" title="Рывок / Кувырок [Shift / C]"
                 class="w-11 h-11 rounded-2xl ${ARENA.dodgeCooldown > 0 ? 'bg-slate-800/80 border border-slate-700 opacity-60' : 'bg-gradient-to-r from-sky-500 to-cyan-500 border-2 border-sky-300 shadow-sky-500/40'} text-white font-black text-sm flex flex-col items-center justify-center shadow-lg active:scale-90 transition-all">
                 <span class="text-base">🌀</span>
                 <span class="text-[8px] leading-tight font-bold">${ARENA.dodgeCooldown > 0 ? Math.ceil(ARENA.dodgeCooldown / 60) + 'с' : 'Рывок'}</span>
@@ -835,6 +867,7 @@
           <!-- Floor & Wave Synchronized Status -->
           <div class="flex items-center justify-between px-3 py-2 rounded-2xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-700/60 text-xs font-bold text-slate-600 dark:text-slate-300">
             <span>⚔️ Этаж ${p.dungeon_floor || 1} • Волна <b class="text-amber-500">${((p.dungeon_cleared || 0) % 20) + 1} / 20</b></span>
+            <span class="ml-3">🐉 Боссов убито: <b class="text-emerald-400">${p.boss_kills || 0}</b></span>
             <span>🏆 Зачищено всего: <b class="text-emerald-500">${p.dungeon_cleared || 0} волн</b></span>
           </div>
 
@@ -1693,11 +1726,11 @@
             ${
               isEquipped
                 ? `
-              <button onclick="window.RPG.openSlotFilterModal('${item.slot || item.type}')" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-95 text-white font-black text-xs shadow-md flex items-center justify-center gap-1.5">
+              <button onclick="window.RPG.openSlotFilterModal('${Object.keys(eq).find(k => eq[k]?.uid === item.uid) || item.slot || 'slot_1'}')" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-95 text-white font-black text-xs shadow-md flex items-center justify-center gap-1.5">
                 <span>🔄</span>
                 <span>Сменить на другой предмет (${slotName})</span>
               </button>
-              <button onclick="window.RPG.unequipItem('${item.slot || item.type || item.uid}')" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 active:scale-95 text-white font-black text-xs shadow-md flex items-center justify-center gap-1.5">
+              <button onclick="window.RPG.unequipItem('${item.uid}')" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 active:scale-95 text-white font-black text-xs shadow-md flex items-center justify-center gap-1.5">
                 <span>🎒</span>
                 <span>Снять в рюкзак</span>
               </button>
@@ -2078,10 +2111,10 @@
     const eq = p.equipment || {};
     const sKey = (slotKey || "").toLowerCase();
     const currEquipped = eq[sKey] || eq[slotKey];
-    const slotRu = sKey === "weapon" ? "Оружие" : sKey === "armor" ? "Броня" : "Реликвия";
+    const slotRu = sKey.startsWith("slot_") ? "Слот " + sKey.split("_")[1] : sKey;
     const matchingItems = inv.filter((it) => {
       const islot = (it.slot || it.type || "").toLowerCase();
-      return islot === sKey;
+      return islot === "weapon" || islot === "armor" || islot === "relic" || islot.startsWith("slot_");
     });
 
     return `
@@ -2150,7 +2183,7 @@
                               <span class="text-[10px] text-slate-500 dark:text-slate-400 truncate block">${item.bonus_desc || ""}</span>
                             </div>
                           </div>
-                          <button onclick="window.RPG.equipItem('${item.uid}')" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs shrink-0 shadow-sm flex items-center gap-1">
+                          <button onclick="window.RPG.equipItem('${item.uid}', '${slotKey}')" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs shrink-0 shadow-sm flex items-center gap-1">
                             <span>⚔️</span>
                             <span>${currEquipped ? "Сменить" : "Надеть"}</span>
                           </button>
@@ -2217,4 +2250,4 @@
   // ===========================================================================
   // PUBLIC API EXPOSURE
   // ===========================================================================
-
+

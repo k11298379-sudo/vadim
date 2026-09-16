@@ -41,18 +41,25 @@ def add_bot_ally_to_room(room: Any) -> tuple[bool, str]:
     existing_names = [room.players[k].get("name") for k in ["host", "player_2", "player_3"]]
     available_bots = [bot for bot in BOTS if bot["name"] not in existing_names]
     b = random.choice(available_bots) if available_bots else random.choice(BOTS)
+    host = room.players.get("host", {})
+    b_hp = host.get("hp_max", b["hp"])
+    b_mp = host.get("mp_max", b["mp"])
+    b_min_atk = host.get("min_atk", b["min_atk"])
+    b_max_atk = host.get("max_atk", b["max_atk"])
+    b_def = host.get("defense", b["defense"])
+
     room.players[target_slot].update({
         "tg_id": -random.randint(100, 999),
         "name": b["name"],
         "class_name": b["class_name"],
         "class_icon": b["class_icon"],
-        "hp": b["hp"],
-        "hp_max": b["hp"],
-        "mp": b["mp"],
-        "mp_max": b["mp"],
-        "min_atk": b["min_atk"],
-        "max_atk": b["max_atk"],
-        "defense": b["defense"],
+        "hp": b_hp,
+        "hp_max": b_hp,
+        "mp": b_mp,
+        "mp_max": b_mp,
+        "min_atk": b_min_atk,
+        "max_atk": b_max_atk,
+        "defense": b_def,
         "is_bot": True,
         "is_dead": False
     })

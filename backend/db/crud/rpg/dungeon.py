@@ -56,20 +56,23 @@ async def run_dungeon_wave(
     is_boss_wave = (wave_num == 20)
 
     # Build enemy with exponential floor scaling
-    floor_scale = (1.42 ** max(0, floor - 1))
-    creep_scale = (1.28 ** max(0, floor - 1))
-    creep_atk_scale = (1.23 ** max(0, floor - 1))
-    boss_atk_scale = (1.26 ** max(0, floor - 1))
+    floor_scale = (1.18 ** max(0, floor - 1))
+    creep_scale = (1.18 ** max(0, floor - 1))
+    creep_atk_scale = (1.15 ** max(0, floor - 1))
+    boss_atk_scale = (1.18 ** max(0, floor - 1))
 
     if is_boss_wave:
-        target_template = NATAR_FLOOR_BOSSES[min(len(NATAR_FLOOR_BOSSES) - 1, max(0, floor - 1))]
-        enemy_name = f"{target_template['name']} [Этаж {floor}]"
+        available_creeps = [c for c in NATAR_CREEPS_POOL if c.get("floor_min", 1) <= floor]
+        if not available_creeps:
+            available_creeps = NATAR_CREEPS_POOL
+        target_template = random.choice(available_creeps)
+        enemy_name = f"Усиленный {target_template['name']} [Босс Этажа {floor}]"
         enemy_icon = target_template["icon"]
-        enemy_hp = int(target_template["base_hp"] * floor_scale)
-        enemy_atk = int(target_template["base_atk"] * boss_atk_scale)
+        enemy_hp = int((target_template["base_hp"] * 15) * creep_scale)
+        enemy_atk = int((target_template["base_atk"] * 15) * creep_atk_scale)
         enemy_def = int(target_template["base_def"] + (floor - 1) * 3)
-        base_gold = int(target_template["gold"] * (1.0 + (floor - 1) * 0.15))
-        base_xp = int(target_template["xp"] * (1.0 + (floor - 1) * 0.15))
+        base_gold = int((target_template["gold"] * 15) * (1.0 + (floor - 1) * 0.15))
+        base_xp = int((target_template["xp"] * 15) * (1.0 + (floor - 1) * 0.15))
     else:
         available_creeps = [c for c in NATAR_CREEPS_POOL if c.get("floor_min", 1) <= floor]
         if not available_creeps:

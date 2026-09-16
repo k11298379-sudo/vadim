@@ -1,3 +1,24 @@
+const RPG_ASSETS = {
+  heroes: {},
+  bosses: {}
+};
+
+function loadRpgImages() {
+  const heroNames = ["pudge", "juggernaut", "shadow_fiend", "leshrac", "phantom_assassin", "invoker", "wraith_king", "anti_mage"];
+  for (const name of heroNames) {
+    const img = new Image();
+    img.src = `/static/images/heroes/${name}.png`;
+    RPG_ASSETS.heroes[name] = img;
+  }
+  const bossNames = ["faceless_void", "terrorblade", "roshan", "butcher", "shadow_lord"];
+  for (const name of bossNames) {
+    const img = new Image();
+    img.src = `/static/images/bosses/${name}.png`;
+    RPG_ASSETS.bosses[name] = img;
+  }
+}
+loadRpgImages();
+
 /**
  * natarGRP — Action RPG Engine & UI for 11 «Б» Mini App
  * Features:
@@ -980,6 +1001,14 @@
       if (eq.weapon?.uid === itemUid) item = eq.weapon;
       else if (eq.armor?.uid === itemUid) item = eq.armor;
       else if (eq.relic?.uid === itemUid) item = eq.relic;
+      else {
+        for (let i = 1; i <= 6; i++) {
+          if (eq[`slot_${i}`]?.uid === itemUid) {
+            item = eq[`slot_${i}`];
+            break;
+          }
+        }
+      }
     }
     if (item) {
       RPG_STATE.inspectedItem = item;
@@ -993,10 +1022,10 @@
     renderRoot();
   }
 
-  async function equipItem(itemUid) {
+  async function equipItem(itemUid, targetSlot) {
     try {
       triggerHaptic("medium");
-      const res = await api.equipRpgItem(itemUid);
+      const res = await api.equipRpgItem(itemUid, targetSlot || RPG_STATE.slotFilterModal);
       if (res.profile) {
         RPG_STATE.profile = res.profile;
         syncArenaPlayerStats();
@@ -1699,6 +1728,18 @@
         ultIcon: "💥",
         ultCd: 840, // 14 sec
         ultDesc: "Колоссальный взрыв маны по скоплению врагов!"
+      },
+      leshrac: {
+        isRanged: true,
+        attackRange: 450,
+        skill1Name: "Кваканье Гения",
+        skill1Icon: "🎵",
+        skill1Cd: 420, // 7 sec
+        skill1Desc: "3-й скилл Ларго: -60% расхода маны + эхо-реверберация урона!",
+        ultName: "Рапсодия",
+        ultIcon: "🐸",
+        ultCd: 30, // 0.5s toggle debounce
+        ultDesc: "Вкл/Выкл: длится бесконечно! Каждые 2 сек тратит ману, наносит урон всем вокруг и хилит Ларго!"
       }
     };
     return configs[hClass] || configs.pudge;
@@ -1784,6 +1825,8 @@
     ARENA.player.bladeDanceActive = 0;
     ARENA.player.rotActive = 0;
     ARENA.player.counterspellActive = 0;
+    ARENA.player.largoRhapsodyActive = false;
+    ARENA.player.largoRhapsodyTickTimer = 0;
 
     ARENA.skill1Cooldown = 0;
     ARENA.skill1CooldownMax = skillCfg.skill1Cd;
@@ -2020,6 +2063,7 @@
 
 
   // REAL RPG DAMAGE: Hero ATK vs Boss Defense (no more %-HP cheese!)
+
   function applyDamageToBoss(boss, rawDmg, isCrit) {
     if (!boss || boss.hp <= 0) return 0;
 
@@ -2222,20 +2266,23 @@
     const stats = RPG_STATE.profile?.stats || {};
     const eq = RPG_STATE.profile?.equipment || {};
 
-    // 1. Passive Item: Butterfly / Agility Evasion (dodge chance)
+    // 1. Evasion (only for normal/physical attacks) & Boss MKB (30%)
     const dodgeChance = Math.min(70, stats.dodge_chance || 0);
-    if (dodgeChance > 0 && Math.random() * 100 < dodgeChance) {
-      spawnFloatingText(p.x, p.y - 25, "💨 УВОРОТ! (БАБОЧКА)", "#38bdf8");
+    const canEvade = (attackType !== "magic");
+    const bossMkbProcced = canEvade && (Math.random() < 0.30);
+    
+    if (canEvade && !bossMkbProcced && dodgeChance > 0 && Math.random() * 100 < dodgeChance) {
+      spawnFloatingText(p.x, p.y - 25, "💨 УВОРОТ!", "#38bdf8");
       triggerHaptic("light");
-      return 0; // Completely dodge incoming attack!
+      return 0;
     }
 
-    // 2. Passive Item: Radiance Blind (17% chance boss misses attack)
+    // 2. Passive Item: Radiance Blind (17% chance boss misses attack, also bypassable by MKB)
     const hasRadiance = Object.values(eq).some(it => it && (it.name?.includes("Radiance") || it.name?.includes("Сияние") || it.bonus?.miss_aura));
-    if (hasRadiance && Math.random() < 0.17) {
-      spawnFloatingText(p.x, p.y - 25, "💨 ПРОМАХ БОССА! (РАДИАНС)", "#f59e0b");
+    if (hasRadiance && canEvade && !bossMkbProcced && Math.random() < 0.17) {
+      spawnFloatingText(p.x, p.y - 25, "💨 ПРОМАХ БОССА!", "#f59e0b");
       triggerHaptic("light");
-      return 0; // Boss blinded!
+      return 0;
     }
 
     let finalDmg = Math.max(1, rawDmg);
@@ -2403,16 +2450,7 @@
       const touch = e.changedTouches[0];
       const { cx, cy } = getEventArenaCoords(touch.clientX, touch.clientY);
 
-      // Only in legacy side-scroller boss mode, bottom 40% moves left/right
-      if (!ARENA.topDownMode && !ARENA.isRaidBossBattle && ARENA.bossArenaMode && ARENA.waveState === "fighting" && cy > ARENA.height * 0.55) {
-        ARENA._touchMoveId = touch.identifier;
-        ARENA.moveInput.left = cx < ARENA.width * 0.38;
-        ARENA.moveInput.right = cx > ARENA.width * 0.62;
-        if (!ARENA.moveInput.left && !ARENA.moveInput.right) {
-          playerSlashAttack();
-        }
-        return;
-      }
+      
 
       handleCanvasTap(cx, cy);
     };
@@ -2420,13 +2458,7 @@
     // Boss arena movement: touchmove for continuous direction
     canvas.ontouchmove = (e) => {
       e.preventDefault();
-      if (!ARENA.bossArenaMode || !ARENA._touchMoveId) return;
-      const touch = Array.from(e.changedTouches).find(t => t.identifier === ARENA._touchMoveId);
-      if (!touch) return;
-      const rect = canvas.getBoundingClientRect();
-      const cx = (touch.clientX - rect.left) * (ARENA.width / rect.width);
-      ARENA.moveInput.left = cx < ARENA.width * 0.38;
-      ARENA.moveInput.right = cx > ARENA.width * 0.62;
+      // No manual movement in 2D side-scroller anymore!
     };
 
     canvas.ontouchend = (e) => {
@@ -2604,6 +2636,7 @@
   // MAIN GAME LOOP UPDATE
   // ---------------------------------------------------------------------------
 
+
   function updateArena() {
     ARENA.frameCount = (ARENA.frameCount || 0) + 1;
 
@@ -2624,6 +2657,7 @@
     // Always update physical loot coins & falling legendary chest
     updatePhysicalCoins();
     updateFallingChest();
+    updatePetLogic();
 
     // Sync DOM action buttons smoothly (cooldowns & block alert)
     if (ARENA.frameCount % 6 === 0) {
@@ -2637,11 +2671,31 @@
       }
       const ultEl = document.getElementById("rpg-cd-ult");
       if (ultEl) {
-        const ultSec = ARENA.ultCooldown > 0 ? Math.ceil(ARENA.ultCooldown / 60) : 0;
-        const txt = ultSec > 0 ? `${ultSec}с` : "Ульта";
+        let txt = "Ульта";
+        const hClass = (RPG_STATE.profile?.hero_class || "").toLowerCase();
+        if (hClass === "leshrac") {
+          if (p.largoRhapsodyActive) {
+            txt = "ВЫКЛ";
+          } else {
+            const ultSec = ARENA.ultCooldown > 0 ? Math.ceil(ARENA.ultCooldown / 60) : 0;
+            txt = ultSec > 0 ? `${ultSec}с` : "ВКЛ";
+          }
+        } else {
+          const ultSec = ARENA.ultCooldown > 0 ? Math.ceil(ARENA.ultCooldown / 60) : 0;
+          txt = ultSec > 0 ? `${ultSec}с` : "Ульта";
+        }
         if (ultEl.textContent !== txt) ultEl.textContent = txt;
         const btnUlt = document.getElementById("rpg-btn-ult");
-        if (btnUlt) btnUlt.style.opacity = ultSec > 0 ? "0.6" : "1";
+        if (btnUlt) {
+          if (hClass === "leshrac" && p.largoRhapsodyActive) {
+            btnUlt.style.opacity = "1";
+            btnUlt.style.borderColor = "#22c55e";
+          } else {
+            const ultSec = ARENA.ultCooldown > 0 ? Math.ceil(ARENA.ultCooldown / 60) : 0;
+            btnUlt.style.opacity = ultSec > 0 ? "0.6" : "1";
+            btnUlt.style.borderColor = "";
+          }
+        }
       }
 
       // Sync Active Item Cooldowns
@@ -3080,6 +3134,7 @@
       }
     }
 
+
     // Passive Regen
     p.currentHp = Math.min(p.maxHp, p.currentHp + (stats.hp_regen || 1) / 60);
     p.currentMp = Math.min(p.maxMp, p.currentMp + (stats.mp_regen || 1) / 60);
@@ -3145,6 +3200,92 @@
     if (p.fleshHeapActive > 0) p.fleshHeapActive--;
     if (p.bladeDanceActive > 0) p.bladeDanceActive--;
     if (p.counterspellActive > 0) p.counterspellActive--;
+    if (p.croakTimer > 0) p.croakTimer--;
+
+    // Largo Amphibian Rhapsody: переключаемая стойка (ВКЛ / ВЫКЛ, длится бесконечно пока есть мана).
+    // Каждые 0.5 секунды (30 кадров) тратит ману, хилит Ларго и наносит AoE-урон вокруг!
+    if (p.largoRhapsodyActive) {
+      if (!p.largoRhapsodyTickTimer || p.largoRhapsodyTickTimer <= 0) {
+        p.largoRhapsodyTickTimer = 30; // 0.5 сек при 60 FPS
+      }
+      p.largoRhapsodyTickTimer--;
+
+      if (p.largoRhapsodyTickTimer <= 0) {
+        p.largoRhapsodyTickTimer = 30; // Сброс таймера на следующие 0.5 секунды
+
+        // Расход маны за тик: 5 MP (или -60% при активном Кваканье Гения -> 2 MP!)
+        let tickCost = 5;
+        if (p.croakTimer > 0) {
+          tickCost = Math.floor(tickCost * 0.4); // 2 MP
+        }
+
+        // Проверка: хватает ли маны на очередной такт
+        if (p.currentMp < tickCost) {
+          p.largoRhapsodyActive = false;
+          spawnFloatingText(p.x, p.y - 30, "Мана закончилась! Рапсодия выключена", "#94a3b8");
+          triggerHaptic("error");
+        } else {
+          p.currentMp -= tickCost;
+          spawnFloatingText(p.x, p.y - 48, `⚡ -${tickCost} MP`, "#38bdf8");
+
+          let ultMult = p.largoRhapsodyDmgMult || 1.0;
+          if (p.edictTimer > 0) {
+            ultMult += 2.5; // +250% урон от ульты пока активен 1 скилл
+          }
+          const spellAmp = (stats.spell_amp !== undefined ? stats.spell_amp : ((p.maxMp || 100) * 0.2));
+
+          // 1. Исцеление Ларго (разделено на 4 для тика 0.5с): +3% макс. HP + INT * 0.55
+          const healAmt = Math.max(12, Math.floor((p.maxHp * 0.03) + ((stats.int || 20) * 0.55)));
+          p.currentHp = Math.min(p.maxHp, p.currentHp + healAmt);
+          spawnFloatingText(p.x, p.y - 30, `💚 +${healAmt} ХП (РАПСОДИЯ)`, "#22c55e");
+
+          // 2. Гармоническая визуальная волна
+          if (!ARENA.specialEffects) ARENA.specialEffects = [];
+          ARENA.specialEffects.push({
+            type: "rhapsody_beat",
+            x: p.x,
+            y: p.y,
+            radius: 25,
+            maxRadius: 280,
+            timer: 28,
+            maxTimer: 28,
+            color: "#22c55e"
+          });
+          ARENA.cameraTrauma = Math.min(1.0, (ARENA.cameraTrauma || 0) + 0.25);
+          triggerHaptic("medium");
+
+          // 3. AoE-урон всем врагам вокруг в радиусе 280px (или линии в 2D) (разделено на 4)
+          const pulseDmg = Math.floor(((stats.max_atk || 30) * 0.7 + spellAmp * 0.25) * ultMult);
+          if (ARENA.topDownMode || ARENA.isRaidBossBattle) {
+            if (ARENA.bossEntity && ARENA.bossEntity.hp > 0) {
+              const dist = Math.hypot(ARENA.bossEntity.x - p.x, ARENA.bossEntity.y - p.y);
+              if (dist <= 280) {
+                const actualDmg = applyDamageToBoss(ARENA.bossEntity, pulseDmg);
+                spawnFloatingText(ARENA.bossEntity.x, ARENA.bossEntity.y - 25, `🐸 -${actualDmg} РАПСОДИЯ`, "#a855f7");
+              }
+            }
+            for (const c of ARENA.creeps) {
+              const dist = Math.hypot(c.x - p.x, c.y - p.y);
+              if (dist <= 280) {
+                if (c.isBoss) {
+                  applyDamageToBoss(c, pulseDmg);
+                } else {
+                  c.hp -= pulseDmg;
+                }
+                spawnFloatingText(c.x, c.y - 15, `🐸 -${pulseDmg}`, "#a855f7");
+              }
+            }
+          } else {
+            for (const c of ARENA.creeps) {
+              if (Math.abs(c.x - p.x) <= 320) {
+                safeDamageCreep(c, pulseDmg, false);
+                spawnFloatingText(c.x, c.y - 15, `🐸 -${pulseDmg} РАПСОДИЯ`, "#a855f7");
+              }
+            }
+          }
+        }
+      }
+    }
 
     // Pudge Rot effect: ticks every 15 frames while active
     if (p.rotActive > 0) {
@@ -4987,6 +5128,68 @@
     ARENA.totalCreepsSpawned++;
   }
 
+  function updatePetLogic() {
+    const p = ARENA.player;
+    if (!p) return;
+    const petId = localStorage.getItem("rpg_active_pet") || "dragon";
+    if (!ARENA.pet) {
+      ARENA.pet = { x: p.x - 25, y: p.y - 25, timer: 0 };
+    }
+    const pet = ARENA.pet;
+    pet.type = petId;
+    
+    // Smooth trailing physics behind the player
+    const targetX = p.x - (p.facing === "left" ? -30 : 30);
+    const targetY = p.y - 26 + Math.sin((ARENA.frameCount || 0) * 0.08) * 6;
+    pet.x += (targetX - pet.x) * 0.12;
+    pet.y += (targetY - pet.y) * 0.12;
+    
+    pet.timer = (pet.timer || 0) + 1;
+    
+    // Pet Action every ~2.5 - 3 seconds (150-180 frames)
+    if (petId === "dragon") {
+      if (pet.timer >= 150) {
+        pet.timer = 0;
+        const target = ARENA.bossEntity || (ARENA.creeps && ARENA.creeps[0]);
+        if (target && target.hp > 0) {
+          const dmg = 250 + Math.floor(Math.random() * 150);
+          if (ARENA.playerProjectiles) {
+            ARENA.playerProjectiles.push({
+              x: pet.x,
+              y: pet.y,
+              vx: (target.x - pet.x) * 0.08,
+              vy: (target.y - pet.y) * 0.08,
+              speed: 7,
+              target: target,
+              dmg: dmg,
+              color: "#f97316",
+              radius: 6,
+              isMagic: true,
+              isCrit: true,
+              isPetShot: true
+            });
+          }
+          spawnFloatingText(pet.x, pet.y - 14, "🔥 ДРАКОН!", "#f97316");
+        }
+      }
+    } else if (petId === "fairy") {
+      if (pet.timer >= 180) {
+        pet.timer = 0;
+        const heal = 45;
+        p.currentHp = Math.min(p.maxHp, (p.currentHp || p.maxHp) + heal);
+        p.currentMp = Math.min(p.maxMp, (p.currentMp || p.maxMp) + 15);
+        spawnFloatingText(p.x, p.y - 20, `💚 +${heal} HP`, "#22c55e");
+      }
+    } else if (petId === "wolf") {
+      if (pet.timer >= 240) {
+        pet.timer = 0;
+        spawnFloatingText(pet.x, pet.y - 14, "🐺 ВОЙ ЯРОСТИ!", "#38bdf8");
+      }
+    }
+  }
+
+
+
 // ============================================================================
 // 04_boss_abilities_early.js — Signature Attacks & Ultimates for Bosses 1–10
 // (Golem, Lich, Tormentor, Dragon, Pudge, Void, Roshan, Tidehunter, SF, Necro)
@@ -5619,7 +5822,12 @@ function updateCustomBossAI(boss, p, ARENA) {
   boss.skillCooldown = Math.max(0, boss.skillCooldown - 1);
   boss.meleeCooldown = Math.max(0, boss.meleeCooldown - 1);
   boss.chargeCooldown = Math.max(0, (boss.chargeCooldown || 0) - 1);
-  boss.ultimateMeter = Math.min(100, (boss.ultimateMeter || 0) + (boss.enrageStage === "enraged" ? 0.14 : 0.08));
+  
+  let ultChargeRate = (boss.enrageStage === "enraged" ? 0.14 : 0.08);
+  if (bId.includes("faceless_void") || bId.includes("хроно")) {
+    ultChargeRate *= 0.25; // Massive nerf to Chronosphere cooldown (4x longer, ~1.5 - 2 mins)
+  }
+  boss.ultimateMeter = Math.min(100, (boss.ultimateMeter || 0) + ultChargeRate);
 
   // Find nearest target (player or active companion)
   let closestTarget = p;
@@ -5886,13 +6094,23 @@ function distToSegment(px, py, x1, y1, x2, y2) {
 
   function spawnBossCreep() {
     const floor = RPG_STATE.profile?.dungeon_floor || 1;
-    const floorScale = Math.pow(1.22, Math.max(0, floor - 1));
+    
+    // Scale identically to creeps but x15 stronger
+    const scaleHp = Math.pow(1.28, Math.max(0, floor - 1)) * (1.0 + 19 * 0.05); // wave 20 multiplier
+    const scaleAtk = Math.pow(1.23, Math.max(0, floor - 1)) * (1.0 + 19 * 0.04);
+    
+    // Base creep stats for floor 20 is around 260 HP, 16 ATK. We multiply by 15!
+    const baseHp = 260 * 15;
+    const baseAtk = 16 * 8; // x8 ATK so it doesn't one-shot instantly but still hurts
 
     const bossTypes = [
-      { name: "РОШАН СВИРЕПЫЙ (Roshan)", icon: "🐲", baseHp: 12000, baseAtk: 80, defense: 35, badgeBg: "#7f1d1d", badgeBorder: "#facc15" },
-      { name: "ДРЕВНИЙ ТЕРЗАТЕЛЬ (Tormentor)", icon: "💎", baseHp: 10000, baseAtk: 75, defense: 30, badgeBg: "#4a044e", badgeBorder: "#c084fc" },
-      { name: "ЧЕРНЫЙ ДРАКОН ИНФЕРНО", icon: "🌋", baseHp: 14000, baseAtk: 85, defense: 40, badgeBg: "#7c2d12", badgeBorder: "#ea580c" },
-      { name: "АРХИЛИЧ НЕКРОПОЛЯ", icon: "💀", baseHp: 9000, baseAtk: 90, defense: 25, badgeBg: "#18181b", badgeBorder: "#e4e4e7" }
+      { id: "golem", name: "Древний Гранитный Голем", icon: "🗿", badgeBg: "#334155", badgeBorder: "#94a3b8" },
+      { id: "lich", name: "Архилич Некрополя", icon: "☠️", badgeBg: "#18181b", badgeBorder: "#e4e4e7" },
+      { id: "tormentor", name: "Древний Терзатель", icon: "🔮", badgeBg: "#4a044e", badgeBorder: "#c084fc" },
+      { id: "dragon", name: "Дракон Инферно", icon: "🌋", badgeBg: "#7c2d12", badgeBorder: "#ea580c" },
+      { id: "pudge_boss", name: "Мясник из Чрева", icon: "🪝", badgeBg: "#064e3b", badgeBorder: "#34d399" },
+      { id: "faceless_void", name: "Хроно-Владыка", icon: "⏳", badgeBg: "#312e81", badgeBorder: "#818cf8" },
+      { id: "roshan", name: "Рошан", icon: "🐲", badgeBg: "#7f1d1d", badgeBorder: "#facc15" }
     ];
     const bt = bossTypes[Math.floor(Math.random() * bossTypes.length)];
 
@@ -5900,9 +6118,9 @@ function distToSegment(px, py, x1, y1, x2, y2) {
     const playerAtk = Math.max(30, Math.floor(((stats.min_atk || 30) + (stats.max_atk || 50)) / 2));
     const playerHp = Math.max(400, stats.hp_max || 400);
 
-    const calculatedHp = Math.floor(bt.baseHp * floorScale);
-    const calculatedAtk = Math.floor(bt.baseAtk * Math.pow(1.15, Math.max(0, floor - 1)));
-    const calculatedDef = Math.floor((bt.defense || 25) * Math.pow(1.10, Math.max(0, floor - 1)));
+    const calculatedHp = Math.floor(baseHp * scaleHp);
+    const calculatedAtk = Math.floor(baseAtk * scaleAtk);
+    const calculatedDef = Math.floor(35 * Math.pow(1.10, Math.max(0, floor - 1)));
 
     const boss = {
       name: bt.name + (floor > 1 ? ` [Этаж ${floor}]` : ""),
@@ -6264,7 +6482,10 @@ function distToSegment(px, py, x1, y1, x2, y2) {
     const stats = RPG_STATE.profile?.stats || {};
     const skillCfg = getHeroSkillConfig();
     const hClass = (RPG_STATE.profile?.hero_class || "pudge").toLowerCase();
-    const cost = 20;
+    let cost = 20;
+    if (p.croakTimer > 0) {
+      cost = Math.floor(cost * 0.4); // 3-й скилл Ларго: -60% расхода маны!
+    }
 
     if (p.isFrozenInTime || (p.stunTimer && p.stunTimer > 0)) {
       spawnFloatingText(p.x, p.y - 25, "💫 ОГЛУШЕНИЕ!", "#facc15");
@@ -6284,13 +6505,14 @@ function distToSegment(px, py, x1, y1, x2, y2) {
       return;
     }
     if (p.currentMp < cost) {
-      spawnFloatingText(p.x, p.y - 25, "Мало маны (нужно 20 MP)!", "#94a3b8");
+      spawnFloatingText(p.x, p.y - 25, `Мало маны (нужно ${cost} MP)!`, "#94a3b8");
       triggerHaptic("error");
       return;
     }
 
     p.currentMp -= cost;
-    ARENA.skill1Cooldown = skillCfg.skill1Cd;
+    const cdReduct1 = 1.0 - ((RPG_STATE.profile?.talents?.cooldown || 0) * 0.06);
+    ARENA.skill1Cooldown = Math.floor(skillCfg.skill1Cd * cdReduct1);
     triggerHaptic("heavy");
 
     // TOP-DOWN 360° BOSS TARGETING FOR ALL SKILLS
@@ -6397,6 +6619,25 @@ function distToSegment(px, py, x1, y1, x2, y2) {
           ARENA.specialEffects.push({ type: "mana_slash", x: boss.x, y: boss.y, timer: 24, maxTimer: 24, dmg: dmg });
           spawnFloatingText(boss.x, boss.y - 30, `⚡ ВЫПАД ИЗ ТЕНИ! -${dmg}`, "#38bdf8");
           ARENA.cameraTrauma = 0.5;
+          return;
+        } else if (hClass === "leshrac") {
+          // Croak of Genius (3-й скилл Ларго): -60% расхода маны + эхо-урон + восстановление маны
+          p.croakTimer = 480; // 8 sec
+          p.currentMp = Math.min(p.maxMp, p.currentMp + 45);
+          const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 3.4));
+          boss.stunTimer = Math.max(boss.stunTimer || 0, 60); // 1.0s ministun
+          ARENA.specialEffects.push({
+            type: "croak_blast",
+            x: boss.x,
+            y: boss.y,
+            radius: 85,
+            timer: 30,
+            maxTimer: 30,
+            color: "#a855f7"
+          });
+          ARENA.cameraTrauma = 0.5;
+          spawnFloatingText(p.x, p.y - 35, "🎵 КВАКАНЬЕ ГЕНИЯ! (+45 MP, ЭХО)", "#c084fc");
+          spawnFloatingText(boss.x, boss.y - 30, `🎶 РЕХО-УРОН! -${dmg}`, "#facc15");
           return;
         }
       }
@@ -6533,6 +6774,40 @@ function distToSegment(px, py, x1, y1, x2, y2) {
       }
       return;
     }
+
+    // 8. LARGO: Diabolic Edict (Магическое эхо)
+    if (hClass === "leshrac") {
+      p.edictTimer = 180; // 3 sec (60 fps * 3)
+      p.edictDmgMult = 0.55;
+      
+      ARENA.specialEffects.push({
+        type: "edict_aura",
+        x: p.x,
+        y: p.y,
+        radius: 200,
+        timer: 180,
+        maxTimer: 180,
+        color: "#c084fc"
+      });
+      ARENA.cameraTrauma = Math.min(1.0, ARENA.cameraTrauma + 0.3);
+      spawnFloatingText(p.x, p.y - 35, "🎵 МАГИЧЕСКОЕ ЭХО!", "#c084fc");
+
+
+      for (const c of ARENA.creeps) {
+        if (Math.abs(c.x - targetX) < radius) {
+          if (c.archetype === "defender") {
+            c.shieldBrokenTimer = 240;
+            c.state = "stagger";
+            c.staggerTimer = 90;
+            c.stateTimer = 90;
+          }
+          safeDamageCreep(c, dmg, false);
+          c.attackCooldown = -60; // 1s ministun
+          spawnFloatingText(c.x, c.y - 20, `🎶 -${dmg} РЕХО!`, "#facc15");
+        }
+      }
+      return;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -6544,7 +6819,10 @@ function distToSegment(px, py, x1, y1, x2, y2) {
     const stats = RPG_STATE.profile?.stats || {};
     const skillCfg = getHeroSkillConfig();
     const hClass = (RPG_STATE.profile?.hero_class || "pudge").toLowerCase();
-    const cost = 35;
+    let cost = 35;
+    if (p.croakTimer > 0) {
+      cost = Math.floor(cost * 0.4); // 3-й скилл Ларго: -60% расхода маны!
+    }
 
     if (p.isFrozenInTime || (p.stunTimer && p.stunTimer > 0)) {
       spawnFloatingText(p.x, p.y - 25, "💫 ОГЛУШЕНИЕ!", "#facc15");
@@ -6557,6 +6835,98 @@ function distToSegment(px, py, x1, y1, x2, y2) {
       return;
     }
 
+    // LARGO TOGGLE ULTIMATE: AMPHIBIAN RHAPSODY (ВКЛ / ВЫКЛ)
+    if (hClass === "leshrac") {
+      if (p.largoRhapsodyActive) {
+        // Выключение ульты
+        p.largoRhapsodyActive = false;
+        ARENA.ultCooldown = 30; // 0.5с защита от двойного клика
+        spawnFloatingText(p.x, p.y - 35, "🛑 РАПСОДИЯ ВЫКЛЮЧЕНА", "#94a3b8");
+        triggerHaptic("light");
+        const ultEl = document.getElementById("rpg-cd-ult");
+        if (ultEl) ultEl.textContent = "ВКЛ";
+        return;
+      } else {
+        // Включение ульты
+        if (ARENA.ultCooldown > 0) {
+          const sec = Math.ceil(ARENA.ultCooldown / 60);
+          spawnFloatingText(p.x, p.y - 25, `КД ${sec}с`, "#94a3b8");
+          triggerHaptic("error");
+          return;
+        }
+        let tickMpCost = 5;
+        if (p.croakTimer > 0) tickMpCost = Math.floor(tickMpCost * 0.4);
+        if (p.currentMp < tickMpCost) {
+          spawnFloatingText(p.x, p.y - 25, `Мало маны (нужно ${tickMpCost} MP)!`, "#94a3b8");
+          triggerHaptic("error");
+          return;
+        }
+
+        p.largoRhapsodyActive = true;
+        p.largoRhapsodyTickTimer = 30; // 0.5 сек между тактами
+        p.largoRhapsodyDmgMult = 1.0 + ((stats.ult_boost || 0) / 100.0);
+        ARENA.ultCooldown = 30; // 0.5с перезарядка на переключение
+
+        // Мгновенный первый такт при включении
+        p.currentMp -= tickMpCost;
+        spawnFloatingText(p.x, p.y - 48, `⚡ -${tickMpCost} MP`, "#38bdf8");
+
+        const ultMult = p.largoRhapsodyDmgMult;
+        const spellAmp = (stats.spell_amp !== undefined ? stats.spell_amp : ((p.maxMp || 100) * 0.2));
+        const healAmt = Math.max(12, Math.floor((p.maxHp * 0.03) + ((stats.int || 20) * 0.55)));
+        p.currentHp = Math.min(p.maxHp, p.currentHp + healAmt);
+        spawnFloatingText(p.x, p.y - 30, `💚 +${healAmt} ХП (РАПСОДИЯ)`, "#22c55e");
+
+        if (!ARENA.specialEffects) ARENA.specialEffects = [];
+        ARENA.specialEffects.push({
+          type: "rhapsody_beat",
+          x: p.x,
+          y: p.y,
+          radius: 25,
+          maxRadius: 280,
+          timer: 28,
+          maxTimer: 28,
+          color: "#22c55e"
+        });
+        ARENA.cameraTrauma = Math.min(1.0, (ARENA.cameraTrauma || 0) + 0.3);
+        triggerHaptic("heavy");
+
+        const pulseDmg = Math.floor(((stats.max_atk || 30) * 0.7 + spellAmp * 0.25) * ultMult);
+        if (ARENA.topDownMode || ARENA.isRaidBossBattle) {
+          if (ARENA.bossEntity && ARENA.bossEntity.hp > 0) {
+            const dist = Math.hypot(ARENA.bossEntity.x - p.x, ARENA.bossEntity.y - p.y);
+            if (dist <= 280) {
+              const actualDmg = applyDamageToBoss(ARENA.bossEntity, pulseDmg);
+              spawnFloatingText(ARENA.bossEntity.x, ARENA.bossEntity.y - 25, `🐸 -${actualDmg} РАПСОДИЯ`, "#a855f7");
+            }
+          }
+          for (const c of ARENA.creeps) {
+            const dist = Math.hypot(c.x - p.x, c.y - p.y);
+            if (dist <= 280) {
+              if (c.isBoss) {
+                applyDamageToBoss(c, pulseDmg);
+              } else {
+                c.hp -= pulseDmg;
+              }
+              spawnFloatingText(c.x, c.y - 15, `🐸 -${pulseDmg}`, "#a855f7");
+            }
+          }
+        } else {
+          for (const c of ARENA.creeps) {
+            if (Math.abs(c.x - p.x) <= 320) {
+              safeDamageCreep(c, pulseDmg, false);
+              spawnFloatingText(c.x, c.y - 15, `🐸 -${pulseDmg} РАПСОДИЯ`, "#a855f7");
+            }
+          }
+        }
+
+        spawnFloatingText(p.x, p.y - 65, "🐸 РАПСОДИЯ ВКЛ (Каждые 0.5с: хил, урон, -MP)", "#22c55e");
+        const ultEl = document.getElementById("rpg-cd-ult");
+        if (ultEl) ultEl.textContent = "ВЫКЛ";
+        return;
+      }
+    }
+
     if (ARENA.ultCooldown > 0) {
       const sec = Math.ceil(ARENA.ultCooldown / 60);
       spawnFloatingText(p.x, p.y - 25, `Ульта: КД ${sec}с`, "#94a3b8");
@@ -6564,7 +6934,7 @@ function distToSegment(px, py, x1, y1, x2, y2) {
       return;
     }
     if (p.currentMp < cost) {
-      spawnFloatingText(p.x, p.y - 25, "Мало маны (нужно 35 MP)!", "#94a3b8");
+      spawnFloatingText(p.x, p.y - 25, `Мало маны (нужно ${cost} MP)!`, "#94a3b8");
       triggerHaptic("error");
       return;
     }
@@ -6713,7 +7083,7 @@ function distToSegment(px, py, x1, y1, x2, y2) {
     if (hClass === "invoker") {
       const spellAmpPct = (stats.spell_amp !== undefined ? stats.spell_amp : ((p.maxMp || 100) * 0.2));
       const manaBonus = 1.0 + (spellAmpPct / 100) + (p.currentMp ? (p.currentMp / p.maxMp) * 0.3 : 0);
-      const meteorDmg = Math.floor((stats.max_atk || 30) * 4.8 * manaBonus * ultMultiplier);
+      const meteorDmg = Math.floor((stats.max_atk || 30) * 3.2 * manaBonus * ultMultiplier);
       if (!ARENA.playerProjectiles) ARENA.playerProjectiles = [];
 
       ARENA.playerProjectiles.push({
@@ -7647,26 +8017,26 @@ function distToSegment(px, py, x1, y1, x2, y2) {
     RPG_STATE.coopRoomData = null;
 
     const bossTmpls = {
-      golem: { id: "golem", name: "Древний Гранитный Голем", icon: "🗿", baseHp: 75000, baseAtk: 140, defense: 35, scale: 1.35, gold: 2000, xp: 1500, desc: "[75 ТЫС. ХП] Каменный колосс глубин" },
-      lich: { id: "lich", name: "Архилич Некрополя", icon: "☠️", baseHp: 225000, baseAtk: 210, defense: 50, scale: 1.30, gold: 3500, xp: 2500, desc: "[225 ТЫС. ХП] Владыка темных заклятий" },
-      tormentor: { id: "tormentor", name: "Древний Терзатель (Tormentor)", icon: "🔮", baseHp: 700000, baseAtk: 320, defense: 75, scale: 1.30, gold: 5000, xp: 4000, desc: "[700 ТЫС. ХП] Отражает 35% урона" },
-      dragon: { id: "dragon", name: "Дракон Инферно", icon: "🌋", baseHp: 2200000, baseAtk: 500, defense: 105, scale: 1.50, gold: 8000, xp: 6000, desc: "[2.2 МЛН ХП] Огнедышащий титан" },
-      pudge_boss: { id: "pudge_boss", name: "Мясник из Чрева (Pudge)", icon: "🪝", baseHp: 7500000, baseAtk: 800, defense: 140, scale: 1.40, gold: 12000, xp: 9000, desc: "[7.5 МЛН ХП] Хук цепью, вонь гнили и пожирание" },
-      faceless_void: { id: "faceless_void", name: "Хроно-Владыка (Faceless Void)", icon: "⏳", baseHp: 25000000, baseAtk: 1250, defense: 180, scale: 1.35, gold: 18000, xp: 14000, desc: "[25 МЛН ХП] Остановка времени и баши" },
-      roshan: { id: "roshan", name: "Рошан (Roshan)", icon: "🐲", baseHp: 85000000, baseAtk: 1950, defense: 230, scale: 1.45, gold: 26000, xp: 20000, desc: "[85 МЛН ХП] Хозяин Ямы, дропает Рапиру и Сыр" },
-      tidehunter: { id: "tidehunter", name: "Левиафан Бездны (Tidehunter)", icon: "🐙", baseHp: 300000000, baseAtk: 3000, defense: 290, scale: 1.40, gold: 40000, xp: 30000, desc: "[300 МЛН ХП] Владыка пучин с якорным ударом и Раважем" },
-      sf_boss: { id: "sf_boss", name: "Архидемон Nevermore", icon: "💀", baseHp: 1000000000, baseAtk: 4600, defense: 370, scale: 1.35, gold: 60000, xp: 45000, desc: "[1 МИЛЛИАРД ХП] Пожиратель душ с черными коилами и Реквиемом" },
-      necrophos: { id: "necrophos", name: "Чумной Владыка (Necrophos)", icon: "🧟", baseHp: 3500000000, baseAtk: 7000, defense: 460, scale: 1.30, gold: 90000, xp: 70000, desc: "[3.5 МЛРД ХП] Аура мора истощает HP, Коса Смерти рубит" },
-      terrorblade: { id: "terrorblade", name: "Демон Бездны (Terrorblade)", icon: "😈", baseHp: 12000000000, baseAtk: 11000, defense: 570, scale: 1.40, gold: 140000, xp: 100000, desc: "[12 МЛРД ХП] Метаморфоза Тьмы и разрыв души Sunder" },
-      invoker_boss: { id: "invoker_boss", name: "Демиург Арсенала (Invoker)", icon: "🧙‍♂️", baseHp: 42000000000, baseAtk: 17500, defense: 700, scale: 1.25, gold: 200000, xp: 150000, desc: "[42 МЛРД ХП] Повелитель стихий, хаос-метеоров и ЭМИ" },
-      chaos_knight: { id: "chaos_knight", name: "Всадник Хаоса (Chaos Knight)", icon: "🐎", baseHp: 150000000000, baseAtk: 26500, defense: 860, scale: 1.45, gold: 300000, xp: 220000, desc: "[150 МЛРД ХП] Фантомы параллельных миров и криты" },
-      dark_tormentor: { id: "dark_tormentor", name: "Тёмный Терзатель Бездны", icon: "💎", baseHp: 550000000000, baseAtk: 42000, defense: 1050, scale: 1.40, gold: 450000, xp: 350000, desc: "[550 МЛРД ХП] Отражает 50% урона и стреляет шипами тьмы" },
-      storm_spirit: { id: "storm_spirit", name: "Громовой Дух (Storm Spirit)", icon: "⚡", baseHp: 2000000000000, baseAtk: 64000, defense: 1300, scale: 1.35, gold: 700000, xp: 500000, desc: "[2 ТРИЛЛИОНА ХП] Молниеносные перелеты через арену и ремнанты" },
-      doom: { id: "doom", name: "Вестник Апокалипсиса (Lord Doom)", icon: "👹", baseHp: 7500000000000, baseAtk: 98000, defense: 1600, scale: 1.45, gold: 1100000, xp: 800000, desc: "[7.5 ТРИЛЛИОНОВ ХП] Владыка Преисподней с роком и пламенем" },
-      primal_beast: { id: "primal_beast", name: "Первобытный Титан (Primal Beast)", icon: "🦣", baseHp: 28000000000000, baseAtk: 150000, defense: 1950, scale: 1.60, gold: 1800000, xp: 1300000, desc: "[28 ТРИЛЛИОНОВ ХП] Сокрушитель материков с диким топотом" },
-      phantom_roshan: { id: "phantom_roshan", name: "Призрачный Рошан Хаоса", icon: "👻", baseHp: 100000000000000, baseAtk: 230000, defense: 2400, scale: 1.55, gold: 3000000, xp: 2200000, desc: "[100 ТРИЛЛИОНОВ ХП] Восставший призрак Рошана с астральным Slam" },
-      tinker_boss: { id: "tinker_boss", name: "Архиинженер (Omega Tinker)", icon: "🤖", baseHp: 350000000000000, baseAtk: 350000, defense: 3000, scale: 1.45, gold: 5000000, xp: 3500000, desc: "[350 ТРИЛЛИОНОВ ХП] Ослепляющий лазер, микроракеты и марш роботов" },
-      enigma: { id: "enigma", name: "Пожиратель Миров (Enigma Cosmic)", icon: "🌌", baseHp: 1200000000000000, baseAtk: 500000, defense: 3800, scale: 1.35, gold: 10000000, xp: 7500000, desc: "[1.2 КВАДРИЛЛИОНА ХП!] Битва на месяц! Схлопывает пространство в Черную Дыру" }
+      golem: { id: "golem", name: "Древний Гранитный Голем", icon: "🗿", baseHp: 75000, baseAtk: 416, defense: 35, scale: 1.35, gold: 2000, xp: 1500, desc: "[75 ТЫС. ХП] Каменный колосс глубин" },
+      lich: { id: "lich", name: "Архилич Некрополя", icon: "☠️", baseHp: 225000, baseAtk: 1250, defense: 50, scale: 1.30, gold: 3500, xp: 2500, desc: "[225 ТЫС. ХП] Владыка темных заклятий" },
+      tormentor: { id: "tormentor", name: "Древний Терзатель (Tormentor)", icon: "🔮", baseHp: 700000, baseAtk: 3888, defense: 75, scale: 1.30, gold: 5000, xp: 4000, desc: "[700 ТЫС. ХП] Отражает 35% урона" },
+      dragon: { id: "dragon", name: "Дракон Инферно", icon: "🌋", baseHp: 2200000, baseAtk: 12222, defense: 105, scale: 1.50, gold: 8000, xp: 6000, desc: "[2.2 МЛН ХП] Огнедышащий титан" },
+      pudge_boss: { id: "pudge_boss", name: "Мясник из Чрева (Pudge)", icon: "🪝", baseHp: 7500000, baseAtk: 41666, defense: 140, scale: 1.40, gold: 12000, xp: 9000, desc: "[7.5 МЛН ХП] Хук цепью, вонь гнили и пожирание" },
+      faceless_void: { id: "faceless_void", name: "Хроно-Владыка (Faceless Void)", icon: "⏳", baseHp: 25000000, baseAtk: 138888, defense: 180, scale: 1.35, gold: 18000, xp: 14000, desc: "[25 МЛН ХП] Остановка времени и баши" },
+      roshan: { id: "roshan", name: "Рошан (Roshan)", icon: "🐲", baseHp: 85000000, baseAtk: 472222, defense: 230, scale: 1.45, gold: 26000, xp: 20000, desc: "[85 МЛН ХП] Хозяин Ямы, дропает Рапиру и Сыр" },
+      tidehunter: { id: "tidehunter", name: "Левиафан Бездны (Tidehunter)", icon: "🐙", baseHp: 300000000, baseAtk: 1666666, defense: 290, scale: 1.40, gold: 40000, xp: 30000, desc: "[300 МЛН ХП] Владыка пучин с якорным ударом и Раважем" },
+      sf_boss: { id: "sf_boss", name: "Архидемон Nevermore", icon: "💀", baseHp: 1000000000, baseAtk: 5555555, defense: 370, scale: 1.35, gold: 60000, xp: 45000, desc: "[1 МИЛЛИАРД ХП] Пожиратель душ с черными коилами и Реквиемом" },
+      necrophos: { id: "necrophos", name: "Чумной Владыка (Necrophos)", icon: "🧟", baseHp: 3500000000, baseAtk: 19444444, defense: 460, scale: 1.30, gold: 90000, xp: 70000, desc: "[3.5 МЛРД ХП] Аура мора истощает HP, Коса Смерти рубит" },
+      terrorblade: { id: "terrorblade", name: "Демон Бездны (Terrorblade)", icon: "😈", baseHp: 12000000000, baseAtk: 66666666, defense: 570, scale: 1.40, gold: 140000, xp: 100000, desc: "[12 МЛРД ХП] Метаморфоза Тьмы и разрыв души Sunder" },
+      invoker_boss: { id: "invoker_boss", name: "Демиург Арсенала (Invoker)", icon: "🧙‍♂️", baseHp: 42000000000, baseAtk: 233333333, defense: 700, scale: 1.25, gold: 200000, xp: 150000, desc: "[42 МЛРД ХП] Повелитель стихий, хаос-метеоров и ЭМИ" },
+      chaos_knight: { id: "chaos_knight", name: "Всадник Хаоса (Chaos Knight)", icon: "🐎", baseHp: 150000000000, baseAtk: 833333333, defense: 860, scale: 1.45, gold: 300000, xp: 220000, desc: "[150 МЛРД ХП] Фантомы параллельных миров и криты" },
+      dark_tormentor: { id: "dark_tormentor", name: "Тёмный Терзатель Бездны", icon: "💎", baseHp: 550000000000, baseAtk: 3055555555, defense: 1050, scale: 1.40, gold: 450000, xp: 350000, desc: "[550 МЛРД ХП] Отражает 50% урона и стреляет шипами тьмы" },
+      storm_spirit: { id: "storm_spirit", name: "Громовой Дух (Storm Spirit)", icon: "⚡", baseHp: 2000000000000, baseAtk: 11111111111, defense: 1300, scale: 1.35, gold: 700000, xp: 500000, desc: "[2 ТРИЛЛИОНА ХП] Молниеносные перелеты через арену и ремнанты" },
+      doom: { id: "doom", name: "Вестник Апокалипсиса (Lord Doom)", icon: "👹", baseHp: 7500000000000, baseAtk: 41666666666, defense: 1600, scale: 1.45, gold: 1100000, xp: 800000, desc: "[7.5 ТРИЛЛИОНОВ ХП] Владыка Преисподней с роком и пламенем" },
+      primal_beast: { id: "primal_beast", name: "Первобытный Титан (Primal Beast)", icon: "🦣", baseHp: 28000000000000, baseAtk: 155555555555, defense: 1950, scale: 1.60, gold: 1800000, xp: 1300000, desc: "[28 ТРИЛЛИОНОВ ХП] Сокрушитель материков с диким топотом" },
+      phantom_roshan: { id: "phantom_roshan", name: "Призрачный Рошан Хаоса", icon: "👻", baseHp: 100000000000000, baseAtk: 555555555555, defense: 2400, scale: 1.55, gold: 3000000, xp: 2200000, desc: "[100 ТРИЛЛИОНОВ ХП] Восставший призрак Рошана с астральным Slam" },
+      tinker_boss: { id: "tinker_boss", name: "Архиинженер (Omega Tinker)", icon: "🤖", baseHp: 350000000000000, baseAtk: 1944444444444, defense: 3000, scale: 1.45, gold: 5000000, xp: 3500000, desc: "[350 ТРИЛЛИОНОВ ХП] Ослепляющий лазер, микроракеты и марш роботов" },
+      enigma: { id: "enigma", name: "Пожиратель Миров (Enigma Cosmic)", icon: "🌌", baseHp: 1200000000000000, baseAtk: 6666666666666, defense: 3800, scale: 1.35, gold: 10000000, xp: 7500000, desc: "[1.2 КВАДРИЛЛИОНА ХП!] Битва на месяц! Схлопывает пространство в Черную Дыру" }
     };
 
     const b = bossTmpls[bossId] || bossTmpls.golem;
@@ -7796,6 +8166,19 @@ function distToSegment(px, py, x1, y1, x2, y2) {
   }
 
   function handlePlayerArenaDeath() {
+    // AEGIS OF THE IMMORTAL RESURRECTION PASSIVE
+    const relic = RPG_STATE.profile?.equipment?.relic;
+    const isAegis = relic && (String(relic.name || "").toLowerCase().includes("aegis") || String(relic.name || "").toLowerCase().includes("эгида") || relic.icon === "🛡️" || relic.icon === "🥚");
+    if (isAegis && !ARENA.aegisUsed && ARENA.player) {
+      ARENA.aegisUsed = true;
+      const pMax = ARENA.player.maxHp || 500;
+      ARENA.player.currentHp = Math.floor(pMax * 0.65);
+      ARENA.player.isInvulnerable = 60;
+      spawnFloatingText(ARENA.player.x, ARENA.player.y - 35, "✨ ВОСКРЕШЕНИЕ ЭГИДОЙ! (+65% HP)", "#facc15");
+      triggerHaptic("heavy");
+      return;
+    }
+
     if (ARENA.player) {
       ARENA.player.currentHp = 0;
       ARENA.player.isInvulnerable = 0;
@@ -7850,6 +8233,7 @@ function distToSegment(px, py, x1, y1, x2, y2) {
       p.xp -= needed;
       p.level = (p.level || 1) + 1;
       p.stat_points = (p.stat_points || 0) + 1;
+      if (p.level % 5 === 0) p.talent_points = (p.talent_points || 0) + 1;
       showLevelUpToast(p.level);
       spawnFloatingText(ARENA.player.x + 30, ARENA.player.y - 45, `🎉 УРОВЕНЬ ${p.level}! (+1 очко)`, "#facc15");
     }
@@ -7877,6 +8261,7 @@ function distToSegment(px, py, x1, y1, x2, y2) {
     const hClass = (heroClass || "pudge").toLowerCase();
     const bob = Math.sin(time * 0.14) * 2;
     const facing = (p && p.facing !== undefined) ? p.facing : 1;
+
 // ============================================================================
 // 06_boss_models_early.js — Procedural Vector Models for Bosses 1–6
 // (Golem, Lich, Tormentor, Dragon, Pudge, Faceless Void)
@@ -7884,6 +8269,22 @@ function distToSegment(px, py, x1, y1, x2, y2) {
 
 function drawBossModelEarly(ctx, b, bId, time) {
   const facing = b.facing || 1;
+  let assetName = null;
+  if (bId.includes("faceless") || bId.includes("войд")) assetName = "faceless_void";
+
+  if (assetName && typeof RPG_ASSETS !== "undefined" && RPG_ASSETS.bosses[assetName]) {
+    const bossAsset = RPG_ASSETS.bosses[assetName];
+    if (bossAsset && bossAsset.complete && bossAsset.naturalWidth > 0) {
+      ctx.save();
+      if (facing === -1) {
+        ctx.scale(-1, 1);
+      }
+      const size = b.radius * 6.0;
+      ctx.drawImage(bossAsset, -size / 2, -size / 1.1, size, size);
+      ctx.restore();
+      return true;
+    }
+  }
 
   // 1. GOLEM (Древний Гранитный Голем)
   if (bId.includes("golem") || bId.includes("голем")) {
@@ -8468,6 +8869,23 @@ function drawBossModelLate(ctx, b, bId, time) {
 
 function drawBossModelMid(ctx, b, bId, time) {
   const facing = b.facing || 1;
+  let assetName = null;
+  if (bId.includes("roshan") && !bId.includes("phantom")) assetName = "roshan";
+  if (bId.includes("terrorblade") || bId.includes("террорблейд")) assetName = "terrorblade";
+
+  if (assetName && typeof RPG_ASSETS !== "undefined" && RPG_ASSETS.bosses[assetName]) {
+    const bossAsset = RPG_ASSETS.bosses[assetName];
+    if (bossAsset && bossAsset.complete && bossAsset.naturalWidth > 0) {
+      ctx.save();
+      if (facing === -1) {
+        ctx.scale(-1, 1);
+      }
+      const size = b.radius * 6.0;
+      ctx.drawImage(bossAsset, -size / 2, -size / 1.1, size, size);
+      ctx.restore();
+      return true;
+    }
+  }
 
   // 7. ROSHAN (Рошан Свирепый)
   if (bId.includes("roshan") && !bId.includes("phantom")) {
@@ -8793,6 +9211,16 @@ function drawBossModelMid(ctx, b, bId, time) {
       ctx.beginPath();
       ctx.arc(0, 0, p.radius + 8, 0, Math.PI * 2);
       ctx.fill();
+    }
+
+    if (typeof RPG_ASSETS !== "undefined" && RPG_ASSETS.heroes[hClass]) {
+      const heroAsset = RPG_ASSETS.heroes[hClass];
+      if (heroAsset && heroAsset.complete && heroAsset.naturalWidth > 0) {
+        const size = p.radius * 5.0; // adjust scale
+        ctx.drawImage(heroAsset, -size / 2, -size / 1.1, size, size);
+        ctx.restore();
+        return;
+      }
     }
 
     // Class-specific Procedural Vector Geometry
@@ -9435,6 +9863,25 @@ function drawBossModelMid(ctx, b, bId, time) {
       const bScale = (c.radius || 44) / 28;
       ctx.save();
       ctx.scale(bScale, bScale);
+
+      if (typeof RPG_ASSETS !== "undefined") {
+        const bIdKey = (c.bossType || c.boss_id || c.id || c.name || "").toLowerCase();
+        let assetKey = null;
+        if (bIdKey.includes("roshan") || bIdKey.includes("рошан")) assetKey = "roshan";
+        else if (bIdKey.includes("terrorblade") || bIdKey.includes("террорблейд")) assetKey = "terrorblade";
+        else if (bIdKey.includes("void") || bIdKey.includes("хроно") || bIdKey.includes("faceless")) assetKey = "faceless_void";
+
+        if (assetKey && RPG_ASSETS.bosses && RPG_ASSETS.bosses[assetKey]) {
+          const bossAsset = RPG_ASSETS.bosses[assetKey];
+          if (bossAsset && bossAsset.complete && bossAsset.naturalWidth > 0) {
+            // Need to unscale because we scale later, or just draw with proper coords
+            const size = 110; 
+            ctx.drawImage(bossAsset, -size / 2, -size / 1.1, size, size);
+            ctx.restore();
+            return;
+          }
+        }
+      }
 
       const bId = (c.bossType || c.boss_id || c.id || c.name || "").toLowerCase();
       let drawn = false;
@@ -10383,7 +10830,7 @@ function drawBossModelMid(ctx, b, bId, time) {
     if (!boss) return;
 
     const bannerX = 8;
-    const bannerY = 7;
+    const bannerY = 56; // Опустили вниз, чтобы не перекрывалось кнопками (было 7)
     const bannerW = w - 16;
     const bannerH = 48;
 
@@ -10523,6 +10970,7 @@ function drawBossModelMid(ctx, b, bId, time) {
 
     ctx.restore();
   }
+
 
   function renderArena() {
     const canvas = document.getElementById("rpg-action-canvas");
@@ -11184,6 +11632,44 @@ function drawBossModelMid(ctx, b, bId, time) {
       ctx.stroke();
     }
 
+    // Largo Croak of Genius Echo Aura
+    if (p.croakTimer > 0) {
+      const pulse = Math.sin((ARENA.frameCount || 0) * 0.25) * 3;
+      ctx.strokeStyle = "rgba(192, 132, 252, 0.85)";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius + 9 + pulse, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Largo Amphibian Rhapsody Aura (активна пока включена ульта)
+    if (p.largoRhapsodyActive || p.largoRhapsodyTimer > 0) {
+      const spin = (ARENA.frameCount || 0) * 0.08;
+      const pulse = Math.sin((ARENA.frameCount || 0) * 0.15) * 4;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.strokeStyle = "rgba(34, 197, 94, 0.85)";
+      ctx.lineWidth = 3;
+      ctx.setLineDash([8, 6]);
+      ctx.beginPath();
+      ctx.arc(0, 0, p.radius + 16 + pulse, spin, spin + Math.PI * 2);
+      ctx.stroke();
+
+      // Golden harmonic outer ring
+      ctx.strokeStyle = "rgba(250, 204, 21, 0.6)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.arc(0, 0, p.radius + 22 - pulse * 0.5, -spin * 1.5, -spin * 1.5 + Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      // Spawns soft floating musical notes around Largo
+      if ((ARENA.frameCount || 0) % 45 === 0) {
+        spawnFloatingText(p.x + (Math.random() - 0.5) * 30, p.y - 15, "🎶", "#4ade80");
+      }
+    }
+
     // --- VISUAL PLAYER STATUS EFFECTS (STUN, SLOW, SILENCE, DOOM, DOTs) ---
     if (p.slowTimer > 0) {
       ctx.save();
@@ -11287,6 +11773,24 @@ function drawBossModelMid(ctx, b, bId, time) {
       ctx.beginPath();
       ctx.arc(0, 0, sa.radius, -Math.PI * 0.4, Math.PI * 0.4);
       ctx.stroke();
+      ctx.restore();
+    }
+
+    // ---- 9.1 ACTIVE BATTLE PET (FAMILIAR) ----
+    if (ARENA.pet) {
+      ctx.save();
+      const pet = ARENA.pet;
+      const petIcon = pet.type === "fairy" ? "🧚" : (pet.type === "wolf" ? "🐺" : "🐉");
+      // Gentle floating shadow/glow
+      ctx.fillStyle = pet.type === "fairy" ? "rgba(34, 197, 94, 0.25)" : (pet.type === "wolf" ? "rgba(56, 189, 248, 0.25)" : "rgba(249, 115, 22, 0.25)");
+      ctx.beginPath();
+      ctx.arc(pet.x, pet.y + 12, 10, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.font = "20px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(petIcon, pet.x, pet.y);
       ctx.restore();
     }
 
@@ -11453,6 +11957,76 @@ function drawBossModelMid(ctx, b, bId, time) {
         ctx.moveTo(randX - 25, randY - 20);
         ctx.lineTo(randX + 25, randY + 20);
         ctx.stroke();
+      } else if (fx.type === "croak_blast") {
+        // --- LARGO CROAK OF GENIUS (Музыкальная звуковая волна) ---
+        ctx.save();
+        const prog = 1 - (fx.timer / (fx.maxTimer || 35));
+        const alpha = Math.max(0, fx.timer / (fx.maxTimer || 35));
+        ctx.shadowColor = "#c084fc";
+        ctx.shadowBlur = 20;
+        ctx.strokeStyle = `rgba(192, 132, 252, ${alpha * 0.9})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.ellipse(fx.x, fx.y, fx.radius * prog, (fx.radius * 0.45) * prog, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Musical note symbols floating up
+        const notes = ["🎵", "🎶", "🐸", "✨"];
+        for (let s = 0; s < 3; s++) {
+          const nX = fx.x + Math.sin(prog * 8 + s * 2) * (fx.radius * 0.6 * prog);
+          const nY = fx.y - (prog * 50 + s * 12);
+          ctx.font = "16px sans-serif";
+          ctx.fillText(notes[s % notes.length], nX - 8, nY);
+        }
+        ctx.restore();
+      } else if (fx.type === "rhapsody_beat") {
+        // --- LARGO AMPHIBIAN RHAPSODY BEAT (Каждую секунду: зеленое исцеление + золотой урон) ---
+        ctx.save();
+        const prog = 1 - (fx.timer / (fx.maxTimer || 35));
+        const alpha = Math.max(0, fx.timer / (fx.maxTimer || 35));
+        
+        // Healing green inner ring
+        ctx.shadowColor = "#22c55e";
+        ctx.shadowBlur = 25;
+        ctx.strokeStyle = `rgba(34, 197, 94, ${alpha * 0.9})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.ellipse(fx.x, fx.y, (fx.radius * 0.6) * prog, (fx.radius * 0.3) * prog, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Golden shockwave outer ring
+        ctx.shadowColor = "#facc15";
+        ctx.shadowBlur = 20;
+        ctx.strokeStyle = `rgba(250, 204, 21, ${alpha * 0.85})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.ellipse(fx.x, fx.y, fx.radius * prog, (fx.radius * 0.45) * prog, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Floating musical notes
+        const notes = ["🎵", "🎶", "💚", "✨", "🐸"];
+        for (let s = 0; s < 4; s++) {
+          const ang = (s * Math.PI / 2) + prog * 2;
+          const nX = fx.x + Math.cos(ang) * (fx.radius * 0.7 * prog);
+          const nY = fx.y + Math.sin(ang) * (fx.radius * 0.35 * prog) - (prog * 30);
+          ctx.font = "15px sans-serif";
+          ctx.fillText(notes[s % notes.length], nX - 7, nY);
+        }
+        ctx.restore();
+      } else if (fx.type === "rhapsody_aura") {
+        // --- LARGO CONTINUOUS AURA ---
+        const p = ARENA.player;
+        if (p && p.largoRhapsodyTimer > 0) {
+          ctx.save();
+          const ang = ((ARENA.frameCount || 0) * 0.06) % (Math.PI * 2);
+          ctx.strokeStyle = "rgba(34, 197, 94, 0.45)";
+          ctx.lineWidth = 2.5;
+          ctx.setLineDash([10, 8]);
+          ctx.beginPath();
+          ctx.ellipse(p.x, p.y + 4, 180, 80, ang, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
       } else if (fx.type === "topdown_meteor") {
         // --- INVOKER CHAOS METEOR (Падающая огненная "котлета") ---
         ctx.save();
@@ -11923,6 +12497,63 @@ function drawBossModelMid(ctx, b, bId, time) {
           ctx.stroke();
         }
         ctx.restore();
+
+      } else if (fx.type === "croak_blast") {
+        // --- LARGO CROAK OF GENIUS (Акустическая волна кваканья) ---
+        ctx.save();
+        const prog = 1 - (fx.timer / (fx.maxTimer || 30));
+        const alpha = Math.max(0, 1 - prog);
+        const curR = 15 + prog * (fx.radius || 85);
+        ctx.strokeStyle = `rgba(168, 85, 247, ${0.9 * alpha})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(fx.x, fx.y, curR, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = `rgba(216, 180, 254, ${0.7 * alpha})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(fx.x, fx.y, curR * 0.7, 0, Math.PI * 2);
+        ctx.stroke();
+
+        for (let n = 0; n < 3; n++) {
+          const noteAngle = (n * Math.PI * 2 / 3) + prog * 2;
+          const nx = fx.x + Math.cos(noteAngle) * curR * 0.8;
+          const ny = fx.y + Math.sin(noteAngle) * curR * 0.8;
+          ctx.fillStyle = `rgba(250, 204, 21, ${alpha})`;
+          ctx.font = "bold 14px sans-serif";
+          ctx.fillText("🎵", nx - 6, ny);
+        }
+        ctx.restore();
+
+      } else if (fx.type === "rhapsody_beat") {
+        // --- LARGO AMPHIBIAN RHAPSODY BEAT (Гармонический взрыв хила и урона) ---
+        ctx.save();
+        const prog = 1 - (fx.timer / (fx.maxTimer || 25));
+        const alpha = Math.max(0, 1 - prog);
+        const curR = fx.radius + (fx.maxRadius - fx.radius) * prog;
+
+        // Emerald healing pulse
+        ctx.strokeStyle = `rgba(34, 197, 94, ${0.85 * alpha})`;
+        ctx.lineWidth = 4.5;
+        ctx.beginPath();
+        ctx.arc(fx.x, fx.y, curR, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Golden harmonic ring
+        ctx.strokeStyle = `rgba(250, 204, 21, ${0.75 * alpha})`;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(fx.x, fx.y, curR * 0.85, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Central harmonic soft glow
+        ctx.fillStyle = `rgba(74, 222, 128, ${0.2 * alpha})`;
+        ctx.beginPath();
+        ctx.arc(fx.x, fx.y, curR * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
       }
     }
 
@@ -11976,20 +12607,20 @@ function drawBossModelMid(ctx, b, bId, time) {
     } else {
       ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
       ctx.beginPath();
-      safeRoundRect(ctx, 10, 8, clientW - 20, 28, 12);
+      safeRoundRect(ctx, 10, 56, clientW - 20, 28, 12); // Moved down from 8 to 56
       ctx.fill();
 
       ctx.font = "bold 11px sans-serif";
       ctx.fillStyle = "#facc15";
       ctx.textAlign = "left";
-      ctx.fillText(`Этаж ${RPG_STATE.profile?.dungeon_floor || 1} • Волна ${ARENA.waveNumber}/${ARENA.waveMax}`, 18, 26);
+      ctx.fillText(`Этаж ${RPG_STATE.profile?.dungeon_floor || 1} • Волна ${ARENA.waveNumber}/${ARENA.waveMax}`, 18, 74); // 26 -> 74
 
       ctx.textAlign = "right";
       ctx.fillStyle = "#94a3b8";
       const killLabel = ARENA.isRaidBossBattle
         ? `👑 РЕЙД-БОСС: ${ARENA.bossEntity?.name || "БОСС"}`
         : `Убито: ${ARENA.creepsKilledInWave}/${ARENA.creepsNeededForWave}`;
-      ctx.fillText(killLabel, w - 18, 26);
+      ctx.fillText(killLabel, w - 18, 74); // 26 -> 74
     }
 
     // Skill 1 & Ult CD in HUD
@@ -12624,6 +13255,7 @@ function drawBossModelMid(ctx, b, bId, time) {
     `;
   }
 
+
 // ============================================================================
 // 07_boss_telegraphs.js — Rendering Unique Boss Visual Telegraphs & Ultimates
 // (Black Hole, Chronosphere, Resonance Laser, Chains, and Special VFX)
@@ -12874,9 +13506,8 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
     const tabs = [
       { id: "farm", name: "Фарм", icon: "⚔️" },
       { id: "hero", name: "Герой", icon: p.class_icon || "🛡️" },
-      { id: "coop", name: "Боссы", icon: "🐉" },
-      { id: "pvp", name: "Дуэли", icon: "🥊" },
-      { id: "leaderboard", name: "Топ", icon: "🏆" }
+      { id: "talents", name: "Таланты", icon: "🧬" },
+      { id: "coop", name: "Боссы", icon: "🐉" }
     ];
 
     const xp = p.xp !== undefined ? p.xp : (p.experience || 0);
@@ -12925,7 +13556,7 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
         </div>
 
         <!-- Navigation Subtabs -->
-        <div class="grid grid-cols-5 gap-1 p-1 rounded-2xl bg-slate-200/80 dark:bg-slate-800/90 text-[11px] font-bold">
+        <div class="grid grid-cols-4 gap-1 p-1 rounded-2xl bg-slate-200/80 dark:bg-slate-800/90 text-[11px] font-bold">
           ${tabs
             .map(
               (t) => `
@@ -12951,6 +13582,8 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
         return renderFarmTabHTML();
       case "hero":
         return renderHeroProfileHTML();
+      case "talents":
+        return renderTalentsTab();
       case "coop":
         return renderCoopRaidsHTML();
       case "pvp":
@@ -13001,6 +13634,31 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
           <div class="w-full h-2.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
             <div class="h-full bg-gradient-to-r from-amber-500 to-yellow-400 transition-all duration-300" style="width: ${xpPct}%"></div>
           </div>
+          <div class="flex items-center justify-between text-xs font-bold mt-2 pt-2 border-t border-slate-200/50 dark:border-slate-700/50">
+            <span class="text-slate-500 dark:text-slate-400">Убито боссов (Рейды)</span>
+            <span class="text-emerald-600 dark:text-emerald-400 font-extrabold">🐉 ${p.boss_kills || 0}</span>
+          </div>
+        </div>
+
+        <!-- REBIRTH & TALENTS SUMMARY CARD -->
+        <div class="theme-card p-3.5 rounded-2xl bg-gradient-to-r from-purple-950/40 via-slate-900 to-indigo-950/40 border border-purple-500/30 shadow-sm space-y-2.5">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="text-xl">🧬</span>
+              <div>
+                <div class="text-xs font-black text-purple-300">Перерождение и Таланты</div>
+                <div class="text-[10px] text-slate-400">Ранг: <b class="text-white">${p.rebirths || 0}</b> (+${(p.rebirths || 0) * 10}% ко всем статам)</div>
+              </div>
+            </div>
+            <button onclick="window.RPG.setSubTab('talents')" class="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 active:scale-95 text-white font-black text-[11px] shadow-sm flex items-center gap-1">
+              <span>Открыть</span>
+              <span>⚡</span>
+            </button>
+          </div>
+          <div class="flex items-center justify-between text-[11px] pt-1.5 border-t border-purple-500/20">
+            <span class="text-slate-400">Доступно очков талантов:</span>
+            <span class="text-emerald-400 font-black">${p.talent_points || 0} очк.</span>
+          </div>
         </div>
 
         <!-- 3 ATTRIBUTES SYSTEM (СИЛА, ЛОВКОСТЬ, ИНТЕЛЛЕКТ) -->
@@ -13034,12 +13692,12 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
               <button ${isUpgradingStat ? "disabled" : ""} onclick="window.RPG.upgradeStat('str')" class="px-3.5 py-2 rounded-xl ${isUpgradingStat ? "opacity-50 pointer-events-none" : ""} ${
                 points > 0
                   ? "bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 animate-pulse ring-2 ring-emerald-400/50"
-                  : (p.gold || 0) >= baseStr * 20
+                  : (p.gold || 0) >= Math.floor(Math.pow(baseStr, 1.35) * 6)
                     ? "bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500"
                     : "bg-slate-300 dark:bg-slate-700 opacity-60 cursor-not-allowed"
               } active:scale-90 text-white font-black text-xs shadow-sm flex items-center gap-1">
                 <span>+</span>
-                <span class="text-[10px]">${points > 0 ? "Очко ✨" : `${baseStr * 20} 🪙`}</span>
+                <span class="text-[10px]">${points > 0 ? "Очко ✨" : `${Math.floor(Math.pow(baseStr, 1.35) * 6).toLocaleString()} 🪙`}</span>
               </button>
             </div>
 
@@ -13055,12 +13713,12 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
               <button ${isUpgradingStat ? "disabled" : ""} onclick="window.RPG.upgradeStat('agi')" class="px-3.5 py-2 rounded-xl ${isUpgradingStat ? "opacity-50 pointer-events-none" : ""} ${
                 points > 0
                   ? "bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 animate-pulse ring-2 ring-emerald-400/50"
-                  : (p.gold || 0) >= baseAgi * 20
+                  : (p.gold || 0) >= Math.floor(Math.pow(baseAgi, 1.35) * 6)
                     ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500"
                     : "bg-slate-300 dark:bg-slate-700 opacity-60 cursor-not-allowed"
               } active:scale-90 text-white font-black text-xs shadow-sm flex items-center gap-1">
                 <span>+</span>
-                <span class="text-[10px]">${points > 0 ? "Очко ✨" : `${baseAgi * 20} 🪙`}</span>
+                <span class="text-[10px]">${points > 0 ? "Очко ✨" : `${Math.floor(Math.pow(baseAgi, 1.35) * 6).toLocaleString()} 🪙`}</span>
               </button>
             </div>
 
@@ -13076,12 +13734,12 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
               <button ${isUpgradingStat ? "disabled" : ""} onclick="window.RPG.upgradeStat('int')" class="px-3.5 py-2 rounded-xl ${isUpgradingStat ? "opacity-50 pointer-events-none" : ""} ${
                 points > 0
                   ? "bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 animate-pulse ring-2 ring-emerald-400/50"
-                  : (p.gold || 0) >= baseInt * 20
+                  : (p.gold || 0) >= Math.floor(Math.pow(baseInt, 1.35) * 6)
                     ? "bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500"
                     : "bg-slate-300 dark:bg-slate-700 opacity-60 cursor-not-allowed"
               } active:scale-90 text-white font-black text-xs shadow-sm flex items-center gap-1">
                 <span>+</span>
-                <span class="text-[10px]">${points > 0 ? "Очко ✨" : `${baseInt * 20} 🪙`}</span>
+                <span class="text-[10px]">${points > 0 ? "Очко ✨" : `${Math.floor(Math.pow(baseInt, 1.35) * 6).toLocaleString()} 🪙`}</span>
               </button>
             </div>
           </div>
@@ -13150,9 +13808,7 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
           </h3>
 
           <div class="grid grid-cols-3 gap-2">
-            ${renderEquippedSlotHTML("weapon", "Оружие", "🗡️", eq.weapon)}
-            ${renderEquippedSlotHTML("armor", "Броня", "🛡️", eq.armor)}
-            ${renderEquippedSlotHTML("relic", "Реликвия", "💍", eq.relic)}
+            ${[1,2,3,4,5,6].map(i => renderEquippedSlotHTML('slot_'+i, 'Слот '+i, '🎒', eq['slot_'+i] || (i===1 ? eq.weapon : i===2 ? eq.armor : i===3 ? eq.relic : null))).join('')}
           </div>
         </div>
 
@@ -13164,7 +13820,7 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
               <h3 class="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-200">
                 Инвентарь
               </h3>
-              <span class="text-[10px] font-bold text-slate-400">(${inv.length} / 30)</span>
+              <span class="text-[10px] font-bold text-slate-400">(${inv.length} / 60)</span>
             </div>
 
             <!-- Toggle Selection Mode Button -->
@@ -13321,7 +13977,7 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
     const p = RPG_STATE.profile || {};
     const eq = p.equipment || {};
     const targetSlot = (item.slot || item.type || "").toLowerCase();
-    const isEquippable = ["weapon", "armor", "relic"].includes(targetSlot);
+    const isEquippable = ["weapon", "armor", "relic"].includes(targetSlot) || targetSlot.startsWith("slot_");
     const currEquipped = isEquippable ? (eq[targetSlot] || eq[item.slot] || eq[item.type]) : null;
     const sellPrice = getItemSellPrice(item);
 
@@ -13498,7 +14154,7 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
           </div>
 
           <!-- Virtual Touch Joystick (Bottom Left, clear of action buttons) -->
-          <div id="rpg-virtual-joystick-zone"
+          ${(ARENA.topDownMode || ARENA.isRaidBossBattle) ? `<div id="rpg-virtual-joystick-zone"
                class="absolute bottom-3 left-3 w-24 h-24 flex items-center justify-center pointer-events-auto z-30 select-none touch-none">
             <div id="rpg-joystick-base" class="relative w-20 h-20 rounded-full border-2 border-amber-400/50 bg-slate-900/80 shadow-2xl flex items-center justify-center backdrop-blur-md ring-2 ring-amber-500/20">
               <span class="absolute top-1 text-[9px] text-amber-300/50">▲</span>
@@ -13509,13 +14165,21 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
                 <span class="text-xs font-black text-slate-950">🕹️</span>
               </div>
             </div>
-          </div>
+          </div>` : ""}
 
-          <!-- Potion button (above joystick) -->
-          <div class="absolute bottom-28 left-3 z-20">
-            <button onclick="window.RPG.usePotionAction()" title="Зелье / Сыр [F / 1]" class="w-10 h-10 rounded-2xl bg-emerald-600/95 border-2 border-emerald-300 text-white font-bold text-lg flex items-center justify-center shadow-lg active:scale-90 transition-transform">
+          <!-- Active Items (above joystick) -->
+          <div class="absolute bottom-28 left-3 z-20 flex flex-col gap-2">
+            <button ontouchstart="event.preventDefault(); window.RPG.usePotionAction()" onmousedown="event.preventDefault(); window.RPG.usePotionAction()" onclick="window.RPG.usePotionAction()" title="Зелье / Сыр [F / 1]" class="w-10 h-10 rounded-2xl bg-emerald-600/95 border-2 border-emerald-300 text-white font-bold text-lg flex items-center justify-center shadow-lg active:scale-90 transition-transform">
               🧪
             </button>
+            ${(window.RPG.getEquippedActiveItems ? window.RPG.getEquippedActiveItems() : []).map((act, idx) => {
+              const cdSec = act.currentCd > 0 ? Math.ceil(act.currentCd / 60) : 0;
+              return `
+              <button id="rpg-btn-item-${idx}" ontouchstart="event.preventDefault(); window.RPG.useActiveItemAction(${idx})" onmousedown="event.preventDefault(); window.RPG.useActiveItemAction(${idx})" onclick="window.RPG.useActiveItemAction(${idx})" title="${act.name}" class="w-10 h-10 rounded-2xl ${cdSec > 0 ? 'bg-slate-800/80 border border-slate-700 opacity-60' : 'bg-indigo-600/95 border-2 border-indigo-300'} text-white font-bold text-lg flex flex-col items-center justify-center shadow-lg active:scale-90 transition-transform relative">
+                <span class="text-base">${act.def.icon || '✨'}</span>
+                <span id="rpg-cd-item-${idx}" class="text-[8px] font-bold absolute bottom-0.5">${cdSec > 0 ? cdSec + 'с' : ''}</span>
+              </button>`;
+            }).join('')}
           </div>
 
           <!-- Right Action Buttons (Attack, Dash / Roll, Skill 1, Ultimate) -->
@@ -13523,13 +14187,13 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
             <!-- Top row: Skill 1 + Ultimate -->
             <div class="flex items-center gap-1.5">
               <!-- Hero Skill 1 Button [E] -->
-              <button id="rpg-btn-skill1" onclick="window.RPG.castSkill1Action()" title="${cfg.skill1Name} [E]" class="w-11 h-11 rounded-2xl ${s1CdSec > 0 ? 'bg-slate-800/80 border border-slate-700 opacity-60' : 'bg-gradient-to-r from-blue-600 to-cyan-600 border-2 border-cyan-400'} text-white font-black text-sm flex flex-col items-center justify-center shadow-lg active:scale-90 transition-transform">
+              <button id="rpg-btn-skill1" ontouchstart="event.preventDefault(); window.RPG.castSkill1Action()" onmousedown="event.preventDefault(); window.RPG.castSkill1Action()" onclick="window.RPG.castSkill1Action()" title="${cfg.skill1Name} [E]" class="w-11 h-11 rounded-2xl ${s1CdSec > 0 ? 'bg-slate-800/80 border border-slate-700 opacity-60' : 'bg-gradient-to-r from-blue-600 to-cyan-600 border-2 border-cyan-400'} text-white font-black text-sm flex flex-col items-center justify-center shadow-lg active:scale-90 transition-transform">
                 <span class="text-base">${cfg.skill1Icon || '⚡'}</span>
                 <span id="rpg-cd-skill1" class="text-[8px] font-bold">${s1CdSec > 0 ? `${s1CdSec}с` : 'Скилл'}</span>
               </button>
 
               <!-- Hero Ultimate Skill Button [Q] -->
-              <button id="rpg-btn-ult" onclick="window.RPG.castUltimateAction()" title="${cfg.ultName} [Q]" class="w-11 h-11 rounded-2xl ${ultCdSec > 0 ? 'bg-slate-800/80 border border-slate-700 opacity-60' : 'bg-gradient-to-r from-purple-600 to-indigo-600 border-2 border-purple-400'} text-white font-black text-sm flex flex-col items-center justify-center shadow-lg active:scale-90 transition-transform">
+              <button id="rpg-btn-ult" ontouchstart="event.preventDefault(); window.RPG.castUltimateAction()" onmousedown="event.preventDefault(); window.RPG.castUltimateAction()" onclick="window.RPG.castUltimateAction()" title="${cfg.ultName} [Q]" class="w-11 h-11 rounded-2xl ${ultCdSec > 0 ? 'bg-slate-800/80 border border-slate-700 opacity-60' : 'bg-gradient-to-r from-purple-600 to-indigo-600 border-2 border-purple-400'} text-white font-black text-sm flex flex-col items-center justify-center shadow-lg active:scale-90 transition-transform">
                 <span class="text-base">${cfg.ultIcon || '🌟'}</span>
                 <span id="rpg-cd-ult" class="text-[8px] font-bold">${ultCdSec > 0 ? `${ultCdSec}с` : 'Ульта'}</span>
               </button>
@@ -13538,14 +14202,14 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
             <!-- Bottom row: Attack + Dash -->
             <div class="flex items-center gap-1.5">
               <!-- Attack / Shoot Button [Space / Click] -->
-              <button id="rpg-btn-attack" onclick="window.RPG.playerSlashAttackAction()" title="Атака [Пробел / Клик]"
+              <button id="rpg-btn-attack" ontouchstart="event.preventDefault(); window.RPG.playerSlashAttackAction()" onmousedown="event.preventDefault(); window.RPG.playerSlashAttackAction()" onclick="window.RPG.playerSlashAttackAction()" title="Атака [Пробел / Клик]"
                 class="w-11 h-11 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 border-2 border-amber-300 text-white font-black text-xs flex flex-col items-center justify-center shadow-lg shadow-red-600/40 active:scale-90 transition-transform">
                 <span class="text-base leading-none">⚔️</span>
                 <span class="text-[8px] font-bold mt-0.5">АТАК</span>
               </button>
 
               <!-- Dash / Roll Button -->
-              <button onclick="window.RPG.playerDashRollAction()" title="Рывок / Кувырок [Shift / C]"
+              <button ontouchstart="event.preventDefault(); window.RPG.playerDashRollAction()" onmousedown="event.preventDefault(); window.RPG.playerDashRollAction()" onclick="window.RPG.playerDashRollAction()" title="Рывок / Кувырок [Shift / C]"
                 class="w-11 h-11 rounded-2xl ${ARENA.dodgeCooldown > 0 ? 'bg-slate-800/80 border border-slate-700 opacity-60' : 'bg-gradient-to-r from-sky-500 to-cyan-500 border-2 border-sky-300 shadow-sky-500/40'} text-white font-black text-sm flex flex-col items-center justify-center shadow-lg active:scale-90 transition-all">
                 <span class="text-base">🌀</span>
                 <span class="text-[8px] leading-tight font-bold">${ARENA.dodgeCooldown > 0 ? Math.ceil(ARENA.dodgeCooldown / 60) + 'с' : 'Рывок'}</span>
@@ -13585,6 +14249,7 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
           <!-- Floor & Wave Synchronized Status -->
           <div class="flex items-center justify-between px-3 py-2 rounded-2xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-700/60 text-xs font-bold text-slate-600 dark:text-slate-300">
             <span>⚔️ Этаж ${p.dungeon_floor || 1} • Волна <b class="text-amber-500">${((p.dungeon_cleared || 0) % 20) + 1} / 20</b></span>
+            <span class="ml-3">🐉 Боссов убито: <b class="text-emerald-400">${p.boss_kills || 0}</b></span>
             <span>🏆 Зачищено всего: <b class="text-emerald-500">${p.dungeon_cleared || 0} волн</b></span>
           </div>
 
@@ -14443,11 +15108,11 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
             ${
               isEquipped
                 ? `
-              <button onclick="window.RPG.openSlotFilterModal('${item.slot || item.type}')" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-95 text-white font-black text-xs shadow-md flex items-center justify-center gap-1.5">
+              <button onclick="window.RPG.openSlotFilterModal('${Object.keys(eq).find(k => eq[k]?.uid === item.uid) || item.slot || 'slot_1'}')" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-95 text-white font-black text-xs shadow-md flex items-center justify-center gap-1.5">
                 <span>🔄</span>
                 <span>Сменить на другой предмет (${slotName})</span>
               </button>
-              <button onclick="window.RPG.unequipItem('${item.slot || item.type || item.uid}')" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 active:scale-95 text-white font-black text-xs shadow-md flex items-center justify-center gap-1.5">
+              <button onclick="window.RPG.unequipItem('${item.uid}')" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 active:scale-95 text-white font-black text-xs shadow-md flex items-center justify-center gap-1.5">
                 <span>🎒</span>
                 <span>Снять в рюкзак</span>
               </button>
@@ -14828,10 +15493,10 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
     const eq = p.equipment || {};
     const sKey = (slotKey || "").toLowerCase();
     const currEquipped = eq[sKey] || eq[slotKey];
-    const slotRu = sKey === "weapon" ? "Оружие" : sKey === "armor" ? "Броня" : "Реликвия";
+    const slotRu = sKey.startsWith("slot_") ? "Слот " + sKey.split("_")[1] : sKey;
     const matchingItems = inv.filter((it) => {
       const islot = (it.slot || it.type || "").toLowerCase();
-      return islot === sKey;
+      return islot === "weapon" || islot === "armor" || islot === "relic" || islot.startsWith("slot_");
     });
 
     return `
@@ -14900,7 +15565,7 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
                               <span class="text-[10px] text-slate-500 dark:text-slate-400 truncate block">${item.bonus_desc || ""}</span>
                             </div>
                           </div>
-                          <button onclick="window.RPG.equipItem('${item.uid}')" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs shrink-0 shadow-sm flex items-center gap-1">
+                          <button onclick="window.RPG.equipItem('${item.uid}', '${slotKey}')" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs shrink-0 shadow-sm flex items-center gap-1">
                             <span>⚔️</span>
                             <span>${currEquipped ? "Сменить" : "Надеть"}</span>
                           </button>
@@ -14967,6 +15632,7 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
   // ===========================================================================
   // PUBLIC API EXPOSURE
   // ===========================================================================
+
 
   window.RPG = {
     init: initRPG,
@@ -15092,3 +15758,165 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
     renderRoot: renderRoot
   };
 })();
+
+function renderTalentsTab() {
+  const p = RPG_STATE.profile;
+  if (!p) return `<div class="p-4 text-center text-white/50">Загрузка...</div>`;
+
+  const talents = p.talents || {};
+  const tPoints = p.talent_points || 0;
+  const rebirths = p.rebirths || 0;
+
+  // Definitions for talents
+  const talentDefs = [
+    { id: "lifesteal", name: "🩸 Вампиризм", desc: "Восстанавливает ХП от урона (+2% за лвл)", max: 5 },
+    { id: "crit_mult", name: "💥 Крит. Урон", desc: "Увеличивает множитель крита (+25% за лвл)", max: 5 },
+    { id: "cooldown", name: "⏳ Спешка", desc: "Снижает КД скиллов (на 6% за лвл)", max: 5 },
+    { id: "dodge", name: "🍃 Уворот", desc: "Шанс увернуться от атаки босса (+4% за лвл)", max: 5 }
+  ];
+
+  let html = `
+    <div class="p-3 bg-slate-900 min-h-screen text-slate-200">
+      <div class="mb-4 bg-slate-800 p-4 rounded-xl border border-slate-700/50 relative overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-r from-purple-900/40 to-blue-900/40 opacity-50"></div>
+        <div class="relative z-10 flex justify-between items-center">
+          <div>
+            <h2 class="text-xl font-black text-white drop-shadow-md">Перерождение</h2>
+            <div class="text-xs text-purple-300 mt-1">Текущий ранг: <span class="font-bold text-white">Перерождений: ${rebirths}</span></div>
+            <div class="text-[10px] text-slate-400 mt-0.5">Каждое перерождение дает +10% ко всем характеристикам навсегда!</div>
+          </div>
+          <div>
+            ${p.level >= 100 
+              ? `<button onclick="doRebirthUI()" class="px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-lg font-bold text-sm text-white shadow-lg shadow-purple-500/30 active:scale-95 transition-transform">СБРОС 100 ЛВЛ</button>`
+              : `<button disabled class="px-4 py-2 bg-slate-700 rounded-lg font-bold text-sm text-slate-500 cursor-not-allowed">Нужен 100 ур.</button>`
+            }
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-between items-end mb-3 px-1">
+        <h3 class="text-lg font-bold text-emerald-400">Дерево Талантов</h3>
+        <div class="text-sm font-bold bg-slate-800 px-3 py-1 rounded-full border border-slate-700">
+          Очков: <span class="text-emerald-400">${tPoints}</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3 pb-20">
+  `;
+
+  talentDefs.forEach(t => {
+    const lvl = talents[t.id] || 0;
+    const isMax = lvl >= t.max;
+    const canUpgrade = tPoints > 0 && !isMax;
+
+    html += `
+        <div class="bg-slate-800 rounded-xl p-3 border border-slate-700 flex flex-col justify-between">
+          <div>
+            <div class="flex justify-between items-start mb-1">
+              <div class="font-bold text-sm text-white leading-tight">${t.name}</div>
+              <div class="text-xs font-bold ${isMax ? "text-amber-400" : "text-emerald-400"} bg-slate-900 px-1.5 py-0.5 rounded">
+                ${lvl}/${t.max}
+              </div>
+            </div>
+            <div class="text-[10px] text-slate-400 leading-snug mb-3">${t.desc}</div>
+          </div>
+          <button 
+            onclick="upgradeTalentUI('${t.id}')"
+            ${canUpgrade ? "" : "disabled"}
+            class="w-full py-1.5 rounded-lg text-xs font-bold transition-all ${
+              canUpgrade 
+                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 active:bg-emerald-500/40" 
+                : "bg-slate-700/50 text-slate-500 border border-slate-700/50 cursor-not-allowed"
+            }"
+          >
+            ${isMax ? "МАКСИМУМ" : "УЛУЧШИТЬ"}
+          </button>
+        </div>
+    `;
+  });
+
+  html += `
+      </div>
+
+      <!-- PETS / FAMILIARS SECTION -->
+      <div class="mb-3 px-1 flex justify-between items-end">
+        <h3 class="text-lg font-bold text-amber-400">🐾 Боевые Питомцы</h3>
+        <div class="text-[10px] text-slate-400">Летают с героем в 2D Арене</div>
+      </div>
+
+      <div class="space-y-2 pb-24">
+        ${[
+          { id: "dragon", icon: "🐉", name: "Дракончик Недр", bonus: "Огненный плевок", desc: "Каждые 2.5 сек выпускает самонаводящийся огненный шар в босса (250-400 урона)." },
+          { id: "fairy", icon: "🧚", name: "Лесная Фея", bonus: "Аура Исцеления", desc: "Каждые 3 сек восстанавливает герою +45 HP и +15 MP в бою." },
+          { id: "wolf", icon: "🐺", name: "Призрачный Волк", bonus: "Боевой вой", desc: "Пассивно дает герою +25% скорости атаки и +15% шанса критического удара." }
+        ].map(pet => {
+          const isSelected = (localStorage.getItem("rpg_active_pet") || "dragon") === pet.id;
+          return `
+            <div class="bg-slate-800/90 rounded-xl p-3 border ${isSelected ? 'border-amber-400/80 shadow-lg shadow-amber-500/10' : 'border-slate-700'} flex items-center justify-between gap-3">
+              <div class="flex items-center gap-3">
+                <div class="w-11 h-11 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center text-2xl shadow-inner">
+                  ${pet.icon}
+                </div>
+                <div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="font-bold text-sm text-white">${pet.name}</span>
+                    <span class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-extrabold border border-amber-500/30">${pet.bonus}</span>
+                  </div>
+                  <div class="text-[10px] text-slate-400 mt-0.5 max-w-[210px] leading-tight">${pet.desc}</div>
+                </div>
+              </div>
+              <button 
+                onclick="selectPetUI('${pet.id}')"
+                class="px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
+                  isSelected 
+                    ? 'bg-amber-500 text-slate-950 shadow-md' 
+                    : 'bg-slate-700/60 hover:bg-slate-700 text-slate-300 border border-slate-600'
+                }"
+              >
+                ${isSelected ? 'В БОЮ' : 'ВЗЯТЬ'}
+              </button>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    </div>
+  `;
+
+  return html;
+}
+
+window.selectPetUI = function(petId) {
+  localStorage.setItem("rpg_active_pet", petId);
+  if (window.triggerHaptic) triggerHaptic("medium");
+  if (typeof renderRoot === "function") renderRoot();
+};
+
+window.doRebirthUI = async function() {
+  if (!confirm("Вы уверены? Ваш уровень сбросится до 1, но вы получите вечный бонус +10% ко всем статам!")) return;
+  try {
+    if (window.triggerHaptic) triggerHaptic("heavy");
+    const res = await api.doRebirth();
+    if (res.profile) {
+      RPG_STATE.profile = res.profile;
+      if (window.syncArenaPlayerStats) syncArenaPlayerStats();
+      if (window.triggerHaptic) triggerHaptic("success");
+      renderRoot();
+    }
+  } catch(e) {
+    alert(e.message || "Ошибка перерождения");
+  }
+};
+
+window.upgradeTalentUI = async function(talentId) {
+  try {
+    if (window.triggerHaptic) triggerHaptic("light");
+    const res = await api.upgradeTalent(talentId);
+    if (res.profile) {
+      RPG_STATE.profile = res.profile;
+      if (window.syncArenaPlayerStats) syncArenaPlayerStats();
+      renderRoot();
+    }
+  } catch(e) {
+    alert(e.message || "Ошибка улучшения таланта");
+  }
+};

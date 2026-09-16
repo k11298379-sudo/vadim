@@ -30,7 +30,12 @@ function updateCustomBossAI(boss, p, ARENA) {
   boss.skillCooldown = Math.max(0, boss.skillCooldown - 1);
   boss.meleeCooldown = Math.max(0, boss.meleeCooldown - 1);
   boss.chargeCooldown = Math.max(0, (boss.chargeCooldown || 0) - 1);
-  boss.ultimateMeter = Math.min(100, (boss.ultimateMeter || 0) + (boss.enrageStage === "enraged" ? 0.14 : 0.08));
+  
+  let ultChargeRate = (boss.enrageStage === "enraged" ? 0.14 : 0.08);
+  if (bId.includes("faceless_void") || bId.includes("хроно")) {
+    ultChargeRate *= 0.25; // Massive nerf to Chronosphere cooldown (4x longer, ~1.5 - 2 mins)
+  }
+  boss.ultimateMeter = Math.min(100, (boss.ultimateMeter || 0) + ultChargeRate);
 
   // Find nearest target (player or active companion)
   let closestTarget = p;

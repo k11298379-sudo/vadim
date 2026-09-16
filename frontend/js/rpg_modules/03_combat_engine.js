@@ -200,20 +200,23 @@
     const stats = RPG_STATE.profile?.stats || {};
     const eq = RPG_STATE.profile?.equipment || {};
 
-    // 1. Passive Item: Butterfly / Agility Evasion (dodge chance)
+    // 1. Evasion (only for normal/physical attacks) & Boss MKB (30%)
     const dodgeChance = Math.min(70, stats.dodge_chance || 0);
-    if (dodgeChance > 0 && Math.random() * 100 < dodgeChance) {
-      spawnFloatingText(p.x, p.y - 25, "💨 УВОРОТ! (БАБОЧКА)", "#38bdf8");
+    const canEvade = (attackType !== "magic");
+    const bossMkbProcced = canEvade && (Math.random() < 0.30);
+    
+    if (canEvade && !bossMkbProcced && dodgeChance > 0 && Math.random() * 100 < dodgeChance) {
+      spawnFloatingText(p.x, p.y - 25, "💨 УВОРОТ!", "#38bdf8");
       triggerHaptic("light");
-      return 0; // Completely dodge incoming attack!
+      return 0;
     }
 
-    // 2. Passive Item: Radiance Blind (17% chance boss misses attack)
+    // 2. Passive Item: Radiance Blind (17% chance boss misses attack, also bypassable by MKB)
     const hasRadiance = Object.values(eq).some(it => it && (it.name?.includes("Radiance") || it.name?.includes("Сияние") || it.bonus?.miss_aura));
-    if (hasRadiance && Math.random() < 0.17) {
-      spawnFloatingText(p.x, p.y - 25, "💨 ПРОМАХ БОССА! (РАДИАНС)", "#f59e0b");
+    if (hasRadiance && canEvade && !bossMkbProcced && Math.random() < 0.17) {
+      spawnFloatingText(p.x, p.y - 25, "💨 ПРОМАХ БОССА!", "#f59e0b");
       triggerHaptic("light");
-      return 0; // Boss blinded!
+      return 0;
     }
 
     let finalDmg = Math.max(1, rawDmg);
@@ -381,16 +384,7 @@
       const touch = e.changedTouches[0];
       const { cx, cy } = getEventArenaCoords(touch.clientX, touch.clientY);
 
-      // Only in legacy side-scroller boss mode, bottom 40% moves left/right
-      if (!ARENA.topDownMode && !ARENA.isRaidBossBattle && ARENA.bossArenaMode && ARENA.waveState === "fighting" && cy > ARENA.height * 0.55) {
-        ARENA._touchMoveId = touch.identifier;
-        ARENA.moveInput.left = cx < ARENA.width * 0.38;
-        ARENA.moveInput.right = cx > ARENA.width * 0.62;
-        if (!ARENA.moveInput.left && !ARENA.moveInput.right) {
-          playerSlashAttack();
-        }
-        return;
-      }
+      
 
       handleCanvasTap(cx, cy);
     };
@@ -398,13 +392,7 @@
     // Boss arena movement: touchmove for continuous direction
     canvas.ontouchmove = (e) => {
       e.preventDefault();
-      if (!ARENA.bossArenaMode || !ARENA._touchMoveId) return;
-      const touch = Array.from(e.changedTouches).find(t => t.identifier === ARENA._touchMoveId);
-      if (!touch) return;
-      const rect = canvas.getBoundingClientRect();
-      const cx = (touch.clientX - rect.left) * (ARENA.width / rect.width);
-      ARENA.moveInput.left = cx < ARENA.width * 0.38;
-      ARENA.moveInput.right = cx > ARENA.width * 0.62;
+      // No manual movement in 2D side-scroller anymore!
     };
 
     canvas.ontouchend = (e) => {
@@ -581,4 +569,4 @@
   // ---------------------------------------------------------------------------
   // MAIN GAME LOOP UPDATE
   // ---------------------------------------------------------------------------
-
+
