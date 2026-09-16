@@ -44,8 +44,10 @@ async def get_or_create_rpg_character(
         hero_cfg = NATAR_HEROES.get(preferred_class, NATAR_HEROES["pudge"])
         starter_weapon = dict(hero_cfg["starter_weapon"])
         starter_weapon["uid"] = str(uuid.uuid4())[:8]
+        starter_weapon["slot"] = "slot_1"
         starter_armor = dict(hero_cfg["starter_armor"])
         starter_armor["uid"] = str(uuid.uuid4())[:8]
+        starter_armor["slot"] = "slot_5"
 
         starter_potion = {
             "uid": str(uuid.uuid4())[:8],
@@ -67,7 +69,7 @@ async def get_or_create_rpg_character(
             "uid": str(uuid.uuid4())[:8],
             "name": "Талисман Энергии",
             "type": "relic",
-            "slot": "relic",
+            "slot": "slot_2",
             "slot_name": "Реликвия",
             "slot_icon": "💍",
             "rarity": "common",
@@ -92,9 +94,9 @@ async def get_or_create_rpg_character(
             vitality=hero_cfg["str"],
             stat_points=2,
             equipment={
-                "weapon": starter_weapon,
-                "armor": starter_armor,
-                "relic": starter_relic
+                "slot_1": starter_weapon,
+                "slot_5": starter_armor,
+                "slot_2": starter_relic
             },
             inventory=[starter_potion],
             dungeon_floor=1,

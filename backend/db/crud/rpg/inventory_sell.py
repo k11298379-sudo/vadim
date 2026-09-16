@@ -102,10 +102,12 @@ async def reset_rpg_character(
     starter_weapon["uid"] = str(uuid.uuid4())[:8]
     starter_armor["uid"] = str(uuid.uuid4())[:8]
 
+    starter_weapon["slot"] = "slot_1"
+    starter_armor["slot"] = "slot_5"
+
     char.equipment = {
-        "weapon": starter_weapon,
-        "armor": starter_armor,
-        "relic": None
+        "slot_1": starter_weapon,
+        "slot_5": starter_armor,
     }
     char.inventory = [
         {

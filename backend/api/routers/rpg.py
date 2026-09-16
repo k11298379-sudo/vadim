@@ -10,6 +10,7 @@ from backend.db.session import get_db_session
 from backend.db.models import User
 from backend.api.auth import get_optional_webapp_user
 from backend.db.crud.rpg import (
+    NATAR_HEROES,
     DOTA_HEROES,
     get_or_create_rpg_character,
     serialize_character_profile,
@@ -373,7 +374,54 @@ async def rebirth_endpoint(
     
     char.level = 1
     char.xp = 0
+    char.dungeon_cleared = 0
+    char.dungeon_floor = 1
+    char.gold = 150
+    
+    h_class = char.hero_class or "pudge"
+    config = NATAR_HEROES.get(h_class, NATAR_HEROES["pudge"])
+    starter_weapon = dict(config["starter_weapon"])
+    starter_weapon["uid"] = str(uuid.uuid4())[:8]
+    starter_weapon["slot"] = "slot_1"
+    starter_armor = dict(config["starter_armor"])
+    starter_armor["uid"] = str(uuid.uuid4())[:8]
+    starter_armor["slot"] = "slot_5"
+
+    char.equipment = {
+        "slot_1": starter_weapon,
+        "slot_5": starter_armor,
+    }
+    
+    starter_potion = {
+        "uid": str(uuid.uuid4())[:8],
+        "name": "Зелье Исцеления",
+        "icon": "🧪",
+        "type": "potion",
+        "slot": "consumable",
+        "slot_name": "Зелье",
+        "slot_icon": "🧪",
+        "rarity": "common",
+        "rarity_name": "Обычный",
+        "bonus_type": "heal",
+        "bonus_val": 120,
+        "qty": 3,
+        "price": 30,
+        "bonus_desc": "❤️ Восстанавливает 120 HP (3 шт.)"
+    }
+    char.inventory = [starter_potion]
+    
+    char.strength = config["str"]
+    char.agility = config["agi"]
+    char.intelligence = config["int"]
+    char.vitality = config["str"]
+    char.stat_points = 2
+    
     char.rebirths += 1
+    char.talent_points = getattr(char, "talent_points", 0) + 1
+    
+    flag_modified(char, "equipment")
+    flag_modified(char, "inventory")
+    
     await session.commit()
     
     return {"status": "ok", "profile": serialize_character_profile(char, user_name=user_name)}
