@@ -160,6 +160,15 @@ async def add_xp_and_gold_to_character(
             if char.level % 5 == 0:
                 char.talent_points = getattr(char, "talent_points", 0) + 1
             
+            # PET SYSTEM: Apply Gold & XP Multipliers
+            pet_gold_mult = 1.0
+            pet_xp_mult = 1.0
+            pets = getattr(char, "pets", []) or []
+            for p in pets:
+                if p.get("is_equipped"):
+                    pet_gold_mult *= p.get("gold_mult", 1.0)
+                    pet_xp_mult *= p.get("xp_mult", 1.0)
+
             # Apply automatic stat gains
             hero_cfg = NATAR_HEROES.get(char.hero_class, NATAR_HEROES.get("pudge", {}))
             char.strength = int(char.strength + hero_cfg.get("str_gain", 2.0))

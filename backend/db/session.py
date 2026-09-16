@@ -152,7 +152,7 @@ async def init_db():
                                       'strength', 'agility', 'intelligence', 'vitality', 'stat_points',
                                       'equipment', 'inventory', 'dungeon_floor', 'dungeon_cleared',
                                       'pvp_rating', 'pvp_wins', 'pvp_losses', 'boss_kills',
-                                      'rebirths', 'talent_points', 'talents',
+                                      'rebirths', 'talent_points', 'talents', 'pets',
                                       'created_at', 'updated_at'
                                   )
                             LOOP
