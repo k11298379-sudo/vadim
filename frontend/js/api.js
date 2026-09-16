@@ -286,7 +286,8 @@ const api = {
   resetRpgCharacter: () =>
     apiRequest("/api/rpg/reset", {
       method: "POST"
-    })
+    }),
+  request: apiRequest
 };
 
 window.api = api;

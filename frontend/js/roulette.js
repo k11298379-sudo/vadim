@@ -204,48 +204,23 @@
         <!-- Сетка основных внешних ставок -->
         <div class="space-y-1.5">
           <div class="grid grid-cols-2 gap-2">
-            <button onclick="window.ROULETTE.addBet('red')" class="rl-bet-btn bg-rose-600 text-white shadow-sm hover:bg-rose-700">
-              🔴 Красное (1:1) ${betBadge('red')}
-            </button>
-            <button onclick="window.ROULETTE.addBet('black')" class="rl-bet-btn bg-slate-900 text-white shadow-sm hover:bg-black">
-              ⚫ Чёрное (1:1) ${betBadge('black')}
-            </button>
+            <button onclick="window.ROULETTE.addBet('red')" class="rl-bet-btn bg-rose-600 text-white shadow-sm hover:bg-rose-700">🔴 Красное (1:1) ${betBadge('red')}</button>
+            <button onclick="window.ROULETTE.addBet('black')" class="rl-bet-btn bg-slate-900 text-white shadow-sm hover:bg-black">⚫ Чёрное (1:1) ${betBadge('black')}</button>
           </div>
-
           <div class="grid grid-cols-2 gap-2">
-            <button onclick="window.ROULETTE.addBet('even')" class="rl-bet-btn bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200">
-              Чёт (1:1) ${betBadge('even')}
-            </button>
-            <button onclick="window.ROULETTE.addBet('odd')" class="rl-bet-btn bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200">
-              Нечет (1:1) ${betBadge('odd')}
-            </button>
+            <button onclick="window.ROULETTE.addBet('even')" class="rl-bet-btn bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200">Чёт (1:1) ${betBadge('even')}</button>
+            <button onclick="window.ROULETTE.addBet('odd')" class="rl-bet-btn bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200">Нечет (1:1) ${betBadge('odd')}</button>
           </div>
-
           <div class="grid grid-cols-2 gap-2">
-            <button onclick="window.ROULETTE.addBet('low')" class="rl-bet-btn bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200">
-              1–18 (1:1) ${betBadge('low')}
-            </button>
-            <button onclick="window.ROULETTE.addBet('high')" class="rl-bet-btn bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200">
-              19–36 (1:1) ${betBadge('high')}
-            </button>
+            <button onclick="window.ROULETTE.addBet('low')" class="rl-bet-btn bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200">1–18 (1:1) ${betBadge('low')}</button>
+            <button onclick="window.ROULETTE.addBet('high')" class="rl-bet-btn bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200">19–36 (1:1) ${betBadge('high')}</button>
           </div>
-
           <div class="grid grid-cols-3 gap-1.5">
-            <button onclick="window.ROULETTE.addBet('dozen1')" class="rl-bet-btn bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200">
-              1–12 (2:1) ${betBadge('dozen1')}
-            </button>
-            <button onclick="window.ROULETTE.addBet('dozen2')" class="rl-bet-btn bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200">
-              13–24 (2:1) ${betBadge('dozen2')}
-            </button>
-            <button onclick="window.ROULETTE.addBet('dozen3')" class="rl-bet-btn bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200">
-              25–36 (2:1) ${betBadge('dozen3')}
-            </button>
+            <button onclick="window.ROULETTE.addBet('dozen1')" class="rl-bet-btn bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200">1–12 (2:1) ${betBadge('dozen1')}</button>
+            <button onclick="window.ROULETTE.addBet('dozen2')" class="rl-bet-btn bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200">13–24 (2:1) ${betBadge('dozen2')}</button>
+            <button onclick="window.ROULETTE.addBet('dozen3')" class="rl-bet-btn bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200">25–36 (2:1) ${betBadge('dozen3')}</button>
           </div>
-
-          <!-- Прямая ставка на 0 -->
-          <button onclick="window.ROULETTE.addBet('straight', 0)" class="w-full rl-bet-btn bg-emerald-700 text-white font-black hover:bg-emerald-800">
-            🟢 Зеро 0 (35:1) ${betBadge('straight:0')}
-          </button>
+          <button onclick="window.ROULETTE.addBet('straight', 0)" class="w-full rl-bet-btn bg-emerald-700 text-white font-black hover:bg-emerald-800">🟢 Зеро 0 (35:1) ${betBadge('straight:0')}</button>
         </div>
 
         <!-- Кнопка запуска -->
@@ -259,6 +234,49 @@
   function render() {
     if (!containerEl) return;
     containerEl.innerHTML = renderHTML();
+  }
+
+  function getUserId() {
+    if (window.currentUser?.tg_id || window.currentUser?.id) return window.currentUser.tg_id || window.currentUser.id;
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const u = p.get('tg_user_id') || p.get('uid') || p.get('user_id');
+      if (u) return parseInt(u, 10);
+      if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) return window.Telegram.WebApp.initDataUnsafe.user.id;
+      const c = localStorage.getItem('cached_tg_uid');
+      if (c && /^[0-9]+$/.test(c)) return parseInt(c, 10);
+    } catch (e) {}
+    return 0;
+  }
+
+  async function apiCall(endpoint, body = null) {
+    const uid = getUserId();
+    const sep = endpoint.includes('?') ? '&' : '?';
+    const url = uid ? `${endpoint}${sep}tg_user_id=${uid}` : endpoint;
+    const headers = { 'Content-Type': 'application/json' };
+    if (uid) headers['X-Telegram-User-Id'] = String(uid);
+    try {
+      const rawInit = window.Telegram?.WebApp?.initData;
+      if (rawInit && /^[\x20-\x7E]*$/.test(rawInit)) headers['X-Telegram-Init-Data'] = rawInit;
+    } catch (e) {}
+
+    const opts = { headers };
+    if (body !== null) {
+      opts.method = 'POST';
+      const payload = typeof body === 'object' && body !== null ? { ...body } : {};
+      if (uid && !payload.user_id) payload.user_id = uid;
+      if (uid && !payload.tg_user_id) payload.tg_user_id = uid;
+      opts.body = JSON.stringify(payload);
+    }
+
+    const res = await fetch(url, opts);
+    let data = {};
+    try {
+      data = await res.json();
+    } catch (e) {
+      data = { detail: `HTTP ${res.status}: ${res.statusText || 'Ошибка ответа сервера'}` };
+    }
+    return { ok: res.ok, status: res.status, data };
   }
 
   async function spin() {
@@ -276,13 +294,8 @@
     });
 
     try {
-      const res = await fetch('/api/roulette/spin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bets: betsPayload })
-      });
-      const data = await res.json();
-      if (!res.ok) {
+      const { ok, data } = await apiCall('/api/roulette/spin', { bets: betsPayload });
+      if (!ok) {
         alert(data.detail || 'Ошибка вращения');
         isSpinning = false;
         render();
@@ -311,7 +324,7 @@
       }, 3500);
 
     } catch (e) {
-      alert('Ошибка соединения');
+      alert(e.message || 'Ошибка соединения');
       isSpinning = false;
       render();
     }
@@ -319,12 +332,10 @@
 
   async function syncState() {
     try {
-      const res = await fetch('/api/roulette/state');
-      if (res.status === 400) {
-        const err = await res.json();
-        if (err.detail && err.detail.includes('экосистем')) isCurrencyActive = false;
-      } else if (res.ok) {
-        const data = await res.json();
+      const { ok, status, data } = await apiCall('/api/roulette/state');
+      if (status === 400 && data.detail && data.detail.includes('экосистем')) {
+        isCurrencyActive = false;
+      } else if (ok) {
         userCoins = data.coins || 0;
         if (window.currentUser) window.currentUser.coins = userCoins;
         isCurrencyActive = true;

@@ -16,8 +16,9 @@ router = APIRouter(prefix="/dice", tags=["dice"])
 async def _resolve_user_and_check_ecosystem(
     request: Request,
     user: Optional[User],
+    payload: Optional[Dict[str, Any]] = None,
 ) -> tuple[int, User]:
-    viewer_id = user.tg_id if user else await _extract_viewer_tg_id(request)
+    viewer_id = _extract_viewer_tg_id(user, request, payload=payload)
     if not viewer_id:
         raise HTTPException(status_code=401, detail="Требуется авторизация через Telegram Mini App")
 
@@ -56,7 +57,7 @@ async def dice_duel(
     Бросок в режиме «Дуэль с дилером».
     payload: {"stake": 25}
     """
-    viewer_id, db_user = await _resolve_user_and_check_ecosystem(request, user)
+    viewer_id, db_user = await _resolve_user_and_check_ecosystem(request, user, payload=payload)
 
     stake = int(payload.get("stake", 10))
     if stake <= 0:
@@ -99,7 +100,7 @@ async def dice_over_under(
     Бросок в режиме «Больше / Меньше / 7».
     payload: {"stake": 25, "prediction": "under_7" | "over_7" | "exact_7" | "double"}
     """
-    viewer_id, db_user = await _resolve_user_and_check_ecosystem(request, user)
+    viewer_id, db_user = await _resolve_user_and_check_ecosystem(request, user, payload=payload)
 
     stake = int(payload.get("stake", 10))
     if stake <= 0:

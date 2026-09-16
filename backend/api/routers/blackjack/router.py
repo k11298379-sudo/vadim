@@ -17,8 +17,9 @@ router = APIRouter(prefix="/blackjack", tags=["blackjack"])
 async def _resolve_user_and_check_ecosystem(
     request: Request,
     user: Optional[User],
+    payload: Optional[Dict[str, Any]] = None,
 ) -> tuple[int, User]:
-    viewer_id = user.tg_id if user else await _extract_viewer_tg_id(request)
+    viewer_id = _extract_viewer_tg_id(user, request, payload=payload)
     if not viewer_id:
         raise HTTPException(status_code=401, detail="Требуется авторизация через Telegram Mini App")
 
@@ -60,7 +61,7 @@ async def blackjack_deal(
     Начало новой раздачи в Блэкджек.
     payload: {"stake": 25}
     """
-    viewer_id, db_user = await _resolve_user_and_check_ecosystem(request, user)
+    viewer_id, db_user = await _resolve_user_and_check_ecosystem(request, user, payload=payload)
 
     stake = int(payload.get("stake", 10))
     if stake <= 0:
@@ -101,10 +102,11 @@ async def blackjack_deal(
 @router.post("/hit")
 async def blackjack_hit(
     request: Request,
+    payload: Dict[str, Any] = Body(default={}),
     user: Optional[User] = Depends(get_optional_webapp_user),
 ):
     """Игрок берет дополнительную карту («Еще»)."""
-    viewer_id, db_user = await _resolve_user_and_check_ecosystem(request, user)
+    viewer_id, db_user = await _resolve_user_and_check_ecosystem(request, user, payload=payload)
     sess = get_session(viewer_id)
     if not sess or sess["game"].phase != "player_turn":
         raise HTTPException(status_code=400, detail="Нет активной раздачи")
@@ -131,10 +133,11 @@ async def blackjack_hit(
 @router.post("/stand")
 async def blackjack_stand(
     request: Request,
+    payload: Dict[str, Any] = Body(default={}),
     user: Optional[User] = Depends(get_optional_webapp_user),
 ):
     """Игрок останавливается («Хватит»). Ход переходит к дилеру."""
-    viewer_id, db_user = await _resolve_user_and_check_ecosystem(request, user)
+    viewer_id, db_user = await _resolve_user_and_check_ecosystem(request, user, payload=payload)
     sess = get_session(viewer_id)
     if not sess or sess["game"].phase != "player_turn":
         raise HTTPException(status_code=400, detail="Нет активной раздачи")
@@ -161,10 +164,11 @@ async def blackjack_stand(
 @router.post("/double")
 async def blackjack_double(
     request: Request,
+    payload: Dict[str, Any] = Body(default={}),
     user: Optional[User] = Depends(get_optional_webapp_user),
 ):
     """Удвоение ставки («Удвоить»): +1 карта и завершение хода."""
-    viewer_id, db_user = await _resolve_user_and_check_ecosystem(request, user)
+    viewer_id, db_user = await _resolve_user_and_check_ecosystem(request, user, payload=payload)
     sess = get_session(viewer_id)
     if not sess or sess["game"].phase != "player_turn":
         raise HTTPException(status_code=400, detail="Нет активной раздачи")

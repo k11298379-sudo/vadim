@@ -211,6 +211,56 @@
     containerEl.innerHTML = renderHTML();
   }
 
+  function getUserId() {
+    if (window.currentUser?.tg_id) return window.currentUser.tg_id;
+    if (window.currentUser?.id) return window.currentUser.id;
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const u = p.get('tg_user_id') || p.get('uid') || p.get('user_id');
+      if (u) return parseInt(u, 10);
+    } catch (e) {}
+    try {
+      if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
+        return window.Telegram.WebApp.initDataUnsafe.user.id;
+      }
+    } catch (e) {}
+    try {
+      const c = localStorage.getItem('cached_tg_uid');
+      if (c && /^[0-9]+$/.test(c)) return parseInt(c, 10);
+    } catch (e) {}
+    return 0;
+  }
+
+  async function apiCall(endpoint, body = null) {
+    const uid = getUserId();
+    const sep = endpoint.includes('?') ? '&' : '?';
+    const url = uid ? `${endpoint}${sep}tg_user_id=${uid}` : endpoint;
+    const headers = { 'Content-Type': 'application/json' };
+    if (uid) headers['X-Telegram-User-Id'] = String(uid);
+    try {
+      const rawInit = window.Telegram?.WebApp?.initData;
+      if (rawInit && /^[\x20-\x7E]*$/.test(rawInit)) headers['X-Telegram-Init-Data'] = rawInit;
+    } catch (e) {}
+
+    const opts = { headers };
+    if (body !== null) {
+      opts.method = 'POST';
+      const payload = typeof body === 'object' && body !== null ? { ...body } : {};
+      if (uid && !payload.user_id) payload.user_id = uid;
+      if (uid && !payload.tg_user_id) payload.tg_user_id = uid;
+      opts.body = JSON.stringify(payload);
+    }
+
+    const res = await fetch(url, opts);
+    let data = {};
+    try {
+      data = await res.json();
+    } catch (e) {
+      data = { detail: `HTTP ${res.status}: ${res.statusText || 'Ошибка ответа сервера'}` };
+    }
+    return { ok: res.ok, status: res.status, data };
+  }
+
   async function roll() {
     if (isRolling || userCoins < selectedStake || selectedStake <= 0) return;
     isRolling = true;
@@ -222,13 +272,8 @@
       : { stake: selectedStake, prediction: selectedPrediction };
 
     try {
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      const data = await res.json();
-      if (!res.ok) {
+      const { ok, data } = await apiCall(endpoint, body);
+      if (!ok) {
         alert(data.detail || 'Ошибка броска');
         isRolling = false;
         render();
@@ -244,7 +289,7 @@
       }, 700);
 
     } catch (e) {
-      alert('Ошибка соединения с сервером');
+      alert(e.message || 'Ошибка соединения с сервером');
       isRolling = false;
       render();
     }
@@ -302,12 +347,10 @@
 
   async function syncState() {
     try {
-      const res = await fetch('/api/dice/state');
-      if (res.status === 400) {
-        const err = await res.json();
-        if (err.detail && err.detail.includes('экосистем')) isCurrencyActive = false;
-      } else if (res.ok) {
-        const data = await res.json();
+      const { ok, status, data } = await apiCall('/api/dice/state');
+      if (status === 400 && data.detail && data.detail.includes('экосистем')) {
+        isCurrencyActive = false;
+      } else if (ok) {
         userCoins = data.coins || 0;
         if (window.currentUser) window.currentUser.coins = userCoins;
         isCurrencyActive = true;

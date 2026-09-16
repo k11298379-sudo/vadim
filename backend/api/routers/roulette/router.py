@@ -20,8 +20,9 @@ router = APIRouter(prefix="/roulette", tags=["roulette"])
 async def _resolve_user_and_check_ecosystem(
     request: Request,
     user: Optional[User],
+    payload: Optional[Dict[str, Any]] = None,
 ) -> tuple[int, User]:
-    viewer_id = user.tg_id if user else await _extract_viewer_tg_id(request)
+    viewer_id = _extract_viewer_tg_id(user, request, payload=payload)
     if not viewer_id:
         raise HTTPException(status_code=401, detail="Требуется авторизация через Telegram Mini App")
 
@@ -60,7 +61,7 @@ async def roulette_spin(
     Вращение рулетки.
     payload: {"bets": [{"type": "red", "amount": 25}, {"type": "straight", "value": 7, "amount": 10}]}
     """
-    viewer_id, db_user = await _resolve_user_and_check_ecosystem(request, user)
+    viewer_id, db_user = await _resolve_user_and_check_ecosystem(request, user, payload=payload)
 
     bets = payload.get("bets", [])
     if not isinstance(bets, list) or not bets:
