@@ -204,8 +204,20 @@ mockWindow.GAMES.switchCasinoSubGame('roulette');
 assert(mockWindow.GAMES.getCasinoSubGame() === 'roulette', 'should switch to roulette');
 mockWindow.GAMES.switchCasinoSubGame('dice');
 assert(mockWindow.GAMES.getCasinoSubGame() === 'dice', 'should switch to dice');
+mockWindow.GAMES.switchCasinoSubGame('leaderboard');
+assert(mockWindow.GAMES.getCasinoSubGame() === 'leaderboard', 'should switch to leaderboard');
 
-console.log('Multiplayer online room opening, game switching, casino sub-tabs and exports verified without ReferenceError!');
+['blackjack.js', 'roulette.js', 'dice.js', 'casino_leaderboard.js'].forEach(m => {
+  const p = path.join(__dirname, '../frontend/js/', m);
+  if (fs.existsSync(p)) eval(fs.readFileSync(p, 'utf-8'));
+});
+
+assert(mockWindow.BLACKJACK && typeof mockWindow.BLACKJACK.setCustomStake === 'function', 'BLACKJACK.setCustomStake must be defined');
+assert(mockWindow.DICE && typeof mockWindow.DICE.setCustomStake === 'function', 'DICE.setCustomStake must be defined');
+assert(mockWindow.ROULETTE && typeof mockWindow.ROULETTE.setCustomChip === 'function', 'ROULETTE.setCustomChip must be defined');
+assert(mockWindow.CASINO_LEADERBOARD && typeof mockWindow.CASINO_LEADERBOARD.init === 'function', 'CASINO_LEADERBOARD.init must be defined');
+
+console.log('Multiplayer online room opening, game switching, casino sub-tabs, custom stakes and exports verified without ReferenceError!');
 
 console.log('\n🎉 ALL FRONTEND AND EGE TESTS PASSED SUCCESSFULLY! 🚀');
 process.exit(0);

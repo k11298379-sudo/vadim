@@ -26,6 +26,7 @@ router = APIRouter(tags=["durak"])
 
 
 @router.get("/durak/leaderboard")
+@router.get("/casino/leaderboard")
 async def durak_leaderboard():
     """Возвращает топ студентов по монетам среди включивших игровую экосистему."""
     async with async_session_factory() as session:

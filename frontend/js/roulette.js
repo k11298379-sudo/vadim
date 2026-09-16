@@ -65,9 +65,41 @@
     render();
   }
 
+  function syncChipUI() {
+    const disp = document.getElementById('rl-chip-display');
+    if (disp) disp.textContent = `${selectedChip} 🪙`;
+    const input = document.getElementById('rl-custom-chip-input');
+    if (input && document.activeElement !== input) {
+      input.value = selectedChip > 0 ? selectedChip : '';
+    }
+    const chipBtns = containerEl?.querySelectorAll('.rl-chip-btn');
+    chipBtns?.forEach(c => {
+      const v = parseInt(c.textContent, 10);
+      if (v === selectedChip) {
+        c.className = 'rl-chip-btn px-2 py-1 rounded-lg text-xs font-black border bg-amber-500 text-black border-amber-500 shadow';
+      } else {
+        c.className = 'rl-chip-btn px-2 py-1 rounded-lg text-xs font-black border bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600';
+      }
+    });
+  }
+
   function setChip(val) {
-    selectedChip = val;
-    render();
+    selectedChip = Math.min(Math.max(1, val), userCoins || 1);
+    syncChipUI();
+  }
+
+  function setCustomChip(val, isChange = false) {
+    let num = parseInt(val, 10);
+    if (isNaN(num) || num < 1) num = isChange ? 1 : 0;
+    if (userCoins > 0 && num > userCoins) num = userCoins;
+    selectedChip = num;
+    syncChipUI();
+  }
+
+  function setAllIn() {
+    const remain = Math.max(1, userCoins - getTotalStake());
+    selectedChip = remain;
+    syncChipUI();
   }
 
   function renderHTML() {
@@ -128,18 +160,45 @@
           ${statusText}
         </div>
 
-        <!-- Фишки -->
-        <div class="p-2.5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-1">
-          <div class="flex gap-1">
-            ${[10, 25, 50, 100, 250].map(v => `
-              <button onclick="window.ROULETTE.setChip(${v})" class="px-2 py-1 rounded-lg text-xs font-black border ${selectedChip === v ? 'bg-amber-500 text-black border-amber-500 shadow' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600'}">
-                ${v}
-              </button>
-            `).join('')}
+        <!-- Фишки и произвольная ставка -->
+        <div class="p-2.5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2">
+          <div class="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
+            <span>Номинал фишки:</span>
+            <span class="text-amber-600 dark:text-amber-400 font-extrabold text-sm" id="rl-chip-display">${selectedChip} 🪙</span>
           </div>
-          <button onclick="window.ROULETTE.clearBets()" ${totalStake === 0 || isSpinning ? 'disabled' : ''} class="px-2 py-1 rounded-lg text-xs font-bold text-slate-400 hover:text-rose-500">
-            Очистить
-          </button>
+
+          <div class="flex items-center justify-between gap-1 flex-wrap">
+            <div class="flex gap-1 flex-wrap">
+              ${[10, 25, 50, 100, 250].map(v => `
+                <button type="button" onclick="window.ROULETTE.setChip(${v})" class="rl-chip-btn px-2 py-1 rounded-lg text-xs font-black border ${selectedChip === v ? 'bg-amber-500 text-black border-amber-500 shadow' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600'}">
+                  ${v}
+                </button>
+              `).join('')}
+            </div>
+            <button type="button" onclick="window.ROULETTE.clearBets()" ${totalStake === 0 || isSpinning ? 'disabled' : ''} class="px-2 py-1 rounded-lg text-xs font-bold text-slate-400 hover:text-rose-500">
+              Очистить
+            </button>
+          </div>
+
+          <!-- Произвольный номинал и Ва-банк -->
+          <div class="flex items-center gap-2">
+            <div class="relative flex-1">
+              <input 
+                type="number" 
+                id="rl-custom-chip-input" 
+                class="w-full text-center font-black text-sm py-1.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-none focus:border-amber-500" 
+                placeholder="Своя фишка..." 
+                min="1" 
+                max="${userCoins}" 
+                value="${selectedChip > 0 ? selectedChip : ''}" 
+                oninput="window.ROULETTE.setCustomChip(this.value)" 
+                onchange="window.ROULETTE.setCustomChip(this.value, true)"
+              />
+            </div>
+            <button type="button" onclick="window.ROULETTE.setAllIn()" class="px-3 py-1.5 rounded-xl border border-amber-400/60 bg-amber-500/10 text-amber-500 font-extrabold text-xs" title="Фишка на весь оставшийся баланс">
+              🔥 Ва-банк
+            </button>
+          </div>
         </div>
 
         <!-- Сетка основных внешних ставок -->
@@ -297,5 +356,7 @@
     addBet,
     clearBets,
     setChip,
+    setCustomChip,
+    setAllIn,
   };
 })();

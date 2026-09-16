@@ -3,8 +3,8 @@
   'use strict';
 
   let currentGame = "2048"; // 'rpg', '2048', 'tictactoe', 'snake', 'tetris', 'chess', 'casino'
-  let currentCasinoSubGame = "durak"; // 'durak', 'blackjack', 'roulette', 'dice'
-  const CASINO_SUBGAMES = ["durak", "blackjack", "roulette", "dice"];
+  let currentCasinoSubGame = "durak"; // 'durak', 'blackjack', 'roulette', 'dice', 'leaderboard'
+  const CASINO_SUBGAMES = ["durak", "blackjack", "roulette", "dice", "leaderboard"];
   window.currentGame = currentGame;
   let isTesterUser = false;
   let isCurrencyEnabled = false;
@@ -143,6 +143,7 @@
     else if (currentCasinoSubGame === "blackjack") initBlackjack();
     else if (currentCasinoSubGame === "roulette") initRoulette();
     else if (currentCasinoSubGame === "dice") initDice();
+    else if (currentCasinoSubGame === "leaderboard") initCasinoLeaderboard();
   }
 
   function switchGame(gameId) {
@@ -164,17 +165,12 @@
   }
 
   function cleanupCurrentGame() {
-    window.RPG?.leavePvPRoom?.();
-    window.RPG?.leaveCoopRoom?.();
-    window.GAMES_2048?.cleanup?.();
-    window.GAMES_TICTACTOE?.cleanup?.();
-    window.GAMES_SNAKE?.cleanup?.();
-    window.GAMES_TETRIS?.cleanup?.();
-    window.GAMES_CHESS?.cleanup?.();
-    window.DURAK?.destroy?.();
-    window.BLACKJACK?.cleanup?.();
-    window.ROULETTE?.cleanup?.();
-    window.DICE?.cleanup?.();
+    [window.RPG?.leavePvPRoom, window.RPG?.leaveCoopRoom,
+     window.GAMES_2048?.cleanup, window.GAMES_TICTACTOE?.cleanup,
+     window.GAMES_SNAKE?.cleanup, window.GAMES_TETRIS?.cleanup,
+     window.GAMES_CHESS?.cleanup, window.DURAK?.destroy,
+     window.BLACKJACK?.cleanup, window.ROULETTE?.cleanup,
+     window.DICE?.cleanup].forEach(fn => fn?.());
   }
 
   function renderActiveGame() {
@@ -194,6 +190,7 @@
       { id: "blackjack", icon: "♠️", name: "21 Очко" },
       { id: "roulette", icon: "🎡", name: "Рулетка" },
       { id: "dice", icon: "🎲", name: "Кости" },
+      { id: "leaderboard", icon: "🏆", name: "Рейтинг" },
     ];
     const tabsHTML = subTabs.map(st => {
       const isCur = currentCasinoSubGame === st.id;
@@ -201,7 +198,7 @@
         ? "bg-white dark:bg-slate-700 text-red-600 dark:text-red-400 shadow-sm"
         : "text-slate-500 dark:text-slate-400 hover:text-slate-700";
       return `
-        <button onclick="window.GAMES.switchCasinoSubGame('${st.id}')" class="flex-1 py-1.5 px-2 rounded-xl transition-all flex items-center justify-center gap-1 shrink-0 ${activeClass}">
+        <button onclick="window.GAMES.switchCasinoSubGame('${st.id}')" class="flex-1 py-1.5 px-1.5 rounded-xl transition-all flex items-center justify-center gap-1 shrink-0 ${activeClass}">
           <span>${st.icon}</span>
           <span class="truncate">${st.name}</span>
         </button>
@@ -213,10 +210,11 @@
     else if (currentCasinoSubGame === "blackjack") subHtml = `<div id="blackjack-root" style="min-height:400px;"></div>`;
     else if (currentCasinoSubGame === "roulette") subHtml = `<div id="roulette-root" style="min-height:400px;"></div>`;
     else if (currentCasinoSubGame === "dice") subHtml = `<div id="dice-root" style="min-height:400px;"></div>`;
+    else if (currentCasinoSubGame === "leaderboard") subHtml = `<div id="casino-leaderboard-root" style="min-height:400px;"></div>`;
 
     return `
       <div class="space-y-3">
-        <div class="flex items-center justify-between gap-1 p-1 rounded-2xl bg-slate-200/70 dark:bg-slate-800/90 text-[11px] font-bold">
+        <div class="flex items-center justify-between gap-1 p-1 rounded-2xl bg-slate-200/70 dark:bg-slate-800/90 text-[10.5px] font-bold">
           ${tabsHTML}
         </div>
         <div id="casino-active-container">
@@ -235,6 +233,13 @@
     s.src = src;
     if (cb) s.onload = cb;
     if (document.head) document.head.appendChild(s);
+  }
+
+  function initCasinoLeaderboard() {
+    const el = document.getElementById('casino-leaderboard-root');
+    if (!el) return;
+    if (window.CASINO_LEADERBOARD) return window.CASINO_LEADERBOARD.init(el);
+    loadScript('/static/js/casino_leaderboard.js?v=20260916_1', () => window.CASINO_LEADERBOARD?.init(el));
   }
 
   function initRoulette() {
@@ -384,6 +389,7 @@
     // Casino games
     initBlackjack: () => window.BLACKJACK?.init(),
     initRoulette: () => window.ROULETTE?.init(),
-    initDice: () => window.DICE?.init()
+    initDice: () => window.DICE?.init(),
+    initCasinoLeaderboard: () => window.CASINO_LEADERBOARD?.init()
   };
 })();

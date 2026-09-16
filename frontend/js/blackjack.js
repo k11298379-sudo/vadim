@@ -173,11 +173,30 @@
               ${[10, 25, 50, 100, 250].map(v => `
                 <button type="button" onclick="window.BLACKJACK.setStake(${v})" class="bj-chip ${selectedStake === v ? 'active' : ''}">${v}</button>
               `).join('')}
-              <button type="button" onclick="window.BLACKJACK.setAllIn()" class="bj-chip text-amber-400 border-amber-400/60">🔥 Все</button>
             </div>
 
-            <button onclick="window.BLACKJACK.deal()" ${userCoins < selectedStake || selectedStake <= 0 || isLoading ? 'disabled' : ''} class="bj-btn w-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm shadow-md py-2.5">
-              <span>▶️</span> <span>${isDone ? 'Сыграть снова' : 'Раздать карты'} (${selectedStake} 🪙)</span>
+            <!-- Произвольная ставка и Ва-банк -->
+            <div class="flex items-center gap-2">
+              <div class="relative flex-1">
+                <input 
+                  type="number" 
+                  id="bj-custom-stake-input" 
+                  class="w-full text-center font-black text-sm py-1.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-none focus:border-amber-500" 
+                  placeholder="Своя ставка..." 
+                  min="1" 
+                  max="${userCoins}" 
+                  value="${selectedStake > 0 ? selectedStake : ''}" 
+                  oninput="window.BLACKJACK.setCustomStake(this.value)"
+                  onchange="window.BLACKJACK.setCustomStake(this.value, true)"
+                />
+              </div>
+              <button type="button" onclick="window.BLACKJACK.setAllIn()" class="bj-chip text-amber-500 font-black py-1.5 px-3" title="Поставить все монеты">
+                🔥 Ва-банк
+              </button>
+            </div>
+
+            <button id="bj-deal-btn" onclick="window.BLACKJACK.deal()" ${userCoins < selectedStake || selectedStake <= 0 || isLoading ? 'disabled' : ''} class="bj-btn w-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm shadow-md py-2.5">
+              <span>▶️</span> <span class="bj-deal-text">${isDone ? 'Сыграть снова' : 'Раздать карты'} (${selectedStake} 🪙)</span>
             </button>
           </div>
         `}
@@ -261,14 +280,44 @@
   }
 
 
+  function syncStakeUI() {
+    const disp = document.getElementById('bj-stake-display');
+    if (disp) disp.textContent = `${selectedStake} 🪙`;
+    const input = document.getElementById('bj-custom-stake-input');
+    if (input && document.activeElement !== input) {
+      input.value = selectedStake > 0 ? selectedStake : '';
+    }
+    const chips = containerEl?.querySelectorAll('.bj-chip');
+    chips?.forEach(c => {
+      const v = parseInt(c.textContent, 10);
+      if (v === selectedStake) c.classList.add('active');
+      else c.classList.remove('active');
+    });
+    const dealBtn = document.getElementById('bj-deal-btn');
+    if (dealBtn) {
+      dealBtn.disabled = userCoins < selectedStake || selectedStake <= 0 || isLoading;
+      const textSpan = dealBtn.querySelector('.bj-deal-text');
+      const isDone = currentGameState && currentGameState.phase === 'done';
+      if (textSpan) textSpan.textContent = `${isDone ? 'Сыграть снова' : 'Раздать карты'} (${selectedStake} 🪙)`;
+    }
+  }
+
   function setStake(amount) {
     selectedStake = Math.min(Math.max(1, amount), userCoins || 1);
-    render();
+    syncStakeUI();
+  }
+
+  function setCustomStake(amount, isChange = false) {
+    let num = parseInt(amount, 10);
+    if (isNaN(num) || num < 1) num = isChange ? 1 : 0;
+    if (userCoins > 0 && num > userCoins) num = userCoins;
+    selectedStake = num;
+    syncStakeUI();
   }
 
   function setAllIn() {
     selectedStake = Math.max(1, userCoins);
-    render();
+    syncStakeUI();
   }
 
   function init(el) {
@@ -296,6 +345,7 @@
     stand: stand,
     doubleDown: doubleDown,
     setStake: setStake,
+    setCustomStake: setCustomStake,
     setAllIn: setAllIn,
   };
 })();

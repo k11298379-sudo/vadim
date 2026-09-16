@@ -638,8 +638,12 @@ async def test_database_and_crud():
         assert "Биология" in bob_text
         assert "География" in bob_text
 
-        # 5. Alice completes Geography as well -> all done
+        # 5. Alice completes Geography (and all homeworks for tomorrow) -> all done
         await toggle_homework_completion(session, user_alice.id, hw_geo.id)
+        for hw in await get_homework_for_date(session, tom):
+            st = await get_user_homework_status(session, user_alice.id, hw.id)
+            if not st or not st.is_completed:
+                await toggle_homework_completion(session, user_alice.id, hw.id)
         digest_bot_2 = MockDigestBot()
         await send_evening_digest(digest_bot_2, target_date=tom)
         alice_text_2 = digest_bot_2.messages[111001][0]

@@ -164,22 +164,43 @@
         ` : ''}
 
         <!-- Панель фишек ставки -->
-        <div class="p-3 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2">
+        <div class="p-3 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2.5">
           <div class="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
             <span>Ставка:</span>
-            <span class="text-amber-600 dark:text-amber-400 font-extrabold text-sm">${selectedStake} 🪙</span>
+            <span class="text-amber-600 dark:text-amber-400 font-extrabold text-sm" id="dc-stake-display">${selectedStake} 🪙</span>
           </div>
+
+          <!-- Чипы -->
           <div class="flex gap-1.5 justify-center flex-wrap">
             ${[10, 25, 50, 100, 250].map(v => `
               <button onclick="window.DICE.setStake(${v})" class="dc-chip ${selectedStake === v ? 'active' : ''}">${v}</button>
             `).join('')}
-            <button onclick="window.DICE.setAllIn()" class="dc-chip text-amber-500 font-black">🔥 Все</button>
+          </div>
+
+          <!-- Произвольная ставка и Ва-банк -->
+          <div class="flex items-center gap-2">
+            <div class="relative flex-1">
+              <input 
+                type="number" 
+                id="dc-custom-stake-input" 
+                class="w-full text-center font-black text-sm py-1.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-none focus:border-amber-500" 
+                placeholder="Своя ставка..." 
+                min="1" 
+                max="${userCoins}" 
+                value="${selectedStake > 0 ? selectedStake : ''}" 
+                oninput="window.DICE.setCustomStake(this.value)"
+                onchange="window.DICE.setCustomStake(this.value, true)"
+              />
+            </div>
+            <button type="button" onclick="window.DICE.setAllIn()" class="dc-chip text-amber-500 font-black py-1.5 px-3" title="Поставить все монеты">
+              🔥 Ва-банк
+            </button>
           </div>
         </div>
 
         <!-- Кнопка броска -->
-        <button onclick="window.DICE.roll()" ${userCoins < selectedStake || selectedStake <= 0 || isRolling ? 'disabled' : ''} class="w-full py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-black text-sm shadow-md transition-all flex items-center justify-center gap-2">
-          <span>🎲</span> <span>${isRolling ? 'Кубики крутятся...' : `Бросить кубики (${selectedStake} 🪙)`}</span>
+        <button id="dc-roll-btn" onclick="window.DICE.roll()" ${userCoins < selectedStake || selectedStake <= 0 || isRolling ? 'disabled' : ''} class="w-full py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-black text-sm shadow-md transition-all flex items-center justify-center gap-2">
+          <span>🎲</span> <span class="dc-roll-text">${isRolling ? 'Кубики крутятся...' : `Бросить кубики (${selectedStake} 🪙)`}</span>
         </button>
       </div>
     `;
@@ -240,14 +261,43 @@
     render();
   }
 
+  function syncStakeUI() {
+    const disp = document.getElementById('dc-stake-display');
+    if (disp) disp.textContent = `${selectedStake} 🪙`;
+    const input = document.getElementById('dc-custom-stake-input');
+    if (input && document.activeElement !== input) {
+      input.value = selectedStake > 0 ? selectedStake : '';
+    }
+    const chips = containerEl?.querySelectorAll('.dc-chip');
+    chips?.forEach(c => {
+      const v = parseInt(c.textContent, 10);
+      if (v === selectedStake) c.classList.add('active');
+      else c.classList.remove('active');
+    });
+    const rollBtn = document.getElementById('dc-roll-btn');
+    if (rollBtn) {
+      rollBtn.disabled = userCoins < selectedStake || selectedStake <= 0 || isRolling;
+      const textSpan = rollBtn.querySelector('.dc-roll-text');
+      if (textSpan) textSpan.textContent = isRolling ? 'Кубики крутятся...' : `Бросить кубики (${selectedStake} 🪙)`;
+    }
+  }
+
   function setStake(amount) {
     selectedStake = Math.min(Math.max(1, amount), userCoins || 1);
-    render();
+    syncStakeUI();
+  }
+
+  function setCustomStake(amount, isChange = false) {
+    let num = parseInt(amount, 10);
+    if (isNaN(num) || num < 1) num = isChange ? 1 : 0;
+    if (userCoins > 0 && num > userCoins) num = userCoins;
+    selectedStake = num;
+    syncStakeUI();
   }
 
   function setAllIn() {
     selectedStake = Math.max(1, userCoins);
-    render();
+    syncStakeUI();
   }
 
   async function syncState() {
@@ -289,6 +339,7 @@
     setMode,
     setPrediction,
     setStake,
+    setCustomStake,
     setAllIn,
   };
 })();
