@@ -2,7 +2,9 @@
 (function () {
   'use strict';
 
-  let currentGame = "rpg"; // 'rpg', '2048', 'tictactoe', 'snake', 'tetris', 'chess', 'durak'
+  let currentGame = "2048"; // 'rpg', '2048', 'tictactoe', 'snake', 'tetris', 'chess', 'casino'
+  let currentCasinoSubGame = "durak"; // 'durak', 'blackjack', 'roulette', 'dice', 'slots', 'coinflip', 'leaderboard'
+  const CASINO_SUBGAMES = ["durak", "blackjack", "roulette", "dice", "slots", "coinflip", "leaderboard"];
   window.currentGame = currentGame;
   let isTesterUser = false;
   let isCurrencyEnabled = false;
@@ -78,7 +80,10 @@
       { id: "chess", icon: "♟️", name: "Шахматы", color: "blue" },
       { id: "casino", icon: "🎰", name: "Казино", color: "red" },
     ];
-    const gamesList = [{ id: "rpg", icon: "⚔️", name: "natarGRP", color: "amber" }, ...baseGames];
+
+    const gamesList = isTesterUser
+      ? [{ id: "rpg", icon: "⚔️", name: "natarGRP", color: "amber" }, ...baseGames]
+      : baseGames;
 
     const gameCountLabel = `${gamesList.length} игр${isTesterUser ? ' (⚔️ natarGRP)' : ''}`;
 
