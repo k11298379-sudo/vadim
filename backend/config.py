@@ -18,7 +18,7 @@ class Settings(BaseSettings):
         description="HTTP/SOCKS proxy for Telegram Bot API"
     )
     ENABLE_BOT_POLLING: bool = Field(
-        default=False,
+        default=True,
         description="Whether to run aiogram long polling in backend"
     )
     
