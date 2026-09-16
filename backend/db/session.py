@@ -95,6 +95,12 @@ async def init_db():
                 cols_rc = [row[1] for row in res_rc.fetchall()]
                 if "stat_points" not in cols_rc:
                     await conn.execute(text("ALTER TABLE rpg_characters ADD COLUMN stat_points INTEGER DEFAULT 2;"))
+                if "rebirths" not in cols_rc:
+                    await conn.execute(text("ALTER TABLE rpg_characters ADD COLUMN rebirths INTEGER DEFAULT 0;"))
+                if "talent_points" not in cols_rc:
+                    await conn.execute(text("ALTER TABLE rpg_characters ADD COLUMN talent_points INTEGER DEFAULT 0;"))
+                if "talents" not in cols_rc:
+                    await conn.execute(text("ALTER TABLE rpg_characters ADD COLUMN talents JSON DEFAULT '{}';"))
                 for col in ["hp_max", "mp_max", "hp", "mp", "hp_current", "current_hp"]:
                     if col in cols_rc:
                         try:
@@ -113,6 +119,9 @@ async def init_db():
                 await conn.execute(text("ALTER TABLE daily_facts ADD COLUMN IF NOT EXISTS hour INTEGER DEFAULT 0;"))
                 await conn.execute(text("ALTER TABLE daily_facts ADD COLUMN IF NOT EXISTS minute INTEGER DEFAULT 0;"))
                 await conn.execute(text("ALTER TABLE rpg_characters ADD COLUMN IF NOT EXISTS stat_points INTEGER DEFAULT 2;"))
+                await conn.execute(text("ALTER TABLE rpg_characters ADD COLUMN IF NOT EXISTS rebirths INTEGER DEFAULT 0;"))
+                await conn.execute(text("ALTER TABLE rpg_characters ADD COLUMN IF NOT EXISTS talent_points INTEGER DEFAULT 0;"))
+                await conn.execute(text("ALTER TABLE rpg_characters ADD COLUMN IF NOT EXISTS talents JSONB DEFAULT '{}'::jsonb;"))
                 # Clean up any legacy columns or constraints in rpg_characters from earlier prototypes
                 await conn.execute(text("""
                     DO $$
@@ -137,6 +146,7 @@ async def init_db():
                                       'strength', 'agility', 'intelligence', 'vitality', 'stat_points',
                                       'equipment', 'inventory', 'dungeon_floor', 'dungeon_cleared',
                                       'pvp_rating', 'pvp_wins', 'pvp_losses', 'boss_kills',
+                                      'rebirths', 'talent_points', 'talents',
                                       'created_at', 'updated_at'
                                   )
                             LOOP
