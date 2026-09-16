@@ -18,7 +18,7 @@
       { id: "faceless_void", name: "Хроно-Владыка", icon: "⏳", badgeBg: "#312e81", badgeBorder: "#818cf8" },
       { id: "roshan", name: "Рошан", icon: "🐲", badgeBg: "#7f1d1d", badgeBorder: "#facc15" }
     ];
-    const bt = bossTypes[Math.floor(Math.random() * bossTypes.length)];
+    const bt = bossTypes[Math.min(bossTypes.length - 1, Math.max(0, floor - 1))];
 
     const stats = RPG_STATE.profile?.stats || {};
     const playerAtk = Math.max(30, Math.floor(((stats.min_atk || 30) + (stats.max_atk || 50)) / 2));

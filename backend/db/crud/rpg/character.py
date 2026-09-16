@@ -261,6 +261,8 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
     talents = getattr(char, "talents", {})
     talent_lifesteal = talents.get("lifesteal", 0) * 2
     talent_dodge = talents.get("dodge", 0) * 4
+    talent_crit_mult = talents.get("crit_mult", 0) * 25   # +25% crit multiplier per level
+    talent_cooldown = talents.get("cooldown", 0) * 6       # -6% cooldown reduction per level
 
     # Apply rebirth multiplier to core stats
     stat_hp = int(stat_hp * rebirth_mult)
@@ -287,7 +289,8 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
         "primary_damage_bonus": int(primary_bonus),
         "spell_amp": spell_amp,
         "ult_boost": ult_boost,
-        "ult_cd_reduct": min(60, ult_cd_reduct),
+        "ult_cd_reduct": min(60, ult_cd_reduct + talent_cooldown),
+        "crit_mult_bonus": talent_crit_mult,
         "damage_type": damage_type,
         "skill": cfg.get("skill", {"name": "Навык", "icon": "⚡", "mp_cost": 20, "desc": "Навык героя"}),
         "base_strength": str_val,

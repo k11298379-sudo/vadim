@@ -83,10 +83,13 @@ async def slash_creep_wave_endpoint(
     direct_xp = payload.get("earned_xp")
     direct_wave = payload.get("wave_cleared")
     if direct_gold is not None or direct_xp is not None or direct_wave is not None:
-        gold_earned = int(direct_gold or 0)
-        xp_earned = int(direct_xp or 0)
+        gold_earned = min(int(direct_gold or 0), 8000)
+        xp_earned = min(int(direct_xp or 0), 8000)
         if direct_wave:
-            char.dungeon_cleared = max(char.dungeon_cleared, int(direct_wave))
+            claimed_wave = int(direct_wave)
+            if claimed_wave > char.dungeon_cleared + 1:
+                claimed_wave = char.dungeon_cleared + 1
+            char.dungeon_cleared = max(char.dungeon_cleared, claimed_wave)
         else:
             char.dungeon_cleared += 1
         char.dungeon_floor = (char.dungeon_cleared // 20) + 1
@@ -158,8 +161,7 @@ async def slash_creep_wave_endpoint(
     total_dmg_dealt = 0
     hero_crits = 0
 
-    h_bonus = stats.get("bonus", {})
-    spell_amp = (stats.get("mp_max", 100) * 0.002) + (h_bonus.get("spell_amp", 0) / 100.0)
+    spell_amp = (stats.get("mp_max", 100) * 0.002) + (stats.get("spell_amp", 0) / 100.0)
     lifesteal_pct = stats.get("lifesteal", 0)
     crit_chance = stats.get("crit_chance", 15)
     dodge_chance = stats.get("dodge_chance", 5)
@@ -167,8 +169,8 @@ async def slash_creep_wave_endpoint(
     h_dr = min(0.82, (h_def * 0.05) / (1.0 + h_def * 0.05))
     boss_armor_bonus = 20 if is_boss_wave else 0
     e_dr = min(0.88 if is_boss_wave else 0.85, (max(0, enemy_def + boss_armor_bonus) * 0.05) / (1.0 + max(0, enemy_def + boss_armor_bonus) * 0.05))
-    reflect_pct = h_bonus.get("reflect", 0)
-    bonus_flat_magic = h_bonus.get("burst_magic", 0) + h_bonus.get("lightning", 0)
+    reflect_pct = stats.get("reflect", 0)
+    bonus_flat_magic = stats.get("burst_magic", 0) + stats.get("lightning", 0)
 
     rounds = 0
     max_rounds = 400

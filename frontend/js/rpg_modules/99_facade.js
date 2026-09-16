@@ -22,13 +22,14 @@
     openSlotFilterModal: openSlotFilterModal,
     closeSlotFilterModal: closeSlotFilterModal,
     openForge: (uid) => {
-      if (uid) {
+      if (uid && typeof uid === 'string') {
         openForge(uid);
       } else {
         const p = RPG_STATE.profile;
-        const w = p?.equipment?.weapon;
-        if (w) openForge(w.uid);
-        else alert("Сначала наденьте оружие или выберите предмет из инвентаря!");
+        const eq = p?.equipment || {};
+        const firstItem = eq.slot_1 || eq.slot_2 || eq.slot_3 || eq.slot_4 || eq.slot_5 || eq.slot_6;
+        if (firstItem) openForge(firstItem.uid);
+        else alert("Сначала наденьте предмет или выберите его из инвентаря!");
       }
     },
     closeForgeModal: closeForgeModal,

@@ -89,23 +89,21 @@ def simulate_combat(
     Returns: (victory, is_timeout, total_dmg_dealt, hero_crits, rounds, combat_log)
     """
     floor = 1  # used for diminishing returns inside enemy def
-    h_bonus = stats.get("bonus", {})
     hero_hp = stats["hp_max"]
     e_hp = enemy["hp"]
     enemy_atk = enemy["atk"]
     enemy_def = enemy["def_"]
 
-    spell_amp = (stats.get("mp_max", 100) * 0.002) + (h_bonus.get("spell_amp", 0) / 100.0)
+    spell_amp = (stats.get("mp_max", 100) * 0.002) + (stats.get("spell_amp", 0) / 100.0)
     lifesteal_pct = stats.get("lifesteal", 0)
     crit_chance = stats.get("crit_chance", 15)
     dodge_chance = stats.get("dodge_chance", 5)
     h_def = max(0, stats.get("defense", 5))
 
-    # Compute floor from enemy name context isn't available here — use enemy def estimate
     h_dr = min(0.82, (h_def * 0.05) / (1.0 + h_def * 0.05))
     e_dr = min(0.85, (max(0, enemy_def) * 0.05) / (1.0 + max(0, enemy_def) * 0.05))
-    reflect_pct = h_bonus.get("reflect", 0)
-    bonus_flat_magic = h_bonus.get("burst_magic", 0) + h_bonus.get("lightning", 0)
+    reflect_pct = stats.get("reflect", 0)
+    bonus_flat_magic = stats.get("burst_magic", 0) + stats.get("lightning", 0)
 
     combat_log: List[str] = []
     total_dmg_dealt = 0
@@ -129,7 +127,8 @@ def simulate_combat(
         is_crit = (random.randint(1, 100) <= crit_chance)
         if is_crit:
             hero_crits += 1
-            base_h = int(base_h * 2.2)
+            crit_mult = 2.2 + (stats.get("crit_mult_bonus", 0) / 100.0)
+            base_h = int(base_h * crit_mult)
 
         base_h += bonus_flat_magic
         dmg_out = max(10, int(base_h * (1.0 - e_dr)))

@@ -62,17 +62,14 @@ async def run_dungeon_wave(
     boss_atk_scale = (1.18 ** max(0, floor - 1))
 
     if is_boss_wave:
-        available_creeps = [c for c in NATAR_CREEPS_POOL if c.get("floor_min", 1) <= floor]
-        if not available_creeps:
-            available_creeps = NATAR_CREEPS_POOL
-        target_template = random.choice(available_creeps)
-        enemy_name = f"Усиленный {target_template['name']} [Босс Этажа {floor}]"
+        target_template = NATAR_FLOOR_BOSSES[min(len(NATAR_FLOOR_BOSSES) - 1, max(0, floor - 1))]
+        enemy_name = f"{target_template['name']} [Этаж {floor}]"
         enemy_icon = target_template["icon"]
-        enemy_hp = int((target_template["base_hp"] * 15) * creep_scale)
-        enemy_atk = int((target_template["base_atk"] * 15) * creep_atk_scale)
+        enemy_hp = int(target_template["base_hp"] * floor_scale)
+        enemy_atk = int(target_template["base_atk"] * boss_atk_scale)
         enemy_def = int(target_template["base_def"] + (floor - 1) * 3)
-        base_gold = int((target_template["gold"] * 15) * (1.0 + (floor - 1) * 0.15))
-        base_xp = int((target_template["xp"] * 15) * (1.0 + (floor - 1) * 0.15))
+        base_gold = int(target_template["gold"] * (1.0 + (floor - 1) * 0.15))
+        base_xp = int(target_template["xp"] * (1.0 + (floor - 1) * 0.15))
     else:
         available_creeps = [c for c in NATAR_CREEPS_POOL if c.get("floor_min", 1) <= floor]
         if not available_creeps:
@@ -94,16 +91,15 @@ async def run_dungeon_wave(
     total_dmg_dealt = 0
     hero_crits = 0
 
-    h_bonus = stats.get("bonus", {})
-    spell_amp = (stats.get("mp_max", 100) * 0.002) + (h_bonus.get("spell_amp", 0) / 100.0)
+    spell_amp = (stats.get("mp_max", 100) * 0.002) + (stats.get("spell_amp", 0) / 100.0)
     lifesteal_pct = stats.get("lifesteal", 0)
     crit_chance = stats.get("crit_chance", 15)
     dodge_chance = stats.get("dodge_chance", 5)
     h_def = max(0, stats.get("defense", 5))
     h_dr = min(0.82, (h_def * 0.05) / (1.0 + h_def * 0.05 + floor * 0.4))
     e_dr = min(0.85, (max(0, enemy_def) * 0.05) / (1.0 + max(0, enemy_def) * 0.05))
-    reflect_pct = h_bonus.get("reflect", 0)
-    bonus_flat_magic = h_bonus.get("burst_magic", 0) + h_bonus.get("lightning", 0)
+    reflect_pct = stats.get("reflect", 0)
+    bonus_flat_magic = stats.get("burst_magic", 0) + stats.get("lightning", 0)
 
     rounds = 0
     max_rounds = 400

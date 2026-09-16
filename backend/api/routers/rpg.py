@@ -48,7 +48,23 @@ async def open_chest_endpoint(
 
     char = await get_or_create_rpg_character(session, user_id=user_id)
     wave = payload.get("wave", char.dungeon_cleared)
+    
+    if wave > char.dungeon_cleared:
+        raise HTTPException(status_code=400, detail="Эта волна еще не пройдена!")
+        
+    talents = dict(char.talents or {})
+    last_chest_wave = talents.get("_last_chest_wave", 0)
+    
+    if wave <= last_chest_wave:
+        raise HTTPException(status_code=400, detail="Сундук за эту волну уже открыт!")
+        
     res = await open_wave_chest(session, char, wave)
+    
+    talents["_last_chest_wave"] = wave
+    char.talents = talents
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(char, "talents")
+    
     res["profile"] = serialize_character_profile(char, user_name=user_name)
     return res
 
@@ -376,6 +392,10 @@ async def upgrade_talent_endpoint(
     talent_id = payload.get("talent_id")
     if not talent_id:
         raise HTTPException(status_code=400, detail="Missing talent_id")
+    
+    VALID_TALENTS = {"lifesteal", "crit_mult", "cooldown", "dodge"}
+    if talent_id not in VALID_TALENTS:
+        raise HTTPException(status_code=400, detail="Неизвестный талант")
         
     if char.talent_points <= 0:
         raise HTTPException(status_code=400, detail="Нет очков талантов!")

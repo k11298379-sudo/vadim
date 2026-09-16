@@ -77,7 +77,7 @@ async def open_wave_chest(
     char.gems += gems_reward
 
     inv = list(char.inventory or [])
-    if len(inv) < 30:
+    if len(inv) < 200:
         inv.append(item)
         char.inventory = inv
         flag_modified(char, "inventory")
@@ -129,7 +129,7 @@ async def open_boss_raid_chest(
     char.gems += gems_reward
 
     inv = list(char.inventory or [])
-    if len(inv) < 30:
+    if len(inv) < 200:
         inv.append(item)
         char.inventory = inv
         flag_modified(char, "inventory")
