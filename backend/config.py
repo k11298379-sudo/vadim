@@ -14,7 +14,7 @@ class Settings(BaseSettings):
         description="Custom Telegram Bot API server / reverse proxy (e.g. Cloudflare Worker)"
     )
     TELEGRAM_PROXY: str = Field(
-        default="http://127.0.0.1:10809",
+        default="",
         description="HTTP/SOCKS proxy for Telegram Bot API"
     )
     ENABLE_BOT_POLLING: bool = Field(
