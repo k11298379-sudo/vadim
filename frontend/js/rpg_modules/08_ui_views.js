@@ -1789,9 +1789,12 @@
     const eq = p.equipment || {};
     const inv = p.inventory || [];
     const allForgeable = [
-      ...(eq.weapon ? [{ ...eq.weapon, locLabel: "Оружие" }] : []),
-      ...(eq.armor ? [{ ...eq.armor, locLabel: "Броня" }] : []),
-      ...(eq.relic ? [{ ...eq.relic, locLabel: "Реликвия" }] : []),
+      ...(eq.slot_1 ? [{ ...eq.slot_1, locLabel: "Слот 1" }] : []),
+      ...(eq.slot_2 ? [{ ...eq.slot_2, locLabel: "Слот 2" }] : []),
+      ...(eq.slot_3 ? [{ ...eq.slot_3, locLabel: "Слот 3" }] : []),
+      ...(eq.slot_4 ? [{ ...eq.slot_4, locLabel: "Слот 4" }] : []),
+      ...(eq.slot_5 ? [{ ...eq.slot_5, locLabel: "Слот 5" }] : []),
+      ...(eq.slot_6 ? [{ ...eq.slot_6, locLabel: "Слот 6" }] : []),
       ...inv.filter((i) => {
         const itype = (i.type || "").toLowerCase();
         const islot = (i.slot || "").toLowerCase();

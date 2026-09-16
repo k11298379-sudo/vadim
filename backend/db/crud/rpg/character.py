@@ -266,10 +266,32 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
     talent_crit_mult = talents.get("crit_mult", 0) * 25   # +25% crit multiplier per level
     talent_cooldown = talents.get("cooldown", 0) * 6       # -6% cooldown reduction per level
 
-    # Apply rebirth multiplier to core stats
-    stat_hp = int(stat_hp * rebirth_mult)
-    total_min_atk = int(total_min_atk * rebirth_mult)
-    total_max_atk = int(total_max_atk * rebirth_mult)
+    # Pet Multipliers
+    pet_hp_mult = 1.0
+    pet_dmg_mult = 1.0
+    pet_gold_mult = 1.0
+    pet_xp_mult = 1.0
+    
+    try:
+        from backend.db.crud.rpg.pets_config import PETS_CATALOG
+        pets = getattr(char, "pets", []) or []
+        for p in pets:
+            if p.get("is_equipped"):
+                cfg = PETS_CATALOG.get(p.get("type"))
+                if cfg:
+                    stars = p.get("stars", 1)
+                    s_mult = 1.0 + (stars - 1) * cfg.get("stars_scaling", 0.05)
+                    pet_hp_mult *= (cfg.get("base_hp_mult", 1.0) * s_mult)
+                    pet_dmg_mult *= (cfg.get("base_dmg_mult", 1.0) * s_mult)
+                    pet_gold_mult *= (cfg.get("base_gold_mult", 1.0) * s_mult)
+                    pet_xp_mult *= (cfg.get("base_xp_mult", 1.0) * s_mult)
+    except Exception:
+        pass
+
+    # Apply rebirth and pet multipliers to core stats
+    stat_hp = int(stat_hp * rebirth_mult * pet_hp_mult)
+    total_min_atk = int(total_min_atk * rebirth_mult * pet_dmg_mult)
+    total_max_atk = int(total_max_atk * rebirth_mult * pet_dmg_mult)
 
     return {
         "hp_max": stat_hp,
@@ -287,13 +309,15 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
         "damage_block": damage_block,
         "reflect": min(100, reflect),
         "gear_score": gear_score,
-        "primary_attr": cfg.get("attr", "Сила"),
+        "primary_attr": cfg.get("attr", "Сила") if 'cfg' in locals() and isinstance(cfg, dict) and "attr" in cfg else "Сила", # Using Natar hero cfg
         "primary_damage_bonus": int(primary_bonus),
         "spell_amp": spell_amp,
         "ult_boost": ult_boost,
         "ult_cd_reduct": min(60, ult_cd_reduct + talent_cooldown),
         "crit_mult_bonus": talent_crit_mult,
         "damage_type": damage_type,
+        "pet_gold_mult": pet_gold_mult,
+        "pet_xp_mult": pet_xp_mult,
         "skill": cfg.get("skill", {"name": "Навык", "icon": "⚡", "mp_cost": 20, "desc": "Навык героя"}),
         "base_strength": str_val,
         "base_agility": agi_val,
@@ -345,6 +369,7 @@ def serialize_character_profile(char: RPGCharacter, user_name: str = "") -> Dict
         "rebirths": getattr(char, "rebirths", 0),
         "talent_points": getattr(char, "talent_points", 0),
         "talents": getattr(char, "talents", {}),
+        "pets": getattr(char, "pets", []),
         "strength": stats["total_strength"],
         "agility": stats["total_agility"],
         "intelligence": stats["total_intelligence"],

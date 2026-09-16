@@ -262,6 +262,21 @@ const api = {
       method: "POST",
       body: JSON.stringify({ item_uid: itemUid })
     }),
+  hatchPetCrate: () =>
+    apiRequest("/api/rpg/pets/hatch", {
+      method: "POST",
+      body: JSON.stringify({})
+    }),
+  equipPet: (petUid) =>
+    apiRequest("/api/rpg/pets/equip", {
+      method: "POST",
+      body: JSON.stringify({ pet_uid: petUid })
+    }),
+  upgradePet: (petUid) =>
+    apiRequest("/api/rpg/pets/upgrade", {
+      method: "POST",
+      body: JSON.stringify({ pet_uid: petUid })
+    }),
   sellRpgItem: (itemUid) =>
     apiRequest("/api/rpg/inventory/sell", {
       method: "POST",

@@ -23,6 +23,7 @@ from backend.api.routers import (
     coinflip_router,
     rpg_router,
 )
+from backend.api.routers.rpg_pets import rpg_pets_router
 from backend.api.auth import extract_viewer_tg_id, _extract_viewer_tg_id
 
 api_router = APIRouter(prefix="/api")
@@ -39,6 +40,7 @@ api_router.include_router(dice_router)
 api_router.include_router(slots_router)
 api_router.include_router(coinflip_router)
 api_router.include_router(rpg_router)
+api_router.include_router(rpg_pets_router)
 
 __all__ = [
     "api_router",

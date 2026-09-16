@@ -226,6 +226,7 @@ class RPGCharacter(Base):
     pvp_wins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     pvp_losses: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     boss_kills: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    pets: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
 
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

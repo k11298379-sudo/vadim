@@ -1201,9 +1201,12 @@
     const eq = RPG_STATE.profile.equipment || {};
     let item = inv.find((i) => i.uid === itemUid);
     if (!item) {
-      if (eq.weapon?.uid === itemUid) item = eq.weapon;
-      else if (eq.armor?.uid === itemUid) item = eq.armor;
-      else if (eq.relic?.uid === itemUid) item = eq.relic;
+      if (eq.slot_1?.uid === itemUid) item = eq.slot_1;
+      else if (eq.slot_2?.uid === itemUid) item = eq.slot_2;
+      else if (eq.slot_3?.uid === itemUid) item = eq.slot_3;
+      else if (eq.slot_4?.uid === itemUid) item = eq.slot_4;
+      else if (eq.slot_5?.uid === itemUid) item = eq.slot_5;
+      else if (eq.slot_6?.uid === itemUid) item = eq.slot_6;
     }
     if (item) {
       RPG_STATE.inspectedItem = null;

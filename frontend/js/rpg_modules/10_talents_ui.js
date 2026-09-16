@@ -80,39 +80,62 @@ function renderTalentsTab() {
       <!-- PETS / FAMILIARS SECTION -->
       <div class="mb-3 px-1 flex justify-between items-end">
         <h3 class="text-lg font-bold text-amber-400">🐾 Боевые Питомцы</h3>
-        <div class="text-[10px] text-slate-400">Летают с героем в 2D Арене</div>
+        <div class="text-[10px] text-slate-400">Умножают характеристики</div>
+      </div>
+
+      <div class="mb-4 bg-slate-800 p-4 rounded-xl border border-slate-700/50 flex justify-between items-center">
+        <div>
+          <h4 class="text-sm font-bold text-white">Яйцо Питомца</h4>
+          <div class="text-xs text-amber-200 mt-0.5">Испытай удачу!</div>
+        </div>
+        <button 
+          onclick="hatchPetUI()"
+          class="px-4 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 rounded-lg font-black text-xs text-slate-950 shadow-md active:scale-95 transition-transform"
+        >
+          ОТКРЫТЬ (50 💎)
+        </button>
       </div>
 
       <div class="space-y-2 pb-24">
-        ${[
-          { id: "dragon", icon: "🐉", name: "Дракончик Недр", bonus: "Огненный плевок", desc: "Каждые 2.5 сек выпускает самонаводящийся огненный шар в босса (250-400 урона)." },
-          { id: "fairy", icon: "🧚", name: "Лесная Фея", bonus: "Аура Исцеления", desc: "Каждые 3 сек восстанавливает герою +45 HP и +15 MP в бою." },
-          { id: "wolf", icon: "🐺", name: "Призрачный Волк", bonus: "Боевой вой", desc: "Пассивно дает герою +25% скорости атаки и +15% шанса критического удара." }
-        ].map(pet => {
-          const isSelected = (localStorage.getItem("rpg_active_pet") || "dragon") === pet.id;
+        ${(p.pets || []).length === 0 ? `<div class="text-center text-slate-500 text-xs py-4">У вас пока нет питомцев.</div>` : ""}
+        ${(p.pets || []).map(pet => {
+          // Hardcoded dictionary for UI since we don't have pet_cfg on the profile
+          const petDict = {
+            "fairy": { icon: "🧚", name: "Лесная Фея" },
+            "wolf": { icon: "🐺", name: "Призрачный Волк" },
+            "dragon": { icon: "🐉", name: "Золотой Дракон" },
+            "phoenix": { icon: "🦅", name: "Феникс" },
+            "slime": { icon: "💧", name: "Слайм" }
+          };
+          const pData = petDict[pet.type] || { icon: "🐾", name: "Неизвестный" };
+          const isSelected = pet.is_equipped;
           return `
             <div class="bg-slate-800/90 rounded-xl p-3 border ${isSelected ? 'border-amber-400/80 shadow-lg shadow-amber-500/10' : 'border-slate-700'} flex items-center justify-between gap-3">
               <div class="flex items-center gap-3">
-                <div class="w-11 h-11 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center text-2xl shadow-inner">
-                  ${pet.icon}
+                <div class="w-11 h-11 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center text-2xl shadow-inner relative">
+                  ${pData.icon}
+                  <div class="absolute -bottom-2 -right-2 bg-amber-500 text-slate-900 text-[10px] font-black px-1.5 rounded-md border border-amber-300">
+                    ${pet.stars}⭐
+                  </div>
                 </div>
                 <div>
                   <div class="flex items-center gap-1.5">
-                    <span class="font-bold text-sm text-white">${pet.name}</span>
-                    <span class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-extrabold border border-amber-500/30">${pet.bonus}</span>
+                    <span class="font-bold text-sm text-white">${pData.name}</span>
                   </div>
-                  <div class="text-[10px] text-slate-400 mt-0.5 max-w-[210px] leading-tight">${pet.desc}</div>
+                  <div class="text-[10px] text-slate-400 mt-1 max-w-[180px] leading-tight">
+                    <button onclick="upgradePetUI('${pet.uid}')" class="text-amber-400 underline decoration-amber-400/50">Улучшить (нужно 3 одинаковых, 10💎)</button>
+                  </div>
                 </div>
               </div>
               <button 
-                onclick="selectPetUI('${pet.id}')"
-                class="px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
+                onclick="equipPetUI('${pet.uid}')"
+                class="px-3 py-1.5 rounded-lg text-[11px] font-black transition-all shrink-0 ${
                   isSelected 
                     ? 'bg-amber-500 text-slate-950 shadow-md' 
                     : 'bg-slate-700/60 hover:bg-slate-700 text-slate-300 border border-slate-600'
                 }"
               >
-                ${isSelected ? 'В БОЮ' : 'ВЗЯТЬ'}
+                ${isSelected ? 'НАДЕТ' : 'ВЗЯТЬ'}
               </button>
             </div>
           `;
@@ -124,11 +147,57 @@ function renderTalentsTab() {
   return html;
 }
 
-window.selectPetUI = function(petId) {
-  localStorage.setItem("rpg_active_pet", petId);
-  if (window.triggerHaptic) triggerHaptic("medium");
-  if (typeof renderRoot === "function") renderRoot();
+window.hatchPetUI = async function() {
+  try {
+    if (window.triggerHaptic) triggerHaptic("medium");
+    const res = await api.hatchPetCrate();
+    if (res.profile) {
+      RPG_STATE.profile = res.profile;
+      if (window.triggerHaptic) triggerHaptic("success");
+      alert("Выпал питомец: " + (res.pet_cfg ? res.pet_cfg.name : "Неизвестно"));
+      renderRoot();
+    }
+  } catch(e) {
+    alert(e.message || "Ошибка открытия яйца");
+  }
 };
+
+window.equipPetUI = async function(petUid) {
+  try {
+    if (window.triggerHaptic) triggerHaptic("light");
+    const res = await api.equipPet(petUid);
+    if (res.profile) {
+      RPG_STATE.profile = res.profile;
+      if (window.syncArenaPlayerStats) syncArenaPlayerStats();
+      // To keep legacy arena working, find equipped pet type and set it to local storage
+      const eqPet = (res.profile.pets || []).find(p => p.is_equipped);
+      if (eqPet) localStorage.setItem("rpg_active_pet", eqPet.type);
+      else localStorage.removeItem("rpg_active_pet");
+      
+      renderRoot();
+    }
+  } catch(e) {
+    alert(e.message || "Ошибка экипировки");
+  }
+};
+
+window.upgradePetUI = async function(petUid) {
+  try {
+    if (window.triggerHaptic) triggerHaptic("medium");
+    const res = await api.upgradePet(petUid);
+    if (res.profile) {
+      RPG_STATE.profile = res.profile;
+      if (window.syncArenaPlayerStats) syncArenaPlayerStats();
+      if (window.triggerHaptic) triggerHaptic("success");
+      alert("Питомец успешно улучшен!");
+      renderRoot();
+    }
+  } catch(e) {
+    alert(e.message || "Ошибка улучшения питомца");
+  }
+};
+
+window.selectPetUI = window.equipPetUI; // fallback for older HTML cache
 
 window.doRebirthUI = async function() {
   if (!confirm("Вы уверены? Ваш уровень сбросится до 1, но вы получите вечный бонус +10% ко всем статам!")) return;

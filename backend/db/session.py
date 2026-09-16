@@ -103,6 +103,8 @@ async def init_db():
                     await conn.execute(text("ALTER TABLE rpg_characters ADD COLUMN talents JSON DEFAULT '{}';"))
                 if "boss_kills" not in cols_rc:
                     await conn.execute(text("ALTER TABLE rpg_characters ADD COLUMN boss_kills INTEGER DEFAULT 0;"))
+                if "pets" not in cols_rc:
+                    await conn.execute(text("ALTER TABLE rpg_characters ADD COLUMN pets JSON DEFAULT '[]';"))
                 for col in ["hp_max", "mp_max", "hp", "mp", "hp_current", "current_hp"]:
                     if col in cols_rc:
                         try:
@@ -125,6 +127,7 @@ async def init_db():
                 await conn.execute(text("ALTER TABLE rpg_characters ADD COLUMN IF NOT EXISTS talent_points INTEGER DEFAULT 0;"))
                 await conn.execute(text("ALTER TABLE rpg_characters ADD COLUMN IF NOT EXISTS talents JSONB DEFAULT '{}'::jsonb;"))
                 await conn.execute(text("ALTER TABLE rpg_characters ADD COLUMN IF NOT EXISTS boss_kills INTEGER DEFAULT 0;"))
+                await conn.execute(text("ALTER TABLE rpg_characters ADD COLUMN IF NOT EXISTS pets JSONB DEFAULT '[]'::jsonb;"))
                 # Clean up any legacy columns or constraints in rpg_characters from earlier prototypes
                 await conn.execute(text("""
                     DO $$

@@ -141,8 +141,13 @@ async def add_xp_and_gold_to_character(
     gold_amount: int
 ) -> Tuple[bool, int]:
     """Awards gold, XP and handles Level-ups (+1 free stat point per level, steeper XP curve)."""
-    char.gold += gold_amount
-    char.xp += xp_amount
+    from backend.db.crud.rpg.character import calculate_character_effective_stats
+    stats = calculate_character_effective_stats(char)
+    pet_gold_mult = stats.get("pet_gold_mult", 1.0)
+    pet_xp_mult = stats.get("pet_xp_mult", 1.0)
+
+    char.gold += int(gold_amount * pet_gold_mult)
+    char.xp += int(xp_amount * pet_xp_mult)
     leveled_up = False
 
     while True:

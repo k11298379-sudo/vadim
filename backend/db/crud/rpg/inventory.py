@@ -187,7 +187,7 @@ async def upgrade_item_forge(
     slot_name = None
 
     equipment = dict(char.equipment or {})
-    for s in ["weapon", "armor", "relic"]:
+    for s in ["slot_1", "slot_2", "slot_3", "slot_4", "slot_5", "slot_6"]:
         if equipment.get(s) and equipment[s].get("uid") == item_uid:
             target_item = dict(equipment[s])
             is_equipped = True
