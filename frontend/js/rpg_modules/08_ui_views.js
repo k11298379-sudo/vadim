@@ -2,6 +2,17 @@
     const container = document.getElementById("rpg-root");
     if (!container) return;
 
+    if (RPG_STATE.errorMessage) {
+      container.innerHTML = `
+        <div class="py-16 text-center space-y-3 px-4">
+          <div class="text-4xl">вљ пёЏ</div>
+          <h3 class="text-base font-bold text-red-500">РљСЂРёС‚РёС‡РµСЃРєР°СЏ РѕС€РёР±РєР°</h3>
+          <p class="text-xs font-mono bg-slate-900 text-slate-300 p-3 rounded-xl border border-slate-700 text-left overflow-auto">${RPG_STATE.errorMessage}</p>
+        </div>
+      `;
+      return;
+    }
+
     if (RPG_STATE.loading && !RPG_STATE.profile) {
       container.innerHTML = `
         <div class="py-16 text-center space-y-3">
