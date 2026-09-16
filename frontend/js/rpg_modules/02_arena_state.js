@@ -255,7 +255,7 @@
 
     const rect = canvas.getBoundingClientRect();
     const dpr = Math.min(2, (typeof window !== "undefined" && window.devicePixelRatio && window.devicePixelRatio > 0) ? window.devicePixelRatio : 1);
-    const isTopDown = !!(ARENA.topDownMode || ARENA.isRaidBossBattle || ARENA.isBossActive);
+    const isTopDown = !!(ARENA.isRaidBossBattle || (ARENA.topDownMode && ARENA.bossEntity));
     const clientW = rect.width > 50 ? rect.width : (canvas.clientWidth > 50 ? canvas.clientWidth : 360);
     const clientH = isTopDown ? 520 : (rect.height > 50 ? rect.height : 320);
     // In Top-Down Brawl mode, arena logical space is a spacious 520x720 battlefield!
@@ -277,16 +277,25 @@
   function initArenaCanvas() {
     const canvas = document.getElementById("rpg-action-canvas");
     if (!canvas) return;
-    bindArenaCanvas(canvas);
 
     // CRITICAL: NEVER wipe out an active Raid Boss Battle!
-    if (ARENA.isRaidBossBattle) {
-      if (ARENA.bossEntity && !ARENA.creeps.includes(ARENA.bossEntity)) {
+    if (ARENA.isRaidBossBattle && ARENA.bossEntity) {
+      if (!ARENA.creeps.includes(ARENA.bossEntity)) {
         ARENA.creeps = [ARENA.bossEntity];
       }
       ARENA.isBossActive = true;
+      bindArenaCanvas(canvas);
       return;
     }
+
+    // Normal wave arena: reset boss flags if no active boss entity
+    if (!ARENA.bossEntity) {
+      ARENA.isBossActive = false;
+      ARENA.topDownMode = false;
+      ARENA.bossArenaMode = false;
+      ARENA.isRaidBossBattle = false;
+    }
+    bindArenaCanvas(canvas);
 
     const p = RPG_STATE.profile;
     const stats = p?.stats || {};
@@ -329,6 +338,7 @@
     ARENA.totalCreepsSpawned = 0;
     ARENA.creepsNeededForWave = Math.min(32, 14 + Math.floor((ARENA.waveNumber - 1) * 1.0));
     ARENA.isBossActive = false;
+    ARENA.topDownMode = false;
     ARENA.bossEntity = null;
     ARENA.bossPhase = 0;
     ARENA.bossCompanions = [];

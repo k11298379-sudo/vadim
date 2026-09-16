@@ -820,17 +820,40 @@
   function setFarmMode(mode) {
     RPG_STATE.farmMode = mode;
     if (mode === "arena") {
+      // Cleanly reset boss and arena states when entering farm arena
+      ARENA.isRaidBossBattle = false;
+      ARENA.topDownMode = false;
+      ARENA.isBossActive = false;
+      ARENA.bossEntity = null;
+      ARENA.bossArenaMode = false;
+
       const currentSavedWave = ((RPG_STATE.profile?.dungeon_cleared || 0) % 20) + 1;
       ARENA.waveNumber = currentSavedWave;
       ARENA.creepsNeededForWave = Math.min(32, 14 + Math.floor((ARENA.waveNumber - 1) * 1.0));
       ARENA.creepsKilledInWave = 0;
       ARENA.totalCreepsSpawned = 0;
       ARENA.creeps = [];
-      ARENA.isBossActive = (ARENA.waveNumber === 20);
+
+      if (ARENA.waveNumber === 20) {
+        ARENA.waveState = "boss_intro";
+        ARENA.waveTransitionTimer = 60;
+        ARENA.bossArenaMode = true;
+        spawnBossCreep();
+      } else {
+        ARENA.waveState = "fighting";
+      }
+
+      RPG_STATE._forceFullRender = true;
       renderRoot();
+      RPG_STATE._forceFullRender = false;
       startArenaLoop();
     } else {
       stopArenaLoop();
+      ARENA.isBossActive = false;
+      ARENA.topDownMode = false;
+      ARENA.bossArenaMode = false;
+      ARENA.bossEntity = null;
+      ARENA.isRaidBossBattle = false;
       renderRoot();
     }
   }
@@ -1734,7 +1757,7 @@
 
     const rect = canvas.getBoundingClientRect();
     const dpr = Math.min(2, (typeof window !== "undefined" && window.devicePixelRatio && window.devicePixelRatio > 0) ? window.devicePixelRatio : 1);
-    const isTopDown = !!(ARENA.topDownMode || ARENA.isRaidBossBattle || ARENA.isBossActive);
+    const isTopDown = !!(ARENA.isRaidBossBattle || (ARENA.topDownMode && ARENA.bossEntity));
     const clientW = rect.width > 50 ? rect.width : (canvas.clientWidth > 50 ? canvas.clientWidth : 360);
     const clientH = isTopDown ? 520 : (rect.height > 50 ? rect.height : 320);
     // In Top-Down Brawl mode, arena logical space is a spacious 520x720 battlefield!
@@ -1756,16 +1779,25 @@
   function initArenaCanvas() {
     const canvas = document.getElementById("rpg-action-canvas");
     if (!canvas) return;
-    bindArenaCanvas(canvas);
 
     // CRITICAL: NEVER wipe out an active Raid Boss Battle!
-    if (ARENA.isRaidBossBattle) {
-      if (ARENA.bossEntity && !ARENA.creeps.includes(ARENA.bossEntity)) {
+    if (ARENA.isRaidBossBattle && ARENA.bossEntity) {
+      if (!ARENA.creeps.includes(ARENA.bossEntity)) {
         ARENA.creeps = [ARENA.bossEntity];
       }
       ARENA.isBossActive = true;
+      bindArenaCanvas(canvas);
       return;
     }
+
+    // Normal wave arena: reset boss flags if no active boss entity
+    if (!ARENA.bossEntity) {
+      ARENA.isBossActive = false;
+      ARENA.topDownMode = false;
+      ARENA.bossArenaMode = false;
+      ARENA.isRaidBossBattle = false;
+    }
+    bindArenaCanvas(canvas);
 
     const p = RPG_STATE.profile;
     const stats = p?.stats || {};
@@ -1808,6 +1840,7 @@
     ARENA.totalCreepsSpawned = 0;
     ARENA.creepsNeededForWave = Math.min(32, 14 + Math.floor((ARENA.waveNumber - 1) * 1.0));
     ARENA.isBossActive = false;
+    ARENA.topDownMode = false;
     ARENA.bossEntity = null;
     ARENA.bossPhase = 0;
     ARENA.bossCompanions = [];
@@ -12817,7 +12850,7 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
     RPG_STATE._lastRenderedRaidBattle = isRaidState;
 
     // Also track farm boss state (wave boss enables topDown mode → canvas must resize to 520px)
-    const isFarmBossActive = !!(ARENA.isBossActive && !ARENA.isRaidBossBattle);
+    const isFarmBossActive = !!(ARENA.isBossActive && ARENA.bossEntity && !ARENA.isRaidBossBattle);
     const bossStateChanged = RPG_STATE._lastFarmBossActive !== isFarmBossActive;
     RPG_STATE._lastFarmBossActive = isFarmBossActive;
 
@@ -13521,14 +13554,15 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
     const cfg = getHeroSkillConfig();
     const s1CdSec = ARENA.skill1Cooldown > 0 ? Math.ceil(ARENA.skill1Cooldown / 60) : 0;
     const ultCdSec = ARENA.ultCooldown > 0 ? Math.ceil(ARENA.ultCooldown / 60) : 0;
+    const isBossActive = !!(ARENA.isRaidBossBattle || (ARENA.isBossActive && ARENA.bossEntity && ARENA.topDownMode));
 
     return `
       <div class="space-y-2">
                 <!-- Canvas Arena Element -->
         <div class="relative w-full rounded-3xl overflow-hidden border-2 border-amber-500/40 shadow-2xl bg-slate-950">
           <canvas id="rpg-action-canvas"
-                  style="height: ${ARENA.isRaidBossBattle || ARENA.topDownMode || ARENA.isBossActive ? 520 : 320}px; min-height: ${ARENA.isRaidBossBattle || ARENA.topDownMode || ARENA.isBossActive ? 520 : 320}px;"
-                  class="w-full ${ARENA.isRaidBossBattle || ARENA.topDownMode || ARENA.isBossActive ? 'h-[520px]' : 'h-[320px]'} block cursor-crosshair"></canvas>
+                  style="height: ${isBossActive ? 520 : 320}px; min-height: ${isBossActive ? 520 : 320}px;"
+                  class="w-full ${isBossActive ? 'h-[520px]' : 'h-[320px]'} block cursor-crosshair"></canvas>
 
           <!-- Raid Boss Exit Button (only during active raid boss battle) -->
           ${ARENA.isRaidBossBattle ? `
@@ -13542,7 +13576,7 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
 
           <!-- Virtual Touch Joystick (Bottom Left, only shown during boss fights) -->
           <div id="rpg-virtual-joystick-zone"
-               class="absolute bottom-3 left-3 w-24 h-24 flex items-center justify-center pointer-events-auto z-30 select-none touch-none ${ARENA.isBossActive || ARENA.isRaidBossBattle ? '' : 'hidden'}">
+               class="absolute bottom-3 left-3 w-24 h-24 flex items-center justify-center pointer-events-auto z-30 select-none touch-none ${isBossActive ? '' : 'hidden'}">
             <div id="rpg-joystick-base" class="relative w-20 h-20 rounded-full border-2 border-amber-400/50 bg-slate-900/80 shadow-2xl flex items-center justify-center backdrop-blur-md ring-2 ring-amber-500/20">
               <span class="absolute top-1 text-[9px] text-amber-300/50">▲</span>
               <span class="absolute bottom-1 text-[9px] text-amber-300/50">▼</span>
@@ -13555,7 +13589,7 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
           </div>
 
           <!-- Potion button (above joystick, only shown during boss fights) -->
-          <div class="absolute bottom-28 left-3 z-20 ${ARENA.isBossActive || ARENA.isRaidBossBattle ? '' : 'hidden'}">
+          <div class="absolute bottom-28 left-3 z-20 ${isBossActive ? '' : 'hidden'}">
             <button onclick="window.RPG.usePotionAction()" title="Зелье / Сыр [F / 1]" class="w-10 h-10 rounded-2xl bg-emerald-600/95 border-2 border-emerald-300 text-white font-bold text-lg flex items-center justify-center shadow-lg active:scale-90 transition-transform">
               🧪
             </button>
@@ -13588,7 +13622,7 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
               </button>
 
               <!-- Dash / Roll Button (only shown during boss fights) -->
-              ${ARENA.isBossActive || ARENA.isRaidBossBattle ? `
+              ${isBossActive ? `
               <button onclick="window.RPG.playerDashRollAction()" title="Рывок / Кувырок [Shift / C]"
                 class="w-11 h-11 rounded-2xl ${ARENA.dodgeCooldown > 0 ? 'bg-slate-800/80 border border-slate-700 opacity-60' : 'bg-gradient-to-r from-sky-500 to-cyan-500 border-2 border-sky-300 shadow-sky-500/40'} text-white font-black text-sm flex flex-col items-center justify-center shadow-lg active:scale-90 transition-all">
                 <span class="text-base">🌀</span>
@@ -13602,7 +13636,7 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
         <!-- Controls Guide Toolbar -->
         <div class="p-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-[10.5px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center justify-between gap-2">
           <div class="flex items-center gap-1.5">
-            <span>${ARENA.isBossActive || ARENA.isRaidBossBattle ? '🕹️ <b>Top-Down Бой</b>: джойстик — бег с авто-прицелом в босса, [⚔️ Атака] — огонь, [🌀 Рывок] — уворот!' : '⚔️ <b>Защита тропы</b>: [⚔️ Атака] — удар по крипам, навыки заряжаются автоматически'}</span>
+            <span>${isBossActive ? '🕹️ <b>Top-Down Бой</b>: джойстик — бег с авто-прицелом в босса, [⚔️ Атака] — огонь, [🌀 Рывок] — уворот!' : '⚔️ <b>Защита тропы</b>: [⚔️ Атака] — удар по крипам, навыки заряжаются автоматически'}</span>
           </div>
           <div class="flex items-center gap-2">
             <!-- Auto-Attack ON / OFF Toggle Button (Wave/Dungeon/Arena) -->
