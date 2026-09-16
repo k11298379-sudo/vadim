@@ -3,8 +3,8 @@
   'use strict';
 
   let currentGame = "2048"; // 'rpg', '2048', 'tictactoe', 'snake', 'tetris', 'chess', 'casino'
-  let currentCasinoSubGame = "durak"; // 'durak', 'blackjack', 'roulette', 'dice', 'leaderboard'
-  const CASINO_SUBGAMES = ["durak", "blackjack", "roulette", "dice", "leaderboard"];
+  let currentCasinoSubGame = "durak"; // 'durak', 'blackjack', 'roulette', 'dice', 'slots', 'coinflip', 'leaderboard'
+  const CASINO_SUBGAMES = ["durak", "blackjack", "roulette", "dice", "slots", "coinflip", "leaderboard"];
   window.currentGame = currentGame;
   let isTesterUser = false;
   let isCurrencyEnabled = false;
@@ -139,11 +139,11 @@
   }
 
   function initCasinoSubGame() {
-    if (currentCasinoSubGame === "durak") initDurak();
-    else if (currentCasinoSubGame === "blackjack") initBlackjack();
-    else if (currentCasinoSubGame === "roulette") initRoulette();
-    else if (currentCasinoSubGame === "dice") initDice();
-    else if (currentCasinoSubGame === "leaderboard") initCasinoLeaderboard();
+    const map = {
+      durak: initDurak, blackjack: initBlackjack, roulette: initRoulette,
+      dice: initDice, slots: initSlots, coinflip: initCoinflip, leaderboard: initCasinoLeaderboard
+    };
+    map[currentCasinoSubGame]?.();
   }
 
   function switchGame(gameId) {
@@ -170,7 +170,7 @@
      window.GAMES_SNAKE?.cleanup, window.GAMES_TETRIS?.cleanup,
      window.GAMES_CHESS?.cleanup, window.DURAK?.destroy,
      window.BLACKJACK?.cleanup, window.ROULETTE?.cleanup,
-     window.DICE?.cleanup].forEach(fn => fn?.());
+     window.DICE?.cleanup, window.SLOTS?.cleanup, window.COINFLIP?.cleanup].forEach(fn => fn?.());
   }
 
   function renderActiveGame() {
@@ -190,6 +190,8 @@
       { id: "blackjack", icon: "♠️", name: "21 Очко" },
       { id: "roulette", icon: "🎡", name: "Рулетка" },
       { id: "dice", icon: "🎲", name: "Кости" },
+      { id: "slots", icon: "🎰", name: "Слоты" },
+      { id: "coinflip", icon: "🪙", name: "Монетка" },
       { id: "leaderboard", icon: "🏆", name: "Рейтинг" },
     ];
     const tabsHTML = subTabs.map(st => {
@@ -198,23 +200,23 @@
         ? "bg-white dark:bg-slate-700 text-red-600 dark:text-red-400 shadow-sm"
         : "text-slate-500 dark:text-slate-400 hover:text-slate-700";
       return `
-        <button onclick="window.GAMES.switchCasinoSubGame('${st.id}')" class="flex-1 py-1.5 px-1.5 rounded-xl transition-all flex items-center justify-center gap-1 shrink-0 ${activeClass}">
+        <button onclick="window.GAMES.switchCasinoSubGame('${st.id}')" class="py-1.5 px-2 rounded-xl transition-all flex items-center justify-center gap-1 shrink-0 ${activeClass}">
           <span>${st.icon}</span>
           <span class="truncate">${st.name}</span>
         </button>
       `;
     }).join("");
 
-    let subHtml = "";
-    if (currentCasinoSubGame === "durak") subHtml = `<div id="durak-root" style="min-height:400px;"></div>`;
-    else if (currentCasinoSubGame === "blackjack") subHtml = `<div id="blackjack-root" style="min-height:400px;"></div>`;
-    else if (currentCasinoSubGame === "roulette") subHtml = `<div id="roulette-root" style="min-height:400px;"></div>`;
-    else if (currentCasinoSubGame === "dice") subHtml = `<div id="dice-root" style="min-height:400px;"></div>`;
-    else if (currentCasinoSubGame === "leaderboard") subHtml = `<div id="casino-leaderboard-root" style="min-height:400px;"></div>`;
+    const rootMap = {
+      durak: 'durak-root', blackjack: 'blackjack-root', roulette: 'roulette-root',
+      dice: 'dice-root', slots: 'slots-root', coinflip: 'coinflip-root', leaderboard: 'casino-leaderboard-root'
+    };
+    const activeRootId = rootMap[currentCasinoSubGame] || 'durak-root';
+    const subHtml = `<div id="${activeRootId}" style="min-height:400px;"></div>`;
 
     return `
       <div class="space-y-3">
-        <div class="flex items-center justify-between gap-1 p-1 rounded-2xl bg-slate-200/70 dark:bg-slate-800/90 text-[10.5px] font-bold">
+        <div class="flex items-center gap-1 p-1 rounded-2xl bg-slate-200/70 dark:bg-slate-800/90 text-[10.5px] font-bold overflow-x-auto no-scrollbar">
           ${tabsHTML}
         </div>
         <div id="casino-active-container">
@@ -235,33 +237,12 @@
     if (document.head) document.head.appendChild(s);
   }
 
-  function initCasinoLeaderboard() {
-    const el = document.getElementById('casino-leaderboard-root');
-    if (!el) return;
-    if (window.CASINO_LEADERBOARD) return window.CASINO_LEADERBOARD.init(el);
-    loadScript('/static/js/casino_leaderboard.js?v=20260916_1', () => window.CASINO_LEADERBOARD?.init(el));
-  }
-
-  function initRoulette() {
-    const el = document.getElementById('roulette-root');
-    if (!el) return;
-    if (window.ROULETTE) return window.ROULETTE.init(el);
-    loadScript('/static/js/roulette.js?v=20260915_1', () => window.ROULETTE?.init(el));
-  }
-
-  function initDice() {
-    const el = document.getElementById('dice-root');
-    if (!el) return;
-    if (window.DICE) return window.DICE.init(el);
-    loadScript('/static/js/dice.js?v=20260915_1', () => window.DICE?.init(el));
-  }
-
-  function initBlackjack() {
-    const el = document.getElementById('blackjack-root');
-    if (!el) return;
-    if (window.BLACKJACK) return window.BLACKJACK.init(el);
-    loadScript('/static/js/blackjack.js?v=20260915_1', () => window.BLACKJACK?.init(el));
-  }
+  function initCasinoLeaderboard() { const el = document.getElementById('casino-leaderboard-root'); if (el) window.CASINO_LEADERBOARD ? window.CASINO_LEADERBOARD.init(el) : loadScript('/static/js/casino_leaderboard.js?v=20260916_1', () => window.CASINO_LEADERBOARD?.init(el)); }
+  function initRoulette() { const el = document.getElementById('roulette-root'); if (el) window.ROULETTE ? window.ROULETTE.init(el) : loadScript('/static/js/roulette.js?v=20260915_1', () => window.ROULETTE?.init(el)); }
+  function initDice() { const el = document.getElementById('dice-root'); if (el) window.DICE ? window.DICE.init(el) : loadScript('/static/js/dice.js?v=20260915_1', () => window.DICE?.init(el)); }
+  function initSlots() { const el = document.getElementById('slots-root'); if (el) window.SLOTS ? window.SLOTS.init(el) : loadScript('/static/js/slots.js?v=20260916_1', () => window.SLOTS?.init(el)); }
+  function initCoinflip() { const el = document.getElementById('coinflip-root'); if (el) window.COINFLIP ? window.COINFLIP.init(el) : loadScript('/static/js/coinflip.js?v=20260916_1', () => window.COINFLIP?.init(el)); }
+  function initBlackjack() { const el = document.getElementById('blackjack-root'); if (el) window.BLACKJACK ? window.BLACKJACK.init(el) : loadScript('/static/js/blackjack.js?v=20260915_1', () => window.BLACKJACK?.init(el)); }
 
   function initDurak() {
     const el = document.getElementById('durak-root');
@@ -390,6 +371,8 @@
     initBlackjack: () => window.BLACKJACK?.init(),
     initRoulette: () => window.ROULETTE?.init(),
     initDice: () => window.DICE?.init(),
+    initSlots: () => window.SLOTS?.init(),
+    initCoinflip: () => window.COINFLIP?.init(),
     initCasinoLeaderboard: () => window.CASINO_LEADERBOARD?.init()
   };
 })();

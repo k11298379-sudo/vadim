@@ -19,6 +19,8 @@ from backend.api.routers import (
     blackjack_router,
     roulette_router,
     dice_router,
+    slots_router,
+    coinflip_router,
     rpg_router,
 )
 from backend.api.auth import extract_viewer_tg_id, _extract_viewer_tg_id
@@ -34,6 +36,8 @@ api_router.include_router(durak_router)
 api_router.include_router(blackjack_router)
 api_router.include_router(roulette_router)
 api_router.include_router(dice_router)
+api_router.include_router(slots_router)
+api_router.include_router(coinflip_router)
 api_router.include_router(rpg_router)
 
 __all__ = [
