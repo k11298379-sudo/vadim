@@ -28,6 +28,15 @@ def escape_md(text: str) -> str:
         text = text.replace(ch, f"\\{ch}")
     return text
 
+def format_copyable_desc(desc: str) -> str:
+    r"""Форматирует описание ДЗ в отдельный блок для копирования по нажатию в Telegram."""
+    if not desc or not desc.strip():
+        return "`—`"
+    clean = desc.strip().replace("```", "'''").replace("`", "'")
+    if "\n" in clean:
+        return f"\n```\n{clean}\n```"
+    return f"`{clean}`"
+
 async def send_evening_digest(bot: Bot, target_date: Optional[date] = None, force: bool = False) -> int:
     """
     Вечернее персональное напоминание в 19:00:
@@ -114,7 +123,7 @@ async def send_evening_digest(bot: Bot, target_date: Optional[date] = None, forc
             hw_group_lines.append("🎉 _Заданий на завтра нет!_")
         else:
             for hw in tomorrow_homeworks:
-                hw_group_lines.append(f"• 📌 **{hw.subject.name}:** {escape_md(hw.description)}")
+                hw_group_lines.append(f"• 📌 **{hw.subject.name}:** {format_copyable_desc(hw.description)}")
         hw_group_text = "\n".join(hw_group_lines)
 
         for g in approved_groups:
@@ -208,7 +217,7 @@ async def send_evening_digest(bot: Bot, target_date: Optional[date] = None, forc
                 else:
                     user_lines.append(f"  _Невыполненные задания ({len(uncompleted_tomorrow)} из {len(tomorrow_homeworks)}):_")
                     for hw in uncompleted_tomorrow:
-                        user_lines.append(f"  • 📌 **{hw.subject.name}:** {escape_md(hw.description)}")
+                        user_lines.append(f"  • 📌 **{hw.subject.name}:** {format_copyable_desc(hw.description)}")
                     if completed_tomorrow:
                         user_lines.append(f"  _(Уже выполнено по чек-листу: {len(completed_tomorrow)})_")
 
@@ -223,7 +232,7 @@ async def send_evening_digest(bot: Bot, target_date: Optional[date] = None, forc
                 user_lines.append("\n⏳ **Другие несделанные задания:**")
                 for hw in uncompleted_other:
                     d_str = hw.due_date.strftime("%d.%m")
-                    user_lines.append(f"  • 📌 **{hw.subject.name}** (к {d_str}): {escape_md(hw.description)}")
+                    user_lines.append(f"  • 📌 **{hw.subject.name}** (к {d_str}): {format_copyable_desc(hw.description)}")
 
             user_lines.append("\n📱 _Отметить выполнение и посмотреть вложения — в Mini App или меню бота._")
             user_msg = "\n".join(user_lines)
@@ -308,12 +317,12 @@ async def send_new_homework_alert(
     from aiogram.types import InputMediaPhoto, InputMediaDocument
 
     day_name = DAYS_RU.get(hw.due_date.isoweekday(), "")
-    desc_escaped = escape_md(hw.description)
+    desc_formatted = format_copyable_desc(hw.description)
     text = (
         f"📚 **НОВОЕ ДОМАШНЕЕ ЗАДАНИЕ • 11 «Б»**\n\n"
         f"📖 **Предмет:** {hw.subject.name if hw.subject else 'Урок'}\n"
         f"📅 **Срок сдачи:** {day_name}, {hw.due_date.strftime('%d.%m.%Y')}\n\n"
-        f"📝 **Задание:**\n{desc_escaped}\n\n"
+        f"📝 **Задание:**\n{desc_formatted}\n\n"
         f"📱 _Чек-лист выполнения и фото доступны в Mini App!_"
     )
     plain_text = (

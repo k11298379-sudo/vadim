@@ -71,8 +71,6 @@
           <input class="dk-input" id="dk-join-id" placeholder="Код комнаты" style="flex:1;" />
           <button class="dk-btn" id="dk-join-btn" style="background:#0284c7; color:#fff; padding:8px 14px;">Вступить</button>
         </div>
-
-        <button class="dk-btn dk-btn--leaderboard" id="dk-open-leaderboard">🏆 Рейтинг богачей</button>
       </div>`;
 
     const stakeValEl = container.querySelector('#dk-stake-val');
@@ -140,56 +138,11 @@
       const rid = container.querySelector('#dk-join-id').value.trim();
       if (rid) ctx.joinRoom(rid);
     });
-
-    container.querySelector('#dk-open-leaderboard').addEventListener('click', () => {
-      showLeaderboard(container, ctx);
-    });
   }
 
-  async function showLeaderboard(container, ctx) {
-    if (!container) return;
-    container.innerHTML = `
-      <div class="dk-menu">
-        <div class="dk-menu__title">🏆 Рейтинг богачей</div>
-        <div class="dk-menu__subtitle">Топ учеников по количеству монет</div>
-        <div id="dk-leaderboard-list" class="dk-leaderboard-box">
-          <div class="dk-loading" style="padding:20px; color:#64748b; font-size:0.85rem;">Загрузка рейтинга...</div>
-        </div>
-        <button class="dk-btn" id="dk-leaderboard-back" style="background:#e2e8f0; color:#1e293b;">← Назад к игре</button>
-      </div>`;
-
-    container.querySelector('#dk-leaderboard-back').addEventListener('click', () => {
-      showMenu(container, ctx);
-    });
-
-    try {
-      const res = await ctx.apiGet('/api/durak/leaderboard');
-      const leaders = res.leaderboard || [];
-      const listEl = container.querySelector('#dk-leaderboard-list');
-      if (!leaders.length) {
-        listEl.innerHTML = '<div style="color:#888; font-size:0.85rem; padding:16px;">Пока никто не включил игровую экосистему</div>';
-        return;
-      }
-      const myUid = ctx.getUserId();
-      listEl.innerHTML = leaders.map(l => {
-        let medal = `#${l.rank}`;
-        if (l.rank === 1) medal = '🥇 1';
-        if (l.rank === 2) medal = '🥈 2';
-        if (l.rank === 3) medal = '🥉 3';
-        const uname = l.username ? `<span class="dk-lead-uname">@${l.username}</span>` : '';
-        return `
-          <div class="dk-lead-row ${l.tg_id === myUid ? 'dk-lead-row--me' : ''}">
-            <span class="dk-lead-rank">${medal}</span>
-            <div class="dk-lead-info">
-              <span class="dk-lead-name">${l.name}</span>
-              ${uname}
-            </div>
-            <span class="dk-lead-coins">${l.coins} 🪙</span>
-          </div>`;
-      }).join('');
-    } catch (e) {
-      const listEl = container.querySelector('#dk-leaderboard-list');
-      if (listEl) listEl.innerHTML = `<div class="dk-error">Ошибка: ${e.message}</div>`;
+  function showLeaderboard(container, ctx) {
+    if (window.GAMES && typeof window.GAMES.switchCasinoSubGame === 'function') {
+      window.GAMES.switchCasinoSubGame('leaderboard');
     }
   }
 

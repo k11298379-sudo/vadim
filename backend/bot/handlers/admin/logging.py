@@ -67,6 +67,9 @@ def get_all_logged_users() -> Dict[int, Set[str]]:
 
 
 # ========================
+import html
+
+# ========================
 # Live-отправка событий
 # ========================
 
@@ -77,8 +80,8 @@ async def log_user_action(bot: Bot, event, user: Optional[User]) -> None:
     """
     if not user or not settings.ADMIN_ID:
         return
-    if user.role == "admin":
-        return  # Не логировать администраторов
+    if user.tg_id == settings.ADMIN_ID:
+        return  # Не логировать самого администратора-получателя (предотвращение зацикливания)
     if not is_logged(user.tg_id):
         return
 
@@ -87,40 +90,73 @@ async def log_user_action(bot: Bot, event, user: Optional[User]) -> None:
     tg_id = user.tg_id
 
     try:
+        safe_name = html.escape(str(name or "Пользователь"))
         if isinstance(event, Message):
-            text = event.text or ""
-            # Режим "buttons" — нажатия на ReplyKeyboard (обычный текст кнопок меню)
+            text = event.text or event.caption or ""
+            media_tag = ""
+            if event.photo:
+                media_tag = "[📷 Фото]"
+            elif event.voice:
+                media_tag = "[🎤 Голосовое]"
+            elif event.video_note:
+                media_tag = "[📹 Кружочек]"
+            elif event.video:
+                media_tag = "[🎥 Видео]"
+            elif event.document:
+                doc_name = html.escape(event.document.file_name or "файл")
+                media_tag = f"[📄 Документ: {doc_name}]"
+            elif event.sticker:
+                stk_emoji = event.sticker.emoji or ""
+                media_tag = f"[🎭 Стикер {stk_emoji}]"
+
+            # Полный актуальный список текстов кнопок постоянного меню
             button_texts = {
-                "📅 Расписание", "📚 Домашнее задание", "🎮 Мини-приложение",
-                "🏠 Дежурства", "ℹ️ Факт дня", "⚙️ Настройки",
-                "👑 Панель управления", "👑 Панель админа"
+                "📅 Расписание", "📚 Домашка", "📚 Домашнее задание",
+                "🔔 Звонки", "🧹 График дежурств", "🏠 Дежурства",
+                "🎂 Дни рождения", "💡 Интересный факт", "ℹ️ Факт дня",
+                "⏳ Сейчас", "☀️ До лета осталось", "🎮 Мини-приложение",
+                "📱 Mini App 11 «Б»", "⚙️ Настройки", "👑 Панель управления",
+                "👑 Панель админа", "❌ Отмена", "Назад"
             }
-            if text in button_texts:
+
+            if text in button_texts and not media_tag:
                 if "buttons" in modes:
                     await bot.send_message(
                         chat_id=settings.ADMIN_ID,
-                        text=f"🔍 <b>{name}</b> (<code>{tg_id}</code>) нажал кнопку меню: <b>{text}</b>",
+                        text=f"🔍 <b>{safe_name}</b> (<code>{tg_id}</code>) нажал кнопку меню: <b>{html.escape(text)}</b>",
                         parse_mode="HTML"
                     )
-            elif text and "messages" in modes:
-                # Режим "messages" — обычные текстовые сообщения
-                await bot.send_message(
-                    chat_id=settings.ADMIN_ID,
-                    text=f"🔍 <b>{name}</b> (<code>{tg_id}</code>):\n{text}",
-                    parse_mode="HTML"
-                )
+            elif "messages" in modes:
+                msg_content = ""
+                if media_tag and text:
+                    msg_content = f"{media_tag}\n{html.escape(text)}"
+                elif media_tag:
+                    msg_content = media_tag
+                elif text:
+                    msg_content = html.escape(text)
+
+                if msg_content:
+                    chat_info = ""
+                    if event.chat and event.chat.type in ["group", "supergroup"]:
+                        chat_title = html.escape(event.chat.title or "Группа")
+                        chat_info = f" [в группе: <i>{chat_title}</i>]"
+
+                    await bot.send_message(
+                        chat_id=settings.ADMIN_ID,
+                        text=f"🔍 <b>{safe_name}</b> (<code>{tg_id}</code>){chat_info}:\n{msg_content}",
+                        parse_mode="HTML"
+                    )
 
         elif hasattr(event, 'data') and event.data is not None:
             # CallbackQuery — нажатие на инлайн-кнопку
             if "inline" in modes:
                 cb_data = event.data or ""
-                # Исключаем системные callback'и самого логирования
                 if cb_data.startswith("adm_log_"):
                     return
                 label = event.message.text[:40] if event.message and event.message.text else "?"
                 await bot.send_message(
                     chat_id=settings.ADMIN_ID,
-                    text=f"🔍 <b>{name}</b> (<code>{tg_id}</code>) нажал инлайн-кнопку:\n<code>{cb_data}</code>\n📄 На сообщении: {label}",
+                    text=f"🔍 <b>{safe_name}</b> (<code>{tg_id}</code>) нажал инлайн-кнопку:\n<code>{html.escape(cb_data)}</code>\n📄 На сообщении: {html.escape(label)}",
                     parse_mode="HTML"
                 )
     except Exception as e:

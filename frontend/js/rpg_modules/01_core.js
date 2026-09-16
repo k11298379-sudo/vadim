@@ -820,17 +820,40 @@
   function setFarmMode(mode) {
     RPG_STATE.farmMode = mode;
     if (mode === "arena") {
+      // Cleanly reset boss and arena states when entering farm arena
+      ARENA.isRaidBossBattle = false;
+      ARENA.topDownMode = false;
+      ARENA.isBossActive = false;
+      ARENA.bossEntity = null;
+      ARENA.bossArenaMode = false;
+
       const currentSavedWave = ((RPG_STATE.profile?.dungeon_cleared || 0) % 20) + 1;
       ARENA.waveNumber = currentSavedWave;
       ARENA.creepsNeededForWave = Math.min(32, 14 + Math.floor((ARENA.waveNumber - 1) * 1.0));
       ARENA.creepsKilledInWave = 0;
       ARENA.totalCreepsSpawned = 0;
       ARENA.creeps = [];
-      ARENA.isBossActive = (ARENA.waveNumber === 20);
+
+      if (ARENA.waveNumber === 20) {
+        ARENA.waveState = "boss_intro";
+        ARENA.waveTransitionTimer = 60;
+        ARENA.bossArenaMode = true;
+        spawnBossCreep();
+      } else {
+        ARENA.waveState = "fighting";
+      }
+
+      RPG_STATE._forceFullRender = true;
       renderRoot();
+      RPG_STATE._forceFullRender = false;
       startArenaLoop();
     } else {
       stopArenaLoop();
+      ARENA.isBossActive = false;
+      ARENA.topDownMode = false;
+      ARENA.bossArenaMode = false;
+      ARENA.bossEntity = null;
+      ARENA.isRaidBossBattle = false;
       renderRoot();
     }
   }
@@ -851,6 +874,7 @@
   }
 
   function toggleAdminModal(open) {
+    triggerHaptic("light");
     RPG_STATE.adminModalOpen = (open !== undefined) ? open : !RPG_STATE.adminModalOpen;
     renderRoot();
   }
