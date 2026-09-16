@@ -115,7 +115,11 @@ async def open_boss_raid_chest(
         if isinstance(it, dict) and it.get("name"):
             owned_names.add(it["name"].strip().lower())
 
-    pool = BOSS_EXCLUSIVE_DROPS.get(boss_id) or BOSS_EXCLUSIVE_DROPS["roshan"]
+    pool = BOSS_EXCLUSIVE_DROPS.get(boss_id)
+    if not pool:
+        # If boss has no exclusive drops (e.g. early game bosses like golem), drop a standard wave chest but better
+        return await open_wave_chest(session, char, wave=50) # wave=50 forces mythic/immortal tier
+        
     item = pick_smart_loot_item(pool, hero_class=getattr(char, 'hero_class', None), owned_names=owned_names)
     item["uid"] = str(uuid.uuid4())[:8]
     item["upgrade"] = 0

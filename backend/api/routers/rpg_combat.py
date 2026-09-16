@@ -33,9 +33,10 @@ KILL_STREAK_TITLES = [
 ]
 
 FLOOR_BOSS_ORDER = [
-    "golem", "lich", "tormentor", "dragon", "roshan",
-    "tidehunter", "sf_boss", "necrophos", "invoker_boss", "chaos_knight",
-    "dark_tormentor", "doom", "primal_beast", "phantom_roshan", "enigma"
+    "golem", "lich", "tormentor", "dragon", "pudge_boss",
+    "faceless_void", "roshan", "tidehunter", "sf_boss", "necrophos",
+    "terrorblade", "invoker_boss", "chaos_knight", "dark_tormentor", 
+    "storm_spirit", "doom"
 ]
 
 

@@ -62,14 +62,17 @@ async def run_dungeon_wave(
     boss_atk_scale = (1.18 ** max(0, floor - 1))
 
     if is_boss_wave:
-        target_template = NATAR_FLOOR_BOSSES[min(len(NATAR_FLOOR_BOSSES) - 1, max(0, floor - 1))]
-        enemy_name = f"{target_template['name']} [Этаж {floor}]"
-        enemy_icon = target_template["icon"]
-        enemy_hp = int(target_template["base_hp"] * floor_scale)
-        enemy_atk = int(target_template["base_atk"] * boss_atk_scale)
+        available_creeps = [c for c in NATAR_CREEPS_POOL if c.get("floor_min", 1) <= floor]
+        if not available_creeps:
+            available_creeps = NATAR_CREEPS_POOL
+        target_template = random.choice(available_creeps)
+        enemy_name = f"БОСС ВОЛНЫ: {target_template['name']}"
+        enemy_icon = "👑"
+        enemy_hp = int(target_template["base_hp"] * 15 * creep_scale)
+        enemy_atk = int(target_template["base_atk"] * 10 * creep_atk_scale)
         enemy_def = int(target_template["base_def"] + (floor - 1) * 3)
-        base_gold = int(target_template["gold"] * (1.0 + (floor - 1) * 0.15))
-        base_xp = int(target_template["xp"] * (1.0 + (floor - 1) * 0.15))
+        base_gold = int(target_template["gold"] * 10 * (1.0 + (floor - 1) * 0.15))
+        base_xp = int(target_template["xp"] * 10 * (1.0 + (floor - 1) * 0.15))
     else:
         available_creeps = [c for c in NATAR_CREEPS_POOL if c.get("floor_min", 1) <= floor]
         if not available_creeps:

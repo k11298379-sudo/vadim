@@ -958,7 +958,7 @@
     const p = RPG_STATE.profile || {};
     const points = p.stat_points || 0;
     const statVal = (statName === "str" ? p.strength : (statName === "agi" ? p.agility : p.intelligence)) || 10;
-    const cost = statVal * 20;
+    const cost = Math.floor(Math.pow(statVal, 1.35) * 6);
 
     if (points <= 0 && (p.gold || 0) < cost) {
       triggerHaptic("error");
