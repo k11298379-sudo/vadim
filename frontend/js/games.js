@@ -59,7 +59,8 @@
     const container = document.getElementById("pane-games");
     if (!container) return;
     await checkTesterStatus();
-    if (isTesterUser && currentGame === "2048") {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get("game") === "rpg" || p.get("tab") === "rpg" || currentGame === "2048") {
       currentGame = "rpg";
     }
     window.currentGame = currentGame;
@@ -73,6 +74,7 @@
     window.currentGame = currentGame;
 
     const baseGames = [
+      { id: "rpg", icon: "⚔️", name: "natarGRP", color: "amber" },
       { id: "2048", icon: "🔢", name: "2048", color: "blue" },
       { id: "tictactoe", icon: "❌⭕", name: "Крестики", color: "blue" },
       { id: "snake", icon: "🐍", name: "Змейка", color: "blue" },
@@ -81,11 +83,9 @@
       { id: "casino", icon: "🎰", name: "Казино", color: "red" },
     ];
 
-    const gamesList = isTesterUser
-      ? [{ id: "rpg", icon: "⚔️", name: "natarGRP", color: "amber" }, ...baseGames]
-      : baseGames;
+    const gamesList = baseGames;
 
-    const gameCountLabel = `${gamesList.length} игр${isTesterUser ? ' (⚔️ natarGRP)' : ''}`;
+    const gameCountLabel = `${gamesList.length} игр (⚔️ natarGRP)`;
 
     const tabsHTML = gamesList.map(g => {
       const isCur = currentGame === g.id;

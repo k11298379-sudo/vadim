@@ -35,6 +35,8 @@ async function initApp() {
     if (window.GAMES && typeof window.GAMES.openOnlineRoom === "function") {
       window.GAMES.openOnlineRoom(roomId, gameType);
     }
+  } else if (tabParam === "rpg" || gameType === "rpg" || gameType) {
+    switchTab("games");
   } else if (tabParam) {
     switchTab(tabParam);
   } else {
