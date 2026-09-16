@@ -36,11 +36,11 @@ def create_bot_and_dispatcher() -> tuple[Bot, Dispatcher]:
 
     dp = Dispatcher(storage=MemoryStorage())
 
-    # Register Middlewares on specific event types
+    # Register Middlewares on specific event types (outer_middleware ensures ALL updates including unhandled text messages are processed)
     auth_middleware = AuthMiddleware()
-    dp.message.middleware(auth_middleware)
-    dp.callback_query.middleware(auth_middleware)
-    dp.my_chat_member.middleware(auth_middleware)
+    dp.message.outer_middleware(auth_middleware)
+    dp.callback_query.outer_middleware(auth_middleware)
+    dp.my_chat_member.outer_middleware(auth_middleware)
 
     # Register Routers safely
     routers = [

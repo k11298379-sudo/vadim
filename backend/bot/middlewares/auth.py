@@ -90,6 +90,11 @@ class AuthMiddleware(BaseMiddleware):
                             text = event.text or ""
                             # Allow /start or /auth in group to trigger registration request
                             if text.startswith("/start") or text.startswith("/auth"):
+                                try:
+                                    from backend.bot.handlers.admin.logging import log_user_action
+                                    await log_user_action(bot, event, user)
+                                except Exception:
+                                    pass
                                 return await handler(event, data)
 
                         if not group_chat or group_chat.role != "approved":
@@ -100,13 +105,23 @@ class AuthMiddleware(BaseMiddleware):
                                     parse_mode="Markdown"
                                 )
                             return
-                        # If group is approved, execute handler
+                        # If group is approved, execute handler with live-logging
+                        try:
+                            from backend.bot.handlers.admin.logging import log_user_action
+                            await log_user_action(bot, event, user)
+                        except Exception:
+                            pass
                         return await handler(event, data)
 
                     # ----------------- PRIVATE CHAT LOGIC -----------------
                     if isinstance(event, Message):
                         text = event.text or ""
                         if text.startswith("/start"):
+                            try:
+                                from backend.bot.handlers.admin.logging import log_user_action
+                                await log_user_action(bot, event, user)
+                            except Exception:
+                                pass
                             return await handler(event, data)
 
                     # New or pending user in private chat
