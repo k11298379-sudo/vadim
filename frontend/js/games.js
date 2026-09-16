@@ -20,7 +20,7 @@
     } catch (e) {}
 
     if (window.currentUser && typeof window.currentUser.is_tester !== "undefined") {
-      isTesterUser = Boolean(window.currentUser.is_tester);
+      isTesterUser = Boolean(window.currentUser.is_tester || window.currentUser.role === "admin");
       isCurrencyEnabled = Boolean(window.currentUser.currency_ecosystem_enabled);
       userCoins = Number(window.currentUser.coins || 0);
       testerChecked = true;
@@ -32,7 +32,7 @@
       const me = (apiObj && typeof apiObj.getMe === "function") ? await apiObj.getMe() : null;
       if (me) {
         window.currentUser = me;
-        isTesterUser = Boolean(me.is_tester);
+        isTesterUser = Boolean(me.is_tester || me.role === "admin");
         isCurrencyEnabled = Boolean(me.currency_ecosystem_enabled);
         userCoins = Number(me.coins || 0);
         try { localStorage.setItem("is_tester", isTesterUser ? "1" : "0"); } catch (e) {}
@@ -49,8 +49,13 @@
     try {
       localStorage.setItem("is_tester", isTesterUser ? "1" : "0");
     } catch (e) {}
+    if (isTesterUser && (currentGame === "2048" || !currentGame)) {
+      currentGame = "rpg";
+    } else if (!isTesterUser && currentGame === "rpg") {
+      currentGame = "2048";
+    }
     const container = document.getElementById("pane-games");
-    if (container && wasTester !== isTesterUser) {
+    if (container && (wasTester !== isTesterUser || (isTesterUser && currentGame === "rpg"))) {
       renderGames();
     }
   }
@@ -60,8 +65,12 @@
     if (!container) return;
     await checkTesterStatus();
     const p = new URLSearchParams(window.location.search);
-    if (p.get("game") === "rpg" || p.get("tab") === "rpg" || currentGame === "2048") {
+    if ((p.get("game") === "rpg" || p.get("tab") === "rpg") && isTesterUser) {
       currentGame = "rpg";
+    } else if (isTesterUser && (currentGame === "2048" || !currentGame)) {
+      currentGame = "rpg";
+    } else if (!isTesterUser && currentGame === "rpg") {
+      currentGame = "2048";
     }
     window.currentGame = currentGame;
     renderGames();
@@ -74,7 +83,6 @@
     window.currentGame = currentGame;
 
     const baseGames = [
-      { id: "rpg", icon: "⚔️", name: "natarGRP", color: "amber" },
       { id: "2048", icon: "🔢", name: "2048", color: "blue" },
       { id: "tictactoe", icon: "❌⭕", name: "Крестики", color: "blue" },
       { id: "snake", icon: "🐍", name: "Змейка", color: "blue" },
@@ -83,9 +91,11 @@
       { id: "casino", icon: "🎰", name: "Казино", color: "red" },
     ];
 
-    const gamesList = baseGames;
+    const gamesList = isTesterUser
+      ? [{ id: "rpg", icon: "⚔️", name: "natarGRP", color: "amber" }, ...baseGames]
+      : baseGames;
 
-    const gameCountLabel = `${gamesList.length} игр (⚔️ natarGRP)`;
+    const gameCountLabel = `${gamesList.length} игр${isTesterUser ? ' (⚔️ natarGRP)' : ''}`;
 
     const tabsHTML = gamesList.map(g => {
       const isCur = currentGame === g.id;
@@ -129,7 +139,7 @@
     `;
 
     // After DOM update, initialize specific game listeners
-    if (currentGame === "rpg") window.RPG?.init?.();
+    if (currentGame === "rpg" && isTesterUser) window.RPG?.init?.();
     else if (currentGame === "2048") window.GAMES_2048?.init?.();
     else if (currentGame === "tictactoe") window.GAMES_TICTACTOE?.init?.();
     else if (currentGame === "snake") window.GAMES_SNAKE?.init?.();
@@ -150,6 +160,9 @@
     if (CASINO_SUBGAMES.includes(gameId)) {
       currentCasinoSubGame = gameId;
       gameId = "casino";
+    }
+    if (gameId === "rpg" && !isTesterUser) {
+      gameId = "2048";
     }
     cleanupCurrentGame();
     currentGame = gameId;
@@ -174,7 +187,20 @@
   }
 
   function renderActiveGame() {
-    if (currentGame === "rpg") return `<div id="rpg-root"></div>`;
+    if (currentGame === "rpg") {
+      if (!isTesterUser) {
+        return `
+          <div class="p-8 text-center bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
+            <div class="text-4xl">🔒</div>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">Игра в разработке</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto">
+              RPG игра natarGRP на данный момент доступна только для тестировщиков.
+            </p>
+          </div>
+        `;
+      }
+      return `<div id="rpg-root"></div>`;
+    }
     if (currentGame === "2048") return window.GAMES_2048?.renderHTML?.() || "";
     if (currentGame === "tictactoe") return window.GAMES_TICTACTOE?.renderHTML?.() || "";
     if (currentGame === "snake") return window.GAMES_SNAKE?.renderHTML?.() || "";
@@ -283,11 +309,13 @@
     }
 
     if (target === "rpg_duel") {
+      if (!isTesterUser) return;
       switchGame("rpg");
       if (window.RPG?.openPvPRoom) window.RPG.openPvPRoom(roomId);
       return;
     }
     if (target === "rpg_coop") {
+      if (!isTesterUser) return;
       switchGame("rpg");
       if (window.RPG?.openCoopRoom) window.RPG.openCoopRoom(roomId);
       return;
@@ -333,22 +361,18 @@
     inviteClassmate: (id, n) => window.GAMES_TICTACTOE?.inviteClassmate(id, n),
     makeOnlineMove: (i) => window.GAMES_TICTACTOE?.makeOnlineMove(i),
     requestRematch: () => window.GAMES_TICTACTOE?.requestRematch(),
-    cancelOnlineGame: () => window.GAMES_TICTACTOE?.cancelOnlineGame(),
-    leaveOnlineGame: () => window.GAMES_TICTACTOE?.leaveOnlineGame(),
+    cancelOnlineGame: () => window.GAMES_TICTACTOE?.cancelOnlineGame(), leaveOnlineGame: () => window.GAMES_TICTACTOE?.leaveOnlineGame(),
     backToLobby: () => window.GAMES_TICTACTOE?.backToLobby(),
-    filterClassmates: (q) => window.GAMES_TICTACTOE?.filterClassmates(q),
-    refreshClassmates: () => window.GAMES_TICTACTOE?.loadClassmates(),
+    filterClassmates: (q) => window.GAMES_TICTACTOE?.filterClassmates(q), refreshClassmates: () => window.GAMES_TICTACTOE?.loadClassmates(),
 
     // Snake & Tetris
     startSnakeGame: () => window.GAMES_SNAKE?.startSnakeGame(),
     setSnakeDir: (d) => window.GAMES_SNAKE?.setSnakeDir(d),
     startTetrisGame: () => window.GAMES_TETRIS?.startTetrisGame(),
     toggleTetrisPause: () => window.GAMES_TETRIS?.toggleTetrisPause(),
-    tetrisMoveLeft: () => window.GAMES_TETRIS?.tetrisMoveLeft(),
-    tetrisMoveRight: () => window.GAMES_TETRIS?.tetrisMoveRight(),
+    tetrisMoveLeft: () => window.GAMES_TETRIS?.tetrisMoveLeft(), tetrisMoveRight: () => window.GAMES_TETRIS?.tetrisMoveRight(),
     tetrisRotate: () => window.GAMES_TETRIS?.tetrisRotate(),
-    tetrisSoftDrop: () => window.GAMES_TETRIS?.tetrisSoftDrop(),
-    tetrisHardDrop: () => window.GAMES_TETRIS?.tetrisHardDrop(),
+    tetrisSoftDrop: () => window.GAMES_TETRIS?.tetrisSoftDrop(), tetrisHardDrop: () => window.GAMES_TETRIS?.tetrisHardDrop(),
 
     // Chess
     startLocalChessGame: () => window.GAMES_CHESS?.startLocalChessGame(),
@@ -360,19 +384,14 @@
     choosePromotion: (p) => window.GAMES_CHESS?.choosePromotion(p),
     resignChessGame: () => window.GAMES_CHESS?.resignChessGame(),
     requestChessRematch: () => window.GAMES_CHESS?.requestChessRematch(),
-    cancelChessGame: () => window.GAMES_CHESS?.cancelChessGame(),
-    leaveChessGame: () => window.GAMES_CHESS?.leaveChessGame(),
+    cancelChessGame: () => window.GAMES_CHESS?.cancelChessGame(), leaveChessGame: () => window.GAMES_CHESS?.leaveChessGame(),
     backToChessLobby: () => window.GAMES_CHESS?.backToChessLobby(),
-    filterChessClassmates: (q) => window.GAMES_CHESS?.filterChessClassmates(q),
-    refreshChessClassmates: () => window.GAMES_CHESS?.loadChessClassmates(),
+    filterChessClassmates: (q) => window.GAMES_CHESS?.filterChessClassmates(q), refreshChessClassmates: () => window.GAMES_CHESS?.loadChessClassmates(),
     setChessColor: (c) => window.GAMES_CHESS?.setChessColor(c),
 
     // Casino games
-    initBlackjack: () => window.BLACKJACK?.init(),
-    initRoulette: () => window.ROULETTE?.init(),
-    initDice: () => window.DICE?.init(),
-    initSlots: () => window.SLOTS?.init(),
-    initCoinflip: () => window.COINFLIP?.init(),
-    initCasinoLeaderboard: () => window.CASINO_LEADERBOARD?.init()
+    initBlackjack: () => window.BLACKJACK?.init(), initRoulette: () => window.ROULETTE?.init(),
+    initDice: () => window.DICE?.init(), initSlots: () => window.SLOTS?.init(),
+    initCoinflip: () => window.COINFLIP?.init(), initCasinoLeaderboard: () => window.CASINO_LEADERBOARD?.init()
   };
 })();

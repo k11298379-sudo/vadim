@@ -168,7 +168,17 @@ assert(typeof mockWindow.GAMES.reset2048 === 'function', 'window.GAMES.reset2048
 assert(typeof mockWindow.GAMES.cellClickTTT === 'function', 'window.GAMES.cellClickTTT must be defined');
 assert(typeof mockWindow.GAMES.startSnakeGame === 'function', 'window.GAMES.startSnakeGame must be defined');
 assert(typeof mockWindow.GAMES.setChessColor === 'function', 'window.GAMES.setChessColor must be defined');
-console.log('window.GAMES module loaded and exports verified!');
+
+// Test tester-only RPG game restriction
+mockWindow.GAMES.updateTesterStatus(false);
+mockWindow.GAMES.switchGame('rpg');
+assert(mockWindow.GAMES.getCurrentGame() !== 'rpg', 'Non-tester must not be able to switch to RPG game');
+assert(mockWindow.GAMES.getCurrentGame() === '2048', 'Non-tester should fall back to 2048');
+
+mockWindow.GAMES.updateTesterStatus(true);
+mockWindow.GAMES.switchGame('rpg');
+assert(mockWindow.GAMES.getCurrentGame() === 'rpg', 'Tester must be able to switch to RPG game');
+console.log('window.GAMES module loaded, tester-only RPG restrictions and exports verified!');
 
 console.log('=== [5/5] Testing multiplayer games & online room routing ===');
 ['game_2048.js', 'game_tictactoe.js', 'game_snake.js', 'game_tetris.js', 'game_chess.js'].forEach(m => {
