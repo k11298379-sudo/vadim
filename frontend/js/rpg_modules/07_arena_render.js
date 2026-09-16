@@ -2,14 +2,20 @@
     const canvas = document.getElementById("rpg-action-canvas");
     if (!canvas) return;
 
-    if (ARENA.canvas !== canvas || !ARENA.ctx) {
+    const isTopDown = !!(ARENA.topDownMode || ARENA.isRaidBossBattle);
+    const expectedClientH = isTopDown ? 520 : 320;
+    const curClientW = canvas.clientWidth;
+
+    if (ARENA.canvas !== canvas || !ARENA.ctx ||
+        (curClientW > 50 && Math.abs(curClientW - (ARENA.cachedClientW || 0)) > 2) ||
+        (ARENA.cachedClientH !== expectedClientH)) {
       bindArenaCanvas(canvas);
     }
 
     const ctx = ARENA.ctx;
     if (!ctx) return;
     const clientW = ARENA.cachedClientW || (canvas.clientWidth > 50 ? canvas.clientWidth : 360);
-    const clientH = ARENA.cachedClientH || (ARENA.topDownMode || ARENA.isRaidBossBattle ? 520 : 320);
+    const clientH = ARENA.cachedClientH || (isTopDown ? 520 : 320);
     const w = ARENA.width || clientW || 360;
     const h = ARENA.height || clientH || 320;
     const time = ARENA.frameCount || 0;
@@ -1846,11 +1852,13 @@
     // ---- 18b. BOSS DEFEAT OVERLAY (On Raid Boss Defeat / Player Death) ----
     if (ARENA.waveState === "boss_defeat") {
       ctx.save();
-      ctx.fillStyle = "rgba(0,0,0,0.78)";
-      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = "rgba(0,0,0,0.85)";
+      ctx.fillRect(0, 0, clientW, clientH);
 
-      const cardW = 290, cardH = 175;
-      const cx = w / 2 - cardW / 2, cy = h / 2 - cardH / 2;
+      const cardW = Math.min(300, clientW - 32);
+      const cardH = 185;
+      const cx = (clientW - cardW) / 2;
+      const cy = (clientH - cardH) / 2;
 
       ctx.fillStyle = "rgba(15, 23, 42, 0.96)";
       ctx.beginPath();
@@ -1862,42 +1870,49 @@
       safeRoundRect(ctx, cx, cy, cardW, cardH, 16);
       ctx.stroke();
 
-      ctx.font = "bold 16px sans-serif";
+      ctx.font = "bold 15px sans-serif";
       ctx.fillStyle = "#ef4444";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("💀 ВЫ ПОГИБЛИ В БИТВЕ С БОССОМ!", w / 2, cy + 26);
+      ctx.fillText("💀 ВЫ ПОГИБЛИ В БИТВЕ С БОССОМ!", clientW / 2, cy + 26);
 
       const bEntity = ARENA.bossEntity;
       const hpPct = bEntity && bEntity.maxHp ? Math.max(0, Math.min(100, Math.round((bEntity.hp / bEntity.maxHp) * 100))) : 0;
       const remHp = bEntity ? formatCompact(bEntity.hp) : "0";
       const totalHp = bEntity ? formatCompact(bEntity.maxHp) : "0";
-      ctx.font = "12px sans-serif";
+      ctx.font = "11.5px sans-serif";
       ctx.fillStyle = "#e2e8f0";
-      ctx.fillText(`У босса осталось: ${hpPct}% HP (${remHp} / ${totalHp})`, w / 2, cy + 50);
-      ctx.font = "10.5px sans-serif";
+      ctx.fillText(`У босса осталось: ${hpPct}% HP (${remHp} / ${totalHp})`, clientW / 2, cy + 52);
+      ctx.font = "10px sans-serif";
       ctx.fillStyle = "#94a3b8";
-      ctx.fillText("Прокачайте героя, подберите билд и повторите!", w / 2, cy + 68);
+      ctx.fillText("Прокачайте героя, подберите билд и повторите!", clientW / 2, cy + 70);
 
       // Button 1: Попробовать снова
-      const btnX = w / 2 - 110, btnY = cy + 92, btnW = 220, btnH = 34;
+      const btnW = Math.min(230, cardW - 32);
+      const btnH = 34;
+      const btnX = (clientW - btnW) / 2;
+      const btnY = cy + 96;
       ctx.fillStyle = "#ef4444";
       ctx.beginPath();
       safeRoundRect(ctx, btnX, btnY, btnW, btnH, 10);
       ctx.fill();
-      ctx.font = "bold 12.5px sans-serif";
+      ctx.font = "bold 12px sans-serif";
       ctx.fillStyle = "#ffffff";
-      ctx.fillText("🔄 Попробовать снова", w / 2, btnY + btnH / 2);
+      ctx.fillText("🔄 Попробовать снова", clientW / 2, btnY + btnH / 2);
 
-      // Button 2: В лобби боссов
-      const exitBtnX = w / 2 - 110, exitBtnY = cy + 132, exitBtnW = 220, exitBtnH = 30;
+      // Button 2: В лобби боссов / Начать с волны 1
+      const exitBtnW = btnW;
+      const exitBtnH = 30;
+      const exitBtnX = btnX;
+      const exitBtnY = cy + 138;
       ctx.fillStyle = "#334155";
       ctx.beginPath();
       safeRoundRect(ctx, exitBtnX, exitBtnY, exitBtnW, exitBtnH, 8);
       ctx.fill();
-      ctx.font = "bold 11.5px sans-serif";
+      ctx.font = "bold 11px sans-serif";
       ctx.fillStyle = "#cbd5e1";
-      ctx.fillText("🚪 В лобби боссов", w / 2, exitBtnY + exitBtnH / 2);
+      const exitLabel = ARENA.isRaidBossBattle ? "🚪 В лобби боссов" : "🏠 Начать с волны 1";
+      ctx.fillText(exitLabel, clientW / 2, exitBtnY + exitBtnH / 2);
 
       ctx.restore();
       ARENA._bossDefeatRetryBounds = { x: btnX, y: btnY, w: btnW, h: btnH };

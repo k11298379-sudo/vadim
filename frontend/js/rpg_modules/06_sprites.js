@@ -1356,13 +1356,13 @@
     const y = 30;
 
     const rankColors = {
-      D: { text: "#94a3b8", glow: "#64748b", title: "DISMAL" },
-      C: { text: "#06b6d4", glow: "#0891b2", title: "CRAZY!" },
-      B: { text: "#10b981", glow: "#059669", title: "BADASS!!" },
-      A: { text: "#f59e0b", glow: "#d97706", title: "APOCALYPTIC!!!" },
-      S: { text: "#f97316", glow: "#ea580c", title: "SAVAGE!" },
-      SS: { text: "#ef4444", glow: "#dc2626", title: "SICK SKILLS!!" },
-      SSS: { text: "#f43f5e", glow: "#e11d48", title: "SMOKIN' SEXY STYLE!!!" }
+      D: { text: "#94a3b8", glow: "#64748b" },
+      C: { text: "#06b6d4", glow: "#0891b2" },
+      B: { text: "#10b981", glow: "#059669" },
+      A: { text: "#f59e0b", glow: "#d97706" },
+      S: { text: "#f97316", glow: "#ea580c" },
+      SS: { text: "#ef4444", glow: "#dc2626" },
+      SSS: { text: "#f43f5e", glow: "#e11d48" }
     };
     const cfg = rankColors[rank] || rankColors.D;
 
@@ -1374,42 +1374,37 @@
     ctx.shadowColor = cfg.glow;
     ctx.shadowBlur = 8;
     ctx.beginPath();
-    safeRoundRect(ctx, x - 42, y - 20, 84, 40, 8);
+    safeRoundRect(ctx, x - 38, y - 17, 76, 34, 8);
     ctx.fill();
     ctx.stroke();
     ctx.shadowBlur = 0;
 
     // Glowing Rank Letter
-    ctx.font = "900 24px 'Impact', sans-serif";
+    ctx.font = "900 22px 'Impact', sans-serif";
     ctx.fillStyle = cfg.text;
     ctx.shadowColor = cfg.glow;
     ctx.shadowBlur = 10;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(rank, x - 16, y - 2);
+    ctx.fillText(rank, x - 16, y);
     ctx.shadowBlur = 0;
-
-    // Subtitle
-    ctx.font = "bold 7px sans-serif";
-    ctx.fillStyle = "#ffffff";
-    ctx.fillText(cfg.title, x + 16, y - 8);
 
     // Style Meter Progress Bar
     const prog = Math.max(0, Math.min(1, styleMeter.progress || 0));
     ctx.fillStyle = "rgba(0,0,0,0.6)";
-    ctx.fillRect(x - 4, y - 1, 38, 4);
+    ctx.fillRect(x - 4, y - 5, 36, 4);
     ctx.fillStyle = cfg.text;
-    ctx.fillRect(x - 4, y - 1, 38 * prog, 4);
+    ctx.fillRect(x - 4, y - 5, 36 * prog, 4);
 
     // Combo Counter (if active)
     if (combo && combo.count > 1) {
       ctx.font = "italic 800 8.5px sans-serif";
       ctx.fillStyle = "#facc15";
-      ctx.fillText(`${combo.count} COMBO!`, x + 14, y + 10);
+      ctx.fillText(`${combo.count} COMBO!`, x + 14, y + 6);
     } else {
       ctx.font = "bold 7px sans-serif";
       ctx.fillStyle = "#94a3b8";
-      ctx.fillText("STYLE", x + 14, y + 10);
+      ctx.fillText("STYLE", x + 14, y + 6);
     }
 
     ctx.restore();

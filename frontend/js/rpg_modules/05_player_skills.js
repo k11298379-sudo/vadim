@@ -70,17 +70,39 @@
     ARENA.isBossActive = true;
     ARENA.bossPhase = 1;
     ARENA.topDownMode = true;
-    ARENA.player.x = (ARENA.width || 360) / 2;
-    ARENA.player.y = (ARENA.height || 460) - 75;
+    ARENA.bossArenaMode = true;
+    ARENA.width = 520;
+    ARENA.height = 720;
+    boss.x = 260;
+    boss.y = 140;
+    boss.radius = 32;
+    ARENA.player.x = 260;
+    ARENA.player.y = 620;
     ARENA.player.isMoving = false;
     ARENA.dashGhosts = [];
 
     ARENA.bossSpecialTimer = 0;
     ARENA.bossProjectiles = [];
-    ARENA.creeps.push(boss);
+    ARENA.creeps = [boss];
 
     if ((ARENA.bossPartyMode || "trio") === "trio") {
       initBossCompanions();
+    }
+
+    // Force full render of DOM to expand canvas to h-[520px] and activate boss controls
+    RPG_STATE._forceFullRender = true;
+    renderRoot();
+    RPG_STATE._forceFullRender = false;
+
+    const canvas = document.getElementById("rpg-action-canvas");
+    if (canvas) {
+      bindArenaCanvas(canvas);
+      ARENA.width = 520;
+      ARENA.height = 720;
+      boss.x = 260;
+      boss.y = 140;
+      ARENA.player.x = 260;
+      ARENA.player.y = 620;
     }
   }
 
@@ -1789,6 +1811,8 @@
     ARENA.alliedMinions = [];
     ARENA.specialEffects = [];
     ARENA.isBossActive = false;
+    ARENA.topDownMode = false;
+    ARENA.isRaidBossBattle = false;
     ARENA.bossEntity = null;
     ARENA.bossPhase = 0;
     ARENA.blockWindowActive = false;
@@ -1797,8 +1821,19 @@
     ARENA.moveInput = { left: false, right: false };
     ARENA.dangerZones = [];
     ARENA.player.x = 65;
+    ARENA.player.y = ARENA.roadY - 18;
     ARENA.player.isInvulnerable = 0;
     ARENA.waveState = "fighting";
+
+    // Re-render DOM to collapse canvas back to 320px and hide boss controls
+    RPG_STATE._forceFullRender = true;
+    renderRoot();
+    RPG_STATE._forceFullRender = false;
+
+    const canvas = document.getElementById("rpg-action-canvas");
+    if (canvas) {
+      bindArenaCanvas(canvas);
+    }
     triggerHaptic("medium");
   }
 

@@ -268,7 +268,7 @@
   }
 
   function setupArenaListeners(canvas) {
-    function handleCanvasTap(cx, cy) {
+    function handleCanvasTap(cx, cy, screenX, screenY) {
       if (ARENA.waveState === "boss_victory") {
         if (RPG_STATE.lastBossChestReward) {
           openChestModal(RPG_STATE.lastBossChestReward);
@@ -290,21 +290,29 @@
         }
       }
       if (ARENA.waveState === "boss_defeat") {
+        const tapX = screenX !== undefined ? screenX : cx;
+        const tapY = screenY !== undefined ? screenY : cy;
         if (ARENA._bossDefeatRetryBounds) {
           const rb = ARENA._bossDefeatRetryBounds;
-          if (cx >= rb.x && cx <= rb.x + rb.w && cy >= rb.y && cy <= rb.y + rb.h) {
-            if (ARENA.currentRaidBoss && ARENA.currentRaidBoss.id) {
+          if (tapX >= rb.x - 10 && tapX <= rb.x + rb.w + 10 && tapY >= rb.y - 8 && tapY <= rb.y + rb.h + 8) {
+            triggerHaptic("medium");
+            if (ARENA.isRaidBossBattle && ARENA.currentRaidBoss && ARENA.currentRaidBoss.id) {
               startRaidBossActionBattle(ARENA.currentRaidBoss.id);
             } else {
-              exitRaidBossBattle();
+              retryCurrentFloor();
             }
             return;
           }
         }
         if (ARENA._bossDefeatExitBounds) {
           const eb = ARENA._bossDefeatExitBounds;
-          if (cx >= eb.x && cx <= eb.x + eb.w && cy >= eb.y && cy <= eb.y + eb.h) {
-            exitRaidBossBattle();
+          if (tapX >= eb.x - 10 && tapX <= eb.x + eb.w + 10 && tapY >= eb.y - 8 && tapY <= eb.y + eb.h + 8) {
+            triggerHaptic("medium");
+            if (ARENA.isRaidBossBattle) {
+              exitRaidBossBattle();
+            } else {
+              retryCurrentFloor();
+            }
             return;
           }
         }
@@ -357,36 +365,40 @@
 
     function getEventArenaCoords(clientX, clientY) {
       const rect = canvas.getBoundingClientRect();
+      const clientW = ARENA.cachedClientW || canvas.clientWidth || (rect.width > 50 ? rect.width : 360);
+      const clientH = ARENA.cachedClientH || canvas.clientHeight || (rect.height > 50 ? rect.height : 320);
+      const screenX = (clientX - rect.left) * (clientW / (rect.width || clientW));
+      const screenY = (clientY - rect.top) * (clientH / (rect.height || clientH));
+
       if (ARENA.topDownMode || ARENA.isRaidBossBattle) {
-        const clientW = rect.width || canvas.clientWidth || 360;
-        const clientH = rect.height || canvas.clientHeight || 520;
         const zoom = Math.min(clientW / 520, clientH / 720);
         const offX = (clientW - 520 * zoom) / 2;
         const offY = (clientH - 720 * zoom) / 2;
         return {
           cx: Math.max(0, Math.min(520, (clientX - rect.left - offX) / zoom)),
-          cy: Math.max(0, Math.min(720, (clientY - rect.top - offY) / zoom))
+          cy: Math.max(0, Math.min(720, (clientY - rect.top - offY) / zoom)),
+          screenX,
+          screenY
         };
       }
       return {
         cx: (clientX - rect.left) * (ARENA.width / (rect.width || 360)),
-        cy: (clientY - rect.top) * (ARENA.height / (rect.height || 320))
+        cy: (clientY - rect.top) * (ARENA.height / (rect.height || 320)),
+        screenX,
+        screenY
       };
     }
 
     canvas.onclick = (e) => {
-      const { cx, cy } = getEventArenaCoords(e.clientX, e.clientY);
-      handleCanvasTap(cx, cy);
+      const { cx, cy, screenX, screenY } = getEventArenaCoords(e.clientX, e.clientY);
+      handleCanvasTap(cx, cy, screenX, screenY);
     };
 
     canvas.ontouchstart = (e) => {
       e.preventDefault();
       const touch = e.changedTouches[0];
-      const { cx, cy } = getEventArenaCoords(touch.clientX, touch.clientY);
-
-      
-
-      handleCanvasTap(cx, cy);
+      const { cx, cy, screenX, screenY } = getEventArenaCoords(touch.clientX, touch.clientY);
+      handleCanvasTap(cx, cy, screenX, screenY);
     };
 
     // Boss arena movement: touchmove for continuous direction

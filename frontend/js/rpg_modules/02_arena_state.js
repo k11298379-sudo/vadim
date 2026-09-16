@@ -268,8 +268,8 @@
     const rect = canvas.getBoundingClientRect();
     const dpr = Math.min(2, (typeof window !== "undefined" && window.devicePixelRatio && window.devicePixelRatio > 0) ? window.devicePixelRatio : 1);
     const isTopDown = !!(ARENA.topDownMode || ARENA.isRaidBossBattle);
-    const clientW = rect.width > 50 ? rect.width : (canvas.clientWidth > 50 ? canvas.clientWidth : 360);
-    const clientH = isTopDown ? 520 : (rect.height > 50 ? rect.height : 320);
+    const clientW = canvas.clientWidth > 50 ? canvas.clientWidth : (rect.width > 50 ? rect.width : 360);
+    const clientH = isTopDown ? 520 : (canvas.clientHeight > 50 ? canvas.clientHeight : (rect.height > 50 ? rect.height : 320));
     // In Top-Down Brawl mode, arena logical space is a spacious 520x720 battlefield!
     ARENA.cachedClientW = clientW;
     ARENA.cachedClientH = clientH;
