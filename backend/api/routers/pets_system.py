@@ -12,11 +12,11 @@ from backend.api.auth import get_optional_webapp_user
 from backend.db.crud.rpg import get_or_create_rpg_character, serialize_character_profile
 from backend.db.crud.rpg.pets_config import PETS_CATALOG, PET_HATCH_RATES
 
-rpg_pets_router = APIRouter(prefix="/rpg/pets", tags=["RPG Pets"])
+pets_system_router = APIRouter(prefix="/rpg/pets", tags=["RPG Pets"])
 
 HATCH_COST_GEMS = 50
 
-@rpg_pets_router.post("/hatch")
+@pets_system_router.post("/hatch")
 async def hatch_pet(
     payload: Dict[str, Any] = Body(...),
     user: Optional[User] = Depends(get_optional_webapp_user),
@@ -83,7 +83,7 @@ async def hatch_pet(
     }
 
 
-@rpg_pets_router.post("/equip")
+@pets_system_router.post("/equip")
 async def equip_pet(
     payload: Dict[str, Any] = Body(...),
     user: Optional[User] = Depends(get_optional_webapp_user),
@@ -118,7 +118,7 @@ async def equip_pet(
     }
 
 
-@rpg_pets_router.post("/upgrade")
+@pets_system_router.post("/upgrade")
 async def upgrade_pet(
     payload: Dict[str, Any] = Body(...),
     user: Optional[User] = Depends(get_optional_webapp_user),

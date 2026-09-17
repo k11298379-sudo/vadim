@@ -17,7 +17,7 @@ from backend.db.crud.rpg import (
     sell_item_from_inventory,
     sell_multiple_items_from_inventory,
 )
-from backend.api.routers.rpg import rpg_router
+from backend.api.routers.heroes_dota import rpg_router
 
 
 @rpg_router.post("/inventory/equip")

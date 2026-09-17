@@ -18,7 +18,7 @@ from backend.db.crud.rpg import (
     open_boss_raid_chest
 )
 from backend.api.game_rooms import game_manager, RAID_BOSSES
-from backend.api.routers.rpg import rpg_router
+from backend.api.routers.heroes_dota import rpg_router
 
 KILL_STREAK_TITLES = [
     "KILLING SPREE! ⚡",

@@ -10,9 +10,11 @@ from backend.api.routers.roulette import roulette_router
 from backend.api.routers.dice import dice_router
 from backend.api.routers.slots import slots_router
 from backend.api.routers.coinflip import coinflip_router
-from backend.api.routers.rpg import rpg_router
-import backend.api.routers.rpg_combat  # Registers combat routes onto rpg_router
-import backend.api.routers.rpg_inventory  # Registers inventory & shop routes onto rpg_router
+from backend.api.routers.heroes_dota import rpg_router
+from backend.api.routers.multiplayer_hub import multiplayer_hub_router
+from backend.api.routers.rebirth_engine import rebirth_engine_router
+import backend.api.routers.bosses_dynamic  # Registers combat routes onto rpg_router
+import backend.api.routers.items_forge  # Registers inventory & shop routes onto rpg_router
 
 __all__ = [
     "common_router",
@@ -27,6 +29,8 @@ __all__ = [
     "slots_router",
     "coinflip_router",
     "rpg_router",
+    "multiplayer_hub_router",
+    "rebirth_engine_router",
 ]
 
 
