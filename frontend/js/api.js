@@ -246,7 +246,7 @@ const api = {
       method: "POST",
       body: JSON.stringify({ item_uid: itemUid })
     }),
-  doRebirth: () => apiRequest("/api/rpg/rebirth", { method: "POST" }),
+  doRebirth: () => apiRequest("/api/rpg/rebirth_system/ascend", { method: "POST" }),
   upgradeTalent: (talentId) => apiRequest("/api/rpg/talents/upgrade", {
     method: "POST",
     body: JSON.stringify({ talent_id: talentId })

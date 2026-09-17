@@ -195,7 +195,7 @@ function renderTalentsTab() {
               "dragon": { icon: "🐉", name: "Золотой Дракон", desc: "Конус огня 1200 урона, +50% золота" },
               "phoenix": { icon: "🦅", name: "Пылающий Феникс", desc: "Щит неуязвимости при смертельном ударе" },
               "slime": { icon: "💧", name: "Капельный Слайм", desc: "Лечит на 10% HP каждые 12с" },
-              "donkey": { icon: "🐴", name: "Ослик-Курьер", desc: "+40% к урону группы" }
+              "donkey": { icon: "🫏", name: "Ослик-Курьер Доты", desc: "Носит рюкзак на 6 предметов, +40% к урону группы" }
             };
             const pData = petDict[pet.type || pet.pet_id] || { icon: "🐾", name: pet.name || "Питомец", desc: "Боевой спутник" };
             const isSelected = pet.is_equipped;
