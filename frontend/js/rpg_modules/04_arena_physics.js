@@ -1853,24 +1853,27 @@
       const maxX = ARENA.width - 45;
 
       if (boss.x <= minX) {
-        boss.moveDir = 1;
+        boss.x = minX;
         boss.attackCooldown = (boss.attackCooldown || 0) + 1;
         if (boss.attackCooldown >= 35) {
           boss.attackCooldown = 0;
           if (!p.isInvulnerable && !p.isBlocking && ARENA.parryWindow <= 0) {
             const rawDmg = calculateBossAttackDamage(boss, 0.85);
             const actualDmg = applyDamageToPlayer(rawDmg, "roam");
-            spawnFloatingText(p.x, p.y - 20, `-${actualDmg}`, "#ef4444");
+            spawnFloatingText(p.x, p.y - 20, `💥 -${actualDmg}`, "#ef4444");
             triggerHaptic("light");
             if (p.currentHp <= 0) { handlePlayerArenaDeath(); return; }
           }
+          if (Math.random() < 0.45) boss.moveDir = 1;
         }
       } else if (boss.x >= maxX) {
         boss.moveDir = -1;
       }
 
-      const spd = (boss.speed || 0.85) * (boss.enraged ? 1.4 : 1.0);
-      boss.x += boss.moveDir * spd;
+      if (boss.x > minX || boss.moveDir === 1) {
+        const spd = (boss.speed || 0.85) * (boss.enraged ? 1.4 : 1.0);
+        boss.x += boss.moveDir * spd;
+      }
 
       // Special Move Decision
       if (boss.decisionTimer <= 0) {

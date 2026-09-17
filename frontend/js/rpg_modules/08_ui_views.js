@@ -33,11 +33,11 @@
     const existingCanvas = document.getElementById("rpg-action-canvas");
     const viewContainer = document.getElementById("rpg-view-container");
 
-    const isRaidState = !!ARENA.isRaidBossBattle;
-    const raidStateChanged = RPG_STATE._lastRenderedRaidBattle !== isRaidState;
-    RPG_STATE._lastRenderedRaidBattle = isRaidState;
+    const isBossFightState = !!(ARENA.isRaidBossBattle || (ARENA.isBossActive && ARENA.topDownMode));
+    const bossFightStateChanged = RPG_STATE._lastRenderedBossFight !== isBossFightState;
+    RPG_STATE._lastRenderedBossFight = isBossFightState;
 
-    if (!RPG_STATE._forceFullRender && !raidStateChanged && existingCanvas && viewContainer && RPG_STATE.activeTab === "farm" && RPG_STATE.farmMode === "arena") {
+    if (!RPG_STATE._forceFullRender && !bossFightStateChanged && existingCanvas && viewContainer && RPG_STATE.activeTab === "farm" && RPG_STATE.farmMode === "arena") {
       const topNav = document.getElementById("rpg-top-nav");
       if (topNav) {
         topNav.outerHTML = renderTopNavBarHTML();
@@ -830,7 +830,7 @@
             <!-- Bottom row: Attack + Dash (Dash only visible during boss fight) -->
             <div class="flex items-center gap-1.5">
               <!-- Attack / Shoot Button [Space / Click] -->
-              <button id="rpg-btn-attack" ontouchstart="event.preventDefault(); window.RPG.playerSlashAttackAction()" onmousedown="event.preventDefault(); window.RPG.playerSlashAttackAction()" onclick="window.RPG.playerSlashAttackAction()" title="Атака [Пробел / Клик]"
+              <button id="rpg-btn-attack" ontouchstart="event.preventDefault(); window.RPG.playerSlashAttackAction()" onclick="window.RPG.playerSlashAttackAction()" title="Атака [Пробел / Клик]"
                 class="w-11 h-11 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 border-2 border-amber-300 text-white font-black text-xs flex flex-col items-center justify-center shadow-lg shadow-red-600/40 active:scale-90 transition-transform">
                 <span class="text-base leading-none">⚔️</span>
                 <span class="text-[8px] font-bold mt-0.5">АТАК</span>
@@ -1637,8 +1637,7 @@
 
     const p = RPG_STATE.profile || {};
     const eq = p.equipment || {};
-    const isEquipped =
-      eq.weapon?.uid === item.uid || eq.armor?.uid === item.uid || eq.relic?.uid === item.uid;
+    const isEquipped = Object.values(eq).some(it => it && it.uid === item.uid);
 
     let deltaHTML = "";
     if (!isEquipped && ["weapon", "armor", "relic"].includes(item.slot)) {
@@ -1773,8 +1772,14 @@
             }
 
             ${
-              !isEquipped
+              isEquipped
                 ? `
+              <button onclick="window.RPG.sellItem('${item.uid}')" class="w-full py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-500 active:scale-95 font-bold text-xs flex items-center justify-center gap-1.5 transition-all">
+                <span>💰</span>
+                <span>Снять и продать (+${getItemSellPrice(item)} 🪙)</span>
+              </button>
+            `
+                : `
               <button onclick="window.RPG.toggleItemSelection('${item.uid}'); window.RPG.closeItemModal();" class="w-full py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-500 font-black text-xs flex items-center justify-center gap-1.5">
                 <span>☑️</span>
                 <span>Выбрать для продажи (+${getItemSellPrice(item)} 🪙)</span>
@@ -1783,7 +1788,6 @@
                 Продать этот предмет (+${getItemSellPrice(item)} 🪙)
               </button>
             `
-                : ""
             }
           </div>
         </div>

@@ -826,6 +826,14 @@
       ARENA.isBossActive = false;
       ARENA.bossEntity = null;
       ARENA.bossArenaMode = false;
+      if (ARENA.player) {
+        ARENA.player.x = 65;
+        ARENA.player.y = ARENA.roadY - 18;
+        ARENA.player.isInvulnerable = 0;
+        const stats = RPG_STATE.profile?.stats || {};
+        ARENA.player.maxHp = Math.max(450, stats.hp_max || 450);
+        ARENA.player.currentHp = Math.max(1, ARENA.player.currentHp || ARENA.player.maxHp);
+      }
 
       const currentSavedWave = ((RPG_STATE.profile?.dungeon_cleared || 0) % 20) + 1;
       ARENA.waveNumber = currentSavedWave;

@@ -113,6 +113,7 @@
   function fireTopDownAttack(targetPoint) {
     const p = ARENA.player;
     if (ARENA.waveState !== "fighting") return;
+    if (p.shootCooldown && p.shootCooldown > 0) return;
     const stats = RPG_STATE.profile?.stats || {};
     const boss = (ARENA.bossEntity && ARENA.bossEntity.hp > 0) ? ARENA.bossEntity : (ARENA.creeps.find(c => c.hp > 0) || null);
 
@@ -161,7 +162,12 @@
     triggerHaptic(isCrit ? "medium" : "light");
   }
 
+  let _lastSlashAttackTime = 0;
   function playerSlashAttack() {
+    const now = Date.now();
+    if (now - _lastSlashAttackTime < 50) return;
+    _lastSlashAttackTime = now;
+
     const p = ARENA.player;
     if (ARENA.topDownMode || ARENA.isRaidBossBattle) {
       fireTopDownAttack(null);
@@ -204,11 +210,6 @@
       cdFrames = 58; // ~0.97s at 60 FPS (~1.03 atk/sec heavy smash)
       isHeavyFinisher = true;
       addStylePoints(145, "HEAVY FINISHER");
-    }
-
-    // Accelerate Ultimate Cooldown on Combo Hits!
-    if (ARENA.ultCooldown > 0) {
-      ARENA.ultCooldown = Math.max(0, ARENA.ultCooldown - 40);
     }
 
     let speedRate = Math.max(0.7, stats.attack_speed || 1.0);
@@ -387,10 +388,12 @@
           safeDamageCreep(c, finalDmg, false);
         }
 
-        // Lifesteal
-        if (stats.lifesteal > 0) {
-          const heal = Math.floor(finalDmg * (stats.lifesteal / 100));
-          p.currentHp = Math.min(p.maxHp, p.currentHp + heal);
+        // Lifesteal on creeps (boss lifesteal is handled safely in applyDamageToBoss)
+        if (!c.isBoss && stats.lifesteal > 0) {
+          const pMax = p.maxHp || 500;
+          const rawHeal = Math.floor(finalDmg * (stats.lifesteal / 100));
+          const heal = Math.max(1, Math.min(Math.floor(pMax * 0.08), rawHeal));
+          p.currentHp = Math.min(pMax, p.currentHp + heal);
         }
 
         const col = (c.isBoss && c.isStaggered) ? "#fbbf24" : (isCrit ? "#facc15" : (isHeavyFinisher ? "#f97316" : "#f87171"));
@@ -1914,9 +1917,11 @@
 
     // Disable Boss Arena Mode — restore player position
     ARENA.bossArenaMode = false;
+    ARENA.topDownMode = false;
     ARENA.moveInput = { left: false, right: false };
     ARENA.dangerZones = [];
     ARENA.player.x = 65; // Reset to default stationary position
+    ARENA.player.y = ARENA.roadY - 18;
     ARENA.player.isInvulnerable = 0;
 
     if (ARENA.isRaidBossBattle) {
@@ -2155,6 +2160,8 @@
       ARENA.alliedMinions = [];
       ARENA.specialEffects = [];
       ARENA.isBossActive = false;
+      ARENA.topDownMode = false;
+      ARENA.bossArenaMode = false;
       ARENA.bossEntity = null;
       ARENA.bossPhase = 0;
       ARENA.blockWindowActive = false;
@@ -2162,6 +2169,8 @@
       ARENA.creepsKilledInWave = 0;
       ARENA.totalCreepsSpawned = 0;
       ARENA.waveNumber = 1;
+      ARENA.player.x = 65;
+      ARENA.player.y = ARENA.roadY - 18;
       ARENA.waveState = "retry_prompt";
     }, 1200);
   }

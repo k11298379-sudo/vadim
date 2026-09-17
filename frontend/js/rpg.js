@@ -847,6 +847,14 @@ loadRpgImages();
       ARENA.isBossActive = false;
       ARENA.bossEntity = null;
       ARENA.bossArenaMode = false;
+      if (ARENA.player) {
+        ARENA.player.x = 65;
+        ARENA.player.y = ARENA.roadY - 18;
+        ARENA.player.isInvulnerable = 0;
+        const stats = RPG_STATE.profile?.stats || {};
+        ARENA.player.maxHp = Math.max(450, stats.hp_max || 450);
+        ARENA.player.currentHp = Math.max(1, ARENA.player.currentHp || ARENA.player.maxHp);
+      }
 
       const currentSavedWave = ((RPG_STATE.profile?.dungeon_cleared || 0) % 20) + 1;
       ARENA.waveNumber = currentSavedWave;
@@ -2307,7 +2315,7 @@ loadRpgImages();
 
   function applyDamageToPlayer(rawDmg, attackType = "normal") {
     const p = ARENA.player;
-    if (!p || (p.isInvulnerable && p.isInvulnerable > 0)) return 0;
+    if (!p || (typeof p.isInvulnerable === "number" && p.isInvulnerable > 0)) return 0;
 
     const stats = RPG_STATE.profile?.stats || {};
     const eq = RPG_STATE.profile?.equipment || {};
@@ -2333,11 +2341,13 @@ loadRpgImages();
 
     let finalDmg = Math.max(1, rawDmg);
 
-    // 3. Passive Item: Vanguard / Crimson Guard Damage Block (70% chance to block 80 dmg)
+    // 3. Passive Item: Vanguard / Crimson Guard Damage Block (70% chance, capped at 50% on bosses)
     const damageBlock = stats.damage_block || 0;
     if (damageBlock > 0 && Math.random() < 0.70) {
-      finalDmg = Math.max(1, finalDmg - damageBlock);
-      spawnFloatingText(p.x, p.y - 20, `🛡️ БЛОК -${damageBlock} (АВАНГАРД)`, "#94a3b8");
+      const isBossEncounter = !!(ARENA.isRaidBossBattle || ARENA.isBossActive || ARENA.bossArenaMode);
+      const effectiveBlock = isBossEncounter ? Math.min(damageBlock, Math.floor(finalDmg * 0.50)) : damageBlock;
+      finalDmg = Math.max(1, finalDmg - effectiveBlock);
+      spawnFloatingText(p.x, p.y - 20, `🛡️ БЛОК -${effectiveBlock} (АВАНГАРД)`, "#94a3b8");
     }
 
     // 4. Passive Item: Blade Mail Damage Return (Reflect 35% damage back to boss)
@@ -4551,24 +4561,27 @@ loadRpgImages();
       const maxX = ARENA.width - 45;
 
       if (boss.x <= minX) {
-        boss.moveDir = 1;
+        boss.x = minX;
         boss.attackCooldown = (boss.attackCooldown || 0) + 1;
         if (boss.attackCooldown >= 35) {
           boss.attackCooldown = 0;
           if (!p.isInvulnerable && !p.isBlocking && ARENA.parryWindow <= 0) {
             const rawDmg = calculateBossAttackDamage(boss, 0.85);
             const actualDmg = applyDamageToPlayer(rawDmg, "roam");
-            spawnFloatingText(p.x, p.y - 20, `-${actualDmg}`, "#ef4444");
+            spawnFloatingText(p.x, p.y - 20, `💥 -${actualDmg}`, "#ef4444");
             triggerHaptic("light");
             if (p.currentHp <= 0) { handlePlayerArenaDeath(); return; }
           }
+          if (Math.random() < 0.45) boss.moveDir = 1;
         }
       } else if (boss.x >= maxX) {
         boss.moveDir = -1;
       }
 
-      const spd = (boss.speed || 0.85) * (boss.enraged ? 1.4 : 1.0);
-      boss.x += boss.moveDir * spd;
+      if (boss.x > minX || boss.moveDir === 1) {
+        const spd = (boss.speed || 0.85) * (boss.enraged ? 1.4 : 1.0);
+        boss.x += boss.moveDir * spd;
+      }
 
       // Special Move Decision
       if (boss.decisionTimer <= 0) {
@@ -6266,6 +6279,7 @@ function distToSegment(px, py, x1, y1, x2, y2) {
   function fireTopDownAttack(targetPoint) {
     const p = ARENA.player;
     if (ARENA.waveState !== "fighting") return;
+    if (p.shootCooldown && p.shootCooldown > 0) return;
     const stats = RPG_STATE.profile?.stats || {};
     const boss = (ARENA.bossEntity && ARENA.bossEntity.hp > 0) ? ARENA.bossEntity : (ARENA.creeps.find(c => c.hp > 0) || null);
 
@@ -6314,7 +6328,12 @@ function distToSegment(px, py, x1, y1, x2, y2) {
     triggerHaptic(isCrit ? "medium" : "light");
   }
 
+  let _lastSlashAttackTime = 0;
   function playerSlashAttack() {
+    const now = Date.now();
+    if (now - _lastSlashAttackTime < 50) return;
+    _lastSlashAttackTime = now;
+
     const p = ARENA.player;
     if (ARENA.topDownMode || ARENA.isRaidBossBattle) {
       fireTopDownAttack(null);
@@ -6357,11 +6376,6 @@ function distToSegment(px, py, x1, y1, x2, y2) {
       cdFrames = 58; // ~0.97s at 60 FPS (~1.03 atk/sec heavy smash)
       isHeavyFinisher = true;
       addStylePoints(145, "HEAVY FINISHER");
-    }
-
-    // Accelerate Ultimate Cooldown on Combo Hits!
-    if (ARENA.ultCooldown > 0) {
-      ARENA.ultCooldown = Math.max(0, ARENA.ultCooldown - 40);
     }
 
     let speedRate = Math.max(0.7, stats.attack_speed || 1.0);
@@ -6540,10 +6554,12 @@ function distToSegment(px, py, x1, y1, x2, y2) {
           safeDamageCreep(c, finalDmg, false);
         }
 
-        // Lifesteal
-        if (stats.lifesteal > 0) {
-          const heal = Math.floor(finalDmg * (stats.lifesteal / 100));
-          p.currentHp = Math.min(p.maxHp, p.currentHp + heal);
+        // Lifesteal on creeps (boss lifesteal is handled safely in applyDamageToBoss)
+        if (!c.isBoss && stats.lifesteal > 0) {
+          const pMax = p.maxHp || 500;
+          const rawHeal = Math.floor(finalDmg * (stats.lifesteal / 100));
+          const heal = Math.max(1, Math.min(Math.floor(pMax * 0.08), rawHeal));
+          p.currentHp = Math.min(pMax, p.currentHp + heal);
         }
 
         const col = (c.isBoss && c.isStaggered) ? "#fbbf24" : (isCrit ? "#facc15" : (isHeavyFinisher ? "#f97316" : "#f87171"));
@@ -8067,9 +8083,11 @@ function distToSegment(px, py, x1, y1, x2, y2) {
 
     // Disable Boss Arena Mode — restore player position
     ARENA.bossArenaMode = false;
+    ARENA.topDownMode = false;
     ARENA.moveInput = { left: false, right: false };
     ARENA.dangerZones = [];
     ARENA.player.x = 65; // Reset to default stationary position
+    ARENA.player.y = ARENA.roadY - 18;
     ARENA.player.isInvulnerable = 0;
 
     if (ARENA.isRaidBossBattle) {
@@ -8308,6 +8326,8 @@ function distToSegment(px, py, x1, y1, x2, y2) {
       ARENA.alliedMinions = [];
       ARENA.specialEffects = [];
       ARENA.isBossActive = false;
+      ARENA.topDownMode = false;
+      ARENA.bossArenaMode = false;
       ARENA.bossEntity = null;
       ARENA.bossPhase = 0;
       ARENA.blockWindowActive = false;
@@ -8315,6 +8335,8 @@ function distToSegment(px, py, x1, y1, x2, y2) {
       ARENA.creepsKilledInWave = 0;
       ARENA.totalCreepsSpawned = 0;
       ARENA.waveNumber = 1;
+      ARENA.player.x = 65;
+      ARENA.player.y = ARENA.roadY - 18;
       ARENA.waveState = "retry_prompt";
     }, 1200);
   }
@@ -9958,30 +9980,28 @@ function drawBossModelMid(ctx, b, bId, time) {
       ctx.save();
       ctx.scale(bScale, bScale);
 
+      const bId = (c.bossType || c.boss_id || c.id || c.name || "").toLowerCase();
+      let drawn = false;
+
       if (typeof RPG_ASSETS !== "undefined") {
-        const bIdKey = (c.bossType || c.boss_id || c.id || c.name || "").toLowerCase();
         let assetKey = null;
-        if (bIdKey.includes("roshan") || bIdKey.includes("рошан") || bIdKey.includes("огненный демон")) assetKey = "roshan";
-        else if (bIdKey.includes("terrorblade") || bIdKey.includes("террорблейд") || bIdKey.includes("демон бездны")) assetKey = "terrorblade";
-        else if (bIdKey.includes("void") || bIdKey.includes("хроно") || bIdKey.includes("faceless") || bIdKey.includes("хроно-владыка")) assetKey = "faceless_void";
-        else if (bIdKey.includes("мясник") || bIdKey.includes("butcher")) assetKey = "butcher";
-        else if (bIdKey.includes("повелитель теней") || bIdKey.includes("shadow")) assetKey = "shadow_lord";
+        if (bId.includes("roshan") || bId.includes("рошан") || bId.includes("огненный демон")) assetKey = "roshan";
+        else if (bId.includes("terrorblade") || bId.includes("террорблейд") || bId.includes("демон бездны")) assetKey = "terrorblade";
+        else if (bId.includes("void") || bId.includes("хроно") || bId.includes("faceless") || bId.includes("хроно-владыка")) assetKey = "faceless_void";
+        else if (bId.includes("мясник") || bId.includes("butcher")) assetKey = "butcher";
+        else if (bId.includes("повелитель теней") || bId.includes("shadow")) assetKey = "shadow_lord";
 
         if (assetKey && RPG_ASSETS.bosses && RPG_ASSETS.bosses[assetKey]) {
           const bossAsset = RPG_ASSETS.bosses[assetKey];
           if (bossAsset && bossAsset.complete && bossAsset.naturalWidth > 0) {
-            // Need to unscale because we scale later, or just draw with proper coords
             const size = 110; 
             ctx.drawImage(bossAsset, -size / 2, -size / 1.1, size, size);
-            ctx.restore();
-            return;
+            drawn = true;
           }
         }
       }
 
-      const bId = (c.bossType || c.boss_id || c.id || c.name || "").toLowerCase();
-      let drawn = false;
-      if (typeof drawBossModelEarly === "function") drawn = drawBossModelEarly(ctx, c, bId, time);
+      if (!drawn && typeof drawBossModelEarly === "function") drawn = drawBossModelEarly(ctx, c, bId, time);
       if (!drawn && typeof drawBossModelMid === "function") drawn = drawBossModelMid(ctx, c, bId, time);
       if (!drawn && typeof drawBossModelLate === "function") drawn = drawBossModelLate(ctx, c, bId, time);
 
@@ -13542,11 +13562,11 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
     const existingCanvas = document.getElementById("rpg-action-canvas");
     const viewContainer = document.getElementById("rpg-view-container");
 
-    const isRaidState = !!ARENA.isRaidBossBattle;
-    const raidStateChanged = RPG_STATE._lastRenderedRaidBattle !== isRaidState;
-    RPG_STATE._lastRenderedRaidBattle = isRaidState;
+    const isBossFightState = !!(ARENA.isRaidBossBattle || (ARENA.isBossActive && ARENA.topDownMode));
+    const bossFightStateChanged = RPG_STATE._lastRenderedBossFight !== isBossFightState;
+    RPG_STATE._lastRenderedBossFight = isBossFightState;
 
-    if (!RPG_STATE._forceFullRender && !raidStateChanged && existingCanvas && viewContainer && RPG_STATE.activeTab === "farm" && RPG_STATE.farmMode === "arena") {
+    if (!RPG_STATE._forceFullRender && !bossFightStateChanged && existingCanvas && viewContainer && RPG_STATE.activeTab === "farm" && RPG_STATE.farmMode === "arena") {
       const topNav = document.getElementById("rpg-top-nav");
       if (topNav) {
         topNav.outerHTML = renderTopNavBarHTML();
@@ -14339,7 +14359,7 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
             <!-- Bottom row: Attack + Dash (Dash only visible during boss fight) -->
             <div class="flex items-center gap-1.5">
               <!-- Attack / Shoot Button [Space / Click] -->
-              <button id="rpg-btn-attack" ontouchstart="event.preventDefault(); window.RPG.playerSlashAttackAction()" onmousedown="event.preventDefault(); window.RPG.playerSlashAttackAction()" onclick="window.RPG.playerSlashAttackAction()" title="Атака [Пробел / Клик]"
+              <button id="rpg-btn-attack" ontouchstart="event.preventDefault(); window.RPG.playerSlashAttackAction()" onclick="window.RPG.playerSlashAttackAction()" title="Атака [Пробел / Клик]"
                 class="w-11 h-11 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 border-2 border-amber-300 text-white font-black text-xs flex flex-col items-center justify-center shadow-lg shadow-red-600/40 active:scale-90 transition-transform">
                 <span class="text-base leading-none">⚔️</span>
                 <span class="text-[8px] font-bold mt-0.5">АТАК</span>
@@ -15146,8 +15166,7 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
 
     const p = RPG_STATE.profile || {};
     const eq = p.equipment || {};
-    const isEquipped =
-      eq.weapon?.uid === item.uid || eq.armor?.uid === item.uid || eq.relic?.uid === item.uid;
+    const isEquipped = Object.values(eq).some(it => it && it.uid === item.uid);
 
     let deltaHTML = "";
     if (!isEquipped && ["weapon", "armor", "relic"].includes(item.slot)) {
@@ -15282,8 +15301,14 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
             }
 
             ${
-              !isEquipped
+              isEquipped
                 ? `
+              <button onclick="window.RPG.sellItem('${item.uid}')" class="w-full py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-500 active:scale-95 font-bold text-xs flex items-center justify-center gap-1.5 transition-all">
+                <span>💰</span>
+                <span>Снять и продать (+${getItemSellPrice(item)} 🪙)</span>
+              </button>
+            `
+                : `
               <button onclick="window.RPG.toggleItemSelection('${item.uid}'); window.RPG.closeItemModal();" class="w-full py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-500 font-black text-xs flex items-center justify-center gap-1.5">
                 <span>☑️</span>
                 <span>Выбрать для продажи (+${getItemSellPrice(item)} 🪙)</span>
@@ -15292,7 +15317,6 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
                 Продать этот предмет (+${getItemSellPrice(item)} 🪙)
               </button>
             `
-                : ""
             }
           </div>
         </div>

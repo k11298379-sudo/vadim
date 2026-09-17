@@ -681,30 +681,28 @@
       ctx.save();
       ctx.scale(bScale, bScale);
 
+      const bId = (c.bossType || c.boss_id || c.id || c.name || "").toLowerCase();
+      let drawn = false;
+
       if (typeof RPG_ASSETS !== "undefined") {
-        const bIdKey = (c.bossType || c.boss_id || c.id || c.name || "").toLowerCase();
         let assetKey = null;
-        if (bIdKey.includes("roshan") || bIdKey.includes("рошан") || bIdKey.includes("огненный демон")) assetKey = "roshan";
-        else if (bIdKey.includes("terrorblade") || bIdKey.includes("террорблейд") || bIdKey.includes("демон бездны")) assetKey = "terrorblade";
-        else if (bIdKey.includes("void") || bIdKey.includes("хроно") || bIdKey.includes("faceless") || bIdKey.includes("хроно-владыка")) assetKey = "faceless_void";
-        else if (bIdKey.includes("мясник") || bIdKey.includes("butcher")) assetKey = "butcher";
-        else if (bIdKey.includes("повелитель теней") || bIdKey.includes("shadow")) assetKey = "shadow_lord";
+        if (bId.includes("roshan") || bId.includes("рошан") || bId.includes("огненный демон")) assetKey = "roshan";
+        else if (bId.includes("terrorblade") || bId.includes("террорблейд") || bId.includes("демон бездны")) assetKey = "terrorblade";
+        else if (bId.includes("void") || bId.includes("хроно") || bId.includes("faceless") || bId.includes("хроно-владыка")) assetKey = "faceless_void";
+        else if (bId.includes("мясник") || bId.includes("butcher")) assetKey = "butcher";
+        else if (bId.includes("повелитель теней") || bId.includes("shadow")) assetKey = "shadow_lord";
 
         if (assetKey && RPG_ASSETS.bosses && RPG_ASSETS.bosses[assetKey]) {
           const bossAsset = RPG_ASSETS.bosses[assetKey];
           if (bossAsset && bossAsset.complete && bossAsset.naturalWidth > 0) {
-            // Need to unscale because we scale later, or just draw with proper coords
             const size = 110; 
             ctx.drawImage(bossAsset, -size / 2, -size / 1.1, size, size);
-            ctx.restore();
-            return;
+            drawn = true;
           }
         }
       }
 
-      const bId = (c.bossType || c.boss_id || c.id || c.name || "").toLowerCase();
-      let drawn = false;
-      if (typeof drawBossModelEarly === "function") drawn = drawBossModelEarly(ctx, c, bId, time);
+      if (!drawn && typeof drawBossModelEarly === "function") drawn = drawBossModelEarly(ctx, c, bId, time);
       if (!drawn && typeof drawBossModelMid === "function") drawn = drawBossModelMid(ctx, c, bId, time);
       if (!drawn && typeof drawBossModelLate === "function") drawn = drawBossModelLate(ctx, c, bId, time);
 

@@ -195,7 +195,7 @@
 
   function applyDamageToPlayer(rawDmg, attackType = "normal") {
     const p = ARENA.player;
-    if (!p || (p.isInvulnerable && p.isInvulnerable > 0)) return 0;
+    if (!p || (typeof p.isInvulnerable === "number" && p.isInvulnerable > 0)) return 0;
 
     const stats = RPG_STATE.profile?.stats || {};
     const eq = RPG_STATE.profile?.equipment || {};
@@ -221,11 +221,13 @@
 
     let finalDmg = Math.max(1, rawDmg);
 
-    // 3. Passive Item: Vanguard / Crimson Guard Damage Block (70% chance to block 80 dmg)
+    // 3. Passive Item: Vanguard / Crimson Guard Damage Block (70% chance, capped at 50% on bosses)
     const damageBlock = stats.damage_block || 0;
     if (damageBlock > 0 && Math.random() < 0.70) {
-      finalDmg = Math.max(1, finalDmg - damageBlock);
-      spawnFloatingText(p.x, p.y - 20, `🛡️ БЛОК -${damageBlock} (АВАНГАРД)`, "#94a3b8");
+      const isBossEncounter = !!(ARENA.isRaidBossBattle || ARENA.isBossActive || ARENA.bossArenaMode);
+      const effectiveBlock = isBossEncounter ? Math.min(damageBlock, Math.floor(finalDmg * 0.50)) : damageBlock;
+      finalDmg = Math.max(1, finalDmg - effectiveBlock);
+      spawnFloatingText(p.x, p.y - 20, `🛡️ БЛОК -${effectiveBlock} (АВАНГАРД)`, "#94a3b8");
     }
 
     // 4. Passive Item: Blade Mail Damage Return (Reflect 35% damage back to boss)
