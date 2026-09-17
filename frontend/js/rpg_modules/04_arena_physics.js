@@ -1,5 +1,6 @@
   function updateArena() {
     ARENA.frameCount = (ARENA.frameCount || 0) + 1;
+    const p = ARENA.player;
 
     // Hitstop freeze (Sekiro/Hollow Knight impact pause)
     if (ARENA.hitstop > 0) {
@@ -107,7 +108,6 @@
       return;
     }
 
-    const p = ARENA.player;
     const stats = RPG_STATE.profile?.stats || {};
 
     // =========================================================================

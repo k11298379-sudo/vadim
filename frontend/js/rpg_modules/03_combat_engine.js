@@ -543,7 +543,8 @@
         ARENA.startLoopTimeout = requestAnimationFrame(() => startArenaLoop());
         return;
       }
-      if (!ARENA.isRaidBossBattle || !ARENA.bossEntity) {
+      const isBossFightActive = !!((ARENA.isRaidBossBattle || ARENA.isBossActive) && ARENA.bossEntity);
+      if (!isBossFightActive) {
         initArenaCanvas();
       } else if (!ARENA.ctx || ARENA.canvas !== canvas) {
         bindArenaCanvas(canvas);

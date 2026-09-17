@@ -1826,8 +1826,8 @@ loadRpgImages();
     if (!canvas) return;
     bindArenaCanvas(canvas);
 
-    // CRITICAL: NEVER wipe out an active Raid Boss Battle!
-    if (ARENA.isRaidBossBattle) {
+    // CRITICAL: NEVER wipe out an active Boss Battle (Raid or Dungeon)!
+    if (ARENA.isRaidBossBattle || (ARENA.isBossActive && ARENA.bossEntity)) {
       if (ARENA.bossEntity && !ARENA.creeps.includes(ARENA.bossEntity)) {
         ARENA.creeps = [ARENA.bossEntity];
       }
@@ -2636,7 +2636,8 @@ loadRpgImages();
         ARENA.startLoopTimeout = requestAnimationFrame(() => startArenaLoop());
         return;
       }
-      if (!ARENA.isRaidBossBattle || !ARENA.bossEntity) {
+      const isBossFightActive = !!((ARENA.isRaidBossBattle || ARENA.isBossActive) && ARENA.bossEntity);
+      if (!isBossFightActive) {
         initArenaCanvas();
       } else if (!ARENA.ctx || ARENA.canvas !== canvas) {
         bindArenaCanvas(canvas);
@@ -2678,6 +2679,7 @@ loadRpgImages();
 
   function updateArena() {
     ARENA.frameCount = (ARENA.frameCount || 0) + 1;
+    const p = ARENA.player;
 
     // Hitstop freeze (Sekiro/Hollow Knight impact pause)
     if (ARENA.hitstop > 0) {
@@ -2785,7 +2787,6 @@ loadRpgImages();
       return;
     }
 
-    const p = ARENA.player;
     const stats = RPG_STATE.profile?.stats || {};
 
     // =========================================================================
@@ -14152,10 +14153,11 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
     const p = RPG_STATE.profile || {};
     const floor = p.dungeon_floor || 1;
     const isArena = RPG_STATE.farmMode === "arena";
-    const isBossFight = !!(ARENA.isRaidBossBattle || (ARENA.isBossActive && ARENA.topDownMode));
+    const isRaidBoss = !!ARENA.isRaidBossBattle;
+    const isDungeonBoss = !!(ARENA.isBossActive && ARENA.topDownMode);
     const bossObj = ARENA.bossEntity || ARENA.currentRaidBoss || {};
 
-    if (isBossFight) {
+    if (isRaidBoss) {
       return `
         <div class="space-y-3.5">
           <!-- Brawl Boss Fight Header -->
@@ -14201,7 +14203,7 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
               </h3>
             </div>
             <p class="text-[11px] text-amber-200/80 font-medium">
-              ${isArena ? "Защита тропы! Крипы бегут справа — руби и отбивай боссов!" : "Автоматическое месилово крипов"}
+              ${isArena ? (isDungeonBoss ? `👑 Бой с боссом: ${bossObj.name || "Босс этажа"}!` : "Защита тропы! Крипы бегут справа — руби и отбивай боссов!") : "Автоматическое месилово крипов"}
             </p>
           </div>
 

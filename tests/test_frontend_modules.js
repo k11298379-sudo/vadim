@@ -271,6 +271,18 @@ assert(typeof mockWindow.RPG.renderRoot === 'function', 'window.RPG.renderRoot m
   assert(farmHtml.includes('rpg-action-canvas'), 'Farm arena should render canvas without ReferenceError');
   assert(farmHtml.includes('h-[320px]'), 'Normal farm arena should have 320px canvas');
 
+  // Test farm mode switching: arena -> sim -> arena
+  mockWindow.RPG.setFarmMode('sim');
+  const simHtml = sharedElements['rpg-root'] ? sharedElements['rpg-root'].innerHTML : '';
+  assert(simHtml.includes('🎮 Арена'), 'Sim mode must have Арена button');
+  assert(simHtml.includes('Зарубить волну'), 'Sim mode must have fast sim slaughter button');
+
+  mockWindow.RPG.setFarmMode('arena');
+  const arenaBackHtml = sharedElements['rpg-root'] ? sharedElements['rpg-root'].innerHTML : '';
+  assert(arenaBackHtml.includes('🎮 Арена'), 'Arena mode must have Арена button');
+  assert(arenaBackHtml.includes('⚡ Авто'), 'Arena mode must have Авто button');
+  assert(arenaBackHtml.includes('rpg-action-canvas'), 'Arena mode must render canvas');
+
   // Test boss fight rendering
   if (typeof mockWindow.RPG.startRaidBossActionBattle === 'function') {
     mockWindow.RPG.startRaidBossActionBattle({ id: 'roshan', name: 'Рошан', hp: 10000, maxHp: 10000 });
@@ -280,7 +292,7 @@ assert(typeof mockWindow.RPG.renderRoot === 'function', 'window.RPG.renderRoot m
     assert(bossHtml.includes('rpg-virtual-joystick-zone'), 'Boss fight arena should render virtual joystick zone');
   }
 
-  console.log('natarGRP RPG module loaded and rendered farm & boss arenas cleanly without ReferenceError!');
+  console.log('natarGRP RPG module loaded, farm mode switching and boss arenas verified without ReferenceError!');
   console.log('\n🎉 ALL FRONTEND AND EGE TESTS PASSED SUCCESSFULLY! 🚀');
   process.exit(0);
 })();

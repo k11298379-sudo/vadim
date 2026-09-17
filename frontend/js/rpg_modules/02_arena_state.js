@@ -291,8 +291,8 @@
     if (!canvas) return;
     bindArenaCanvas(canvas);
 
-    // CRITICAL: NEVER wipe out an active Raid Boss Battle!
-    if (ARENA.isRaidBossBattle) {
+    // CRITICAL: NEVER wipe out an active Boss Battle (Raid or Dungeon)!
+    if (ARENA.isRaidBossBattle || (ARENA.isBossActive && ARENA.bossEntity)) {
       if (ARENA.bossEntity && !ARENA.creeps.includes(ARENA.bossEntity)) {
         ARENA.creeps = [ARENA.bossEntity];
       }
