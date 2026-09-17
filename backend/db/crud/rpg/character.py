@@ -132,7 +132,7 @@ def serialize_character_profile(char: RPGCharacter, user_name: str = "") -> Dict
     }
     canonical_class = LEGACY_MAP.get(h_class, h_class)
     cfg = NATAR_HEROES.get(canonical_class, NATAR_HEROES["pudge"])
-    xp_needed = 120 + (char.level - 1) * 160
+    xp_needed = int(100 * (char.level ** 1.85) + 50 * char.level) if char.level < 50 else 0
 
     return {
         "id": char.id,
@@ -152,6 +152,7 @@ def serialize_character_profile(char: RPGCharacter, user_name: str = "") -> Dict
         "gems": char.gems,
         "stat_points": getattr(char, "stat_points", 0),
         "rebirths": getattr(char, "rebirths", 0),
+        "rebirth_essence": getattr(char, "rebirth_essence", 0),
         "talent_points": getattr(char, "talent_points", 0),
         "talents": getattr(char, "talents", {}),
         "pets": getattr(char, "pets", []),

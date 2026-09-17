@@ -108,25 +108,25 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
     total_int = int_val + gear_int
 
     # Attributes scaling
-    stat_hp = hero_cfg.get("base_hp", 160) + int(total_str * 22) + flat_hp
-    stat_hp_regen = round((total_str * 0.35) + flat_hp_regen, 1)
+    stat_hp = 150 + int(total_str * 24) + flat_hp
+    stat_hp_regen = round(0.5 + (total_str * 0.08) + flat_hp_regen, 1)
 
-    stat_atk_speed = round(1.0 + (total_agi * 0.025) + flat_atk_speed, 2)
-    stat_def = int(total_agi * 0.4) + flat_def
-    crit_chance = min(85, 5 + int(total_agi * 0.4) + crit_chance)
-    dodge_chance = min(60, int(total_agi * 0.3) + dodge_chance)
+    stat_atk_speed = round(1.0 + (total_agi * 0.0005) + flat_atk_speed, 2)
+    stat_def = int(total_agi * 0.18) + flat_def
+    crit_chance = min(85, 5 + int(total_agi * 0.12) + crit_chance)
+    dodge_chance = min(60, int(total_agi * 0.08) + dodge_chance)
 
-    stat_mp = hero_cfg.get("base_mp", 60) + int(total_int * 14) + flat_mp
-    stat_mp_regen = round((total_int * 0.25) + flat_mp_regen, 1)
-    magic_res = min(80, int(total_int * 0.35) + magic_res)
+    stat_mp = 100 + int(total_int * 16) + flat_mp
+    stat_mp_regen = round(1.0 + (total_int * 0.10) + flat_mp_regen, 1)
+    magic_res = min(80, int(total_int * 0.15) + magic_res)
 
     # Primary attribute attack bonus
     if hero_cfg["attr"] == "Сила":
-        primary_bonus = total_str * 1.0
+        primary_bonus = total_str * 1.8
     elif hero_cfg["attr"] == "Ловкость":
-        primary_bonus = total_agi * 1.0
+        primary_bonus = total_agi * 1.8
     else:  # Интеллект
-        primary_bonus = total_int * 1.0
+        primary_bonus = total_int * 1.8
 
     stat_atk = int(primary_bonus + 10) + flat_atk
     total_min_atk = stat_atk + w_min
@@ -149,7 +149,7 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
 
     # Endgame RPG multipliers
     rebirths = getattr(char, "rebirths", 0)
-    rebirth_mult = 1.0 + (rebirths * 0.1)
+    rebirth_mult = 1.0 + (rebirths * 0.35) + ((rebirths ** 1.3) * 0.08)
 
     talents = getattr(char, "talents", {})
     talent_lifesteal = talents.get("lifesteal", 0) * 2
