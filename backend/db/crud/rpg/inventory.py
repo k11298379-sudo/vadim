@@ -10,6 +10,11 @@ from backend.db.crud.rpg.character import get_or_create_rpg_character, serialize
 from backend.db.crud.rpg.heroes import NATAR_HEROES
 
 from backend.db.crud.rpg.inventory_sell import sell_item_from_inventory, sell_multiple_items_from_inventory, reset_rpg_character
+from backend.db.crud.rpg.forge_math import (
+    get_forge_upgrade_requirements,
+    apply_forge_upgrade_to_item,
+    FORGE_MAX_LEVEL,
+)
 
 async def equip_item_for_character(
     session: AsyncSession,
@@ -181,7 +186,7 @@ async def upgrade_item_forge(
     char: RPGCharacter,
     item_uid: str
 ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
-    """Upgrades item level (+1..+100) at the Forge."""
+    """Upgrades item level (+1..+15) at the Forge according to Volume V."""
     target_item = None
     is_equipped = False
     slot_name = None
@@ -205,59 +210,36 @@ async def upgrade_item_forge(
         return False, "Предмет для заточки не найден.", None
 
     current_upg = target_item.get("upgrade", 0)
-    cost = int(60 * (1.25 ** current_upg))
-    if char.gold < cost:
-        return False, f"Не хватает золота! Заточка до +{current_upg + 1} стоит {cost} 🪙 (у вас {char.gold} 🪙).", None
+    reqs = get_forge_upgrade_requirements(current_upg)
+    if reqs["is_max"]:
+        return False, f"Предмет «{target_item.get('name', 'Снаряжение')}» уже достиг максимального уровня заточки +{FORGE_MAX_LEVEL}!", target_item
 
-    char.gold -= cost
-    new_upg = current_upg + 1
-    target_item["upgrade"] = new_upg
-    target_item["forge_level"] = new_upg
+    gold_cost = reqs["gold_cost"]
+    gems_cost = reqs["gems_cost"]
+    target_lvl = reqs["target_level"]
 
-    # 1. Weapon damage
-    if target_item.get("slot") == "weapon" or target_item.get("type") == "weapon" or "min_atk" in target_item or "base_min" in target_item:
-        cur_min = target_item.get("min_atk") or target_item.get("base_min") or 8
-        cur_max = target_item.get("max_atk") or target_item.get("base_max") or 14
-        target_item["min_atk"] = int(cur_min * 1.15) + 3
-        target_item["base_min"] = target_item["min_atk"]
-        target_item["max_atk"] = max(target_item["min_atk"] + 4, int(cur_max * 1.15) + 5)
-        target_item["base_max"] = target_item["max_atk"]
+    if char.gold < gold_cost:
+        return False, f"Не хватает золота! Заточка до +{target_lvl} стоит {gold_cost} 🪙 (у вас {char.gold} 🪙).", target_item
 
-    # 2. Armor defense & HP
-    if target_item.get("slot") == "armor" or target_item.get("type") == "armor" or "defense" in target_item or "base_def" in target_item or "def" in target_item:
-        cur_def = target_item.get("defense") or target_item.get("base_def") or target_item.get("def") or 4
-        cur_hp = target_item.get("hp_bonus") or target_item.get("base_hp") or 20
-        target_item["defense"] = int(cur_def * 1.15) + 2
-        target_item["base_def"] = target_item["defense"]
-        if "def" in target_item:
-            target_item["def"] = target_item["defense"]
-        target_item["hp_bonus"] = int(cur_hp * 1.15) + 25
-        target_item["base_hp"] = target_item["hp_bonus"]
+    if char.gems < gems_cost:
+        return False, f"Не хватает кристаллов! Заточка до +{target_lvl} требует {gems_cost} 💎 (у вас {char.gems} 💎).", target_item
 
-    # 3. Bonus attributes and stats
-    if "bonus" in target_item and isinstance(target_item["bonus"], dict):
-        bonus = dict(target_item["bonus"])
-        for k, v in bonus.items():
-            if isinstance(v, (int, float)) and v > 0:
-                if k in ["str", "agi", "int", "atk", "all_stats"]:
-                    bonus[k] = int(v * 1.15) + 2
-                elif k in ["hp", "mp"]:
-                    bonus[k] = int(v * 1.15) + 15
-                elif k in ["hp_regen", "mp_regen", "aura_armor", "armor_aura", "block", "damage_block", "armor_pierce"]:
-                    bonus[k] = int(v * 1.15) + 1
-                elif k in ["crit", "dodge", "lifesteal", "atk_speed"]:
-                    bonus[k] = min(65, int(v * 1.1) + 1)
-                elif k in ["ult_boost"]:
-                    bonus[k] = min(250, int(v * 1.06) + 2)
-                elif k in ["ult_cd", "cooldown_reduct"]:
-                    bonus[k] = min(60, int(v * 1.05) + 1)
-                elif k in ["spell_amp"]:
-                    bonus[k] = min(75, int(v * 1.1) + 1)
-                elif k in ["lightning", "chain_lightning", "burst_magic", "cleave", "reflect", "meteor", "magic_dmg", "burn_aura"]:
-                    bonus[k] = int(v * 1.15) + 3
-        target_item["bonus"] = bonus
+    char.gold -= gold_cost
+    char.gems -= gems_cost
 
-    target_item["bonus_desc"] = rebuild_item_description(target_item)
+    # Roll success probability according to Volume V
+    roll = random.random()
+    is_success = roll <= reqs["success_rate"]
+
+    if not is_success:
+        # Failure: item is NOT broken and NOT degraded; only resources are lost
+        await session.commit()
+        await session.refresh(char)
+        fail_msg = f"Заточка на +{target_lvl} не удалась ({reqs['success_pct']}% шанс)! Предмет сохранен, потрачено {gold_cost} 🪙 и {gems_cost} 💎."
+        return False, fail_msg, target_item
+
+    # Success: upgrade stats (+15% per level)
+    target_item = apply_forge_upgrade_to_item(target_item, target_lvl)
 
     if is_equipped and slot_name:
         equipment[slot_name] = target_item
@@ -273,6 +255,7 @@ async def upgrade_item_forge(
 
     await session.commit()
     await session.refresh(char)
-    return True, f"Заточка успешна! «{target_item['name']}» теперь +{new_upg} ⚔️", target_item
+    success_msg = f"✨ Заточка успешна ({reqs['success_pct']}% шанс)! «{target_item.get('name', 'Снаряжение')}» теперь +{target_lvl} ⚔️"
+    return True, success_msg, target_item
 
 

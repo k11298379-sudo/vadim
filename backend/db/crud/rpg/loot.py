@@ -203,14 +203,16 @@ def generate_random_natar_item(floor: int, quality_luck: float = 0.0, hero_class
     """Generates a class-weighted item from the streamlined natarGRP catalog."""
     roll = random.random() + quality_luck + (floor * 0.006)
 
-    if roll > 0.98:
-        target_rarities = ["immortal", "legendary"]
+    if roll > 0.995:
+        target_rarities = ["immortal", "mythic"]
+    elif roll > 0.96:
+        target_rarities = ["mythic", "legendary"]
     elif roll > 0.85:
         target_rarities = ["legendary", "epic"]
     elif roll > 0.55:
         target_rarities = ["epic", "rare"]
     elif roll > 0.25:
-        target_rarities = ["rare", "common", "uncommon"]
+        target_rarities = ["rare", "uncommon"]
     else:
         target_rarities = ["common", "uncommon"]
 

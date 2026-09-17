@@ -17,6 +17,12 @@ from backend.db.crud.rpg import (
     sell_item_from_inventory,
     sell_multiple_items_from_inventory,
 )
+from backend.db.crud.rpg.forge_math import (
+    RARITY_TIERS,
+    get_forge_upgrade_requirements,
+    apply_forge_upgrade_to_item,
+    FORGE_MAX_LEVEL,
+)
 from backend.api.routers.heroes_dota import rpg_router
 
 
@@ -44,24 +50,77 @@ async def equip_item_endpoint(
     }
 
 
+@rpg_router.get("/items/rarities")
+async def get_item_rarities_endpoint():
+    """Returns the 7 canonical rarity tiers with multipliers and drop weights (Volume V)."""
+    return list(RARITY_TIERS.values())
+
+
+@rpg_router.get("/forge/info/{item_uid}")
+async def get_forge_info_endpoint(
+    item_uid: str,
+    user: Optional[User] = Depends(get_optional_webapp_user),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Calculates forge upgrade requirements, success rate, costs and stat preview."""
+    user_id = user.id if user else 1
+    char = await get_or_create_rpg_character(session, user_id=user_id)
+
+    target_item = None
+    equipment = dict(char.equipment or {})
+    for s in ["slot_1", "slot_2", "slot_3", "slot_4", "slot_5", "slot_6"]:
+        if equipment.get(s) and equipment[s].get("uid") == item_uid:
+            target_item = dict(equipment[s])
+            break
+
+    if not target_item:
+        for it in (char.inventory or []):
+            if it.get("uid") == item_uid:
+                target_item = dict(it)
+                break
+
+    if not target_item:
+        raise HTTPException(status_code=404, detail="Предмет не найден.")
+
+    cur_lvl = target_item.get("upgrade", 0)
+    reqs = get_forge_upgrade_requirements(cur_lvl)
+
+    preview_item = None
+    if not reqs["is_max"]:
+        import copy
+        preview_item = apply_forge_upgrade_to_item(copy.deepcopy(target_item), reqs["target_level"])
+
+    return {
+        "item_uid": item_uid,
+        "item_name": target_item.get("name", "Снаряжение"),
+        "rarity": target_item.get("rarity", "common"),
+        "current_level": cur_lvl,
+        "max_level": FORGE_MAX_LEVEL,
+        "is_max": reqs["is_max"],
+        "requirements": reqs,
+        "current_item": target_item,
+        "preview_item": preview_item,
+    }
+
+
 @rpg_router.post("/inventory/forge")
 async def forge_item_endpoint(
     payload: Dict[str, Any] = Body(...),
     user: Optional[User] = Depends(get_optional_webapp_user),
     session: AsyncSession = Depends(get_db_session)
 ):
-    """Upgrades Dota item level (+1..+100) at the Secret Shop Forge."""
+    """Upgrades Dota item level (+1..+15) at the Secret Shop Forge."""
     user_id = user.id if user else 1
     item_uid = payload.get("item_uid", "")
 
     char = await get_or_create_rpg_character(session, user_id=user_id)
     ok, msg, item = await upgrade_item_forge(session, char, item_uid)
-    if not ok:
+    if not ok and ("Не хватает" in msg or "не найден" in msg or "достиг максимального" in msg):
         raise HTTPException(status_code=400, detail=msg)
 
     user_name = user.display_name if user else "Дотер 11 «Б»"
     return {
-        "success": True,
+        "success": ok,
         "message": msg,
         "item": item,
         "profile": serialize_character_profile(char, user_name=user_name)

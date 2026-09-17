@@ -49,6 +49,12 @@ from backend.db.crud.rpg.rebirth import (
     CONSTELLATIONS_CATALOG,
     REBIRTH_RANKS_CONFIG,
 )
+from backend.db.crud.rpg.forge_math import (
+    RARITY_TIERS,
+    get_forge_upgrade_requirements,
+    apply_forge_upgrade_to_item,
+    FORGE_MAX_LEVEL,
+)
 from backend.db.crud.rpg.dungeon import run_dungeon_wave
 
 __all__ = [
@@ -67,4 +73,5 @@ __all__ = [
     "calculate_base_attribute_stats", "LEVEL_CAP", "STAT_POINTS_PER_LEVEL", "PROGRESSION_MILESTONES",
     "calculate_rebirth_multiplier", "get_rebirth_rank_info", "perform_ascension",
     "upgrade_constellation", "CONSTELLATIONS_CATALOG", "REBIRTH_RANKS_CONFIG",
+    "RARITY_TIERS", "get_forge_upgrade_requirements", "apply_forge_upgrade_to_item", "FORGE_MAX_LEVEL",
 ]

@@ -12,12 +12,13 @@ from typing import Dict, Any, List
 # ==============================================================================
 
 RARITY_MULTIPLIERS = {
-    "common": {"name": "Обычный", "color": "#94a3b8", "mult": 1.0, "sell": 40},
-    "uncommon": {"name": "Необычный", "color": "#22c55e", "mult": 1.25, "sell": 75},
-    "rare": {"name": "Редкий", "color": "#38bdf8", "mult": 1.5, "sell": 120},
-    "epic": {"name": "Эпический", "color": "#c084fc", "mult": 2.2, "sell": 320},
-    "legendary": {"name": "Легендарный", "color": "#facc15", "mult": 3.4, "sell": 850},
-    "immortal": {"name": "Бессмертный", "color": "#f97316", "mult": 5.0, "sell": 2500}
+    "common": {"name": "Обычный", "color": "#94a3b8", "mult": 1.00, "sell": 40, "affixes": 0, "weight": 50.0},
+    "uncommon": {"name": "Необычный", "color": "#22c55e", "mult": 1.30, "sell": 75, "affixes": 1, "weight": 28.0},
+    "rare": {"name": "Редкий", "color": "#3b82f6", "mult": 1.75, "sell": 140, "affixes": 2, "weight": 13.5},
+    "epic": {"name": "Эпический", "color": "#a855f7", "mult": 2.40, "sell": 350, "affixes": 3, "weight": 6.0},
+    "legendary": {"name": "Легендарный", "color": "#f59e0b", "mult": 3.40, "sell": 900, "affixes": 4, "weight": 1.9},
+    "mythic": {"name": "Мифический", "color": "#ef4444", "mult": 4.80, "sell": 2500, "affixes": 5, "weight": 0.45},
+    "immortal": {"name": "Бессмертный", "color": "#ec4899", "mult": 6.80, "sell": 7500, "affixes": 6, "weight": 0.15},
 }
 
 # ==============================================================================
