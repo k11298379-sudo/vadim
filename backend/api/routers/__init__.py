@@ -12,6 +12,7 @@ from backend.api.routers.slots import slots_router
 from backend.api.routers.coinflip import coinflip_router
 from backend.api.routers.rpg import rpg_router
 import backend.api.routers.rpg_combat  # Registers combat routes onto rpg_router
+import backend.api.routers.rpg_inventory  # Registers inventory & shop routes onto rpg_router
 
 __all__ = [
     "common_router",

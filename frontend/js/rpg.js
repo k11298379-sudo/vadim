@@ -978,8 +978,13 @@ loadRpgImages();
     if (isUpgradingStat) return;
     const p = RPG_STATE.profile || {};
     const points = p.stat_points || 0;
-    const statVal = (statName === "str" ? p.strength : (statName === "agi" ? p.agility : p.intelligence)) || 10;
-    const cost = Math.floor(Math.pow(statVal, 1.35) * 6);
+    const baseAttrs = p.base_attributes || {};
+    const baseVal = (statName === "str"
+      ? (baseAttrs.strength ?? p.strength)
+      : (statName === "agi"
+        ? (baseAttrs.agility ?? p.agility)
+        : (baseAttrs.intelligence ?? p.intelligence))) || 10;
+    const cost = Math.floor(Math.pow(baseVal, 1.35) * 6);
 
     if (points <= 0 && (p.gold || 0) < cost) {
       triggerHaptic("error");
@@ -995,9 +1000,23 @@ loadRpgImages();
       } else {
         p.gold = Math.max(0, (p.gold || 0) - cost);
       }
-      if (statName === "str") p.strength = statVal + 1;
-      else if (statName === "agi") p.agility = statVal + 1;
-      else if (statName === "int") p.intelligence = statVal + 1;
+      if (!p.base_attributes) {
+        p.base_attributes = {
+          strength: p.strength || 10,
+          agility: p.agility || 10,
+          intelligence: p.intelligence || 10
+        };
+      }
+      if (statName === "str") {
+        p.base_attributes.strength = baseVal + 1;
+        p.strength = (p.strength || baseVal) + 1;
+      } else if (statName === "agi") {
+        p.base_attributes.agility = baseVal + 1;
+        p.agility = (p.agility || baseVal) + 1;
+      } else if (statName === "int") {
+        p.base_attributes.intelligence = baseVal + 1;
+        p.intelligence = (p.intelligence || baseVal) + 1;
+      }
       renderRoot();
 
       const res = await api.upgradeRpgStat(statName);
@@ -13003,25 +13022,46 @@ function drawBossModelMid(ctx, b, bId, time) {
     // ---- 21. BOSS VICTORY SHOWCASE OVERLAY ----
     if (ARENA.waveState === "boss_victory") {
       ctx.save();
-      ctx.fillStyle = "rgba(0,0,0,0.55)";
-      ctx.fillRect(0, 0, w, h);
-      ctx.font = "bold 22px sans-serif";
+      ctx.fillStyle = "rgba(0, 0, 0, 0.80)";
+      ctx.fillRect(0, 0, clientW, clientH);
+
+      const cardW = Math.min(310, clientW - 32);
+      const cardH = 175;
+      const cx = (clientW - cardW) / 2;
+      const cy = (clientH - cardH) / 2;
+
+      ctx.fillStyle = "rgba(15, 23, 42, 0.96)";
+      ctx.beginPath();
+      safeRoundRect(ctx, cx, cy, cardW, cardH, 16);
+      ctx.fill();
+      ctx.strokeStyle = "#facc15";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      safeRoundRect(ctx, cx, cy, cardW, cardH, 16);
+      ctx.stroke();
+
+      ctx.font = "bold 16px sans-serif";
       ctx.fillStyle = "#facc15";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("👑 РЕЙД-БОСС ПОВЕРЖЕН! 🏆", w / 2, 45);
-      ctx.font = "bold 11px sans-serif";
-      ctx.fillStyle = "#e2e8f0";
-      ctx.fillText("Нажмите на сундук или кнопку ниже, чтобы забрать награду!", w / 2, 68);
+      ctx.fillText("👑 РЕЙД-БОСС ПОВЕРЖЕН! 🏆", clientW / 2, cy + 30);
 
-      const btnX = w / 2 - 95, btnY = h - 55, btnW = 190, btnH = 36;
+      ctx.font = "11.5px sans-serif";
+      ctx.fillStyle = "#e2e8f0";
+      ctx.fillText("Великая победа! Награда ждёт вас!", clientW / 2, cy + 58);
+
+      const btnW = Math.min(230, cardW - 32);
+      const btnH = 38;
+      const btnX = (clientW - btnW) / 2;
+      const btnY = cy + 102;
       ctx.fillStyle = "#eab308";
       ctx.beginPath();
       safeRoundRect(ctx, btnX, btnY, btnW, btnH, 12);
       ctx.fill();
-      ctx.font = "bold 12px sans-serif";
+
+      ctx.font = "bold 13px sans-serif";
       ctx.fillStyle = "#0f172a";
-      ctx.fillText("ОТКРЫТЬ СУНДУК 🎁", w / 2, btnY + btnH / 2);
+      ctx.fillText("🎁 ЗАБРАТЬ НАГРАДУ", clientW / 2, btnY + btnH / 2);
       ctx.restore();
       ARENA._promptBtnBounds = { x: btnX, y: btnY, w: btnW, h: btnH };
     }

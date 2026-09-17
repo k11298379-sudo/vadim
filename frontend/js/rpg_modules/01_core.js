@@ -957,8 +957,13 @@
     if (isUpgradingStat) return;
     const p = RPG_STATE.profile || {};
     const points = p.stat_points || 0;
-    const statVal = (statName === "str" ? p.strength : (statName === "agi" ? p.agility : p.intelligence)) || 10;
-    const cost = Math.floor(Math.pow(statVal, 1.35) * 6);
+    const baseAttrs = p.base_attributes || {};
+    const baseVal = (statName === "str"
+      ? (baseAttrs.strength ?? p.strength)
+      : (statName === "agi"
+        ? (baseAttrs.agility ?? p.agility)
+        : (baseAttrs.intelligence ?? p.intelligence))) || 10;
+    const cost = Math.floor(Math.pow(baseVal, 1.35) * 6);
 
     if (points <= 0 && (p.gold || 0) < cost) {
       triggerHaptic("error");
@@ -974,9 +979,23 @@
       } else {
         p.gold = Math.max(0, (p.gold || 0) - cost);
       }
-      if (statName === "str") p.strength = statVal + 1;
-      else if (statName === "agi") p.agility = statVal + 1;
-      else if (statName === "int") p.intelligence = statVal + 1;
+      if (!p.base_attributes) {
+        p.base_attributes = {
+          strength: p.strength || 10,
+          agility: p.agility || 10,
+          intelligence: p.intelligence || 10
+        };
+      }
+      if (statName === "str") {
+        p.base_attributes.strength = baseVal + 1;
+        p.strength = (p.strength || baseVal) + 1;
+      } else if (statName === "agi") {
+        p.base_attributes.agility = baseVal + 1;
+        p.agility = (p.agility || baseVal) + 1;
+      } else if (statName === "int") {
+        p.base_attributes.intelligence = baseVal + 1;
+        p.intelligence = (p.intelligence || baseVal) + 1;
+      }
       renderRoot();
 
       const res = await api.upgradeRpgStat(statName);
