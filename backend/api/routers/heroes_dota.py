@@ -98,11 +98,7 @@ async def get_hero_by_id_endpoint(hero_id: str):
 @rpg_router.get("/progression/table")
 async def get_progression_table_endpoint():
     """Returns level 1 to 50 progression model with XP formulas and milestones."""
-    return {
-        "level_cap": LEVEL_CAP,
-        "stat_points_per_level": STAT_POINTS_PER_LEVEL,
-        "table": get_full_progression_table(),
-    }
+    return {"level_cap": LEVEL_CAP, "stat_points_per_level": STAT_POINTS_PER_LEVEL, "table": get_full_progression_table()}
 
 
 @rpg_router.get("/progression/milestones")
@@ -283,30 +279,57 @@ async def upgrade_talent_endpoint(
     user_id = user.id if user else 1
     user_name = user.display_name if user else "Герой natarGRP"
     char = await get_or_create_rpg_character(session, user_id=user_id)
-    
     talent_id = payload.get("talent_id")
-    if not talent_id:
-        raise HTTPException(status_code=400, detail="Missing talent_id")
-    
-    VALID_TALENTS = {"lifesteal", "crit_mult", "cooldown", "dodge"}
-    if talent_id not in VALID_TALENTS:
+    if not talent_id or talent_id not in {"lifesteal", "crit_mult", "cooldown", "dodge"}:
         raise HTTPException(status_code=400, detail="Неизвестный талант")
-        
     if char.talent_points <= 0:
         raise HTTPException(status_code=400, detail="Нет очков талантов!")
-        
     talents = dict(char.talents or {})
     current_lvl = talents.get(talent_id, 0)
-    
-    # Cap talents at level 5
     if current_lvl >= 5:
         raise HTTPException(status_code=400, detail="Талант максимального уровня!")
-        
     talents[talent_id] = current_lvl + 1
     char.talents = talents
     char.talent_points -= 1
-    
     flag_modified(char, "talents")
     await session.commit()
-    
     return {"status": "ok", "profile": serialize_character_profile(char, user_name=user_name)}
+
+
+@rpg_router.post("/talents/choose")
+async def choose_dota_talent_endpoint(
+    payload: Dict[str, Any] = Body(...),
+    user: Optional[User] = Depends(get_optional_webapp_user),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Selects Left or Right talent for a given tier (10, 15, 20, 25)."""
+    user_id = user.id if user else 1
+    char = await get_or_create_rpg_character(session, user_id=user_id)
+    try:
+        tier = int(payload.get("tier", 0))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid tier")
+    choice = str(payload.get("choice", "")).strip().lower()
+    if tier not in [10, 15, 20, 25]:
+        raise HTTPException(status_code=400, detail="Тир таланта должен быть 10, 15, 20 или 25.")
+    if choice not in ["left", "right"]:
+        raise HTTPException(status_code=400, detail="Выбор должен быть 'left' или 'right'.")
+    if char.level < tier:
+        raise HTTPException(status_code=400, detail=f"Требуется {tier} уровень персонажа (у вас {char.level}).")
+
+    talents = dict(char.talents or {})
+    dota_talents = dict(talents.get("dota_talents") or {})
+    dota_talents[str(tier)] = choice
+    talents["dota_talents"] = dota_talents
+    char.talents = talents
+    flag_modified(char, "talents")
+    await session.commit()
+    await session.refresh(char)
+
+    user_name = user.display_name if user else "Герой natarGRP"
+    return {
+        "success": True,
+        "tier": tier,
+        "choice": choice,
+        "profile": serialize_character_profile(char, user_name=user_name)
+    }

@@ -1258,12 +1258,21 @@
         RPG_STATE.profile = res.profile;
         syncArenaPlayerStats();
         RPG_STATE.forgeItem = res.item || RPG_STATE.forgeItem;
-        RPG_STATE.forgeSuccessAnimation = true;
-        triggerHaptic("success");
-        setTimeout(() => {
-          RPG_STATE.forgeSuccessAnimation = false;
-          renderRoot();
-        }, 1200);
+        if (res.success) {
+          RPG_STATE.forgeSuccessAnimation = true;
+          triggerHaptic("success");
+          setTimeout(() => {
+            RPG_STATE.forgeSuccessAnimation = false;
+            renderRoot();
+          }, 1200);
+        } else {
+          triggerHaptic("warning");
+          RPG_STATE.forgeFailMessage = res.message || "Заточка не удалась!";
+          setTimeout(() => {
+            RPG_STATE.forgeFailMessage = null;
+            renderRoot();
+          }, 2500);
+        }
       }
     } catch (err) {
       triggerHaptic("error");

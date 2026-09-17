@@ -1279,12 +1279,21 @@ loadRpgImages();
         RPG_STATE.profile = res.profile;
         syncArenaPlayerStats();
         RPG_STATE.forgeItem = res.item || RPG_STATE.forgeItem;
-        RPG_STATE.forgeSuccessAnimation = true;
-        triggerHaptic("success");
-        setTimeout(() => {
-          RPG_STATE.forgeSuccessAnimation = false;
-          renderRoot();
-        }, 1200);
+        if (res.success) {
+          RPG_STATE.forgeSuccessAnimation = true;
+          triggerHaptic("success");
+          setTimeout(() => {
+            RPG_STATE.forgeSuccessAnimation = false;
+            renderRoot();
+          }, 1200);
+        } else {
+          triggerHaptic("warning");
+          RPG_STATE.forgeFailMessage = res.message || "Заточка не удалась!";
+          setTimeout(() => {
+            RPG_STATE.forgeFailMessage = null;
+            renderRoot();
+          }, 2500);
+        }
       }
     } catch (err) {
       triggerHaptic("error");
@@ -15327,9 +15336,46 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
   function renderForgeModalHTML(item) {
     const p = RPG_STATE.profile || {};
     const userGold = p.gold || 0;
+    const userGems = p.gems || 0;
     const currentUpg = item.upgrade || item.forge_level || 0;
-    const goldCost = Math.floor(60 * Math.pow(1.25, currentUpg));
-    const canAfford = userGold >= goldCost;
+    const targetUpg = currentUpg + 1;
+    const isMax = currentUpg >= 15;
+
+    let rate = 1.0;
+    let goldCost = targetUpg * 350;
+    let gemsCost = 0;
+
+    if (targetUpg <= 3) {
+      rate = 1.0;
+      goldCost = targetUpg * 350;
+      gemsCost = 0;
+    } else if (targetUpg <= 6) {
+      rate = 0.85;
+      goldCost = targetUpg * 800;
+      gemsCost = 2;
+    } else if (targetUpg <= 9) {
+      rate = 0.65;
+      goldCost = targetUpg * 2000;
+      gemsCost = 6;
+    } else if (targetUpg <= 12) {
+      rate = 0.45;
+      goldCost = targetUpg * 5500;
+      gemsCost = 15;
+    } else {
+      rate = 0.25;
+      goldCost = targetUpg * 15000;
+      gemsCost = 45;
+    }
+
+    const successPct = isMax ? 0 : Math.round(rate * 100);
+    const canAffordGold = userGold >= goldCost;
+    const canAffordGems = userGems >= gemsCost;
+    const canAfford = canAffordGold && canAffordGems && !isMax;
+
+    let chanceColor = "text-emerald-400";
+    if (successPct <= 25) chanceColor = "text-rose-400";
+    else if (successPct <= 45) chanceColor = "text-orange-400";
+    else if (successPct <= 65) chanceColor = "text-yellow-400";
 
     // Collect all forgeable equipment & inventory items
     const eq = p.equipment || {};
@@ -15348,14 +15394,14 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
       }).map((i) => ({ ...i, locLabel: "Рюкзак" }))
     ];
 
-    // Compute preview stat deltas
+    // Compute preview stat deltas (+15% per level)
     let previewStats = "";
     const itemT = (item.type || item.slot || "").toLowerCase();
     if (itemT === "weapon") {
       const curMin = item.min_atk || item.base_min || 16;
       const curMax = item.max_atk || item.base_max || 24;
-      const nextMin = Math.floor(curMin * 1.15) + 3;
-      const nextMax = Math.floor(curMax * 1.15) + 5;
+      const nextMin = Math.floor(curMin * 1.15) + 2;
+      const nextMax = Math.floor(curMax * 1.15) + 4;
       previewStats = `
         <div class="p-2 rounded-xl bg-slate-800/80 border border-amber-500/30 text-[11px] font-bold text-amber-300">
           ⚔️ Урон: ${curMin}..${curMax} ➔ <span class="text-emerald-400 font-extrabold">${nextMin}..${nextMax}</span> (+15%)
@@ -15365,7 +15411,7 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
       const curDef = item.defense || item.base_def || 10;
       const curHp = item.hp_bonus || item.base_hp || 40;
       const nextDef = Math.floor(curDef * 1.15) + 2;
-      const nextHp = Math.floor(curHp * 1.15) + 25;
+      const nextHp = Math.floor(curHp * 1.15) + 20;
       previewStats = `
         <div class="p-2 rounded-xl bg-slate-800/80 border border-amber-500/30 text-[11px] font-bold text-amber-300">
           🛡️ Броня: ${curDef} ➔ <span class="text-emerald-400 font-extrabold">${nextDef}</span> | ❤️ HP: +${curHp} ➔ <span class="text-emerald-400 font-extrabold">+${nextHp}</span>
@@ -15374,7 +15420,7 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
     } else {
       previewStats = `
         <div class="p-2 rounded-xl bg-slate-800/80 border border-amber-500/30 text-[11px] font-bold text-amber-300">
-          ✨ Все бонусы реликвии усилятся на <span class="text-emerald-400 font-extrabold">+15%</span>!
+          ✨ Все параметры реликвии увеличатся на <span class="text-emerald-400 font-extrabold">+15%</span>!
         </div>
       `;
     }
@@ -15384,7 +15430,7 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
         <div class="w-full max-w-sm rounded-3xl bg-slate-900 border-2 border-amber-500/60 p-5 space-y-3.5 shadow-2xl text-white animate-scale-up">
           <div class="flex items-center justify-between">
             <h3 class="text-xs font-black uppercase text-amber-400 flex items-center gap-1.5">
-              <span>⚒️</span> Кузница natarGRP
+              <span>⚒️</span> Кузница Заточки (+0..+15)
             </h3>
             <button onclick="window.RPG.closeForgeModal()" class="w-7 h-7 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-xs">
               ✕
@@ -15396,7 +15442,11 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
               ? `<div class="p-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-black text-xs text-center shadow-lg animate-bounce flex items-center justify-center gap-1.5">
                   <span>🔥</span> ЗАТОЧКА УСПЕШНА! Уровень +${currentUpg}! <span>✨</span>
                 </div>`
-              : ""
+              : (RPG_STATE.forgeFailMessage
+                  ? `<div class="p-2.5 rounded-xl bg-gradient-to-r from-rose-700 to-red-600 text-white font-black text-xs text-center shadow-lg flex items-center justify-center gap-1.5">
+                      <span>💥</span> ${RPG_STATE.forgeFailMessage}
+                    </div>`
+                  : "")
           }
 
           <div class="text-center space-y-2 py-1">
@@ -15412,7 +15462,14 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
                 : ""
             }
             ${previewStats}
-            <span class="text-[10.5px] text-emerald-400 block font-semibold">Шанс успеха: 100% (гарантированное улучшение)</span>
+            <div class="space-y-0.5 pt-1">
+              <span class="text-xs ${chanceColor} block font-black">
+                ${isMax ? "МАКСИМАЛЬНЫЙ УРОВЕНЬ (+15)" : `Шанс успеха: ${successPct}%`}
+              </span>
+              <span class="text-[9.5px] text-emerald-400 block font-medium">
+                🛡️ Безопасность: при неудаче предмет НЕ сломается и не сбросит уровень!
+              </span>
+            </div>
           </div>
 
           <!-- Quick Item Selector Chips -->
@@ -15445,20 +15502,24 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
 
           <div class="p-2.5 rounded-xl bg-slate-800/50 border border-slate-700 flex items-center justify-between text-xs font-bold">
             <span class="text-slate-400">Стоимость заточки:</span>
-            <span class="${canAfford ? "text-amber-400 font-black" : "text-red-400 font-black"}">🪙 ${goldCost} (у вас ${userGold})</span>
+            <div class="flex items-center gap-2">
+              <span class="${canAffordGold ? "text-amber-400 font-black" : "text-red-400 font-black"}">🪙 ${goldCost.toLocaleString()}</span>
+              ${gemsCost > 0 ? `<span class="${canAffordGems ? "text-cyan-400 font-black" : "text-red-400 font-black"}">💎 ${gemsCost}</span>` : ""}
+            </div>
           </div>
 
           <div class="space-y-2">
             <button onclick="window.RPG.forgeCurrentItem()" ${!canAfford ? "disabled" : ""} class="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 active:scale-95 text-slate-950 font-black text-xs shadow-md ${
               !canAfford ? "opacity-40 cursor-not-allowed" : ""
             }">
-              ${canAfford ? `Заточить до +${currentUpg + 1} 🔥` : "Недостаточно золота"}
+              ${isMax ? "Максимальный уровень заточки (+15)" : (canAfford ? `Заточить до +${targetUpg} (${successPct}% шанс) 🔥` : (!canAffordGold ? `Не хватает золота (нужно 🪙 ${goldCost})` : `Не хватает кристаллов (нужно 💎 ${gemsCost})`))}
             </button>
           </div>
         </div>
       </div>
     `;
   }
+
 
   function renderChestModalHTML(chest) {
     const item = chest.item || {};
@@ -15800,154 +15861,255 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
   // ===========================================================================
 
 
+const DOTA_HERO_TALENTS_FALLBACK = {
+  pudge: {
+    10: { left: "+25 к скорости бега", right: "+4 к броне" },
+    15: { left: "+12% к замедлению от Rot", right: "+2.0x урона к Meat Hook" },
+    20: { left: "+0.8 STR за заряд Flesh Heap", right: "-4с кулдауна Meat Hook" },
+    25: { left: "Rot лечит Паджа вместо урона", right: "1.8x длительность и вампиризм Dismember" }
+  },
+  juggernaut: {
+    10: { left: "+5 к броне", right: "+20 к скорости бега" },
+    15: { left: "+25 к скорости атаки", right: "+1.2% к лечению Healing Ward" },
+    20: { left: "+160 урона к Blade Fury", right: "+8% к шансу Blade Dance" },
+    25: { left: "+1.0с длительности Omnislash", right: "+450 к здоровью" }
+  },
+  phantom_assassin: {
+    10: { left: "+150 к дальности каста", right: "+15 к урону" },
+    15: { left: "+25% к вампиризму", right: "+250 к здоровью" },
+    20: { left: "-1.5с КД Stifling Dagger", right: "+25% к уклонению Blur" },
+    25: { left: "+7% к шансу Coup de Grace", right: "Двойной Stifling Dagger" }
+  },
+  shadow_fiend: {
+    10: { left: "+20 к скорости атаки", right: "+8% к силе заклинаний" },
+    15: { left: "+80 к урону Shadowraze", right: "+3 к душам за убийство" },
+    20: { left: "+2 души к макс. запасу", right: "-3с кулдауна Shadowraze" },
+    25: { left: "Shadowraze накладывает страх", right: "+30% к урону от Requiem" }
+  },
+  invoker: {
+    10: { left: "+40 к урону Chaos Meteor", right: "+2 к макс. духам Forge" },
+    15: { left: "-8с КД Cold Snap", right: "+1 к силе всех сфер" },
+    20: { left: "+35 к урону Alacrity", right: "-10с КД Tornado" },
+    25: { left: "Катаклизм (Sun Strike по всем)", right: "Радиальный Deafening Blast" }
+  },
+  wraith_king: {
+    10: { left: "+20 к скорости атаки", right: "+1.5с стана Wraithfire" },
+    15: { left: "+6 к призыву скелетов", right: "+15 к силе" },
+    20: { left: "Реинкарнация без расхода маны", right: "+25% к вампиризму" },
+    25: { left: "+25% к шансу крита", right: "Двойной урон скелетов" }
+  },
+  anti_mage: {
+    10: { left: "+9 к силе", right: "+15 к скорости атаки" },
+    15: { left: "-1с КД Blink", right: "+300 к дальности Blink" },
+    20: { left: "+15% к защите от магии", right: "+200 к урону Mana Void" },
+    25: { left: "+20% к сжиганию маны", right: "Щит Counterspell союзникам" }
+  },
+  leshrac: {
+    10: { left: "+4 к броне", right: "+40 к урону Pulse Nova" },
+    15: { left: "+80 к радиусу Split Earth", right: "+15% к вампиризму заклинаний" },
+    20: { left: "+25% к урону Lightning Storm", right: "+400 к мане" },
+    25: { left: "+30 взрывов Diabolic Edict", right: "Pulse Nova замедляет на 25%" }
+  }
+};
+
 function renderTalentsTab() {
   const p = RPG_STATE.profile;
   if (!p) return `<div class="p-4 text-center text-white/50">Загрузка...</div>`;
 
-  const talents = p.talents || {};
-  const tPoints = p.talent_points || 0;
-  const rebirths = p.rebirths || 0;
-
-  // Definitions for talents
-  const talentDefs = [
-    { id: "lifesteal", name: "🩸 Вампиризм", desc: "Восстанавливает ХП от урона (+2% за лвл)", max: 5 },
-    { id: "crit_mult", name: "💥 Крит. Урон", desc: "Увеличивает множитель крита (+25% за лвл)", max: 5 },
-    { id: "cooldown", name: "⏳ Спешка", desc: "Снижает КД скиллов (на 6% за лвл)", max: 5 },
-    { id: "dodge", name: "🍃 Уворот", desc: "Шанс увернуться от атаки босса (+4% за лвл)", max: 5 }
-  ];
+  const heroKey = (p.hero_class || "pudge").toLowerCase();
+  const heroTalents = p.hero_talents || DOTA_HERO_TALENTS_FALLBACK[heroKey] || DOTA_HERO_TALENTS_FALLBACK["pudge"];
+  const dotaTalents = (p.talents && p.talents.dota_talents) ? p.talents.dota_talents : {};
+  const charLvl = p.level || 1;
+  const rebirths = p.rebirths || (p.rebirth_info && p.rebirth_info.rank) || 0;
+  const rebirthMult = (p.rebirth_info && p.rebirth_info.multiplier) || 1.0;
+  const essence = (p.rebirth_info && p.rebirth_info.essence) || p.rebirth_essence || 0;
+  const tiers = [25, 20, 15, 10];
 
   let html = `
-    <div class="p-3 bg-slate-900 min-h-screen text-slate-200">
-      <div class="mb-4 bg-slate-800 p-4 rounded-xl border border-slate-700/50 relative overflow-hidden">
-        <div class="absolute inset-0 bg-gradient-to-r from-purple-900/40 to-blue-900/40 opacity-50"></div>
+    <div class="p-3 bg-slate-900 min-h-screen text-slate-200 space-y-4">
+      <!-- 1. REBIRTH & ASCENSION BANNER -->
+      <div class="bg-gradient-to-r from-purple-950/80 via-slate-800 to-indigo-950/80 p-4 rounded-2xl border border-purple-500/40 shadow-lg relative overflow-hidden">
         <div class="relative z-10 flex justify-between items-center">
           <div>
-            <h2 class="text-xl font-black text-white drop-shadow-md">Перерождение</h2>
-            <div class="text-xs text-purple-300 mt-1">Текущий ранг: <span class="font-bold text-white">Перерождений: ${rebirths}</span></div>
-            <div class="text-[10px] text-slate-400 mt-0.5">Каждое перерождение дает +10% ко всем характеристикам навсегда!</div>
+            <div class="flex items-center gap-1.5">
+              <h2 class="text-base font-black text-white drop-shadow-md">🌟 Алтарь Вознесения</h2>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/30 text-purple-300 font-extrabold border border-purple-400/30">Ранг ${rebirths}</span>
+            </div>
+            <div class="text-xs text-amber-300 mt-1 font-bold">Множитель статов: <span class="text-white">x${rebirthMult.toFixed(2)}</span> | ✨ Эссенция: <span class="text-white">${essence}</span></div>
+            <div class="text-[10px] text-slate-400 mt-0.5">Доступно на 30, 40, 45 и 50 ур. Вещи и заточка сохраняются!</div>
           </div>
           <div>
-            ${p.level >= 100 
-              ? `<button onclick="doRebirthUI()" class="px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-lg font-bold text-sm text-white shadow-lg shadow-purple-500/30 active:scale-95 transition-transform">СБРОС 100 ЛВЛ</button>`
-              : `<button disabled class="px-4 py-2 bg-slate-700 rounded-lg font-bold text-sm text-slate-500 cursor-not-allowed">Нужен 100 ур.</button>`
+            ${charLvl >= 30
+              ? `<button onclick="doRebirthUI()" class="px-3 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-xl font-black text-xs text-white shadow-lg shadow-purple-500/30 active:scale-95">ВОЗНЕСЕНИЕ</button>`
+              : `<button disabled class="px-3 py-1.5 bg-slate-800 rounded-xl font-bold text-[11px] text-slate-500 border border-slate-700 cursor-not-allowed">С 30 ур.</button>`
             }
           </div>
         </div>
       </div>
 
-      <div class="flex justify-between items-end mb-3 px-1">
-        <h3 class="text-lg font-bold text-emerald-400">Дерево Талантов</h3>
-        <div class="text-sm font-bold bg-slate-800 px-3 py-1 rounded-full border border-slate-700">
-          Очков: <span class="text-emerald-400">${tPoints}</span>
+      <!-- 2. DOTA 2 VERTICAL TALENT TREE -->
+      <div class="space-y-2">
+        <div class="flex items-center justify-between px-1">
+          <div>
+            <h3 class="text-sm font-black text-amber-400 flex items-center gap-1.5">
+              <span>🧬</span> Древо Талантов Dota 2 (${p.class_name || "Герой"})
+            </h3>
+            <p class="text-[10.5px] text-slate-400">Выберите 1 из 2 способностей на каждом рубеже</p>
+          </div>
+          <span class="text-xs font-black px-2.5 py-1 rounded-xl bg-slate-800 border border-slate-700 text-amber-300">
+            Ур. ${charLvl}
+          </span>
+        </div>
+
+        <!-- Vertical Tree Container -->
+        <div class="relative py-2 space-y-3 bg-slate-950/60 p-3 rounded-2xl border border-slate-800 shadow-inner">
+          <!-- Central Connecting Line -->
+          <div class="absolute left-1/2 top-5 bottom-5 w-0.5 -translate-x-1/2 bg-gradient-to-b from-amber-500/50 via-amber-600/30 to-slate-700/30 pointer-events-none"></div>
+
+          ${tiers.map(tier => {
+            const tData = heroTalents[tier] || { left: `Талант A (+${tier})`, right: `Талант B (+${tier})` };
+            const isUnlocked = charLvl >= tier;
+            const chosen = dotaTalents[tier] || dotaTalents[String(tier)] || null;
+
+            const isLeftChosen = chosen === "left";
+            const isRightChosen = chosen === "right";
+
+            let centerBadgeClass = "bg-slate-800 text-slate-500 border-slate-700";
+            if (chosen) {
+              centerBadgeClass = "bg-amber-500 text-slate-950 font-black border-amber-300 ring-2 ring-amber-500/40 shadow-lg shadow-amber-500/30";
+            } else if (isUnlocked) {
+              centerBadgeClass = "bg-emerald-500 text-slate-950 font-black border-emerald-300 animate-pulse";
+            }
+
+            return `
+              <div class="relative z-10 flex items-center gap-2">
+                <!-- Left Talent Option -->
+                <div class="flex-1">
+                  <div class="p-2.5 rounded-xl border transition-all ${
+                    isLeftChosen
+                      ? "bg-amber-500/20 border-amber-400 text-amber-200 shadow-md shadow-amber-500/10"
+                      : (isRightChosen
+                          ? "bg-slate-900/40 border-slate-800 text-slate-600 opacity-40"
+                          : (isUnlocked
+                              ? "bg-slate-800/90 border-emerald-500/60 text-white hover:border-emerald-400"
+                              : "bg-slate-900/30 border-slate-800/40 text-slate-600 opacity-50"))
+                  }">
+                    <div class="text-[11px] font-bold leading-snug">${tData.left}</div>
+                    ${!chosen && isUnlocked
+                      ? `<button onclick="chooseDotaTalentUI(${tier}, 'left')" class="mt-1.5 w-full py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-[10px] shadow-sm">
+                          ВЫБРАТЬ 👈
+                        </button>`
+                      : (isLeftChosen ? `<span class="mt-1 inline-block text-[9px] font-black text-amber-400">✓ ВЫБРАНО</span>` : "")
+                    }
+                  </div>
+                </div>
+
+                <!-- Central Level Circle -->
+                <div class="w-9 h-9 rounded-full shrink-0 border-2 flex items-center justify-center text-xs font-black shadow-md ${centerBadgeClass}">
+                  ${tier}
+                </div>
+
+                <!-- Right Talent Option -->
+                <div class="flex-1">
+                  <div class="p-2.5 rounded-xl border transition-all text-right ${
+                    isRightChosen
+                      ? "bg-amber-500/20 border-amber-400 text-amber-200 shadow-md shadow-amber-500/10"
+                      : (isLeftChosen
+                          ? "bg-slate-900/40 border-slate-800 text-slate-600 opacity-40"
+                          : (isUnlocked
+                              ? "bg-slate-800/90 border-emerald-500/60 text-white hover:border-emerald-400"
+                              : "bg-slate-900/30 border-slate-800/40 text-slate-600 opacity-50"))
+                  }">
+                    <div class="text-[11px] font-bold leading-snug">${tData.right}</div>
+                    ${!chosen && isUnlocked
+                      ? `<button onclick="chooseDotaTalentUI(${tier}, 'right')" class="mt-1.5 w-full py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-[10px] shadow-sm">
+                          👉 ВЫБРАТЬ
+                        </button>`
+                      : (isRightChosen ? `<span class="mt-1 inline-block text-[9px] font-black text-amber-400">✓ ВЫБРАНО</span>` : "")
+                    }
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join("")}
         </div>
       </div>
 
-      <div class="grid grid-cols-2 gap-3 pb-20">
-  `;
-
-  talentDefs.forEach(t => {
-    const lvl = talents[t.id] || 0;
-    const isMax = lvl >= t.max;
-    const canUpgrade = tPoints > 0 && !isMax;
-
-    html += `
-        <div class="bg-slate-800 rounded-xl p-3 border border-slate-700 flex flex-col justify-between">
+      <!-- 3. PETS / FAMILIARS SECTION -->
+      <div class="space-y-2 pt-2 pb-20">
+        <div class="flex items-center justify-between px-1">
           <div>
-            <div class="flex justify-between items-start mb-1">
-              <div class="font-bold text-sm text-white leading-tight">${t.name}</div>
-              <div class="text-xs font-bold ${isMax ? "text-amber-400" : "text-emerald-400"} bg-slate-900 px-1.5 py-0.5 rounded">
-                ${lvl}/${t.max}
-              </div>
-            </div>
-            <div class="text-[10px] text-slate-400 leading-snug mb-3">${t.desc}</div>
+            <h3 class="text-sm font-black text-amber-400 flex items-center gap-1.5">
+              <span>🐾</span> Боевые Питомцы Доты
+            </h3>
+            <p class="text-[10px] text-slate-400">Летающий спутник атакует врагов и усиливает героя</p>
           </div>
-          <button 
-            onclick="upgradeTalentUI('${t.id}')"
-            ${canUpgrade ? "" : "disabled"}
-            class="w-full py-1.5 rounded-lg text-xs font-bold transition-all ${
-              canUpgrade 
-                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 active:bg-emerald-500/40" 
-                : "bg-slate-700/50 text-slate-500 border border-slate-700/50 cursor-not-allowed"
-            }"
-          >
-            ${isMax ? "МАКСИМУМ" : "УЛУЧШИТЬ"}
+          <button onclick="hatchPetUI()" class="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 active:scale-95 text-slate-950 font-black text-[11px] shadow-sm">
+            🥚 ИНКУБАТОР (50 💎)
           </button>
         </div>
-    `;
-  });
 
-  html += `
-      </div>
-
-      <!-- PETS / FAMILIARS SECTION -->
-      <div class="mb-3 px-1 flex justify-between items-end">
-        <h3 class="text-lg font-bold text-amber-400">🐾 Боевые Питомцы</h3>
-        <div class="text-[10px] text-slate-400">Умножают характеристики</div>
-      </div>
-
-      <div class="mb-4 bg-slate-800 p-4 rounded-xl border border-slate-700/50 flex justify-between items-center">
-        <div>
-          <h4 class="text-sm font-bold text-white">Яйцо Питомца</h4>
-          <div class="text-xs text-amber-200 mt-0.5">Испытай удачу!</div>
-        </div>
-        <button 
-          onclick="hatchPetUI()"
-          class="px-4 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 rounded-lg font-black text-xs text-slate-950 shadow-md active:scale-95 transition-transform"
-        >
-          ОТКРЫТЬ (50 💎)
-        </button>
-      </div>
-
-      <div class="space-y-2 pb-24">
-        ${(p.pets || []).length === 0 ? `<div class="text-center text-slate-500 text-xs py-4">У вас пока нет питомцев.</div>` : ""}
-        ${(p.pets || []).map(pet => {
-          // Hardcoded dictionary for UI since we don't have pet_cfg on the profile
-          const petDict = {
-            "fairy": { icon: "🧚", name: "Лесная Фея" },
-            "wolf": { icon: "🐺", name: "Призрачный Волк" },
-            "dragon": { icon: "🐉", name: "Золотой Дракон" },
-            "phoenix": { icon: "🦅", name: "Феникс" },
-            "slime": { icon: "💧", name: "Слайм" }
-          };
-          const pData = petDict[pet.type] || { icon: "🐾", name: "Неизвестный" };
-          const isSelected = pet.is_equipped;
-          return `
-            <div class="bg-slate-800/90 rounded-xl p-3 border ${isSelected ? 'border-amber-400/80 shadow-lg shadow-amber-500/10' : 'border-slate-700'} flex items-center justify-between gap-3">
-              <div class="flex items-center gap-3">
-                <div class="w-11 h-11 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center text-2xl shadow-inner relative">
-                  ${pData.icon}
-                  <div class="absolute -bottom-2 -right-2 bg-amber-500 text-slate-900 text-[10px] font-black px-1.5 rounded-md border border-amber-300">
-                    ${pet.stars}⭐
+        <div class="space-y-1.5">
+          ${(p.pets || []).length === 0 ? `<div class="text-center text-slate-500 text-xs py-4 bg-slate-800/40 rounded-2xl border border-slate-800">У вас пока нет питомцев. Откройте яйцо в Инкубаторе!</div>` : ""}
+          ${(p.pets || []).map(pet => {
+            const petDict = {
+              "fairy": { icon: "🧚", name: "Лесная Фея", desc: "Снимает станы, +35% скорости бега" },
+              "wolf": { icon: "🐺", name: "Призрачный Волк", desc: "Кровотечение 400 ед./сек" },
+              "dragon": { icon: "🐉", name: "Золотой Дракон", desc: "Конус огня 1200 урона, +50% золота" },
+              "phoenix": { icon: "🦅", name: "Пылающий Феникс", desc: "Щит неуязвимости при смертельном ударе" },
+              "slime": { icon: "💧", name: "Капельный Слайм", desc: "Лечит на 10% HP каждые 12с" },
+              "donkey": { icon: "🐴", name: "Ослик-Курьер", desc: "+40% к урону группы" }
+            };
+            const pData = petDict[pet.type || pet.pet_id] || { icon: "🐾", name: pet.name || "Питомец", desc: "Боевой спутник" };
+            const isSelected = pet.is_equipped;
+            return `
+              <div class="bg-slate-800/80 rounded-2xl p-3 border ${isSelected ? 'border-amber-400 shadow-md shadow-amber-500/10' : 'border-slate-700/80'} flex items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                  <div class="w-11 h-11 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center text-2xl shadow-inner relative">
+                    ${pData.icon}
+                    <div class="absolute -bottom-1 -right-1 bg-amber-500 text-slate-900 text-[9px] font-black px-1 rounded border border-amber-300">
+                      ${pet.stars || 1}⭐
+                    </div>
+                  </div>
+                  <div>
+                    <div class="font-bold text-xs text-white">${pData.name}</div>
+                    <div class="text-[10px] text-slate-400 mt-0.5 leading-tight">${pData.desc}</div>
+                    <button onclick="upgradePetUI('${pet.uid}')" class="text-[10px] text-amber-400 underline mt-0.5 block font-semibold">
+                      Синтез 3-в-1 (нужно 3 шт, 10 💎)
+                    </button>
                   </div>
                 </div>
-                <div>
-                  <div class="flex items-center gap-1.5">
-                    <span class="font-bold text-sm text-white">${pData.name}</span>
-                  </div>
-                  <div class="text-[10px] text-slate-400 mt-1 max-w-[180px] leading-tight">
-                    <button onclick="upgradePetUI('${pet.uid}')" class="text-amber-400 underline decoration-amber-400/50">Улучшить (нужно 3 одинаковых, 10💎)</button>
-                  </div>
-                </div>
+                <button onclick="equipPetUI('${pet.uid}')" class="px-3 py-1.5 rounded-xl text-xs font-black transition-all shrink-0 ${
+                  isSelected ? 'bg-amber-500 text-slate-950 shadow-md' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'
+                }">
+                  ${isSelected ? 'НАДЕТ' : 'ВЗЯТЬ'}
+                </button>
               </div>
-              <button 
-                onclick="equipPetUI('${pet.uid}')"
-                class="px-3 py-1.5 rounded-lg text-[11px] font-black transition-all shrink-0 ${
-                  isSelected 
-                    ? 'bg-amber-500 text-slate-950 shadow-md' 
-                    : 'bg-slate-700/60 hover:bg-slate-700 text-slate-300 border border-slate-600'
-                }"
-              >
-                ${isSelected ? 'НАДЕТ' : 'ВЗЯТЬ'}
-              </button>
-            </div>
-          `;
-        }).join("")}
+            `;
+          }).join("")}
+        </div>
       </div>
     </div>
   `;
 
   return html;
 }
+
+window.chooseDotaTalentUI = async function(tier, choice) {
+  try {
+    if (window.triggerHaptic) triggerHaptic("medium");
+    const res = await api.chooseDotaTalent(tier, choice);
+    if (res && res.profile) {
+      RPG_STATE.profile = res.profile;
+      if (window.syncArenaPlayerStats) syncArenaPlayerStats();
+      if (window.triggerHaptic) triggerHaptic("success");
+      renderRoot();
+    }
+  } catch (err) {
+    if (window.triggerHaptic) triggerHaptic("error");
+    alert(err.message || "Ошибка выбора таланта");
+  }
+};
 
 window.hatchPetUI = async function() {
   try {
@@ -15956,7 +16118,7 @@ window.hatchPetUI = async function() {
     if (res.profile) {
       RPG_STATE.profile = res.profile;
       if (window.triggerHaptic) triggerHaptic("success");
-      alert("Выпал питомец: " + (res.pet_cfg ? res.pet_cfg.name : "Неизвестно"));
+      alert("Выпал питомец: " + (res.pet_cfg ? res.pet_cfg.name : "Новый питомец!"));
       renderRoot();
     }
   } catch(e) {
@@ -15971,11 +16133,9 @@ window.equipPetUI = async function(petUid) {
     if (res.profile) {
       RPG_STATE.profile = res.profile;
       if (window.syncArenaPlayerStats) syncArenaPlayerStats();
-      // To keep legacy arena working, find equipped pet type and set it to local storage
       const eqPet = (res.profile.pets || []).find(p => p.is_equipped);
-      if (eqPet) localStorage.setItem("rpg_active_pet", eqPet.type);
+      if (eqPet) localStorage.setItem("rpg_active_pet", eqPet.type || eqPet.pet_id);
       else localStorage.removeItem("rpg_active_pet");
-      
       renderRoot();
     }
   } catch(e) {
@@ -15999,10 +16159,10 @@ window.upgradePetUI = async function(petUid) {
   }
 };
 
-window.selectPetUI = window.equipPetUI; // fallback for older HTML cache
+window.selectPetUI = window.equipPetUI;
 
 window.doRebirthUI = async function() {
-  if (!confirm("Вы уверены? Ваш уровень сбросится до 1, но вы получите вечный бонус +10% ко всем статам!")) return;
+  if (!confirm("Совершить Вознесение? Уровень сбросится до 1, но вы сохраните все предметы, заточку, питомцев и получите постоянный множитель статов!")) return;
   try {
     if (window.triggerHaptic) triggerHaptic("heavy");
     const res = await api.doRebirth();

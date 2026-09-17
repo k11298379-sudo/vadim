@@ -251,6 +251,10 @@ const api = {
     method: "POST",
     body: JSON.stringify({ talent_id: talentId })
   }),
+  chooseDotaTalent: (tier, choice) => apiRequest("/api/rpg/talents/choose", {
+    method: "POST",
+    body: JSON.stringify({ tier, choice })
+  }),
   getRpgShop: () => apiRequest("/api/rpg/shop"),
   buyRpgShopItem: (itemId) =>
     apiRequest("/api/rpg/shop/buy", {

@@ -1798,9 +1798,46 @@
   function renderForgeModalHTML(item) {
     const p = RPG_STATE.profile || {};
     const userGold = p.gold || 0;
+    const userGems = p.gems || 0;
     const currentUpg = item.upgrade || item.forge_level || 0;
-    const goldCost = Math.floor(60 * Math.pow(1.25, currentUpg));
-    const canAfford = userGold >= goldCost;
+    const targetUpg = currentUpg + 1;
+    const isMax = currentUpg >= 15;
+
+    let rate = 1.0;
+    let goldCost = targetUpg * 350;
+    let gemsCost = 0;
+
+    if (targetUpg <= 3) {
+      rate = 1.0;
+      goldCost = targetUpg * 350;
+      gemsCost = 0;
+    } else if (targetUpg <= 6) {
+      rate = 0.85;
+      goldCost = targetUpg * 800;
+      gemsCost = 2;
+    } else if (targetUpg <= 9) {
+      rate = 0.65;
+      goldCost = targetUpg * 2000;
+      gemsCost = 6;
+    } else if (targetUpg <= 12) {
+      rate = 0.45;
+      goldCost = targetUpg * 5500;
+      gemsCost = 15;
+    } else {
+      rate = 0.25;
+      goldCost = targetUpg * 15000;
+      gemsCost = 45;
+    }
+
+    const successPct = isMax ? 0 : Math.round(rate * 100);
+    const canAffordGold = userGold >= goldCost;
+    const canAffordGems = userGems >= gemsCost;
+    const canAfford = canAffordGold && canAffordGems && !isMax;
+
+    let chanceColor = "text-emerald-400";
+    if (successPct <= 25) chanceColor = "text-rose-400";
+    else if (successPct <= 45) chanceColor = "text-orange-400";
+    else if (successPct <= 65) chanceColor = "text-yellow-400";
 
     // Collect all forgeable equipment & inventory items
     const eq = p.equipment || {};
@@ -1819,14 +1856,14 @@
       }).map((i) => ({ ...i, locLabel: "Рюкзак" }))
     ];
 
-    // Compute preview stat deltas
+    // Compute preview stat deltas (+15% per level)
     let previewStats = "";
     const itemT = (item.type || item.slot || "").toLowerCase();
     if (itemT === "weapon") {
       const curMin = item.min_atk || item.base_min || 16;
       const curMax = item.max_atk || item.base_max || 24;
-      const nextMin = Math.floor(curMin * 1.15) + 3;
-      const nextMax = Math.floor(curMax * 1.15) + 5;
+      const nextMin = Math.floor(curMin * 1.15) + 2;
+      const nextMax = Math.floor(curMax * 1.15) + 4;
       previewStats = `
         <div class="p-2 rounded-xl bg-slate-800/80 border border-amber-500/30 text-[11px] font-bold text-amber-300">
           ⚔️ Урон: ${curMin}..${curMax} ➔ <span class="text-emerald-400 font-extrabold">${nextMin}..${nextMax}</span> (+15%)
@@ -1836,7 +1873,7 @@
       const curDef = item.defense || item.base_def || 10;
       const curHp = item.hp_bonus || item.base_hp || 40;
       const nextDef = Math.floor(curDef * 1.15) + 2;
-      const nextHp = Math.floor(curHp * 1.15) + 25;
+      const nextHp = Math.floor(curHp * 1.15) + 20;
       previewStats = `
         <div class="p-2 rounded-xl bg-slate-800/80 border border-amber-500/30 text-[11px] font-bold text-amber-300">
           🛡️ Броня: ${curDef} ➔ <span class="text-emerald-400 font-extrabold">${nextDef}</span> | ❤️ HP: +${curHp} ➔ <span class="text-emerald-400 font-extrabold">+${nextHp}</span>
@@ -1845,7 +1882,7 @@
     } else {
       previewStats = `
         <div class="p-2 rounded-xl bg-slate-800/80 border border-amber-500/30 text-[11px] font-bold text-amber-300">
-          ✨ Все бонусы реликвии усилятся на <span class="text-emerald-400 font-extrabold">+15%</span>!
+          ✨ Все параметры реликвии увеличатся на <span class="text-emerald-400 font-extrabold">+15%</span>!
         </div>
       `;
     }
@@ -1855,7 +1892,7 @@
         <div class="w-full max-w-sm rounded-3xl bg-slate-900 border-2 border-amber-500/60 p-5 space-y-3.5 shadow-2xl text-white animate-scale-up">
           <div class="flex items-center justify-between">
             <h3 class="text-xs font-black uppercase text-amber-400 flex items-center gap-1.5">
-              <span>⚒️</span> Кузница natarGRP
+              <span>⚒️</span> Кузница Заточки (+0..+15)
             </h3>
             <button onclick="window.RPG.closeForgeModal()" class="w-7 h-7 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-xs">
               ✕
@@ -1867,7 +1904,11 @@
               ? `<div class="p-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-black text-xs text-center shadow-lg animate-bounce flex items-center justify-center gap-1.5">
                   <span>🔥</span> ЗАТОЧКА УСПЕШНА! Уровень +${currentUpg}! <span>✨</span>
                 </div>`
-              : ""
+              : (RPG_STATE.forgeFailMessage
+                  ? `<div class="p-2.5 rounded-xl bg-gradient-to-r from-rose-700 to-red-600 text-white font-black text-xs text-center shadow-lg flex items-center justify-center gap-1.5">
+                      <span>💥</span> ${RPG_STATE.forgeFailMessage}
+                    </div>`
+                  : "")
           }
 
           <div class="text-center space-y-2 py-1">
@@ -1883,7 +1924,14 @@
                 : ""
             }
             ${previewStats}
-            <span class="text-[10.5px] text-emerald-400 block font-semibold">Шанс успеха: 100% (гарантированное улучшение)</span>
+            <div class="space-y-0.5 pt-1">
+              <span class="text-xs ${chanceColor} block font-black">
+                ${isMax ? "МАКСИМАЛЬНЫЙ УРОВЕНЬ (+15)" : `Шанс успеха: ${successPct}%`}
+              </span>
+              <span class="text-[9.5px] text-emerald-400 block font-medium">
+                🛡️ Безопасность: при неудаче предмет НЕ сломается и не сбросит уровень!
+              </span>
+            </div>
           </div>
 
           <!-- Quick Item Selector Chips -->
@@ -1916,20 +1964,24 @@
 
           <div class="p-2.5 rounded-xl bg-slate-800/50 border border-slate-700 flex items-center justify-between text-xs font-bold">
             <span class="text-slate-400">Стоимость заточки:</span>
-            <span class="${canAfford ? "text-amber-400 font-black" : "text-red-400 font-black"}">🪙 ${goldCost} (у вас ${userGold})</span>
+            <div class="flex items-center gap-2">
+              <span class="${canAffordGold ? "text-amber-400 font-black" : "text-red-400 font-black"}">🪙 ${goldCost.toLocaleString()}</span>
+              ${gemsCost > 0 ? `<span class="${canAffordGems ? "text-cyan-400 font-black" : "text-red-400 font-black"}">💎 ${gemsCost}</span>` : ""}
+            </div>
           </div>
 
           <div class="space-y-2">
             <button onclick="window.RPG.forgeCurrentItem()" ${!canAfford ? "disabled" : ""} class="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 active:scale-95 text-slate-950 font-black text-xs shadow-md ${
               !canAfford ? "opacity-40 cursor-not-allowed" : ""
             }">
-              ${canAfford ? `Заточить до +${currentUpg + 1} 🔥` : "Недостаточно золота"}
+              ${isMax ? "Максимальный уровень заточки (+15)" : (canAfford ? `Заточить до +${targetUpg} (${successPct}% шанс) 🔥` : (!canAffordGold ? `Не хватает золота (нужно 🪙 ${goldCost})` : `Не хватает кристаллов (нужно 💎 ${gemsCost})`))}
             </button>
           </div>
         </div>
       </div>
     `;
   }
+
 
   function renderChestModalHTML(chest) {
     const item = chest.item || {};
