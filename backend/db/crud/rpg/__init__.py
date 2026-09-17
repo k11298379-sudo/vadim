@@ -55,6 +55,13 @@ from backend.db.crud.rpg.forge_math import (
     apply_forge_upgrade_to_item,
     FORGE_MAX_LEVEL,
 )
+from backend.db.crud.rpg.bosses_engine import (
+    BOSS_DIFFICULTIES,
+    DOTA_BOSS_CATALOG,
+    calculate_enrage_multiplier,
+    get_boss_phase_state,
+    calculate_boss_dynamic_damage,
+)
 from backend.db.crud.rpg.dungeon import run_dungeon_wave
 
 __all__ = [
@@ -74,4 +81,7 @@ __all__ = [
     "calculate_rebirth_multiplier", "get_rebirth_rank_info", "perform_ascension",
     "upgrade_constellation", "CONSTELLATIONS_CATALOG", "REBIRTH_RANKS_CONFIG",
     "RARITY_TIERS", "get_forge_upgrade_requirements", "apply_forge_upgrade_to_item", "FORGE_MAX_LEVEL",
+    "BOSS_DIFFICULTIES", "DOTA_BOSS_CATALOG", "calculate_enrage_multiplier",
+    "get_boss_phase_state", "calculate_boss_dynamic_damage",
 ]
+
