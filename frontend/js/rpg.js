@@ -14229,6 +14229,7 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
     const p = RPG_STATE.profile || {};
     const stats = p.stats || {};
     const cfg = getHeroSkillConfig();
+    const isBossFight = !!(ARENA.isRaidBossBattle || (ARENA.isBossActive && ARENA.topDownMode));
     const s1CdSec = ARENA.skill1Cooldown > 0 ? Math.ceil(ARENA.skill1Cooldown / 60) : 0;
     const ultCdSec = ARENA.ultCooldown > 0 ? Math.ceil(ARENA.ultCooldown / 60) : 0;
 

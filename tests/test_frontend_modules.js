@@ -235,5 +235,53 @@ assert(mockWindow.CASINO_LEADERBOARD && typeof mockWindow.CASINO_LEADERBOARD.ini
 
 console.log('Multiplayer online room opening, game switching, casino sub-tabs, custom stakes and exports verified without ReferenceError!');
 
-console.log('\n🎉 ALL FRONTEND AND EGE TESTS PASSED SUCCESSFULLY! 🚀');
-process.exit(0);
+console.log('=== [6/6] Testing natarGRP RPG module execution and UI rendering ===');
+global.Image = class Image { constructor() { this.src = ''; this.onload = null; } };
+global.localStorage = { getItem: () => null, setItem: () => {} };
+global.requestAnimationFrame = () => 1;
+global.cancelAnimationFrame = () => {};
+mockApi.getRpgProfile = async () => ({ hero_class: 'knight', level: 5, dungeon_floor: 20, stats: {} });
+mockApi.getRPGShop = async () => [];
+const mockCtxProxy = new Proxy({}, {
+  get: (target, prop) => {
+    if (prop === 'canvas') return sharedElements['rpg-action-canvas'];
+    return (...args) => ({ addColorStop: () => {}, width: 10 });
+  }
+});
+const origGetEl = global.document.getElementById;
+global.document.getElementById = (id) => {
+  const el = origGetEl(id);
+  if (!el.getContext) el.getContext = () => mockCtxProxy;
+  if (!el.getBoundingClientRect) el.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600 });
+  if (!el.addEventListener) el.addEventListener = () => {};
+  if (!el.removeEventListener) el.removeEventListener = () => {};
+  return el;
+};
+global.document.createElement = (tag) => global.document.getElementById('el_' + tag + '_' + Math.random());
+global.document.addEventListener = () => {};
+
+eval(fs.readFileSync(path.join(__dirname, '../frontend/js/rpg.js'), 'utf-8'));
+assert(mockWindow.RPG && typeof mockWindow.RPG.init === 'function', 'window.RPG.init must be defined');
+assert(typeof mockWindow.RPG.renderRoot === 'function', 'window.RPG.renderRoot must be defined');
+
+(async () => {
+  await mockWindow.RPG.loadProfile();
+  mockWindow.RPG.renderRoot();
+  const farmHtml = sharedElements['rpg-root'] ? sharedElements['rpg-root'].innerHTML : '';
+  assert(farmHtml.includes('rpg-action-canvas'), 'Farm arena should render canvas without ReferenceError');
+  assert(farmHtml.includes('h-[320px]'), 'Normal farm arena should have 320px canvas');
+
+  // Test boss fight rendering
+  if (typeof mockWindow.RPG.startRaidBossActionBattle === 'function') {
+    mockWindow.RPG.startRaidBossActionBattle({ id: 'roshan', name: 'Рошан', hp: 10000, maxHp: 10000 });
+    mockWindow.RPG.renderRoot();
+    const bossHtml = sharedElements['rpg-root'] ? sharedElements['rpg-root'].innerHTML : '';
+    assert(bossHtml.includes('h-[520px]'), 'Boss fight arena should have 520px canvas');
+    assert(bossHtml.includes('rpg-virtual-joystick-zone'), 'Boss fight arena should render virtual joystick zone');
+  }
+
+  console.log('natarGRP RPG module loaded and rendered farm & boss arenas cleanly without ReferenceError!');
+  console.log('\n🎉 ALL FRONTEND AND EGE TESTS PASSED SUCCESSFULLY! 🚀');
+  process.exit(0);
+})();
+
