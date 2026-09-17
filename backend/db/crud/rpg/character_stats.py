@@ -179,7 +179,7 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
                 pet_cfg = PETS_CATALOG.get(p.get("type"))
                 if pet_cfg:
                     stars = p.get("stars", 1)
-                    s_mult = 1.0 + (stars - 1) * pet_cfg.get("stars_scaling", 0.05)
+                    s_mult = 1.0 + (stars - 1) * pet_cfg.get("stars_scaling", 0.08)
                     pet_hp_mult *= (pet_cfg.get("base_hp_mult", 1.0) * s_mult)
                     pet_dmg_mult *= (pet_cfg.get("base_dmg_mult", 1.0) * s_mult)
                     pet_gold_mult *= (pet_cfg.get("base_gold_mult", 1.0) * s_mult)
