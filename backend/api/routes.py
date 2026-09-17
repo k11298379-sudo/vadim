@@ -27,6 +27,7 @@ from backend.api.routers.pets_system import pets_system_router
 from backend.api.routers.multiplayer_hub import multiplayer_hub_router
 from backend.api.routers.rebirth_engine import rebirth_engine_router
 from backend.api.routers.multiplayer_market import multiplayer_market_router
+from backend.api.routers.creeps_bestiary import creeps_bestiary_router
 from backend.api.auth import extract_viewer_tg_id, _extract_viewer_tg_id
 
 api_router = APIRouter(prefix="/api")
@@ -47,6 +48,7 @@ api_router.include_router(pets_system_router)
 api_router.include_router(multiplayer_hub_router)
 api_router.include_router(rebirth_engine_router)
 api_router.include_router(multiplayer_market_router)
+api_router.include_router(creeps_bestiary_router)
 
 __all__ = [
     "api_router",

@@ -79,12 +79,29 @@ from backend.db.crud.rpg.world_boss_market import (
     MARKET_FEE_PCT,
     DEFAULT_WORLD_BOSS_HP,
 )
+from backend.db.crud.rpg.creeps import (
+    NATAR_CREEPS_POOL,
+    NATAR_FLOOR_BOSSES,
+    DOTA_CREEPS_POOL,
+    DOTA_FLOOR_BOSSES,
+    DOTA_BESTIARY_CATALOG,
+)
+from backend.db.crud.rpg.creeps_ai import (
+    create_creep_instance,
+    update_creep_ai_state,
+    apply_creep_auras,
+    handle_creep_death,
+    AGGRO_RADIUS,
+    LEASH_RADIUS,
+)
 from backend.db.crud.rpg.dungeon import run_dungeon_wave
 
 __all__ = [
     "NATAR_HEROES", "DOTA_HEROES", "HERO_CLASSES",
     "NATAR_ITEMS_CATALOG", "DOTA_ITEMS_CATALOG", "RARITY_MULTIPLIERS",
     "NATAR_CREEPS_POOL", "NATAR_FLOOR_BOSSES", "DOTA_CREEPS_POOL", "DOTA_FLOOR_BOSSES",
+    "DOTA_BESTIARY_CATALOG", "create_creep_instance", "update_creep_ai_state",
+    "apply_creep_auras", "handle_creep_death", "AGGRO_RADIUS", "LEASH_RADIUS",
     "get_or_create_rpg_character", "calculate_character_effective_stats", "serialize_character_profile",
     "rebuild_item_description", "generate_random_natar_item", "generate_random_dota_item", "pick_smart_loot_item",
     "open_wave_chest", "open_boss_raid_chest",
@@ -105,5 +122,6 @@ __all__ = [
     "get_market_listings", "list_item_for_sale", "cancel_market_listing", "buy_market_item",
     "MARKET_FEE_PCT", "DEFAULT_WORLD_BOSS_HP",
 ]
+
 
 

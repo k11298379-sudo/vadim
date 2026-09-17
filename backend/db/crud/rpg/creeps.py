@@ -55,3 +55,156 @@ NATAR_FLOOR_BOSSES = [
 # Backwards compat aliases
 DOTA_CREEPS_POOL = NATAR_CREEPS_POOL
 DOTA_FLOOR_BOSSES = NATAR_FLOOR_BOSSES
+
+# ==============================================================================
+# 6.2. КАТАЛОГ КРИПОВ DOTA 2 (GDD 3.0.0-ULTIMATE, ТОМ VI)
+# ==============================================================================
+
+DOTA_BESTIARY_CATALOG: Dict[str, Dict[str, Any]] = {
+    "melee_creep": {
+        "id": "melee_creep",
+        "name": "Линейный Мечник (Melee Creep)",
+        "role": "melee",
+        "icon": "🗡️",
+        "hp": 280,
+        "attack": 24,
+        "armor": 2,
+        "speed": 160,
+        "attack_range": 60,
+        "attack_cooldown": 1.0,
+        "behavior": "boids_swarm",
+        "desc": "Бежит толпой на ближайшего игрока по алгоритму стаи Boids."
+    },
+    "ranged_creep": {
+        "id": "ranged_creep",
+        "name": "Линейный Маг (Ranged Creep)",
+        "role": "ranged",
+        "icon": "🔮",
+        "hp": 180,
+        "attack": 36,
+        "armor": 0,
+        "speed": 140,
+        "attack_range": 320,
+        "attack_cooldown": 1.2,
+        "behavior": "kite_ranged",
+        "projectile_speed": 400,
+        "desc": "Держит дистанцию 320px, стреляет пулями магии."
+    },
+    "mega_creep": {
+        "id": "mega_creep",
+        "name": "Мега-крип (Mega Creep)",
+        "role": "heavy",
+        "icon": "⚔️",
+        "hp": 1400,
+        "attack": 95,
+        "armor": 14,
+        "speed": 150,
+        "attack_range": 70,
+        "attack_cooldown": 1.1,
+        "micro_stun_immune": True,
+        "desc": "Невосприимчив к легкому микро-стану, наносит сокрушительный урон."
+    },
+    "centaur_conqueror": {
+        "id": "centaur_conqueror",
+        "name": "Нейтральный Кентавр-Завоеватель",
+        "role": "neutral_bruiser",
+        "icon": "🐎",
+        "hp": 950,
+        "attack": 55,
+        "armor": 8,
+        "speed": 155,
+        "attack_range": 80,
+        "attack_cooldown": 1.2,
+        "ability": {
+            "id": "war_stomp",
+            "name": "War Stomp",
+            "radius": 160,
+            "damage": 120,
+            "stun_duration": 1.5,
+            "cooldown": 8.0,
+            "trigger_distance": 160
+        },
+        "desc": "При сближении игрока топает копытом (War Stomp R=160px), станит на 1.5с."
+    },
+    "alpha_wolf": {
+        "id": "alpha_wolf",
+        "name": "Нейтральный Альфа-Волк",
+        "role": "neutral_support",
+        "icon": "🐺",
+        "hp": 600,
+        "attack": 40,
+        "armor": 5,
+        "speed": 170,
+        "attack_range": 70,
+        "attack_cooldown": 1.0,
+        "aura": {
+            "id": "pack_leader",
+            "name": "Pack Leader (Вожак стаи)",
+            "damage_bonus_pct": 30.0,
+            "radius": 450,
+            "desc": "Излучает ауру +30% урона всем союзным крипам в комнате."
+        },
+        "desc": "Излучает ауру +30% урона всем крипам в комнате."
+    },
+    "satyr_tormenter": {
+        "id": "satyr_tormenter",
+        "name": "Нейтральный Сатир-Истязатель",
+        "role": "neutral_caster",
+        "icon": "🐐",
+        "hp": 800,
+        "attack": 45,
+        "armor": 6,
+        "speed": 135,
+        "attack_range": 200,
+        "attack_cooldown": 1.3,
+        "ability": {
+            "id": "shockwave",
+            "name": "Shockwave (Ударная волна)",
+            "damage": 260,
+            "range": 800,
+            "width": 100,
+            "cooldown": 10.0,
+            "desc": "Выпускает гигантскую красную волну через весь зал на 260 урона."
+        },
+        "desc": "Выпускает гигантскую красную волну (Shockwave) через весь зал на 260 урона."
+    },
+    "mud_golem": {
+        "id": "mud_golem",
+        "name": "Грязевой Голем",
+        "role": "neutral_splitter",
+        "icon": "🗿",
+        "hp": 700,
+        "attack": 35,
+        "armor": 10,
+        "speed": 130,
+        "attack_range": 70,
+        "attack_cooldown": 1.2,
+        "on_death": {
+            "action": "split_into_shards",
+            "count": 2,
+            "spawn_creep_id": "shard_golem"
+        },
+        "desc": "При смерти взрывается и распадается на 2 маленьких големов, бросающих камни со станом."
+    },
+    "shard_golem": {
+        "id": "shard_golem",
+        "name": "Малый Грязевой Голем",
+        "role": "neutral_minion",
+        "icon": "🪨",
+        "hp": 250,
+        "attack": 20,
+        "armor": 4,
+        "speed": 145,
+        "attack_range": 240,
+        "attack_cooldown": 1.0,
+        "ability": {
+            "id": "hurl_boulder",
+            "name": "Hurl Boulder (Бросок камня)",
+            "damage": 60,
+            "stun_duration": 0.6,
+            "cooldown": 6.0
+        },
+        "desc": "Осколок грязевого голема. Бросает камни с микро-станом."
+    }
+}
+
