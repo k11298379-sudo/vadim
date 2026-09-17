@@ -17,6 +17,12 @@ from backend.db.crud.rpg import (
     reset_rpg_character,
     upgrade_character_base_stat,
     open_wave_chest,
+    calculate_xp_for_level,
+    get_unlocked_features,
+    get_full_progression_table,
+    PROGRESSION_MILESTONES,
+    LEVEL_CAP,
+    STAT_POINTS_PER_LEVEL,
 )
 
 rpg_router = APIRouter(prefix="/rpg", tags=["rpg"])
@@ -26,6 +32,100 @@ rpg_router = APIRouter(prefix="/rpg", tags=["rpg"])
 async def get_dota_heroes_endpoint():
     """Returns list of all available natarGRP heroes."""
     return list(DOTA_HEROES.values())
+
+
+@rpg_router.get("/heroes/detailed")
+async def get_all_heroes_detailed_endpoint():
+    """Returns complete catalog of all 8 Dota 2 heroes with skills, stat gains and talents."""
+    result = []
+    for h_id, hero in DOTA_HEROES.items():
+        result.append({
+            "id": h_id,
+            "name": hero.get("name"),
+            "icon": hero.get("icon"),
+            "avatar": hero.get("avatar"),
+            "attr": hero.get("attr"),
+            "desc": hero.get("desc"),
+            "base_hp": hero.get("base_hp"),
+            "base_mp": hero.get("base_mp"),
+            "base_speed": hero.get("base_speed", 200),
+            "base_armor": hero.get("base_armor", 3.0),
+            "str": hero.get("str"),
+            "agi": hero.get("agi"),
+            "int": hero.get("int"),
+            "str_gain": hero.get("str_gain", 2.0),
+            "agi_gain": hero.get("agi_gain", 2.0),
+            "int_gain": hero.get("int_gain", 2.0),
+            "skills": hero.get("skills", []),
+            "talents": hero.get("talents", {}),
+            "starter_weapon": hero.get("starter_weapon"),
+            "starter_armor": hero.get("starter_armor"),
+        })
+    return result
+
+
+@rpg_router.get("/heroes/{hero_id}")
+async def get_hero_by_id_endpoint(hero_id: str):
+    """Returns detailed specification for a specific Dota 2 hero."""
+    h_norm = hero_id.strip().lower()
+    hero = DOTA_HEROES.get(h_norm)
+    if not hero:
+        raise HTTPException(status_code=404, detail=f"Герой '{hero_id}' не найден в ростере.")
+    return {
+        "id": h_norm,
+        "name": hero.get("name"),
+        "icon": hero.get("icon"),
+        "avatar": hero.get("avatar"),
+        "attr": hero.get("attr"),
+        "desc": hero.get("desc"),
+        "base_hp": hero.get("base_hp"),
+        "base_mp": hero.get("base_mp"),
+        "base_speed": hero.get("base_speed", 200),
+        "base_armor": hero.get("base_armor", 3.0),
+        "str": hero.get("str"),
+        "agi": hero.get("agi"),
+        "int": hero.get("int"),
+        "str_gain": hero.get("str_gain", 2.0),
+        "agi_gain": hero.get("agi_gain", 2.0),
+        "int_gain": hero.get("int_gain", 2.0),
+        "skills": hero.get("skills", []),
+        "talents": hero.get("talents", {}),
+        "starter_weapon": hero.get("starter_weapon"),
+        "starter_armor": hero.get("starter_armor"),
+    }
+
+
+@rpg_router.get("/progression/table")
+async def get_progression_table_endpoint():
+    """Returns level 1 to 50 progression model with XP formulas and milestones."""
+    return {
+        "level_cap": LEVEL_CAP,
+        "stat_points_per_level": STAT_POINTS_PER_LEVEL,
+        "table": get_full_progression_table(),
+    }
+
+
+@rpg_router.get("/progression/milestones")
+async def get_milestones_endpoint():
+    """Returns list of key level milestones (pets, forge, relics, ultimate, rebirth)."""
+    return PROGRESSION_MILESTONES
+
+
+@rpg_router.get("/progression/unlocked")
+async def get_my_unlocked_features_endpoint(
+    user: Optional[User] = Depends(get_optional_webapp_user),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Returns unlocked game systems for current character level."""
+    user_id = user.id if user else 1
+    char = await get_or_create_rpg_character(session, user_id=user_id)
+    return {
+        "level": char.level,
+        "unlocked_features": get_unlocked_features(char.level),
+        "xp_needed": calculate_xp_for_level(char.level),
+        "current_xp": char.xp,
+        "stat_points": getattr(char, "stat_points", 0),
+    }
 
 
 @rpg_router.post("/chest/open")
@@ -54,7 +154,6 @@ async def open_chest_endpoint(
     
     talents["_last_chest_wave"] = wave
     char.talents = talents
-    from sqlalchemy.orm.attributes import flag_modified
     flag_modified(char, "talents")
     
     res["profile"] = serialize_character_profile(char, user_name=user_name)
@@ -83,7 +182,7 @@ async def select_hero_class_endpoint(
     user: Optional[User] = Depends(get_optional_webapp_user),
     session: AsyncSession = Depends(get_db_session)
 ):
-    """Selects or changes Dota 2 hero (Pudge, Jugg, PA, SF, Invoker, WK, AM)."""
+    """Selects or changes Dota 2 hero (Pudge, Jugg, PA, SF, Invoker, WK, AM, Leshrac)."""
     user_id = user.id if user else 1
     user_name = user.display_name if user else "Дотер 11 «Б»"
 
@@ -138,7 +237,7 @@ async def upgrade_stat_endpoint(
     user: Optional[User] = Depends(get_optional_webapp_user),
     session: AsyncSession = Depends(get_db_session)
 ):
-    """Upgrades Strength, Agility, Intelligence or Vitality using free stat points or farmed gold."""
+    """Upgrades Strength, Agility, Intelligence using free stat points or farmed gold."""
     user_id = user.id if user else 1
     stat_name = payload.get("stat", "").strip().lower()
 
@@ -207,10 +306,7 @@ async def upgrade_talent_endpoint(
     char.talents = talents
     char.talent_points -= 1
     
-    # Since we modify a JSON column in SQLAlchemy, we need to flag it as modified
-    from sqlalchemy.orm.attributes import flag_modified
     flag_modified(char, "talents")
-    
     await session.commit()
     
     return {"status": "ok", "profile": serialize_character_profile(char, user_name=user_name)}

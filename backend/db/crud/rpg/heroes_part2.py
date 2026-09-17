@@ -3,14 +3,19 @@ NATAR_HEROES_P2 = {
         "id": "invoker",
         "name": "Архимаг Стихий (Чародей)",
         "icon": "🔮",
-        'avatar': '<img src="/images/heroes/invoker.png" class="w-full h-full object-cover drop-shadow-lg">',
+        "avatar": '<img src="/images/heroes/invoker.png" class="w-full h-full object-cover drop-shadow-lg">',
         "attr": "Интеллект",
         "desc": "Верховный магистр древних стихий. Огромный запас маны, метеоритные штормы и лучи солнца.",
-        "base_hp": 125,
-        "base_mp": 140,
+        "base_hp": 510,
+        "base_mp": 320,
+        "base_speed": 205,
+        "base_armor": 3.0,
         "str": 9,
         "agi": 10,
         "int": 25,
+        "str_gain": 1.4,
+        "agi_gain": 1.4,
+        "int_gain": 3.6,
         "starter_weapon": {
             "uid": "w_starter_inv",
             "name": "Сфера Трех Стихий",
@@ -50,20 +55,37 @@ NATAR_HEROES_P2 = {
             "icon": "☄️",
             "mp_cost": 30,
             "desc": "Солнечный луч Санстрайка с неба и пылающая «котлета» Хаос Метеора через всю арену!"
+        },
+        "skills": [
+            {"key": "Q", "name": "Quas-Wex-Exort", "icon": "🔮", "type": "passive_spheres", "cooldown": 0, "mp": 0, "desc": "Сферы льда (+3.5 HP/с), молнии (+9% бега, +12% атаки) и огня (+16 к урону)"},
+            {"key": "E", "name": "Chaos Meteor", "icon": "☄️", "type": "skill", "cooldown": 18, "mp": 120, "desc": "Огромный пылающий метеор катится вперед, выжигая дорожку лавы на 1800 урона"},
+            {"key": "R", "name": "Invoke (10 Спеллов)", "icon": "📜", "type": "invoke", "cooldown": 4, "mp": 20, "desc": "Комбинирует сферы: Cold Snap, Ghost Walk, Ice Wall, EMP, Tornado, Alacrity, Blast"},
+            {"key": "F", "name": "Sun Strike (ULT)", "icon": "☀️", "type": "ultimate", "cooldown": 25, "mp": 160, "desc": "Глобальный столб солнечного пламени: 700 + INT*3.2 чистого урона сквозь броню"}
+        ],
+        "talents": {
+            10: {"left": "+150 к мане", "right": "+20 к урону"},
+            15: {"left": "+1 дух Forge Spirit", "right": "-3с кулдауна Invoke"},
+            20: {"left": "+40 к урону Chaos Meteor", "right": "+1.5с к длительности Tornado"},
+            25: {"left": "Двойной Sun Strike (Cataclysm)", "right": "Deafening Blast радиально на 360°"}
         }
     },
     "wraith_king": {
         "id": "wraith_king",
         "name": "Король Скелетов (Монарх)",
         "icon": "👑",
-        'avatar': '<img src="/images/heroes/wraith_king.png" class="w-full h-full object-cover drop-shadow-lg">',
+        "avatar": '<img src="/images/heroes/wraith_king.png" class="w-full h-full object-cover drop-shadow-lg">',
         "attr": "Сила",
         "desc": "Древний бессмертный монарх катакомб. Сокрушительный вампиризм и несокрушимая стойкость.",
-        "base_hp": 210,
-        "base_mp": 55,
+        "base_hp": 660,
+        "base_mp": 180,
+        "base_speed": 195,
+        "base_armor": 4.0,
         "str": 21,
         "agi": 9,
         "int": 7,
+        "str_gain": 3.4,
+        "agi_gain": 1.7,
+        "int_gain": 1.3,
         "starter_weapon": {
             "uid": "w_starter_wk",
             "name": "Меч Призрачного Монарха",
@@ -103,20 +125,37 @@ NATAR_HEROES_P2 = {
             "icon": "💥",
             "mp_cost": 20,
             "desc": "Оглушает врага снарядом призраков и наносит 250% урона с вампиризмом!"
+        },
+        "skills": [
+            {"key": "Q", "name": "Wraithfire Blast", "icon": "🔥", "type": "skill", "cooldown": 11, "mp": 90, "desc": "Призрачный череп: стан 2.0с, замедление и урон 120 + STR*1.8"},
+            {"key": "E", "name": "Vampiric Spirit", "icon": "🩸", "type": "aura_active", "cooldown": 22, "mp": 60, "desc": "Аура вампиризма 30% для всей группы и призыв до 8 скелетов-воинов"},
+            {"key": "R", "name": "Mortal Strike", "icon": "🗡️", "type": "passive", "cooldown": 0, "mp": 0, "desc": "Пассивно: 22% шанс на сокрушительный критический удар с множителем x2.9"},
+            {"key": "F", "name": "Reincarnation (ULT)", "icon": "👑", "type": "passive_ultimate", "cooldown": 60, "mp": 160, "desc": "При гибели замедляет арену на 75% и через 3с воскрешает со 100% HP и 100% MP"}
+        ],
+        "talents": {
+            10: {"left": "+20 к скорости бега", "right": "+1.5с к стану черепа"},
+            15: {"left": "+15% к ауре вампиризма", "right": "+4 скелета к призыву"},
+            20: {"left": "+30 к урону скелетов", "right": "-20с кулдауна Reincarnation"},
+            25: {"left": "Reincarnation не требует маны", "right": "+1.2 к множителю Mortal Strike"}
         }
     },
     "anti_mage": {
         "id": "anti_mage",
         "name": "Охотник на Магов (Каратель)",
         "icon": "⚔️",
-        'avatar': '<img src="/images/heroes/anti_mage.png" class="w-full h-full object-cover drop-shadow-lg">',
+        "avatar": '<img src="/images/heroes/anti_mage.png" class="w-full h-full object-cover drop-shadow-lg">',
         "attr": "Ловкость",
         "desc": "Быстрый охотник на чародеев. Рассекает эфир, выжигает ману врагов и взрывает боссов.",
-        "base_hp": 145,
-        "base_mp": 60,
+        "base_hp": 560,
+        "base_mp": 190,
+        "base_speed": 230,
+        "base_armor": 4.8,
         "str": 13,
         "agi": 22,
         "int": 6,
+        "str_gain": 1.6,
+        "agi_gain": 3.2,
+        "int_gain": 1.8,
         "starter_weapon": {
             "uid": "w_starter_am",
             "name": "Парные Клинки Охотника",
@@ -156,18 +195,31 @@ NATAR_HEROES_P2 = {
             "icon": "⚡",
             "mp_cost": 20,
             "desc": "Выжигает запасы маны врага и взрывает его изнутри на 260% урона!"
+        },
+        "skills": [
+            {"key": "Q", "name": "Mana Break", "icon": "⚡", "type": "passive", "cooldown": 0, "mp": 0, "desc": "Сжигает 45 + AGI*0.25 MP за удар, конвертируя сожженную ману в 85% чистого урона"},
+            {"key": "E", "name": "Blink", "icon": "💫", "type": "skill", "cooldown": 4, "mp": 40, "desc": "Мгновенная телепортация в направлении курсора на дистанцию до 650px"},
+            {"key": "R", "name": "Counterspell", "icon": "🛡️", "type": "active_passive", "cooldown": 12, "mp": 45, "desc": "Пассивно: +40% защиты от магии. Активно: щит на 1.4с, отражающий спеллы врага"},
+            {"key": "F", "name": "Mana Void (ULT)", "icon": "💥", "type": "ultimate", "cooldown": 35, "mp": 150, "desc": "Взрыв по площади: MissingMana * 1.15 + 400 урона, стан 1.2с"}
+        ],
+        "talents": {
+            10: {"left": "+12 к силе", "right": "+20 к скорости атаки"},
+            15: {"left": "+250 к дальности Blink", "right": "+15% сопротивления магии"},
+            20: {"left": "-1.5с кулдауна Blink", "right": "+25 к сжиганию маны"},
+            25: {"left": "+0.4 к множителю урона Mana Void", "right": "Blink создает боевую иллюзию"}
         }
-    }
-,
+    },
     "leshrac": {
         "id": "leshrac",
-        "name": "Пуся Жаба (Largo)",
-        "icon": "🐸",
-        'avatar': '<img src="/images/heroes/leshrac.png" class="w-full h-full object-cover drop-shadow-lg">',
+        "name": "Мучитель Земли (Largo)",
+        "icon": "🦌",
+        "avatar": '<img src="/images/heroes/leshrac.png" class="w-full h-full object-cover drop-shadow-lg">',
         "attr": "Интеллект",
-        "desc": "Наносит 55% от маг. урона в течение 3 сек (каждую секунду). Ульта (Вкл/Выкл): каждые 0.5 сек тратит ману, наносит урон и хилит!",
-        "base_hp": 130,
-        "base_mp": 100,
+        "desc": "Повелитель стихийного расщепления. Бесконечные взрывы эдикта, стан земли и шторм пульс-новы.",
+        "base_hp": 520,
+        "base_mp": 290,
+        "base_speed": 210,
+        "base_armor": 3.8,
         "str": 12,
         "agi": 10,
         "int": 22,
@@ -193,7 +245,7 @@ NATAR_HEROES_P2 = {
         },
         "starter_armor": {
             "uid": "a_starter_lesh",
-            "name": "Мантия Жабы",
+            "name": "Мантия Мучителя",
             "type": "armor",
             "slot": "armor",
             "slot_name": "Броня",
@@ -213,6 +265,18 @@ NATAR_HEROES_P2 = {
             "icon": "🎵",
             "mp_cost": 0,
             "desc": "Вкл/Выкл: Ульта тратит ману, наносит урон и хилит каждые 0.5с. 1-й скилл: Магическое эхо!"
+        },
+        "skills": [
+            {"key": "Q", "name": "Split Earth", "icon": "🌍", "type": "skill", "cooldown": 9, "mp": 80, "desc": "Раскалывает землю с задержкой 0.7с: стан на 2.0с в радиусе 220px"},
+            {"key": "E", "name": "Diabolic Edict", "icon": "💥", "type": "skill", "cooldown": 18, "mp": 110, "desc": "40 взрывов случайным целям вокруг в течение 10с чистым физическим уроном"},
+            {"key": "R", "name": "Lightning Storm", "icon": "⚡", "type": "skill", "cooldown": 5, "mp": 60, "desc": "Молния отскакивает по 8 врагам, нанося урон и замедляя на 75%"},
+            {"key": "F", "name": "Pulse Nova (ULT)", "icon": "✨", "type": "toggle_ultimate", "cooldown": 1, "mp": 25, "desc": "Переключаемый шторм: каждые 0.8с импульс 220 + INT*1.8 урона и отхил"}
+        ],
+        "talents": {
+            10: {"left": "+25 к скорости бега", "right": "+5 к броне"},
+            15: {"left": "+100 к радиусу Split Earth", "right": "+40 к урону Diabolic Edict"},
+            20: {"left": "+20% вампиризма заклинаниями", "right": "+4 отскока Lightning Storm"},
+            25: {"left": "Pulse Nova наносит +140 урона", "right": "Diabolic Edict взрывается быстрее"}
         }
     }
 }

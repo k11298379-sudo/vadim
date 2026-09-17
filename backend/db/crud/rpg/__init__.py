@@ -1,4 +1,4 @@
-﻿"""
+"""
 natarGRP CRUD package — re-exports all public API for RPG system.
 """
 from backend.db.crud.rpg.heroes import NATAR_HEROES, DOTA_HEROES, HERO_CLASSES
@@ -32,6 +32,15 @@ from backend.db.crud.rpg.shop import (
     add_xp_and_gold_to_character,
     get_rpg_leaderboard_data,
 )
+from backend.db.crud.rpg.progression_math import (
+    calculate_xp_for_level,
+    get_unlocked_features,
+    get_full_progression_table,
+    calculate_base_attribute_stats,
+    LEVEL_CAP,
+    STAT_POINTS_PER_LEVEL,
+    PROGRESSION_MILESTONES,
+)
 from backend.db.crud.rpg.dungeon import run_dungeon_wave
 
 __all__ = [
@@ -46,4 +55,6 @@ __all__ = [
     "get_rpg_shop_catalog", "buy_item_from_shop", "upgrade_character_base_stat",
     "add_xp_and_gold_to_character", "get_rpg_leaderboard_data",
     "run_dungeon_wave",
+    "calculate_xp_for_level", "get_unlocked_features", "get_full_progression_table",
+    "calculate_base_attribute_stats", "LEVEL_CAP", "STAT_POINTS_PER_LEVEL", "PROGRESSION_MILESTONES",
 ]

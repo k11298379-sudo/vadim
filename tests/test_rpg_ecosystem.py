@@ -8,7 +8,6 @@ if hasattr(sys.stdout, "reconfigure"):
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./data/test_rpg.db"
 
-import pytest
 from httpx import AsyncClient, ASGITransport
 from backend.main import app
 from backend.db.session import init_db, get_db_session

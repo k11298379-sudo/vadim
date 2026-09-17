@@ -14,6 +14,11 @@ from backend.db.crud.rpg.character import (
     calculate_character_effective_stats,
 )
 from backend.db.crud.rpg.heroes import NATAR_HEROES
+from backend.db.crud.rpg.progression_math import (
+    calculate_xp_for_level,
+    LEVEL_CAP,
+    STAT_POINTS_PER_LEVEL
+)
 
 # ==============================================================================
 # NATARGRP SHOP (ТАЙНАЯ ЛАВКА СНАРЯЖЕНИЯ)
@@ -151,11 +156,15 @@ async def add_xp_and_gold_to_character(
     leveled_up = False
 
     while True:
-        needed = 120 + (char.level - 1) * 160
+        if char.level >= LEVEL_CAP:
+            needed = calculate_xp_for_level(LEVEL_CAP)
+            char.xp = min(char.xp, needed)
+            break
+        needed = calculate_xp_for_level(char.level)
         if char.xp >= needed:
             char.xp -= needed
             char.level += 1
-            char.stat_points = getattr(char, "stat_points", 0) + 1
+            char.stat_points = getattr(char, "stat_points", 0) + STAT_POINTS_PER_LEVEL
             char.gems += 2
             if char.level % 5 == 0:
                 char.talent_points = getattr(char, "talent_points", 0) + 1

@@ -8,6 +8,12 @@ from backend.db.models import RPGCharacter, User
 from backend.db.crud.rpg.heroes import NATAR_HEROES
 from backend.db.crud.rpg.items_catalog import RARITY_MULTIPLIERS
 from backend.db.crud.rpg.character_stats import calculate_character_effective_stats
+from backend.db.crud.rpg.progression_math import (
+    calculate_xp_for_level,
+    get_unlocked_features,
+    LEVEL_CAP,
+    STAT_POINTS_PER_LEVEL
+)
 
 # ==============================================================================
 # CHARACTER CALCULATIONS & CRUDS
@@ -132,7 +138,7 @@ def serialize_character_profile(char: RPGCharacter, user_name: str = "") -> Dict
     }
     canonical_class = LEGACY_MAP.get(h_class, h_class)
     cfg = NATAR_HEROES.get(canonical_class, NATAR_HEROES["pudge"])
-    xp_needed = int(100 * (char.level ** 1.85) + 50 * char.level) if char.level < 50 else 0
+    xp_needed = calculate_xp_for_level(char.level)
 
     return {
         "id": char.id,
@@ -175,6 +181,13 @@ def serialize_character_profile(char: RPGCharacter, user_name: str = "") -> Dict
             "strength": stats["total_strength"],
             "agility": stats["total_agility"],
             "intelligence": stats["total_intelligence"]
+        },
+        "skills": cfg.get("skills", []),
+        "hero_talents": cfg.get("talents", {}),
+        "progression": {
+            "unlocked_features": get_unlocked_features(char.level),
+            "level_cap": LEVEL_CAP,
+            "stat_points_per_level": STAT_POINTS_PER_LEVEL
         },
         "stats": stats,
         "equipment": char.equipment,
