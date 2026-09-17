@@ -62,6 +62,23 @@ from backend.db.crud.rpg.bosses_engine import (
     get_boss_phase_state,
     calculate_boss_dynamic_damage,
 )
+from backend.db.crud.rpg.multiplayer_engine import (
+    calculate_player_threat,
+    determine_boss_target,
+    calculate_party_synergies,
+    HERO_PRIMARY_ROLES,
+)
+from backend.db.crud.rpg.world_boss_market import (
+    get_world_boss_status,
+    record_world_boss_attack,
+    reset_world_boss,
+    get_market_listings,
+    list_item_for_sale,
+    cancel_market_listing,
+    buy_market_item,
+    MARKET_FEE_PCT,
+    DEFAULT_WORLD_BOSS_HP,
+)
 from backend.db.crud.rpg.dungeon import run_dungeon_wave
 
 __all__ = [
@@ -83,5 +100,10 @@ __all__ = [
     "RARITY_TIERS", "get_forge_upgrade_requirements", "apply_forge_upgrade_to_item", "FORGE_MAX_LEVEL",
     "BOSS_DIFFICULTIES", "DOTA_BOSS_CATALOG", "calculate_enrage_multiplier",
     "get_boss_phase_state", "calculate_boss_dynamic_damage",
+    "calculate_player_threat", "determine_boss_target", "calculate_party_synergies", "HERO_PRIMARY_ROLES",
+    "get_world_boss_status", "record_world_boss_attack", "reset_world_boss",
+    "get_market_listings", "list_item_for_sale", "cancel_market_listing", "buy_market_item",
+    "MARKET_FEE_PCT", "DEFAULT_WORLD_BOSS_HP",
 ]
+
 

@@ -13,6 +13,7 @@ from backend.api.routers.coinflip import coinflip_router
 from backend.api.routers.heroes_dota import rpg_router
 from backend.api.routers.multiplayer_hub import multiplayer_hub_router
 from backend.api.routers.rebirth_engine import rebirth_engine_router
+from backend.api.routers.multiplayer_market import multiplayer_market_router
 import backend.api.routers.bosses_dynamic  # Registers combat routes onto rpg_router
 import backend.api.routers.items_forge  # Registers inventory & shop routes onto rpg_router
 
@@ -31,4 +32,6 @@ __all__ = [
     "rpg_router",
     "multiplayer_hub_router",
     "rebirth_engine_router",
+    "multiplayer_market_router",
 ]
+
