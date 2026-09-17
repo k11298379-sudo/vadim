@@ -4,6 +4,7 @@ from typing import Dict, Any, List
 from backend.db.models import RPGCharacter
 from backend.db.crud.rpg.heroes import NATAR_HEROES
 from backend.db.crud.rpg.pets_config import PETS_CATALOG
+from backend.db.crud.rpg.rebirth import calculate_rebirth_multiplier
 
 
 def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
@@ -104,6 +105,13 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
         lifesteal += 15
     if canonical_class == "pudge":
         flat_hp_regen += 2.5
+
+    talents = getattr(char, "talents", {}) or {}
+    constellations = talents.get("constellations", {}) or {}
+    vit_level = constellations.get("constellation_vitality", 0)
+    flat_hp += vit_level * 150
+    flat_def += vit_level * 5
+
     total_str = str_val + gear_str
     total_agi = agi_val + gear_agi
     total_int = int_val + gear_int
@@ -150,17 +158,17 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
 
     # Endgame RPG multipliers
     rebirths = getattr(char, "rebirths", 0)
-    rebirth_mult = 1.0 + (rebirths * 0.35) + ((rebirths ** 1.3) * 0.08)
+    rebirth_mult = calculate_rebirth_multiplier(rebirths)
 
-    talents = getattr(char, "talents", {})
     talent_lifesteal = talents.get("lifesteal", 0) * 2
     talent_dodge = talents.get("dodge", 0) * 4
     talent_crit_mult = talents.get("crit_mult", 0) * 25   # +25% crit multiplier per level
     talent_cooldown = talents.get("cooldown", 0) * 6       # -6% cooldown reduction per level
 
-    # Pet Multipliers
-    pet_hp_mult = 1.0
-    pet_dmg_mult = 1.0
+    # Pet Multipliers (boosted by Constellation Pet)
+    pet_constellation_boost = 1.0 + (constellations.get("constellation_pet", 0) * 0.20)
+    pet_hp_mult = 1.0 * pet_constellation_boost
+    pet_dmg_mult = 1.0 * pet_constellation_boost
     pet_gold_mult = 1.0
     pet_xp_mult = 1.0
 
@@ -210,6 +218,16 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
         "pet_gold_mult": pet_gold_mult,
         "pet_xp_mult": pet_xp_mult,
         "skill": hero_cfg.get("skill", {"name": "Навык", "icon": "⚡", "mp_cost": 20, "desc": "Навык героя"}),
+        "rebirth_multiplier": rebirth_mult,
+        "constellations_bonuses": {
+            "vitality_hp": vit_level * 150,
+            "vitality_armor": vit_level * 5,
+            "pet_power_pct": constellations.get("constellation_pet", 0) * 20,
+            "drop_fortune_pct": constellations.get("constellation_fortune", 0) * 18,
+            "enrage_slow_pct": constellations.get("constellation_boss_pacifier", 0) * 14,
+            "coop_damage_pct": constellations.get("constellation_brotherhood", 0) * 20,
+            "colossus_damage_pct": constellations.get("constellation_colossus_slayer", 0) * 30,
+        },
         "base_strength": str_val,
         "base_agility": agi_val,
         "base_intelligence": int_val,

@@ -140,6 +140,10 @@ def serialize_character_profile(char: RPGCharacter, user_name: str = "") -> Dict
     cfg = NATAR_HEROES.get(canonical_class, NATAR_HEROES["pudge"])
     xp_needed = calculate_xp_for_level(char.level)
 
+    talents_data = getattr(char, "talents", {}) or {}
+    rebirth_essence = talents_data.get("rebirth_essence", getattr(char, "rebirth_essence", 0))
+    rebirth_rank = getattr(char, "rebirths", 0)
+
     return {
         "id": char.id,
         "user_id": char.user_id,
@@ -157,10 +161,16 @@ def serialize_character_profile(char: RPGCharacter, user_name: str = "") -> Dict
         "gold": char.gold,
         "gems": char.gems,
         "stat_points": getattr(char, "stat_points", 0),
-        "rebirths": getattr(char, "rebirths", 0),
-        "rebirth_essence": getattr(char, "rebirth_essence", 0),
+        "rebirths": rebirth_rank,
+        "rebirth_essence": rebirth_essence,
+        "rebirth_info": {
+            "rank": rebirth_rank,
+            "essence": rebirth_essence,
+            "multiplier": stats.get("rebirth_multiplier", 1.0),
+            "constellations": talents_data.get("constellations", {}),
+        },
         "talent_points": getattr(char, "talent_points", 0),
-        "talents": getattr(char, "talents", {}),
+        "talents": talents_data,
         "pets": getattr(char, "pets", []),
         "strength": stats["total_strength"],
         "agility": stats["total_agility"],
