@@ -31,7 +31,7 @@ async def get_rebirth_info_endpoint(
     rank_info = get_rebirth_rank_info(current_rank)
     
     req_level = rank_info["next_min_level"]
-    can_ascend = bool(req_level and char.level >= req_level and current_rank < 10)
+    can_ascend = bool(req_level and char.level >= req_level and current_rank < 25)
     
     talents = getattr(char, "talents", {}) or {}
     essence = talents.get("rebirth_essence", 0)

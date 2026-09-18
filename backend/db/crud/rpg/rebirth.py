@@ -20,6 +20,21 @@ REBIRTH_RANKS_CONFIG: Dict[int, Dict[str, Any]] = {
     8: {"min_level": 50, "essence_reward": 35, "title": "Архитектор Реальности (VIII)"},
     9: {"min_level": 50, "essence_reward": 40, "title": "Архитектор Реальности (IX)"},
     10: {"min_level": 50, "essence_reward": 50, "title": "Архитектор Реальности (X)"},
+    11: {"min_level": 50, "essence_reward": 60, "title": "Владыка Времени (XI)"},
+    12: {"min_level": 50, "essence_reward": 75, "title": "Владыка Времени (XII)"},
+    13: {"min_level": 50, "essence_reward": 90, "title": "Владыка Времени (XIII)"},
+    14: {"min_level": 50, "essence_reward": 110, "title": "Владыка Времени (XIV)"},
+    15: {"min_level": 50, "essence_reward": 135, "title": "Галактический Титан (XV)"},
+    16: {"min_level": 50, "essence_reward": 165, "title": "Галактический Титан (XVI)"},
+    17: {"min_level": 50, "essence_reward": 200, "title": "Галактический Титан (XVII)"},
+    18: {"min_level": 50, "essence_reward": 240, "title": "Космический Абсолют (XVIII)"},
+    19: {"min_level": 50, "essence_reward": 290, "title": "Космический Абсолют (XIX)"},
+    20: {"min_level": 50, "essence_reward": 350, "title": "Повелитель Измерений (XX)"},
+    21: {"min_level": 50, "essence_reward": 420, "title": "Повелитель Измерений (XXI)"},
+    22: {"min_level": 50, "essence_reward": 500, "title": "Архитектор Сингулярности (XXII)"},
+    23: {"min_level": 50, "essence_reward": 600, "title": "Архитектор Сингулярности (XXIII)"},
+    24: {"min_level": 50, "essence_reward": 750, "title": "Властелин Вечности (XXIV)"},
+    25: {"min_level": 50, "essence_reward": 1000, "title": "Создатель Мультивселенной (XXV)"},
 }
 
 CONSTELLATIONS_CATALOG: Dict[str, Dict[str, Any]] = {
@@ -72,9 +87,9 @@ CONSTELLATIONS_CATALOG: Dict[str, Dict[str, Any]] = {
         "id": "constellation_colossus_slayer",
         "name": "Палач Колоссов",
         "icon": "⚔️",
-        "desc": "+30% чистого урона по боссам с запасом HP > 1 000 000 за ур.",
+        "desc": "+30% чистого урона по боссам с запасом HP > 1 000 000 за ур. (до 30 ур.)",
         "bonus_per_level": {"colossus_damage_pct": 30},
-        "max_level": 10,
+        "max_level": 30,
         "cost_per_level": 1,
     },
 }
@@ -83,12 +98,17 @@ CONSTELLATIONS_CATALOG: Dict[str, Dict[str, Any]] = {
 def calculate_rebirth_multiplier(rank: int) -> float:
     """
     Computes global multiplier to all stats and damage:
-    M_rebirth(R) = 1 + (R * 0.35) + (R^1.3 * 0.08)
+    - Ranks 0..10: M(R) = 1 + (R * 0.35) + (R^1.3 * 0.08)  [up to ~6.1x / 9.43x]
+    - Ranks 11..25: Exponential 1.31x per rank above 10, smoothly scaling up to ~350x at Rank 25
     """
     if rank <= 0:
         return 1.0
     r = float(rank)
-    mult = 1.0 + (r * 0.35) + (math.pow(r, 1.3) * 0.08)
+    if rank <= 10:
+        mult = 1.0 + (r * 0.35) + (math.pow(r, 1.3) * 0.08)
+    else:
+        base_10 = 1.0 + (10.0 * 0.35) + (math.pow(10.0, 1.3) * 0.08)
+        mult = base_10 * math.pow(1.31, r - 10.0)
     return round(mult, 3)
 
 
@@ -106,7 +126,7 @@ def get_rebirth_rank_info(rank: int) -> Dict[str, Any]:
         "title": cfg["title"],
         "multiplier": calculate_rebirth_multiplier(rank),
         "multiplier_pct": int(round((calculate_rebirth_multiplier(rank) - 1.0) * 100)),
-        "next_rank": next_rank if next_rank <= 10 else None,
+        "next_rank": next_rank if next_rank <= 25 else None,
         "next_min_level": next_cfg["min_level"] if next_cfg else None,
         "next_essence_reward": next_cfg["essence_reward"] if next_cfg else None,
     }
@@ -121,8 +141,8 @@ async def perform_ascension(session: AsyncSession, char: RPGCharacter) -> Tuple[
     - Increments rank and awards Astral Essence (✨).
     """
     current_rank = getattr(char, "rebirths", 0)
-    if current_rank >= 10:
-        return False, "Достигнут максимальный ранг Вознесения (Ранг X)!", {}
+    if current_rank >= 25:
+        return False, "Достигнут максимальный ранг Вознесения (Ранг XXV)!", {}
 
     next_rank = current_rank + 1
     next_cfg = REBIRTH_RANKS_CONFIG.get(next_rank, {"min_level": 50, "essence_reward": 25})

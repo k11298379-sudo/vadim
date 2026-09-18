@@ -15339,7 +15339,7 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
     const userGems = p.gems || 0;
     const currentUpg = item.upgrade || item.forge_level || 0;
     const targetUpg = currentUpg + 1;
-    const isMax = currentUpg >= 15;
+    const isMax = currentUpg >= 100;
 
     let rate = 1.0;
     let goldCost = targetUpg * 350;
@@ -15350,21 +15350,25 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
       goldCost = targetUpg * 350;
       gemsCost = 0;
     } else if (targetUpg <= 6) {
-      rate = 0.85;
+      rate = 0.95;
       goldCost = targetUpg * 800;
       gemsCost = 2;
     } else if (targetUpg <= 9) {
-      rate = 0.65;
+      rate = 0.75;
       goldCost = targetUpg * 2000;
       gemsCost = 6;
     } else if (targetUpg <= 12) {
-      rate = 0.45;
+      rate = 0.55;
       goldCost = targetUpg * 5500;
       gemsCost = 15;
-    } else {
-      rate = 0.25;
+    } else if (targetUpg <= 15) {
+      rate = 0.35;
       goldCost = targetUpg * 15000;
       gemsCost = 45;
+    } else {
+      rate = 0.30;
+      goldCost = targetUpg * 25000;
+      gemsCost = 45 + (targetUpg - 15) * 2;
     }
 
     const successPct = isMax ? 0 : Math.round(rate * 100);
@@ -15430,7 +15434,7 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
         <div class="w-full max-w-sm rounded-3xl bg-slate-900 border-2 border-amber-500/60 p-5 space-y-3.5 shadow-2xl text-white animate-scale-up">
           <div class="flex items-center justify-between">
             <h3 class="text-xs font-black uppercase text-amber-400 flex items-center gap-1.5">
-              <span>⚒️</span> Кузница Заточки (+0..+15)
+              <span>⚒️</span> Кузница Заточки (+0..+100)
             </h3>
             <button onclick="window.RPG.closeForgeModal()" class="w-7 h-7 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-xs">
               ✕
@@ -15464,7 +15468,7 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
             ${previewStats}
             <div class="space-y-0.5 pt-1">
               <span class="text-xs ${chanceColor} block font-black">
-                ${isMax ? "МАКСИМАЛЬНЫЙ УРОВЕНЬ (+15)" : `Шанс успеха: ${successPct}%`}
+                ${isMax ? "МАКСИМАЛЬНЫЙ УРОВЕНЬ (+100)" : `Шанс успеха: ${successPct}%`}
               </span>
               <span class="text-[9.5px] text-emerald-400 block font-medium">
                 🛡️ Безопасность: при неудаче предмет НЕ сломается и не сбросит уровень!
@@ -15512,7 +15516,7 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
             <button onclick="window.RPG.forgeCurrentItem()" ${!canAfford ? "disabled" : ""} class="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 active:scale-95 text-slate-950 font-black text-xs shadow-md ${
               !canAfford ? "opacity-40 cursor-not-allowed" : ""
             }">
-              ${isMax ? "Максимальный уровень заточки (+15)" : (canAfford ? `Заточить до +${targetUpg} (${successPct}% шанс) 🔥` : (!canAffordGold ? `Не хватает золота (нужно 🪙 ${goldCost})` : `Не хватает кристаллов (нужно 💎 ${gemsCost})`))}
+              ${isMax ? "Максимальный уровень заточки (+100)" : (canAfford ? `Заточить до +${targetUpg} (${successPct}% шанс) 🔥` : (!canAffordGold ? `Не хватает золота (нужно 🪙 ${goldCost})` : `Не хватает кристаллов (нужно 💎 ${gemsCost})`))}
             </button>
           </div>
         </div>

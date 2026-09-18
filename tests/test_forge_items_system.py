@@ -54,39 +54,45 @@ async def run_forge_items_suite():
     assert req1["gold_cost"] == 350
     assert req1["gems_cost"] == 0
 
-    # +4: 85%, 3200 gold, 2 gems
+    # +4: 95% (+10% buff), 3200 gold, 2 gems
     req4 = get_forge_upgrade_requirements(3)
     assert req4["target_level"] == 4
-    assert req4["success_rate"] == 0.85
+    assert req4["success_rate"] == 0.95
     assert req4["gold_cost"] == 4 * 800
     assert req4["gems_cost"] == 2
 
-    # +8: 65%, 16000 gold, 6 gems
+    # +8: 75% (+10% buff), 16000 gold, 6 gems
     req8 = get_forge_upgrade_requirements(7)
     assert req8["target_level"] == 8
-    assert req8["success_rate"] == 0.65
+    assert req8["success_rate"] == 0.75
     assert req8["gold_cost"] == 8 * 2000
     assert req8["gems_cost"] == 6
 
-    # +11: 45%, 60500 gold, 15 gems
+    # +11: 55% (+10% buff), 60500 gold, 15 gems
     req11 = get_forge_upgrade_requirements(10)
     assert req11["target_level"] == 11
-    assert req11["success_rate"] == 0.45
+    assert req11["success_rate"] == 0.55
     assert req11["gold_cost"] == 11 * 5500
     assert req11["gems_cost"] == 15
 
-    # +15: 25%, 225000 gold, 45 gems
+    # +15: 35% (+10% buff), 225000 gold, 45 gems
     req15 = get_forge_upgrade_requirements(14)
     assert req15["target_level"] == 15
-    assert req15["success_rate"] == 0.25
+    assert req15["success_rate"] == 0.35
     assert req15["gold_cost"] == 15 * 15000
     assert req15["gems_cost"] == 45
 
-    # Max level check
-    req_max = get_forge_upgrade_requirements(15)
+    # +50: 30% success, level up to 100
+    req50 = get_forge_upgrade_requirements(49)
+    assert req50["target_level"] == 50
+    assert req50["success_rate"] == 0.30
+    assert req50["is_max"] is False
+
+    # Max level check (+100)
+    req_max = get_forge_upgrade_requirements(100)
     assert req_max["is_max"] is True
     assert req_max["success_rate"] == 0.0
-    print("[OK] Forge Requirements & Probability Table (+1..+15) verified!")
+    print("[OK] Forge Requirements & Probability Table (+1..+100) verified!")
 
     # 3. Stat Growth formula: Stat_final = Stat_base * (1 + Level * 0.15)
     sample_weapon = {
@@ -161,14 +167,14 @@ async def run_forge_items_suite():
         assert "Не хватает кристаллов" in msg_no_gems
         print(f"[OK] Insufficient gems properly rejected: {msg_no_gems}")
 
-        # Step D: Max level +15 cap enforcement
-        test_item["upgrade"] = 15
+        # Step D: Max level +100 cap enforcement
+        test_item["upgrade"] = 100
         char.inventory = [test_item]
         await session.commit()
         ok_max, msg_max, _ = await upgrade_item_forge(session, char, "item_forge_test_01")
-        assert not ok_max, "Must reject forge at max level 15"
+        assert not ok_max, "Must reject forge at max level 100"
         assert "максимального" in msg_max
-        print(f"[OK] Maximum level +15 cap properly enforced: {msg_max}")
+        print(f"[OK] Maximum level +100 cap properly enforced: {msg_max}")
         break
 
     print("\n=== [3/3] Testing Forge HTTP Endpoints ===")

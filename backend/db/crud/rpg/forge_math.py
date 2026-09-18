@@ -1,4 +1,4 @@
-﻿import math
+import math
 import random
 from typing import Dict, Any, Tuple, Optional
 
@@ -72,18 +72,33 @@ RARITY_TIERS: Dict[str, Dict[str, Any]] = {
     },
 }
 
-FORGE_MAX_LEVEL = 15
+FORGE_MAX_LEVEL = 100
+
+
+def calculate_forge_multiplier(level: int) -> float:
+    """
+    Computes stat multiplier for forge level:
+    - Level 0..15: Linear +15% per level (1.0 -> 3.25x)
+    - Level 16..100: Compound +14.15% per level above 15, reaching ~250,000x at +100
+    """
+    if level <= 0:
+        return 1.0
+    if level <= 15:
+        return round(1.0 + (level * 0.15), 3)
+    return round(3.25 * math.pow(1.1415, level - 15), 2)
 
 
 def get_forge_upgrade_requirements(current_level: int) -> Dict[str, Any]:
     """
-    Returns success rate, gold and gem costs according to Volume V:
+    Returns success rate, gold and gem costs:
     - +1..+3: 100% success, (L+1) * 350 gold, 0 gems
-    - +4..+6: 85% success, (L+1) * 800 gold, 2 gems
-    - +7..+9: 65% success, (L+1) * 2000 gold, 6 gems
-    - +10..+12: 45% success, (L+1) * 5500 gold, 15 gems
-    - +13..+15: 25% success, (L+1) * 15000 gold, 45 gems
+    - +4..+6: 95% success, (L+1) * 800 gold, 2 gems (increased by +10%)
+    - +7..+9: 75% success, (L+1) * 2000 gold, 6 gems (increased by +10%)
+    - +10..+12: 55% success, (L+1) * 5500 gold, 15 gems (increased by +10%)
+    - +13..+15: 35% success, (L+1) * 15000 gold, 45 gems (increased by +10%)
+    - +16..+100: 30% success, (L+1) * 25000 gold, 45 + (L-15)*2 gems
     """
+    cur_mult = calculate_forge_multiplier(current_level)
     if current_level >= FORGE_MAX_LEVEL:
         return {
             "current_level": current_level,
@@ -93,7 +108,8 @@ def get_forge_upgrade_requirements(current_level: int) -> Dict[str, Any]:
             "success_pct": 0,
             "gold_cost": 0,
             "gems_cost": 0,
-            "stat_multiplier": round(1.0 + (current_level * 0.15), 3),
+            "stat_multiplier": cur_mult,
+            "current_multiplier": cur_mult,
         }
 
     target_level = current_level + 1
@@ -102,21 +118,25 @@ def get_forge_upgrade_requirements(current_level: int) -> Dict[str, Any]:
         gold = target_level * 350
         gems = 0
     elif target_level <= 6:
-        rate = 0.85
+        rate = 0.95
         gold = target_level * 800
         gems = 2
     elif target_level <= 9:
-        rate = 0.65
+        rate = 0.75
         gold = target_level * 2000
         gems = 6
     elif target_level <= 12:
-        rate = 0.45
+        rate = 0.55
         gold = target_level * 5500
         gems = 15
-    else:  # 13..15
-        rate = 0.25
+    elif target_level <= 15:
+        rate = 0.35
         gold = target_level * 15000
         gems = 45
+    else:  # 16..100
+        rate = 0.30
+        gold = target_level * 25000
+        gems = 45 + (target_level - 15) * 2
 
     return {
         "current_level": current_level,
@@ -126,29 +146,29 @@ def get_forge_upgrade_requirements(current_level: int) -> Dict[str, Any]:
         "success_pct": int(rate * 100),
         "gold_cost": gold,
         "gems_cost": gems,
-        "stat_multiplier": round(1.0 + (target_level * 0.15), 3),
-        "current_multiplier": round(1.0 + (current_level * 0.15), 3),
+        "stat_multiplier": calculate_forge_multiplier(target_level),
+        "current_multiplier": cur_mult,
     }
 
 
 def apply_forge_upgrade_to_item(item: Dict[str, Any], target_level: int) -> Dict[str, Any]:
     """
-    Recalculates item stats for target_level (+1..+15):
-    Stat_final = Stat_base * (1 + Level * 0.15) * M_rarity
+    Recalculates item stats for target_level (+1..+100):
+    Stat_final = Stat_base * calculate_forge_multiplier(Level) * M_rarity
     """
     from backend.db.crud.rpg.loot import rebuild_item_description
 
     item["upgrade"] = target_level
     item["forge_level"] = target_level
-    growth_mult = 1.0 + (target_level * 0.15)
+    growth_mult = calculate_forge_multiplier(target_level)
 
     # 1. Base Weapon Attack
+    cur_lvl = item.get("upgrade", 0)
+    cur_mult = max(1.0, calculate_forge_multiplier(cur_lvl))
     if "base_min" not in item and "min_atk" in item:
-        cur_lvl = item.get("upgrade", 0)
-        item["base_min"] = max(6, int(round(item["min_atk"] / (1.0 + cur_lvl * 0.15))))
+        item["base_min"] = max(6, int(round(item["min_atk"] / cur_mult)))
     if "base_max" not in item and "max_atk" in item:
-        cur_lvl = item.get("upgrade", 0)
-        item["base_max"] = max(10, int(round(item["max_atk"] / (1.0 + cur_lvl * 0.15))))
+        item["base_max"] = max(10, int(round(item["max_atk"] / cur_mult)))
 
     if "base_min" in item:
         item["min_atk"] = int(round(item["base_min"] * growth_mult))
@@ -158,11 +178,9 @@ def apply_forge_upgrade_to_item(item: Dict[str, Any], target_level: int) -> Dict
     # 2. Base Armor Defense & HP
     if "base_def" not in item and ("defense" in item or "def" in item):
         cur_d = item.get("defense", item.get("def", 4))
-        cur_lvl = item.get("upgrade", 0)
-        item["base_def"] = max(2, int(round(cur_d / (1.0 + cur_lvl * 0.15))))
+        item["base_def"] = max(2, int(round(cur_d / cur_mult)))
     if "base_hp" not in item and "hp_bonus" in item:
-        cur_lvl = item.get("upgrade", 0)
-        item["base_hp"] = max(15, int(round(item["hp_bonus"] / (1.0 + cur_lvl * 0.15))))
+        item["base_hp"] = max(15, int(round(item["hp_bonus"] / cur_mult)))
 
     if "base_def" in item:
         new_def = int(round(item["base_def"] * growth_mult))

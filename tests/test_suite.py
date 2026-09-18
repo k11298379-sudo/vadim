@@ -386,8 +386,9 @@ async def test_database_and_crud():
         )
         past_orig_due = hw_past.due_date
 
-        # 4. Schedule change occurs: Chemistry added earlier on a specific date (Thursday 2026-09-17)
-        await set_date_schedule_item(session, date(2026, 9, 17), 1, chem_id)
+        # 4. Schedule change occurs: Chemistry added earlier on a specific date (earlier than hw_active due_date)
+        shift_target_date = today
+        await set_date_schedule_item(session, shift_target_date, 1, chem_id)
 
         # 5. Run auto-shift
         shifted = await auto_shift_active_homeworks(session, affected_subject_id=chem_id)
@@ -395,7 +396,7 @@ async def test_database_and_crud():
 
         # Check that active homework shifted to the earlier date!
         await session.refresh(hw_active)
-        assert hw_active.due_date == date(2026, 9, 17), f"Expected shifted to 17.09, got {hw_active.due_date}"
+        assert hw_active.due_date == shift_target_date, f"Expected shifted to {shift_target_date}, got {hw_active.due_date}"
 
         # Check that past homework was NOT touched (remained closed/frozen)
         await session.refresh(hw_past)
@@ -591,7 +592,7 @@ async def test_database_and_crud():
         from backend.bot.services.notifier import send_evening_digest
         from backend.db.crud import get_approved_group_chats, get_or_create_subject
         tom = today + timedelta(days=1)
-        if tom.isoweekday() == 7:
+        while tom.isoweekday() in (6, 7):
             tom = tom + timedelta(days=1)
         subj_bio = await get_or_create_subject(session, "Биология")
         subj_geo = await get_or_create_subject(session, "География")
