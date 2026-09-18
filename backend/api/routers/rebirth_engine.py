@@ -31,13 +31,17 @@ async def get_rebirth_info_endpoint(
     rank_info = get_rebirth_rank_info(current_rank)
     
     req_level = rank_info["next_min_level"]
-    can_ascend = bool(req_level and char.level >= req_level and current_rank < 25)
+    char_floor = getattr(char, "dungeon_floor", 1) or 1
+    effective_progress = max(char.level, char_floor)
+    can_ascend = bool(req_level and effective_progress >= req_level and current_rank < 25)
     
     talents = getattr(char, "talents", {}) or {}
     essence = talents.get("rebirth_essence", 0)
     
     return {
         "current_level": char.level,
+        "current_floor": char_floor,
+        "effective_progress": effective_progress,
         "current_rank": current_rank,
         "title": rank_info["title"],
         "multiplier": rank_info["multiplier"],

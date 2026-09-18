@@ -1,18 +1,7 @@
 // ============================================================
-// 10_talents_ui.js — Новое Дерево Талантов Героев natarGRP
-// 3 ветки (ATK / TANK / UTILITY) × 5 тиров = 15 узлов/герой
+// 10_talents_ui.js — Дерево Талантов и Алтарь Вознесения natarGRP
 // ============================================================
 
-const BRANCH_META = {
-  atk:  { label: "🗡️ Атака",      color: "red",    bg: "from-red-950/80 to-red-900/40",    border: "border-red-500/50",   badge: "bg-red-600",  textColor: "text-red-300" },
-  tank: { label: "🛡️ Выживание",  color: "blue",   bg: "from-blue-950/80 to-blue-900/40",  border: "border-blue-500/50",  badge: "bg-blue-600", textColor: "text-blue-300" },
-  util: { label: "✨ Утилита",     color: "purple", bg: "from-purple-950/80 to-purple-900/40", border: "border-purple-500/50", badge: "bg-purple-600", textColor: "text-purple-300" },
-};
-
-const TIER_UNLOCK = { 1: 5, 2: 10, 3: 15, 4: 20, 5: 30 };
-
-// Hero talent tree data (mirrored from backend talent_tree.py)
-// Loaded dynamically from API or falls back to minimal local stub
 let _cachedTalentTree = null;
 
 function renderTalentsTab() {
@@ -23,26 +12,35 @@ function renderTalentsTab() {
   const rebirthMult = (p.rebirth_info && p.rebirth_info.multiplier) || 1.0;
   const essence = (p.rebirth_info && p.rebirth_info.essence) || p.rebirth_essence || 0;
   const charLvl = p.level || 1;
+  const charFloor = p.dungeon_floor || 1;
+  const effectiveProgress = Math.max(charLvl, charFloor);
   const talentPts = p.talent_points || 0;
+
+  const reqLvl = (p.rebirth_info && p.rebirth_info.next_min_level) || (rebirths === 0 ? 30 : (rebirths === 1 ? 40 : (rebirths === 2 ? 45 : 50)));
+  const canAscend = effectiveProgress >= reqLvl && rebirths < 25;
 
   let html = `<div class="p-3 bg-slate-900 min-h-screen text-slate-200 space-y-4">`;
 
-  // === 1. REBIRTH BANNER ===
+  // === 1. REBIRTH BANNER (АЛТАРЬ ВОЗНЕСЕНИЯ) ===
   html += `
-    <div class="bg-gradient-to-r from-purple-950/80 via-slate-800 to-indigo-950/80 p-4 rounded-2xl border border-purple-500/40 shadow-lg relative overflow-hidden">
-      <div class="relative z-10 flex justify-between items-center">
+    <div class="bg-gradient-to-r from-purple-950/90 via-slate-800 to-indigo-950/90 p-4 rounded-3xl border border-purple-500/40 shadow-xl relative overflow-hidden">
+      <div class="relative z-10 flex justify-between items-center gap-3">
         <div>
           <div class="flex items-center gap-1.5">
             <h2 class="text-base font-black text-white drop-shadow-md">🌟 Алтарь Вознесения</h2>
             <span class="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/30 text-purple-300 font-extrabold border border-purple-400/30">Ранг ${rebirths}</span>
           </div>
-          <div class="text-xs text-amber-300 mt-1 font-bold">Множитель статов: <span class="text-white">x${rebirthMult.toFixed(2)}</span> | ✨ Эссенция: <span class="text-white">${essence}</span></div>
-          <div class="text-[10px] text-slate-400 mt-0.5">Доступно на 30, 40, 45 и 50 ур. Вещи и заточка сохраняются!</div>
+          <div class="text-xs text-amber-300 mt-1 font-bold">
+            Множитель: <span class="text-white">x${rebirthMult.toFixed(2)}</span> | ✨ Эссенция: <span class="text-white">${essence}</span>
+          </div>
+          <div class="text-[10.5px] text-slate-400 mt-0.5">
+            Требуется: <span class="${canAscend ? 'text-emerald-400 font-bold' : 'text-amber-300 font-bold'}">${reqLvl} ур. или этаж</span> (ур. ${charLvl}, эт. ${charFloor})
+          </div>
         </div>
-        <div>
-          ${charLvl >= 30
-            ? `<button onclick="doRebirthUI()" class="px-3 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-xl font-black text-xs text-white shadow-lg shadow-purple-500/30 active:scale-95">ВОЗНЕСЕНИЕ</button>`
-            : `<button disabled class="px-3 py-1.5 bg-slate-800 rounded-xl font-bold text-[11px] text-slate-500 border border-slate-700 cursor-not-allowed">С 30 ур.</button>`
+        <div class="shrink-0">
+          ${canAscend
+            ? `<button onclick="doRebirthUI()" class="px-3.5 py-2.5 bg-gradient-to-r from-purple-500 via-indigo-500 to-purple-600 rounded-2xl font-black text-xs text-white shadow-lg shadow-purple-500/40 active:scale-95 animate-pulse">ВОЗНЕСЕНИЕ 🌟</button>`
+            : `<button disabled class="px-3 py-2 bg-slate-800/90 rounded-2xl font-bold text-[10px] text-slate-500 border border-slate-700/80 cursor-not-allowed">С ${reqLvl} ур./эт.</button>`
           }
         </div>
       </div>
@@ -53,102 +51,24 @@ function renderTalentsTab() {
     <div class="flex items-center justify-between px-1">
       <div>
         <h3 class="text-sm font-black text-amber-400 flex items-center gap-1.5">
-          <span>⚔️</span> Дерево Талантов (${p.class_name || "Герой"})
+          <span>⚔️</span> Древо Навыков (${p.class_name || "Герой"})
         </h3>
-        <p class="text-[10.5px] text-slate-400">Три ветки развития — выбирай свой путь!</p>
+        <p class="text-[10.5px] text-slate-400">Интерактивное древо развития — выберите узел для прокачки</p>
       </div>
-      <div class="flex flex-col items-end gap-1">
+      <div class="flex items-center gap-1.5">
         <span class="text-xs font-black px-2.5 py-1 rounded-xl bg-slate-800 border border-slate-700 text-amber-300">Ур. ${charLvl}</span>
         <span class="text-xs font-black px-2.5 py-1 rounded-xl ${talentPts > 0 ? 'bg-emerald-900/60 border-emerald-500/50 text-emerald-300 animate-pulse' : 'bg-slate-800 border-slate-700 text-slate-400'} border">⭐ ${talentPts} очк.</span>
       </div>
     </div>`;
 
-  // === 3. TALENT TREE BRANCHES ===
-  const treeData = _cachedTalentTree;
-  if (!treeData) {
-    html += `<div class="text-center text-slate-500 text-sm py-8">
-      <div class="text-2xl mb-2">🌳</div>
-      Загрузка дерева талантов...
-      <br><button onclick="loadTalentTreeUI()" class="mt-3 px-4 py-2 bg-amber-600 rounded-xl text-white font-bold text-xs active:scale-95">Загрузить</button>
-    </div>`;
-  } else {
-    const purchased = treeData.purchased || {};
-    const branches = treeData.branches || {};
-
-    html += `<div class="grid grid-cols-1 gap-3">`;
-    for (const [branchKey, meta] of Object.entries(BRANCH_META)) {
-      const nodes = (branches[branchKey] || []).slice().sort((a, b) => a.tier - b.tier);
-      html += `
-        <div class="bg-gradient-to-b ${meta.bg} rounded-2xl border ${meta.border} overflow-hidden shadow-lg">
-          <div class="px-4 py-2.5 border-b ${meta.border} flex items-center justify-between">
-            <h4 class="font-black text-sm ${meta.textColor}">${meta.label}</h4>
-            <span class="text-[10px] text-slate-400">${nodes.filter(n => n.is_bought).length}/${nodes.length} куплено</span>
-          </div>
-          <div class="p-2 space-y-2">`;
-
-      for (const node of nodes) {
-        html += renderTalentNode(node, meta, charLvl, talentPts);
-      }
-
-      html += `</div></div>`;
-    }
-    html += `</div>`;
-  }
+  // === 3. VISUAL TALENT TREE GRAPH ===
+  html += renderVisualTalentTree(p, _cachedTalentTree);
 
   // === 4. PETS SECTION ===
   html += renderPetsSection(p);
 
   html += `</div>`;
   return html;
-}
-
-function renderTalentNode(node, meta, charLvl, talentPts) {
-  const unlockLvl = TIER_UNLOCK[node.tier] || node.unlock_level || 5;
-  const isLocked = charLvl < unlockLvl;
-  const isReqMissing = !node.is_bought && !node.can_buy && node.req && !isLocked;
-
-  const isPerk = node.desc && node.desc.includes("[ПЕРК]");
-
-  let cardClass, badgeClass, btnHtml;
-  if (node.is_bought) {
-    cardClass = isPerk ? "bg-emerald-950/50 border-emerald-400 shadow-md shadow-emerald-500/10" : "bg-emerald-900/40 border-emerald-500/60";
-    badgeClass = "bg-emerald-600 text-white";
-    btnHtml = `<span class="text-[9px] font-black text-emerald-400">✓ КУПЛЕНО</span>`;
-  } else if (isLocked) {
-    cardClass = "bg-slate-900/30 border-slate-800/40 opacity-50";
-    badgeClass = "bg-slate-700 text-slate-500";
-    btnHtml = `<span class="text-[9px] text-slate-500">🔒 Нужен ${unlockLvl} ур.</span>`;
-  } else if (isReqMissing) {
-    cardClass = "bg-slate-900/40 border-slate-800/40 opacity-60";
-    badgeClass = "bg-slate-700 text-slate-400";
-    btnHtml = `<span class="text-[9px] text-slate-500">⛓ Нужен предыдущий талант</span>`;
-  } else if (talentPts < (node.cost || 1)) {
-    cardClass = isPerk ? "bg-slate-800/80 border-amber-500/40" : "bg-slate-800/60 border-slate-700/60";
-    badgeClass = `${meta.badge} opacity-60 text-white`;
-    btnHtml = `<span class="text-[9px] text-amber-500/70">Нужно ${node.cost} очк.</span>`;
-  } else {
-    cardClass = isPerk ? "bg-gradient-to-br from-slate-800 to-amber-950/40 border-amber-400 shadow-amber-500/20 shadow-lg" : "bg-slate-800/80 border-amber-500/40 shadow-amber-500/10 shadow-md";
-    badgeClass = `${meta.badge} text-white animate-pulse`;
-    btnHtml = `<button onclick="buyTalentNodeUI('${node.id}')" class="px-3 py-1 rounded-lg ${meta.badge} hover:brightness-110 active:scale-95 text-white font-black text-[10px] shadow-sm transition-all">КУПИТЬ (${node.cost}⭐)</button>`;
-  }
-
-  return `
-    <div class="p-2.5 rounded-xl border transition-all ${cardClass}">
-      <div class="flex items-start gap-2">
-        <div class="w-9 h-9 rounded-xl ${node.is_bought ? 'bg-emerald-700/50' : 'bg-slate-900/60'} border ${isPerk ? 'border-amber-400/80 shadow-amber-500/20' : 'border-slate-700'} flex items-center justify-center text-xl shrink-0 shadow-inner">${node.icon}</div>
-        <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-1.5 mb-0.5 flex-wrap">
-            <span class="text-xs font-black text-white leading-tight">${node.name}</span>
-            <span class="text-[9px] px-1.5 py-0.5 rounded ${badgeClass} font-bold shrink-0">Т${node.tier}</span>
-            ${isPerk ? '<span class="text-[8px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/50 font-black shrink-0">✨ ПЕРК</span>' : ''}
-          </div>
-          <div class="text-[10px] text-slate-400 leading-snug mb-1.5">${node.desc}</div>
-          <div class="flex items-center justify-between">
-            ${btnHtml}
-          </div>
-        </div>
-      </div>
-    </div>`;
 }
 
 function renderPetsSection(p) {
@@ -222,7 +142,6 @@ window.buyTalentNodeUI = async function(nodeId) {
     if (res && res.profile) {
       RPG_STATE.profile = res.profile;
       if (window.syncArenaPlayerStats) syncArenaPlayerStats();
-      // Refresh tree cache
       _cachedTalentTree = await api.getTalentTree();
       if (window.triggerHaptic) triggerHaptic("success");
       renderRoot();
@@ -233,20 +152,25 @@ window.buyTalentNodeUI = async function(nodeId) {
   }
 };
 
-window.chooseDotaTalentUI = async function(tier, choice) {
+window.doRebirthUI = async function() {
+  if (!confirm("Совершить Вознесение? Уровень сбросится до 1, но вы сохраните все предметы, заточку, питомцев и получите постоянный множитель статов!")) return;
   try {
-    if (window.triggerHaptic) triggerHaptic("medium");
-    const res = await api.chooseDotaTalent(tier, choice);
-    if (res && res.profile) {
+    if (window.triggerHaptic) triggerHaptic("heavy");
+    const res = await api.doRebirth();
+    if (res.profile) {
       RPG_STATE.profile = res.profile;
+      if (typeof ARENA !== "undefined") {
+        ARENA.waveNumber = 1;
+        ARENA.totalCreepsSpawned = 0;
+        ARENA.creepsKilledInWave = 0;
+        ARENA.creeps = [];
+      }
       if (window.syncArenaPlayerStats) syncArenaPlayerStats();
       if (window.triggerHaptic) triggerHaptic("success");
+      _cachedTalentTree = null;
       renderRoot();
     }
-  } catch (err) {
-    if (window.triggerHaptic) triggerHaptic("error");
-    alert(err.message || "Ошибка выбора таланта");
-  }
+  } catch(e) { alert(e.message || "Ошибка перерождения"); }
 };
 
 window.hatchPetUI = async function() {
@@ -291,27 +215,6 @@ window.upgradePetUI = async function(petUid) {
       renderRoot();
     }
   } catch(e) { alert(e.message || "Ошибка улучшения питомца"); }
-};
-
-window.doRebirthUI = async function() {
-  if (!confirm("Совершить Вознесение? Уровень сбросится до 1, но вы сохраните все предметы, заточку, питомцев и получите постоянный множитель статов!")) return;
-  try {
-    if (window.triggerHaptic) triggerHaptic("heavy");
-    const res = await api.doRebirth();
-    if (res.profile) {
-      RPG_STATE.profile = res.profile;
-      if (typeof ARENA !== "undefined") {
-        ARENA.waveNumber = 1;
-        ARENA.totalCreepsSpawned = 0;
-        ARENA.creepsKilledInWave = 0;
-        ARENA.creeps = [];
-      }
-      if (window.syncArenaPlayerStats) syncArenaPlayerStats();
-      if (window.triggerHaptic) triggerHaptic("success");
-      _cachedTalentTree = null; // reset cache on rebirth
-      renderRoot();
-    }
-  } catch(e) { alert(e.message || "Ошибка перерождения"); }
 };
 
 window.upgradeTalentUI = async function(talentId) {

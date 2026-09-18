@@ -1972,6 +1972,10 @@
 
     // ---- 21. BOSS VICTORY SHOWCASE OVERLAY ----
     if (ARENA.waveState === "boss_victory") {
+      if (!ARENA.isRaidBossBattle && !RPG_STATE.lastBossChestReward) {
+        ARENA.waveState = "fighting";
+        return;
+      }
       ctx.save();
       ctx.fillStyle = "rgba(0, 0, 0, 0.80)";
       ctx.fillRect(0, 0, clientW, clientH);

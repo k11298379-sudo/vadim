@@ -1451,6 +1451,10 @@
 
   function closeChestModal() {
     RPG_STATE.activeChestModal = null;
+    RPG_STATE.lastBossChestReward = null;
+    if (typeof ARENA !== "undefined" && ARENA.waveState === "boss_victory") {
+      ARENA.waveState = "fighting";
+    }
     if (ARENA.isRaidBossBattle) {
       exitRaidBossBattle();
       return;

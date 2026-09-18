@@ -1472,6 +1472,10 @@ loadRpgImages();
 
   function closeChestModal() {
     RPG_STATE.activeChestModal = null;
+    RPG_STATE.lastBossChestReward = null;
+    if (typeof ARENA !== "undefined" && ARENA.waveState === "boss_victory") {
+      ARENA.waveState = "fighting";
+    }
     if (ARENA.isRaidBossBattle) {
       exitRaidBossBattle();
       return;
@@ -2488,12 +2492,14 @@ loadRpgImages();
   function setupArenaListeners(canvas) {
     function handleCanvasTap(cx, cy, screenX, screenY) {
       if (ARENA.waveState === "boss_victory") {
-        if (RPG_STATE.lastBossChestReward) {
-          openChestModal(RPG_STATE.lastBossChestReward);
+        const reward = RPG_STATE.lastBossChestReward;
+        ARENA.waveState = "fighting";
+        ARENA.isRaidBossBattle = false;
+        RPG_STATE.lastBossChestReward = null;
+        if (reward) {
+          openChestModal(reward);
         } else {
-          ARENA.isRaidBossBattle = false;
-          RPG_STATE.activeTab = "coop";
-          renderRoot();
+          exitRaidBossBattle();
         }
         return;
       }
@@ -8191,7 +8197,7 @@ function distToSegment(px, py, x1, y1, x2, y2) {
       const totalWaveCleared = (currentFloor - 1) * 20 + ARENA.waveNumber;
       const floorMult = 1.0 + (currentFloor - 1) * 0.10;
       const baseGold = Math.floor((10 + ARENA.waveNumber * 2) * floorMult);
-      const baseXp = Math.floor((15 + ARENA.waveNumber * 3) * (1.0 + (currentFloor - 1) * 0.08));
+      const baseXp = Math.floor((15 + ARENA.waveNumber * 3) * (1.0 + (currentFloor - 1) * 0.20));
 
       // DMC Style Meter Reward Multiplier (D..SSS)
       const rank = ARENA.styleMeter?.rank || "D";
@@ -8413,7 +8419,12 @@ function distToSegment(px, py, x1, y1, x2, y2) {
     ARENA.bossProjectiles = [];
     ARENA.creeps = [];
     ARENA.dangerZones = [];
-    RPG_STATE.activeTab = "coop";
+    ARENA.waveState = "fighting";
+    RPG_STATE.lastBossChestReward = null;
+    RPG_STATE.activeTab = "farm";
+    if (typeof initArenaCanvas === "function") {
+      initArenaCanvas();
+    }
     renderRoot();
   }
 
@@ -13403,6 +13414,10 @@ function drawBossModelMid(ctx, b, bId, time) {
 
     // ---- 21. BOSS VICTORY SHOWCASE OVERLAY ----
     if (ARENA.waveState === "boss_victory") {
+      if (!ARENA.isRaidBossBattle && !RPG_STATE.lastBossChestReward) {
+        ARENA.waveState = "fighting";
+        return;
+      }
       ctx.save();
       ctx.fillStyle = "rgba(0, 0, 0, 0.80)";
       ctx.fillRect(0, 0, clientW, clientH);
@@ -16220,20 +16235,279 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
 
 
 // ============================================================
-// 10_talents_ui.js — Новое Дерево Талантов Героев natarGRP
-// 3 ветки (ATK / TANK / UTILITY) × 5 тиров = 15 узлов/герой
+// 10_talents_tree.js — Интерактивное Визуальное Древо Талантов (Skill Tree)
+// 3 ветки (ATK, TANK, UTIL) × 5 тиров с SVG связями и плашкой прокачки
 // ============================================================
 
-const BRANCH_META = {
-  atk:  { label: "🗡️ Атака",      color: "red",    bg: "from-red-950/80 to-red-900/40",    border: "border-red-500/50",   badge: "bg-red-600",  textColor: "text-red-300" },
-  tank: { label: "🛡️ Выживание",  color: "blue",   bg: "from-blue-950/80 to-blue-900/40",  border: "border-blue-500/50",  badge: "bg-blue-600", textColor: "text-blue-300" },
-  util: { label: "✨ Утилита",     color: "purple", bg: "from-purple-950/80 to-purple-900/40", border: "border-purple-500/50", badge: "bg-purple-600", textColor: "text-purple-300" },
+window._selectedTalentId = window._selectedTalentId || null;
+window._talentTreeFilter = window._talentTreeFilter || "all";
+
+const TREE_BRANCH_THEMES = {
+  atk: {
+    label: "🗡️ Атака",
+    colX: 60,
+    activeStroke: "#ef4444",
+    glowColor: "rgba(239, 68, 68, 0.6)",
+    nodeBought: "bg-red-950 border-red-500 shadow-red-500/50 shadow-md",
+    nodeAvail: "bg-slate-900 border-red-500/80 shadow-red-500/30 animate-pulse",
+    textColor: "text-red-400"
+  },
+  tank: {
+    label: "🛡️ Выживание",
+    colX: 180,
+    activeStroke: "#3b82f6",
+    glowColor: "rgba(59, 130, 246, 0.6)",
+    nodeBought: "bg-blue-950 border-blue-500 shadow-blue-500/50 shadow-md",
+    nodeAvail: "bg-slate-900 border-blue-500/80 shadow-blue-500/30 animate-pulse",
+    textColor: "text-blue-400"
+  },
+  util: {
+    label: "✨ Утилита",
+    colX: 300,
+    activeStroke: "#a855f7",
+    glowColor: "rgba(168, 85, 247, 0.6)",
+    nodeBought: "bg-purple-950 border-purple-500 shadow-purple-500/50 shadow-md",
+    nodeAvail: "bg-slate-900 border-purple-500/80 shadow-purple-500/30 animate-pulse",
+    textColor: "text-purple-400"
+  }
 };
 
-const TIER_UNLOCK = { 1: 5, 2: 10, 3: 15, 4: 20, 5: 30 };
+const TIER_Y = {
+  1: 385,
+  2: 305,
+  3: 225,
+  4: 145,
+  5: 60
+};
 
-// Hero talent tree data (mirrored from backend talent_tree.py)
-// Loaded dynamically from API or falls back to minimal local stub
+const ROOT_POS = { x: 180, y: 465 };
+
+function renderVisualTalentTree(p, treeData) {
+  if (!treeData) {
+    return `
+      <div class="text-center text-slate-500 text-sm py-12 bg-slate-900/60 rounded-3xl border border-slate-800">
+        <div class="text-3xl mb-2 animate-bounce">🌳</div>
+        Связывание с астральным древом...
+        <br><button onclick="loadTalentTreeUI()" class="mt-4 px-4 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 rounded-xl text-slate-950 font-black text-xs shadow-lg shadow-amber-500/20 active:scale-95">Загрузить Древо</button>
+      </div>`;
+  }
+
+  const branches = treeData.branches || {};
+  const charLvl = p.level || 1;
+  const charFloor = p.dungeon_floor || 1;
+  const effectiveProgress = Math.max(charLvl, charFloor);
+  const talentPts = p.talent_points || 0;
+  const filter = window._talentTreeFilter;
+
+  // Flatten nodes for fast lookup
+  const nodeMap = {};
+  for (const bKey in branches) {
+    for (const n of branches[bKey]) {
+      nodeMap[n.id] = { ...n, branchKey: bKey };
+    }
+  }
+
+  // Selected Node (default to first available or first tier if none chosen)
+  let selectedNode = nodeMap[window._selectedTalentId];
+  if (!selectedNode) {
+    const allNodes = Object.values(nodeMap);
+    selectedNode = allNodes.find(n => n.can_buy && !n.is_bought) || allNodes.find(n => n.is_bought) || allNodes[0];
+  }
+
+  let html = `
+    <div class="relative bg-slate-950/90 rounded-3xl border border-slate-800/80 shadow-2xl overflow-hidden p-3 select-none">
+      <!-- Background Constellation Ambient Glow -->
+      <div class="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/20 via-slate-950/40 to-slate-950/90"></div>
+
+      <!-- Tree Header / Filter Tabs -->
+      <div class="relative z-10 flex items-center justify-between gap-1 mb-2 pb-2 border-b border-slate-800/60">
+        <div class="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
+          <button onclick="setTalentTreeFilterUI('all')" class="px-2.5 py-1 rounded-xl text-[10px] font-black transition-all ${filter === 'all' ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20' : 'bg-slate-900 text-slate-400 border border-slate-800'}">🌲 Все</button>
+          <button onclick="setTalentTreeFilterUI('atk')" class="px-2.5 py-1 rounded-xl text-[10px] font-black transition-all ${filter === 'atk' ? 'bg-red-600 text-white shadow-md shadow-red-600/30' : 'bg-slate-900 text-red-300 border border-slate-800'}">🗡️ Атака</button>
+          <button onclick="setTalentTreeFilterUI('tank')" class="px-2.5 py-1 rounded-xl text-[10px] font-black transition-all ${filter === 'tank' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'bg-slate-900 text-blue-300 border border-slate-800'}">🛡️ Выживание</button>
+          <button onclick="setTalentTreeFilterUI('util')" class="px-2.5 py-1 rounded-xl text-[10px] font-black transition-all ${filter === 'util' ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30' : 'bg-slate-900 text-purple-300 border border-slate-800'}">✨ Утилита</button>
+        </div>
+        <div class="text-[10.5px] font-bold text-amber-400 shrink-0">
+          ⭐ <span class="text-white">${talentPts}</span> очк.
+        </div>
+      </div>
+
+      <!-- Main Visual Tree Canvas (360x510 SVG + Positioned HTML Nodes) -->
+      <div class="relative w-full max-w-[360px] mx-auto h-[510px]">
+        <!-- SVG Connecting Energy Branches -->
+        <svg class="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 360 510">`;
+
+  // Draw root lines to T1
+  const bKeys = ["atk", "tank", "util"];
+  for (const bKey of bKeys) {
+    if (filter !== "all" && filter !== bKey) continue;
+    const theme = TREE_BRANCH_THEMES[bKey];
+    const t1Node = (branches[bKey] || []).find(n => n.tier === 1);
+    const isT1Bought = t1Node && t1Node.is_bought;
+    const isT1Avail = t1Node && t1Node.can_buy;
+
+    const strokeColor = isT1Bought ? theme.activeStroke : (isT1Avail ? "#eab308" : "#334155");
+    const strokeW = isT1Bought ? 3.5 : (isT1Avail ? 2.5 : 1.5);
+    const dash = isT1Bought ? "" : "stroke-dasharray='4,4'";
+    const opacity = isT1Bought ? 0.95 : (isT1Avail ? 0.75 : 0.35);
+
+    html += `<line x1="${ROOT_POS.x}" y1="${ROOT_POS.y}" x2="${theme.colX}" y2="${TIER_Y[1]}" stroke="${strokeColor}" stroke-width="${strokeW}" ${dash} opacity="${opacity}" stroke-linecap="round" />`;
+
+    // Draw lines between tiers (T1->T2, T2->T3, T3->T4, T4->T5)
+    for (let t = 1; t <= 4; t++) {
+      const parentNode = (branches[bKey] || []).find(n => n.tier === t);
+      const childNode = (branches[bKey] || []).find(n => n.tier === t + 1);
+      const isParentBought = parentNode && parentNode.is_bought;
+      const isChildBought = childNode && childNode.is_bought;
+      const isChildAvail = childNode && childNode.can_buy;
+
+      let lineCol = "#334155";
+      let lw = 1.5;
+      let lDash = "stroke-dasharray='4,4'";
+      let lOp = 0.35;
+
+      if (isChildBought) {
+        lineCol = theme.activeStroke;
+        lw = 3.5;
+        lDash = "";
+        lOp = 0.95;
+      } else if (isParentBought || isChildAvail) {
+        lineCol = theme.activeStroke;
+        lw = 2.5;
+        lDash = "stroke-dasharray='6,3'";
+        lOp = 0.75;
+      }
+
+      html += `<line x1="${theme.colX}" y1="${TIER_Y[t]}" x2="${theme.colX}" y2="${TIER_Y[t + 1]}" stroke="${lineCol}" stroke-width="${lw}" ${lDash} opacity="${lOp}" stroke-linecap="round" />`;
+    }
+  }
+
+  html += `</svg>`;
+
+  // 1. HERO CORE ROOT NODE at bottom
+  html += `
+    <div style="left: ${ROOT_POS.x - 26}px; top: ${ROOT_POS.y - 26}px;" class="absolute w-[52px] h-[52px] rounded-full bg-gradient-to-tr from-amber-600 via-yellow-500 to-amber-300 border-2 border-yellow-200 shadow-xl shadow-amber-500/40 flex flex-col items-center justify-center text-slate-950 font-black z-10 animate-pulse cursor-pointer">
+      <span class="text-base leading-none">👑</span>
+      <span class="text-[9px] font-black leading-none mt-0.5">Ур.${charLvl}</span>
+    </div>`;
+
+  // 2. TALENT NODES
+  for (const bKey of bKeys) {
+    if (filter !== "all" && filter !== bKey) continue;
+    const theme = TREE_BRANCH_THEMES[bKey];
+    const nodes = branches[bKey] || [];
+
+    for (const node of nodes) {
+      const isSelected = selectedNode && selectedNode.id === node.id;
+      const isPerk = node.desc && node.desc.includes("[ПЕРК]");
+      const y = TIER_Y[node.tier] || 250;
+      const x = theme.colX;
+      const size = isPerk ? 54 : 46;
+      const halfSize = size / 2;
+
+      let borderStyle = "";
+      let bgStyle = "";
+      let badgeHtml = "";
+
+      if (node.is_bought) {
+        bgStyle = isPerk ? "bg-gradient-to-br from-emerald-950 to-slate-900 border-emerald-400 shadow-lg shadow-emerald-500/30" : "bg-emerald-950/90 border-emerald-500 shadow-md shadow-emerald-500/20";
+        borderStyle = "border-2";
+        badgeHtml = `<span class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center text-[9px] font-black shadow">✓</span>`;
+      } else if (node.can_buy) {
+        bgStyle = isPerk ? "bg-gradient-to-br from-amber-950 via-slate-900 to-amber-900 border-amber-400 shadow-xl shadow-amber-500/40 animate-pulse" : `${theme.nodeAvail} border-2`;
+        borderStyle = isPerk ? "border-2" : "border-2";
+        badgeHtml = `<span class="absolute -top-1 -right-1 px-1 py-0.2 rounded-full bg-amber-500 text-slate-950 text-[8px] font-black shadow">${node.cost || 1}⭐</span>`;
+      } else {
+        bgStyle = "bg-slate-900/70 border-slate-800 text-slate-600 opacity-60";
+        borderStyle = "border";
+        badgeHtml = `<span class="absolute -top-1 -right-1 text-[10px]">🔒</span>`;
+      }
+
+      if (isSelected) {
+        bgStyle += " ring-2 ring-white ring-offset-2 ring-offset-slate-950 scale-110 z-20";
+      }
+
+      html += `
+        <div style="left: ${x - halfSize}px; top: ${y - halfSize}px; width: ${size}px; height: ${size}px;"
+             onclick="selectTalentNodeUI('${node.id}')"
+             class="absolute rounded-2xl ${borderStyle} ${bgStyle} flex flex-col items-center justify-center cursor-pointer transition-all active:scale-95 group z-10">
+          ${badgeHtml}
+          <span class="${isPerk ? 'text-2xl' : 'text-xl'} leading-none filter drop-shadow">${node.icon}</span>
+          <span class="text-[8px] font-black ${node.is_bought ? 'text-emerald-300' : (node.can_buy ? 'text-amber-300' : 'text-slate-500')} leading-none mt-1">Т${node.tier}</span>
+        </div>`;
+    }
+  }
+
+  html += `</div>`; // End Canvas
+
+  // 3. SELECTED TALENT INTERACTIVE DETAILS CARD (BOTTOM SHEET)
+  if (selectedNode) {
+    const isPerk = selectedNode.desc && selectedNode.desc.includes("[ПЕРК]");
+    const theme = TREE_BRANCH_THEMES[selectedNode.branchKey] || TREE_BRANCH_THEMES.atk;
+    const unlockLvl = selectedNode.unlock_level || (selectedNode.tier * 5);
+    const isLvlMet = effectiveProgress >= unlockLvl;
+
+    let buyBtnHtml = "";
+    if (selectedNode.is_bought) {
+      buyBtnHtml = `<div class="px-4 py-2.5 rounded-xl bg-emerald-900/60 border border-emerald-500/40 text-emerald-300 text-xs font-black flex items-center justify-center gap-1.5 shadow-sm">✓ ТАЛАНТ УЖЕ ИЗУЧЕН</div>`;
+    } else if (!isLvlMet) {
+      buyBtnHtml = `<div class="px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-500 text-xs font-bold flex items-center justify-center gap-1">🔒 Требуется ${unlockLvl} ур. или этаж (у вас: ${effectiveProgress})</div>`;
+    } else if (!selectedNode.can_buy) {
+      buyBtnHtml = `<div class="px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 text-xs font-bold flex items-center justify-center gap-1">⛓️ Сначала изучите предыдущий талант ветки</div>`;
+    } else if (talentPts < (selectedNode.cost || 1)) {
+      buyBtnHtml = `<div class="px-4 py-2.5 rounded-xl bg-amber-950/40 border border-amber-500/30 text-amber-400 text-xs font-bold flex items-center justify-center gap-1">⭐ Не хватает очков талантов (нужно: ${selectedNode.cost || 1})</div>`;
+    } else {
+      buyBtnHtml = `
+        <button onclick="buyTalentNodeUI('${selectedNode.id}')" class="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 active:scale-95 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/30 flex items-center justify-center gap-2">
+          <span>⚡ ИЗУЧИТЬ ТАЛАНТ</span>
+          <span class="px-2 py-0.5 rounded bg-black/20 text-slate-950 text-[11px] font-extrabold">${selectedNode.cost || 1} ⭐</span>
+        </button>`;
+    }
+
+    html += `
+      <div class="relative z-10 mt-3 p-4 rounded-2xl bg-slate-900/90 border-2 ${isPerk ? 'border-amber-400/80 shadow-amber-500/20 shadow-xl' : 'border-slate-700/80 shadow-lg'} animate-scale-up">
+        <div class="flex items-start justify-between gap-2 mb-2">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-2xl ${selectedNode.is_bought ? 'bg-emerald-950 border-emerald-500' : 'bg-slate-950 border-slate-700'} border flex items-center justify-center text-3xl shrink-0 shadow-inner">
+              ${selectedNode.icon}
+            </div>
+            <div>
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <h4 class="font-black text-sm text-white">${selectedNode.name}</h4>
+                <span class="text-[9px] font-black px-1.5 py-0.5 rounded ${theme.textColor} bg-slate-950 border border-slate-800">Т${selectedNode.tier}</span>
+                ${isPerk ? '<span class="text-[8.5px] font-black px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/60 animate-pulse">✨ ПЕРК</span>' : ''}
+              </div>
+              <div class="text-[10px] text-slate-400 mt-0.5 font-medium">${theme.label} • Доступно с ${unlockLvl} ур. / этажа</div>
+            </div>
+          </div>
+        </div>
+        <p class="text-xs text-slate-200 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80 mb-3 leading-relaxed">
+          ${selectedNode.desc}
+        </p>
+        ${buyBtnHtml}
+      </div>`;
+  }
+
+  html += `</div>`; // End container
+  return html;
+}
+
+window.selectTalentNodeUI = function(nodeId) {
+  window._selectedTalentId = nodeId;
+  if (window.triggerHaptic) triggerHaptic("light");
+  renderRoot();
+};
+
+window.setTalentTreeFilterUI = function(filter) {
+  window._talentTreeFilter = filter;
+  if (window.triggerHaptic) triggerHaptic("light");
+  renderRoot();
+};
+
+// ============================================================
+// 10_talents_ui.js — Дерево Талантов и Алтарь Вознесения natarGRP
+// ============================================================
+
 let _cachedTalentTree = null;
 
 function renderTalentsTab() {
@@ -16244,26 +16518,35 @@ function renderTalentsTab() {
   const rebirthMult = (p.rebirth_info && p.rebirth_info.multiplier) || 1.0;
   const essence = (p.rebirth_info && p.rebirth_info.essence) || p.rebirth_essence || 0;
   const charLvl = p.level || 1;
+  const charFloor = p.dungeon_floor || 1;
+  const effectiveProgress = Math.max(charLvl, charFloor);
   const talentPts = p.talent_points || 0;
+
+  const reqLvl = (p.rebirth_info && p.rebirth_info.next_min_level) || (rebirths === 0 ? 30 : (rebirths === 1 ? 40 : (rebirths === 2 ? 45 : 50)));
+  const canAscend = effectiveProgress >= reqLvl && rebirths < 25;
 
   let html = `<div class="p-3 bg-slate-900 min-h-screen text-slate-200 space-y-4">`;
 
-  // === 1. REBIRTH BANNER ===
+  // === 1. REBIRTH BANNER (АЛТАРЬ ВОЗНЕСЕНИЯ) ===
   html += `
-    <div class="bg-gradient-to-r from-purple-950/80 via-slate-800 to-indigo-950/80 p-4 rounded-2xl border border-purple-500/40 shadow-lg relative overflow-hidden">
-      <div class="relative z-10 flex justify-between items-center">
+    <div class="bg-gradient-to-r from-purple-950/90 via-slate-800 to-indigo-950/90 p-4 rounded-3xl border border-purple-500/40 shadow-xl relative overflow-hidden">
+      <div class="relative z-10 flex justify-between items-center gap-3">
         <div>
           <div class="flex items-center gap-1.5">
             <h2 class="text-base font-black text-white drop-shadow-md">🌟 Алтарь Вознесения</h2>
             <span class="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/30 text-purple-300 font-extrabold border border-purple-400/30">Ранг ${rebirths}</span>
           </div>
-          <div class="text-xs text-amber-300 mt-1 font-bold">Множитель статов: <span class="text-white">x${rebirthMult.toFixed(2)}</span> | ✨ Эссенция: <span class="text-white">${essence}</span></div>
-          <div class="text-[10px] text-slate-400 mt-0.5">Доступно на 30, 40, 45 и 50 ур. Вещи и заточка сохраняются!</div>
+          <div class="text-xs text-amber-300 mt-1 font-bold">
+            Множитель: <span class="text-white">x${rebirthMult.toFixed(2)}</span> | ✨ Эссенция: <span class="text-white">${essence}</span>
+          </div>
+          <div class="text-[10.5px] text-slate-400 mt-0.5">
+            Требуется: <span class="${canAscend ? 'text-emerald-400 font-bold' : 'text-amber-300 font-bold'}">${reqLvl} ур. или этаж</span> (ур. ${charLvl}, эт. ${charFloor})
+          </div>
         </div>
-        <div>
-          ${charLvl >= 30
-            ? `<button onclick="doRebirthUI()" class="px-3 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-xl font-black text-xs text-white shadow-lg shadow-purple-500/30 active:scale-95">ВОЗНЕСЕНИЕ</button>`
-            : `<button disabled class="px-3 py-1.5 bg-slate-800 rounded-xl font-bold text-[11px] text-slate-500 border border-slate-700 cursor-not-allowed">С 30 ур.</button>`
+        <div class="shrink-0">
+          ${canAscend
+            ? `<button onclick="doRebirthUI()" class="px-3.5 py-2.5 bg-gradient-to-r from-purple-500 via-indigo-500 to-purple-600 rounded-2xl font-black text-xs text-white shadow-lg shadow-purple-500/40 active:scale-95 animate-pulse">ВОЗНЕСЕНИЕ 🌟</button>`
+            : `<button disabled class="px-3 py-2 bg-slate-800/90 rounded-2xl font-bold text-[10px] text-slate-500 border border-slate-700/80 cursor-not-allowed">С ${reqLvl} ур./эт.</button>`
           }
         </div>
       </div>
@@ -16274,102 +16557,24 @@ function renderTalentsTab() {
     <div class="flex items-center justify-between px-1">
       <div>
         <h3 class="text-sm font-black text-amber-400 flex items-center gap-1.5">
-          <span>⚔️</span> Дерево Талантов (${p.class_name || "Герой"})
+          <span>⚔️</span> Древо Навыков (${p.class_name || "Герой"})
         </h3>
-        <p class="text-[10.5px] text-slate-400">Три ветки развития — выбирай свой путь!</p>
+        <p class="text-[10.5px] text-slate-400">Интерактивное древо развития — выберите узел для прокачки</p>
       </div>
-      <div class="flex flex-col items-end gap-1">
+      <div class="flex items-center gap-1.5">
         <span class="text-xs font-black px-2.5 py-1 rounded-xl bg-slate-800 border border-slate-700 text-amber-300">Ур. ${charLvl}</span>
         <span class="text-xs font-black px-2.5 py-1 rounded-xl ${talentPts > 0 ? 'bg-emerald-900/60 border-emerald-500/50 text-emerald-300 animate-pulse' : 'bg-slate-800 border-slate-700 text-slate-400'} border">⭐ ${talentPts} очк.</span>
       </div>
     </div>`;
 
-  // === 3. TALENT TREE BRANCHES ===
-  const treeData = _cachedTalentTree;
-  if (!treeData) {
-    html += `<div class="text-center text-slate-500 text-sm py-8">
-      <div class="text-2xl mb-2">🌳</div>
-      Загрузка дерева талантов...
-      <br><button onclick="loadTalentTreeUI()" class="mt-3 px-4 py-2 bg-amber-600 rounded-xl text-white font-bold text-xs active:scale-95">Загрузить</button>
-    </div>`;
-  } else {
-    const purchased = treeData.purchased || {};
-    const branches = treeData.branches || {};
-
-    html += `<div class="grid grid-cols-1 gap-3">`;
-    for (const [branchKey, meta] of Object.entries(BRANCH_META)) {
-      const nodes = (branches[branchKey] || []).slice().sort((a, b) => a.tier - b.tier);
-      html += `
-        <div class="bg-gradient-to-b ${meta.bg} rounded-2xl border ${meta.border} overflow-hidden shadow-lg">
-          <div class="px-4 py-2.5 border-b ${meta.border} flex items-center justify-between">
-            <h4 class="font-black text-sm ${meta.textColor}">${meta.label}</h4>
-            <span class="text-[10px] text-slate-400">${nodes.filter(n => n.is_bought).length}/${nodes.length} куплено</span>
-          </div>
-          <div class="p-2 space-y-2">`;
-
-      for (const node of nodes) {
-        html += renderTalentNode(node, meta, charLvl, talentPts);
-      }
-
-      html += `</div></div>`;
-    }
-    html += `</div>`;
-  }
+  // === 3. VISUAL TALENT TREE GRAPH ===
+  html += renderVisualTalentTree(p, _cachedTalentTree);
 
   // === 4. PETS SECTION ===
   html += renderPetsSection(p);
 
   html += `</div>`;
   return html;
-}
-
-function renderTalentNode(node, meta, charLvl, talentPts) {
-  const unlockLvl = TIER_UNLOCK[node.tier] || node.unlock_level || 5;
-  const isLocked = charLvl < unlockLvl;
-  const isReqMissing = !node.is_bought && !node.can_buy && node.req && !isLocked;
-
-  const isPerk = node.desc && node.desc.includes("[ПЕРК]");
-
-  let cardClass, badgeClass, btnHtml;
-  if (node.is_bought) {
-    cardClass = isPerk ? "bg-emerald-950/50 border-emerald-400 shadow-md shadow-emerald-500/10" : "bg-emerald-900/40 border-emerald-500/60";
-    badgeClass = "bg-emerald-600 text-white";
-    btnHtml = `<span class="text-[9px] font-black text-emerald-400">✓ КУПЛЕНО</span>`;
-  } else if (isLocked) {
-    cardClass = "bg-slate-900/30 border-slate-800/40 opacity-50";
-    badgeClass = "bg-slate-700 text-slate-500";
-    btnHtml = `<span class="text-[9px] text-slate-500">🔒 Нужен ${unlockLvl} ур.</span>`;
-  } else if (isReqMissing) {
-    cardClass = "bg-slate-900/40 border-slate-800/40 opacity-60";
-    badgeClass = "bg-slate-700 text-slate-400";
-    btnHtml = `<span class="text-[9px] text-slate-500">⛓ Нужен предыдущий талант</span>`;
-  } else if (talentPts < (node.cost || 1)) {
-    cardClass = isPerk ? "bg-slate-800/80 border-amber-500/40" : "bg-slate-800/60 border-slate-700/60";
-    badgeClass = `${meta.badge} opacity-60 text-white`;
-    btnHtml = `<span class="text-[9px] text-amber-500/70">Нужно ${node.cost} очк.</span>`;
-  } else {
-    cardClass = isPerk ? "bg-gradient-to-br from-slate-800 to-amber-950/40 border-amber-400 shadow-amber-500/20 shadow-lg" : "bg-slate-800/80 border-amber-500/40 shadow-amber-500/10 shadow-md";
-    badgeClass = `${meta.badge} text-white animate-pulse`;
-    btnHtml = `<button onclick="buyTalentNodeUI('${node.id}')" class="px-3 py-1 rounded-lg ${meta.badge} hover:brightness-110 active:scale-95 text-white font-black text-[10px] shadow-sm transition-all">КУПИТЬ (${node.cost}⭐)</button>`;
-  }
-
-  return `
-    <div class="p-2.5 rounded-xl border transition-all ${cardClass}">
-      <div class="flex items-start gap-2">
-        <div class="w-9 h-9 rounded-xl ${node.is_bought ? 'bg-emerald-700/50' : 'bg-slate-900/60'} border ${isPerk ? 'border-amber-400/80 shadow-amber-500/20' : 'border-slate-700'} flex items-center justify-center text-xl shrink-0 shadow-inner">${node.icon}</div>
-        <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-1.5 mb-0.5 flex-wrap">
-            <span class="text-xs font-black text-white leading-tight">${node.name}</span>
-            <span class="text-[9px] px-1.5 py-0.5 rounded ${badgeClass} font-bold shrink-0">Т${node.tier}</span>
-            ${isPerk ? '<span class="text-[8px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/50 font-black shrink-0">✨ ПЕРК</span>' : ''}
-          </div>
-          <div class="text-[10px] text-slate-400 leading-snug mb-1.5">${node.desc}</div>
-          <div class="flex items-center justify-between">
-            ${btnHtml}
-          </div>
-        </div>
-      </div>
-    </div>`;
 }
 
 function renderPetsSection(p) {
@@ -16443,7 +16648,6 @@ window.buyTalentNodeUI = async function(nodeId) {
     if (res && res.profile) {
       RPG_STATE.profile = res.profile;
       if (window.syncArenaPlayerStats) syncArenaPlayerStats();
-      // Refresh tree cache
       _cachedTalentTree = await api.getTalentTree();
       if (window.triggerHaptic) triggerHaptic("success");
       renderRoot();
@@ -16454,20 +16658,25 @@ window.buyTalentNodeUI = async function(nodeId) {
   }
 };
 
-window.chooseDotaTalentUI = async function(tier, choice) {
+window.doRebirthUI = async function() {
+  if (!confirm("Совершить Вознесение? Уровень сбросится до 1, но вы сохраните все предметы, заточку, питомцев и получите постоянный множитель статов!")) return;
   try {
-    if (window.triggerHaptic) triggerHaptic("medium");
-    const res = await api.chooseDotaTalent(tier, choice);
-    if (res && res.profile) {
+    if (window.triggerHaptic) triggerHaptic("heavy");
+    const res = await api.doRebirth();
+    if (res.profile) {
       RPG_STATE.profile = res.profile;
+      if (typeof ARENA !== "undefined") {
+        ARENA.waveNumber = 1;
+        ARENA.totalCreepsSpawned = 0;
+        ARENA.creepsKilledInWave = 0;
+        ARENA.creeps = [];
+      }
       if (window.syncArenaPlayerStats) syncArenaPlayerStats();
       if (window.triggerHaptic) triggerHaptic("success");
+      _cachedTalentTree = null;
       renderRoot();
     }
-  } catch (err) {
-    if (window.triggerHaptic) triggerHaptic("error");
-    alert(err.message || "Ошибка выбора таланта");
-  }
+  } catch(e) { alert(e.message || "Ошибка перерождения"); }
 };
 
 window.hatchPetUI = async function() {
@@ -16512,27 +16721,6 @@ window.upgradePetUI = async function(petUid) {
       renderRoot();
     }
   } catch(e) { alert(e.message || "Ошибка улучшения питомца"); }
-};
-
-window.doRebirthUI = async function() {
-  if (!confirm("Совершить Вознесение? Уровень сбросится до 1, но вы сохраните все предметы, заточку, питомцев и получите постоянный множитель статов!")) return;
-  try {
-    if (window.triggerHaptic) triggerHaptic("heavy");
-    const res = await api.doRebirth();
-    if (res.profile) {
-      RPG_STATE.profile = res.profile;
-      if (typeof ARENA !== "undefined") {
-        ARENA.waveNumber = 1;
-        ARENA.totalCreepsSpawned = 0;
-        ARENA.creepsKilledInWave = 0;
-        ARENA.creeps = [];
-      }
-      if (window.syncArenaPlayerStats) syncArenaPlayerStats();
-      if (window.triggerHaptic) triggerHaptic("success");
-      _cachedTalentTree = null; // reset cache on rebirth
-      renderRoot();
-    }
-  } catch(e) { alert(e.message || "Ошибка перерождения"); }
 };
 
 window.upgradeTalentUI = async function(talentId) {

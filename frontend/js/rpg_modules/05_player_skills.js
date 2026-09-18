@@ -1843,7 +1843,7 @@
       const totalWaveCleared = (currentFloor - 1) * 20 + ARENA.waveNumber;
       const floorMult = 1.0 + (currentFloor - 1) * 0.10;
       const baseGold = Math.floor((10 + ARENA.waveNumber * 2) * floorMult);
-      const baseXp = Math.floor((15 + ARENA.waveNumber * 3) * (1.0 + (currentFloor - 1) * 0.08));
+      const baseXp = Math.floor((15 + ARENA.waveNumber * 3) * (1.0 + (currentFloor - 1) * 0.20));
 
       // DMC Style Meter Reward Multiplier (D..SSS)
       const rank = ARENA.styleMeter?.rank || "D";
@@ -2065,7 +2065,12 @@
     ARENA.bossProjectiles = [];
     ARENA.creeps = [];
     ARENA.dangerZones = [];
-    RPG_STATE.activeTab = "coop";
+    ARENA.waveState = "fighting";
+    RPG_STATE.lastBossChestReward = null;
+    RPG_STATE.activeTab = "farm";
+    if (typeof initArenaCanvas === "function") {
+      initArenaCanvas();
+    }
     renderRoot();
   }
 

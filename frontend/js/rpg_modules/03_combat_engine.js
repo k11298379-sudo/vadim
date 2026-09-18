@@ -340,12 +340,14 @@
   function setupArenaListeners(canvas) {
     function handleCanvasTap(cx, cy, screenX, screenY) {
       if (ARENA.waveState === "boss_victory") {
-        if (RPG_STATE.lastBossChestReward) {
-          openChestModal(RPG_STATE.lastBossChestReward);
+        const reward = RPG_STATE.lastBossChestReward;
+        ARENA.waveState = "fighting";
+        ARENA.isRaidBossBattle = false;
+        RPG_STATE.lastBossChestReward = null;
+        if (reward) {
+          openChestModal(reward);
         } else {
-          ARENA.isRaidBossBattle = false;
-          RPG_STATE.activeTab = "coop";
-          renderRoot();
+          exitRaidBossBattle();
         }
         return;
       }
