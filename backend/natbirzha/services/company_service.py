@@ -51,6 +51,17 @@ STARTER_FACTORIES = {
     "technoprom": "machinery_plant",
 }
 
+STARTER_INVENTORIES: Dict[str, Dict[str, float]] = {
+    "agrarian": {"water": 100.0, "grid_quota": 100.0},
+    "miner": {"water": 100.0, "grid_quota": 100.0},
+    "oilman": {"water": 100.0, "grid_quota": 100.0},
+    "forester": {"water": 100.0, "grid_quota": 100.0},
+    "power_engineer": {"water": 100.0, "grid_quota": 100.0, "energy": 100.0},
+    "metallurgist": {"water": 100.0, "grid_quota": 100.0, "iron_ore": 60.0, "coal": 40.0, "energy": 60.0},
+    "chemist": {"water": 100.0, "grid_quota": 100.0, "bio_raw": 60.0, "oil_crude": 40.0, "energy": 60.0},
+    "technoprom": {"water": 100.0, "grid_quota": 100.0, "steel": 60.0, "polymers": 40.0, "energy": 60.0},
+}
+
 class CompanyService:
     @staticmethod
     async def create_company(
@@ -107,12 +118,14 @@ class CompanyService:
         )
         session.add(starter_factory)
 
-        # Starter utilities keep every specialization playable from minute one.
-        for item_id, quantity in (("water", 100.0), ("grid_quota", 100.0)):
+        # Starter utilities and raw resources keep every specialization playable from minute one.
+        starter_items = STARTER_INVENTORIES.get(spec, {"water": 100.0, "grid_quota": 100.0})
+        for item_id, quantity in starter_items.items():
             session.add(NatInventory(
                 company_id=company.id, item_id=item_id, quantity=quantity,
                 reserved_quantity=0.0, avg_cost_basis=0.0
             ))
+
 
         # Initialize base army garrison
         army = NatArmy(

@@ -228,8 +228,30 @@ async def produce_manual(
 
     res = await ProductionTickEngine.execute_manual_produce(session, company.id, req.factory_id, req.recipe_id)
     if not res.get("success"):
-        err_msg = res.get("error") or res.get("message") or "Ошибка производственного цикла."
+        reason = res.get("reason", "")
+        if reason.startswith("insufficient_"):
+            item_id = reason.replace("insufficient_", "")
+            item_info = CANONICAL_ITEMS.get(item_id, {})
+            item_name = item_info.get("name", item_id)
+            needed = res.get("needed", 0)
+            available = res.get("available", 0)
+            unit = item_info.get("unit", "ед.")
+            err_msg = f"Недостаточно сырья: {item_name} (требуется {needed} {unit}, на складе {available} {unit}). Купите на Бирже или добудьте на производстве."
+        elif reason == "cycle_in_progress":
+            rem = res.get("remaining_seconds", 0)
+            err_msg = f"Цикл еще выполняется (осталось {rem} сек.)."
+        elif reason == "cycle_ready_to_collect":
+            err_msg = "Цикл готов! Нажмите «Забрать продукцию»."
+        elif reason == "factory_inactive":
+            err_msg = "Предприятие отключено."
+        elif reason == "company_level_required":
+            err_msg = f"Для рецепта требуется уровень компании {res.get('required_level', 1)}."
+        elif reason == "recipe_not_available":
+            err_msg = "Этот рецепт не подходит для данного типа предприятия."
+        else:
+            err_msg = res.get("error") or res.get("message") or f"Ошибка производственного цикла ({reason or 'сбой'})."
         raise HTTPException(status_code=400, detail=str(err_msg))
+
 
     await session.commit()
     await IdempotencyService.save_record(

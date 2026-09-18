@@ -78,7 +78,25 @@ class ProductionTickEngine:
             inv = await cls._inventory(session, company.id, item_id)
             available = inv.available_quantity if inv else 0.0
             if available < needed:
+                # Auto-grant starter operational reserve if company lacks starter inputs
+                from backend.natbirzha.services.company_service import STARTER_INVENTORIES
+                bundle = STARTER_INVENTORIES.get(company.specialization, {})
+                if item_id in bundle and (inv is None or inv.quantity <= 0.0):
+                    grant_qty = bundle[item_id]
+                    if not inv:
+                        inv = NatInventory(
+                            company_id=company.id, item_id=item_id,
+                            quantity=grant_qty, reserved_quantity=0.0, avg_cost_basis=0.0
+                        )
+                        session.add(inv)
+                    else:
+                        inv.quantity = grant_qty
+                    await session.flush()
+                    available = inv.available_quantity
+
+            if available < needed:
                 return {"success": False, "reason": f"insufficient_{item_id}", "needed": needed, "available": available}
+
 
         # Inputs are consumed at cycle start, so resources cannot be double-spent while processing.
         for item_id, qty in recipe["inputs"].items():
@@ -144,11 +162,19 @@ class ProductionTickEngine:
         if not company or not factory or factory.company_id != company_id:
             return {"success": False, "reason": "factory_not_found"}
         now = normalize_dt(get_game_now())
-        if factory.cycle_ready_at and now >= normalize_dt(factory.cycle_ready_at):
-            return await cls.complete_cycle(session, company, factory, now)
         if factory.cycle_ready_at:
-            return await cls.complete_cycle(session, company, factory, now)
+            ready = normalize_dt(factory.cycle_ready_at)
+            if now >= ready:
+                return await cls.complete_cycle(session, company, factory, now)
+            remaining = max(1, int((ready - now).total_seconds()))
+            return {
+                "success": False,
+                "reason": "cycle_in_progress",
+                "remaining_seconds": remaining,
+                "ready_at": ready.isoformat()
+            }
         return await cls.start_cycle(session, company, factory, recipe_id, now)
+
 
     @classmethod
     async def catch_up_company(cls, session: AsyncSession, company_id: int,
