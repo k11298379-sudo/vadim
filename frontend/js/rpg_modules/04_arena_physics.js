@@ -209,7 +209,6 @@
             const actualDmg = applyDamageToBoss(boss, proj.dmg, proj.isCrit);
             if (boss.poise !== undefined) boss.poise = Math.max(0, boss.poise - (proj.isCrit ? 15 : 8));
             spawnFloatingText(boss.x + (Math.random() * 24 - 12), boss.y - 20, `${proj.isCrit ? "💥 КРИТ! " : ""}-${actualDmg}`, proj.isCrit ? "#ef4444" : "#facc15");
-            ARENA.cameraTrauma = Math.min(1.0, (ARENA.cameraTrauma || 0) + (proj.isCrit ? 0.16 : 0.05));
             triggerHaptic(proj.isCrit ? "heavy" : "light");
             ARENA.playerProjectiles.splice(pi, 1);
             continue;
@@ -893,7 +892,6 @@
           if (boss.poise !== undefined) boss.poise = Math.max(0, boss.poise - (proj.isCrit ? 12 : 6));
           if (proj.isCrit) {
             spawnFloatingText(boss.x - 10 + Math.random() * 20, boss.y - 25 - Math.random() * 15, `💥 КРИТ! -${proj.dmg}`, "#ef4444");
-            ARENA.cameraTrauma = Math.min(1.0, ARENA.cameraTrauma + 0.2);
             triggerHaptic("heavy");
           } else {
             spawnFloatingText(boss.x - 10 + Math.random() * 20, boss.y - 20 - Math.random() * 12, `🗡️ КИНЖАЛ -${proj.dmg}`, "#38bdf8");
@@ -1089,7 +1087,6 @@
             }
             if (c.isStaggered) {
               finalDmg = Math.floor(finalDmg * 2.5);
-              ARENA.cameraTrauma = Math.min(1.0, ARENA.cameraTrauma + 0.25);
             } else {
               c.poise = Math.max(0, (c.poise !== undefined ? c.poise : 300) - (proj.isCrit ? 35 : 18));
               if (c.poise <= 0) {

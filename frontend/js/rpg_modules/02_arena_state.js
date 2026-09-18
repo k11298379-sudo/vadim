@@ -419,7 +419,6 @@
 
     p.isInvulnerable = 26; // 26 frames of invincibility (~430ms)
     ARENA.dodgeCooldown = 90; // 1.5s cooldown
-    ARENA.cameraTrauma = Math.min(1.0, (ARENA.cameraTrauma || 0) + 0.15);
 
     if (!ARENA.dashGhosts) ARENA.dashGhosts = [];
     const hClass = (RPG_STATE.profile?.hero_class || "pudge").toLowerCase();

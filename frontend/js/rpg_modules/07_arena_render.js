@@ -20,11 +20,11 @@
     const h = ARENA.height || clientH || 320;
     const time = ARENA.frameCount || 0;
 
-    // Camera Trauma Shake (Sekiro / Hollow Knight impact feel)
+    // Camera Trauma Shake (Subtle, crisp impact feel without violent earthquake)
     let shakeX = 0, shakeY = 0;
     if (ARENA.cameraTrauma > 0) {
-      ARENA.cameraTrauma = Math.max(0, ARENA.cameraTrauma - 0.02);
-      const shake = Math.pow(ARENA.cameraTrauma, 2) * 12;
+      ARENA.cameraTrauma = Math.max(0, ARENA.cameraTrauma - 0.08);
+      const shake = Math.pow(ARENA.cameraTrauma, 2) * 3.5;
       shakeX = (Math.random() * 2 - 1) * shake;
       shakeY = (Math.random() * 2 - 1) * shake;
     }

@@ -1990,7 +1990,6 @@ loadRpgImages();
 
     p.isInvulnerable = 26; // 26 frames of invincibility (~430ms)
     ARENA.dodgeCooldown = 90; // 1.5s cooldown
-    ARENA.cameraTrauma = Math.min(1.0, (ARENA.cameraTrauma || 0) + 0.15);
 
     if (!ARENA.dashGhosts) ARENA.dashGhosts = [];
     const hClass = (RPG_STATE.profile?.hero_class || "pudge").toLowerCase();
@@ -2204,26 +2203,10 @@ loadRpgImages();
 
     let finalDmg = Math.max(1, Math.floor(afterArmor * staggerMult * critMult));
 
-    // DPS THROTTLE (anti-cheat ceiling per second):
-    // Scales dynamically: max 2.5% HP/sec (normal) or 5.0% HP/sec (staggered)
-    const curSec = Math.floor((ARENA.frameCount || 0) / 60);
-    if (boss._dmgWindowSec !== curSec) {
-      boss._dmgWindowSec = curSec;
-      boss._dmgTakenThisSec = 0;
-    }
+    // Single-hit sanity cap (protects against one-shot exploits or overflow bugs, up to 50% boss max HP per hit)
+    const maxSingleHit = Math.max(5000, Math.floor((boss.maxHp || 1000) * 0.50));
+    finalDmg = Math.min(finalDmg, maxSingleHit);
 
-    const secCapPct = boss.isStaggered ? 0.050 : 0.025;
-    const maxSecDmg = Math.max(5000, Math.floor(boss.maxHp * secCapPct));
-    const roomLeft = Math.max(0, maxSecDmg - (boss._dmgTakenThisSec || 0));
-
-    if (roomLeft <= 0) {
-      finalDmg = Math.max(1, Math.floor(finalDmg * 0.08));
-    } else if (finalDmg > roomLeft) {
-      const excess = finalDmg - roomLeft;
-      finalDmg = roomLeft + Math.floor(excess * 0.12);
-    }
-
-    boss._dmgTakenThisSec = (boss._dmgTakenThisSec || 0) + finalDmg;
     const curBossHp = (!isNaN(boss.hp) && boss.hp > 0) ? boss.hp : (boss.maxHp || 1000);
     boss.hp = Math.max(0, curBossHp - finalDmg);
 
@@ -2955,7 +2938,6 @@ loadRpgImages();
             const actualDmg = applyDamageToBoss(boss, proj.dmg, proj.isCrit);
             if (boss.poise !== undefined) boss.poise = Math.max(0, boss.poise - (proj.isCrit ? 15 : 8));
             spawnFloatingText(boss.x + (Math.random() * 24 - 12), boss.y - 20, `${proj.isCrit ? "💥 КРИТ! " : ""}-${actualDmg}`, proj.isCrit ? "#ef4444" : "#facc15");
-            ARENA.cameraTrauma = Math.min(1.0, (ARENA.cameraTrauma || 0) + (proj.isCrit ? 0.16 : 0.05));
             triggerHaptic(proj.isCrit ? "heavy" : "light");
             ARENA.playerProjectiles.splice(pi, 1);
             continue;
@@ -3639,7 +3621,6 @@ loadRpgImages();
           if (boss.poise !== undefined) boss.poise = Math.max(0, boss.poise - (proj.isCrit ? 12 : 6));
           if (proj.isCrit) {
             spawnFloatingText(boss.x - 10 + Math.random() * 20, boss.y - 25 - Math.random() * 15, `💥 КРИТ! -${proj.dmg}`, "#ef4444");
-            ARENA.cameraTrauma = Math.min(1.0, ARENA.cameraTrauma + 0.2);
             triggerHaptic("heavy");
           } else {
             spawnFloatingText(boss.x - 10 + Math.random() * 20, boss.y - 20 - Math.random() * 12, `🗡️ КИНЖАЛ -${proj.dmg}`, "#38bdf8");
@@ -3835,7 +3816,6 @@ loadRpgImages();
             }
             if (c.isStaggered) {
               finalDmg = Math.floor(finalDmg * 2.5);
-              ARENA.cameraTrauma = Math.min(1.0, ARENA.cameraTrauma + 0.25);
             } else {
               c.poise = Math.max(0, (c.poise !== undefined ? c.poise : 300) - (proj.isCrit ? 35 : 18));
               if (c.poise <= 0) {
@@ -6657,8 +6637,6 @@ function distToSegment(px, py, x1, y1, x2, y2) {
           }
           if (c.isStaggered) {
             finalDmg = Math.floor(finalDmg * 2.5);
-            ARENA.cameraTrauma = Math.min(1.0, ARENA.cameraTrauma + 0.3);
-            ARENA.hitstop = 4;
           } else {
             const poiseDmg = isCrit ? 28 : (isHeavyFinisher ? 35 : 14);
             c.poise = Math.max(0, (c.poise !== undefined ? c.poise : 300) - poiseDmg);
@@ -11237,11 +11215,11 @@ function drawBossModelMid(ctx, b, bId, time) {
     const h = ARENA.height || clientH || 320;
     const time = ARENA.frameCount || 0;
 
-    // Camera Trauma Shake (Sekiro / Hollow Knight impact feel)
+    // Camera Trauma Shake (Subtle, crisp impact feel without violent earthquake)
     let shakeX = 0, shakeY = 0;
     if (ARENA.cameraTrauma > 0) {
-      ARENA.cameraTrauma = Math.max(0, ARENA.cameraTrauma - 0.02);
-      const shake = Math.pow(ARENA.cameraTrauma, 2) * 12;
+      ARENA.cameraTrauma = Math.max(0, ARENA.cameraTrauma - 0.08);
+      const shake = Math.pow(ARENA.cameraTrauma, 2) * 3.5;
       shakeX = (Math.random() * 2 - 1) * shake;
       shakeY = (Math.random() * 2 - 1) * shake;
     }

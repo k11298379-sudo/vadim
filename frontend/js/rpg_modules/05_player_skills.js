@@ -365,8 +365,6 @@
           }
           if (c.isStaggered) {
             finalDmg = Math.floor(finalDmg * 2.5);
-            ARENA.cameraTrauma = Math.min(1.0, ARENA.cameraTrauma + 0.3);
-            ARENA.hitstop = 4;
           } else {
             const poiseDmg = isCrit ? 28 : (isHeavyFinisher ? 35 : 14);
             c.poise = Math.max(0, (c.poise !== undefined ? c.poise : 300) - poiseDmg);

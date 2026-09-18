@@ -75,26 +75,10 @@
 
     let finalDmg = Math.max(1, Math.floor(afterArmor * staggerMult * critMult));
 
-    // DPS THROTTLE (anti-cheat ceiling per second):
-    // Scales dynamically: max 2.5% HP/sec (normal) or 5.0% HP/sec (staggered)
-    const curSec = Math.floor((ARENA.frameCount || 0) / 60);
-    if (boss._dmgWindowSec !== curSec) {
-      boss._dmgWindowSec = curSec;
-      boss._dmgTakenThisSec = 0;
-    }
+    // Single-hit sanity cap (protects against one-shot exploits or overflow bugs, up to 50% boss max HP per hit)
+    const maxSingleHit = Math.max(5000, Math.floor((boss.maxHp || 1000) * 0.50));
+    finalDmg = Math.min(finalDmg, maxSingleHit);
 
-    const secCapPct = boss.isStaggered ? 0.050 : 0.025;
-    const maxSecDmg = Math.max(5000, Math.floor(boss.maxHp * secCapPct));
-    const roomLeft = Math.max(0, maxSecDmg - (boss._dmgTakenThisSec || 0));
-
-    if (roomLeft <= 0) {
-      finalDmg = Math.max(1, Math.floor(finalDmg * 0.08));
-    } else if (finalDmg > roomLeft) {
-      const excess = finalDmg - roomLeft;
-      finalDmg = roomLeft + Math.floor(excess * 0.12);
-    }
-
-    boss._dmgTakenThisSec = (boss._dmgTakenThisSec || 0) + finalDmg;
     const curBossHp = (!isNaN(boss.hp) && boss.hp > 0) ? boss.hp : (boss.maxHp || 1000);
     boss.hp = Math.max(0, curBossHp - finalDmg);
 
