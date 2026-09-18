@@ -17,8 +17,20 @@ async def login_user(
     user: User = Depends(get_strict_natbirzha_user),
     session: AsyncSession = Depends(get_db_session)
 ):
-    comp_res = await session.execute(select(NatCompany).where(NatCompany.user_id == user.id))
+    comp_res = await session.execute(
+        select(NatCompany).where(
+            (NatCompany.user_id == user.id) | (NatCompany.user_id == user.tg_id)
+        )
+    )
     company = comp_res.scalar_one_or_none()
+    if not company and (user.tg_id == settings.ADMIN_ID or user.role == "admin"):
+        from backend.natbirzha.services.company_service import CompanyService
+        try:
+            company = await CompanyService.create_company(
+                session, user.id, "НАТБИРЖА 11 «Б»", "metallurgist"
+            )
+        except Exception:
+            pass
     if company and not company.is_bankrupt:
         from backend.natbirzha.services.production_service import ProductionTickEngine
         try:

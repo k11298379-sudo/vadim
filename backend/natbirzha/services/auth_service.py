@@ -152,6 +152,14 @@ async def get_current_company(
         )
     )
     company = res.scalar_one_or_none()
+    if not company and (user.tg_id == settings.ADMIN_ID or user.role == "admin"):
+        from backend.natbirzha.services.company_service import CompanyService
+        try:
+            company = await CompanyService.create_company(
+                session, user.id, "НАТБИРЖА 11 «Б»", "metallurgist"
+            )
+        except Exception:
+            pass
     if not company:
         raise HTTPException(
             status_code=404,

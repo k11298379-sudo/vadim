@@ -103,6 +103,12 @@ async function request(endpoint, options = {}) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     const errorMsg = parseErrorMessage(data, response.status);
+    if (response.status === 404 && (errorMsg.includes('Onboarding') || errorMsg.includes('Company not found'))) {
+      if (typeof window !== 'undefined' && window.NatApp?.store) {
+        window.NatApp.store.setCompany(null);
+        window.NatApp.renderCurrentScreen?.();
+      }
+    }
     const error = new Error(errorMsg);
     error.status = response.status;
     error.data = data;
