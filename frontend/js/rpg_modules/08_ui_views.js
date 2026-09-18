@@ -216,6 +216,7 @@
       case "hero":
         return renderHeroProfileHTML();
       case "talents":
+        if (window._talentsTabAutoLoad) setTimeout(_talentsTabAutoLoad, 0);
         return renderTalentsTab();
       case "coop":
         return renderCoopRaidsHTML();

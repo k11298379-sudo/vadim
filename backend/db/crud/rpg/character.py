@@ -116,6 +116,12 @@ async def get_or_create_rpg_character(
         session.add(char)
         await session.commit()
         await session.refresh(char)
+    else:
+        from backend.db.crud.rpg.talent_tree import reset_char_talents_v2
+        if reset_char_talents_v2(char):
+            flag_modified(char, "talents")
+            await session.commit()
+            await session.refresh(char)
 
     return char
 

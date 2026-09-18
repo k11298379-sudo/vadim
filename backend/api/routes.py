@@ -28,6 +28,7 @@ from backend.api.routers.multiplayer_hub import multiplayer_hub_router
 from backend.api.routers.rebirth_engine import rebirth_engine_router
 from backend.api.routers.multiplayer_market import multiplayer_market_router
 from backend.api.routers.creeps_bestiary import creeps_bestiary_router
+from backend.api.routers.talent_tree_router import talent_tree_router
 from backend.natbirzha.api import natbirzha_router
 from backend.api.auth import extract_viewer_tg_id, _extract_viewer_tg_id
 
@@ -50,6 +51,7 @@ api_router.include_router(multiplayer_hub_router)
 api_router.include_router(rebirth_engine_router)
 api_router.include_router(multiplayer_market_router)
 api_router.include_router(creeps_bestiary_router)
+api_router.include_router(talent_tree_router)
 api_router.include_router(natbirzha_router)
 from backend.api.routers.debug import router as debug_router
 api_router.include_router(debug_router)

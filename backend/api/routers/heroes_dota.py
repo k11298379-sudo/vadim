@@ -24,6 +24,14 @@ from backend.db.crud.rpg import (
     LEVEL_CAP,
     STAT_POINTS_PER_LEVEL,
 )
+from backend.db.crud.rpg.talent_tree import (
+    HERO_TALENT_TREE,
+    BRANCH_LABELS,
+    TIER_UNLOCK_LEVEL,
+    TIER_COST,
+    get_hero_tree,
+    is_node_available,
+)
 
 rpg_router = APIRouter(prefix="/rpg", tags=["rpg"])
 

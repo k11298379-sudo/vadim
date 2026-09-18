@@ -5,6 +5,7 @@ from backend.db.models import RPGCharacter
 from backend.db.crud.rpg.heroes import NATAR_HEROES
 from backend.db.crud.rpg.pets_config import PETS_CATALOG
 from backend.db.crud.rpg.rebirth import calculate_rebirth_multiplier
+from backend.db.crud.rpg.talent_tree import get_hero_tree
 
 
 def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
@@ -112,6 +113,38 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
     flat_hp += vit_level * 150
     flat_def += vit_level * 5
 
+    # New hero-specific talent tree bonuses (applied BEFORE stat formulas)
+    _tree_talents = (talents.get("tree") or {}).get(canonical_class, {})
+    _flat_mp_regen_from_tree = 0.0
+    _flat_atk_pct_str = 0.0
+    _hp_to_crit = 0.0
+    _hero_tree = {}
+    if _tree_talents:
+        _hero_tree = get_hero_tree(canonical_class)
+        for _nid, _nlvl in _tree_talents.items():
+            if not _nlvl:
+                continue
+            _ncfg = _hero_tree.get(_nid)
+            if not _ncfg:
+                continue
+            _eff = _ncfg.get("effect", {})
+            flat_hp += _eff.get("flat_hp", 0)
+            flat_mp += _eff.get("flat_mp", 0)
+            flat_atk += _eff.get("flat_atk", 0)
+            flat_def += _eff.get("flat_def", 0)
+            flat_hp_regen += _eff.get("flat_hp_regen", 0.0)
+            _flat_mp_regen_from_tree += _eff.get("flat_mp_regen", 0.0)
+            _flat_atk_pct_str += _eff.get("flat_atk_pct_str", 0.0)
+            _hp_to_crit += _eff.get("hp_to_crit", 0.0)
+            flat_atk_speed += _eff.get("flat_atk_speed", 0.0)
+            crit_chance += _eff.get("crit_chance", 0)
+            dodge_chance += _eff.get("dodge_chance", 0)
+            lifesteal += _eff.get("lifesteal", 0)
+            magic_res += _eff.get("magic_res", 0)
+            damage_block += _eff.get("damage_block", 0)
+            flat_spell_amp += _eff.get("spell_amp", 0)
+            ult_cd_reduct += _eff.get("ult_cd_reduct", 0)
+
     total_str = str_val + gear_str
     total_agi = agi_val + gear_agi
     total_int = int_val + gear_int
@@ -122,11 +155,11 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
 
     stat_atk_speed = min(4.0, round(1.0 + (total_agi * 0.012) + flat_atk_speed, 2))
     stat_def = int(math.floor(total_agi * 0.18)) + flat_def
-    crit_chance = min(85, round(5.0 + (total_agi * 0.10) + crit_chance, 1))
+    crit_chance = min(85, round(5.0 + (total_agi * 0.10) + crit_chance + (stat_hp * _hp_to_crit), 1))
     dodge_chance = min(60, int(total_agi * 0.25) + dodge_chance)
 
     stat_mp = hero_cfg.get("base_mp", 100) + int(total_int * 16) + flat_mp
-    stat_mp_regen = round(1.0 + (total_int * 0.10) + flat_mp_regen, 1)
+    stat_mp_regen = round(1.0 + (total_int * 0.10) + flat_mp_regen + _flat_mp_regen_from_tree, 1)
     magic_res = min(80, int(total_int * 0.35) + magic_res)
 
     # Primary attribute attack bonus (1.5x tuned with working attack speed)
@@ -137,7 +170,7 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
     else:  # Интеллект
         primary_bonus = total_int * 1.5
 
-    stat_atk = int(primary_bonus) + flat_atk
+    stat_atk = int(primary_bonus + (total_str * _flat_atk_pct_str)) + flat_atk
     total_min_atk = stat_atk + w_min
     total_max_atk = stat_atk + w_max
 
@@ -164,6 +197,15 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
     talent_dodge = talents.get("dodge", 0) * 4
     talent_crit_mult = talents.get("crit_mult", 0) * 25   # +25% crit multiplier per level
     talent_cooldown = talents.get("cooldown", 0) * 6       # -6% cooldown reduction per level
+    # Accumulate crit_mult bonus from tree nodes (use already-built _hero_tree)
+    _tree_crit_mult_bonus = 0
+    if _tree_talents:
+        for _nid2, _nlvl2 in _tree_talents.items():
+            if _nlvl2:
+                _nc2 = _hero_tree.get(_nid2)  # _hero_tree always set when _tree_talents truthy
+                if _nc2:
+                    _tree_crit_mult_bonus += _nc2.get("effect", {}).get("crit_mult_bonus", 0)
+    talent_crit_mult += _tree_crit_mult_bonus
 
     # Pet Multipliers (boosted by Constellation Pet)
     pet_constellation_boost = 1.0 + (constellations.get("constellation_pet", 0) * 0.20)

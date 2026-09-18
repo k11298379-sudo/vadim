@@ -166,7 +166,7 @@ async def add_xp_and_gold_to_character(
             char.level += 1
             char.stat_points = getattr(char, "stat_points", 0) + STAT_POINTS_PER_LEVEL
             char.gems += 2
-            if char.level % 5 == 0:
+            if char.level % 2 == 0:
                 char.talent_points = getattr(char, "talent_points", 0) + 1
             
             # PET SYSTEM: Apply Gold & XP Multipliers

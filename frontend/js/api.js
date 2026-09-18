@@ -273,6 +273,11 @@ const api = {
     method: "POST",
     body: JSON.stringify({ tier, choice })
   }),
+  getTalentTree: () => apiRequest("/api/rpg/talents/tree"),
+  buyTalentNode: (nodeId) => apiRequest("/api/rpg/talents/tree/buy", {
+    method: "POST",
+    body: JSON.stringify({ node_id: nodeId })
+  }),
   getRpgShop: () => apiRequest("/api/rpg/shop"),
   buyRpgShopItem: (itemId) =>
     apiRequest("/api/rpg/shop/buy", {
