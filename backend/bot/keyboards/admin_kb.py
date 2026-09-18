@@ -1,48 +1,46 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 def get_admin_panel_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="➕ Добавить ДЗ", callback_data="admin_add_hw"),
-                InlineKeyboardButton(text="🗑 Удалить ДЗ", callback_data="admin_delete_hw")
-            ],
-            [
-                InlineKeyboardButton(text="🔄 Замена урока", callback_data="admin_add_sub"),
-                InlineKeyboardButton(text="📢 Срочное объявление", callback_data="admin_broadcast_custom")
-            ],
-            [
-                InlineKeyboardButton(text="📅 Расписание на дату", callback_data="admin_edit_date_schedule"),
-                InlineKeyboardButton(text="🗓 Постоянное расписание", callback_data="admin_edit_schedule")
-            ],
-            [
-                InlineKeyboardButton(text="📢 Скинуть расписание", callback_data="admin_broadcast_schedule")
-            ],
-            [
-                InlineKeyboardButton(text="🔔 Звонки и перемены", callback_data="admin_edit_bells")
-            ],
-            [
-                InlineKeyboardButton(text="🧹 Дежурства", callback_data="admin_manage_duty"),
-                InlineKeyboardButton(text="📢 Объявление дежурным", callback_data="admin_duty_broadcast")
-            ],
-            [
-                InlineKeyboardButton(text="👥 Заявки на вход", callback_data="admin_view_pending"),
-                InlineKeyboardButton(text="📋 Права доступа", callback_data="admin_view_students")
-            ],
-            [
-                InlineKeyboardButton(text="🪙 Выдать монеты", callback_data="admin_give_coins"),
-                InlineKeyboardButton(text="📊 Опросы класса", callback_data="admin_polls_menu")
-            ]
+    rows = [
+        [
+            InlineKeyboardButton(text="➕ Добавить ДЗ", callback_data="admin_add_hw"),
+            InlineKeyboardButton(text="🗑 Удалить ДЗ", callback_data="admin_delete_hw")
+        ],
+        [
+            InlineKeyboardButton(text="🔄 Замена урока", callback_data="admin_add_sub"),
+            InlineKeyboardButton(text="📢 Срочное объявление", callback_data="admin_broadcast_custom")
+        ],
+        [
+            InlineKeyboardButton(text="📅 Расписание на дату", callback_data="admin_edit_date_schedule"),
+            InlineKeyboardButton(text="🗓 Постоянное расписание", callback_data="admin_edit_schedule")
+        ],
+        [
+            InlineKeyboardButton(text="📢 Скинуть расписание", callback_data="admin_broadcast_schedule")
+        ],
+        [
+            InlineKeyboardButton(text="🔔 Звонки и перемены", callback_data="admin_edit_bells")
+        ],
+        [
+            InlineKeyboardButton(text="🧹 Дежурства", callback_data="admin_manage_duty"),
+            InlineKeyboardButton(text="📢 Объявление дежурным", callback_data="admin_duty_broadcast")
+        ],
+        [
+            InlineKeyboardButton(text="👥 Заявки на вход", callback_data="admin_view_pending"),
+            InlineKeyboardButton(text="📋 Права доступа", callback_data="admin_view_students")
+        ],
+        [
+            InlineKeyboardButton(text="🪙 Выдать монеты", callback_data="admin_give_coins"),
+            InlineKeyboardButton(text="📊 Опросы класса", callback_data="admin_polls_menu")
         ]
-    )
+    ]
     try:
         from backend.bot.handlers.admin.pug_prank import get_pug_keyboard_button
         pug_btn = get_pug_keyboard_button()
         if pug_btn:
-            kb.inline_keyboard.append([pug_btn])
+            rows.append([pug_btn])
     except Exception:
         pass
-    return kb
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 def get_cancel_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(

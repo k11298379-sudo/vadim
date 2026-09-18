@@ -1,4 +1,4 @@
-﻿"""
+"""
 backend/bot/handlers/admin/pug_prank.py
 Шуточный изолированный модуль для режима «Глеб Мопс».
 Полностью автономен — для удаления достаточно просто удалить этот файл и убрать 1 строчку импорта.
@@ -9,7 +9,7 @@ import json
 import logging
 from typing import Optional
 from aiogram import Router, F
-from aiogram.types import CallbackQuery, InlineKeyboardButton
+from aiogram.types import CallbackQuery, InlineKeyboardButton, Message
 from fastapi import APIRouter, Query
 
 from backend.db.models import User
@@ -64,6 +64,20 @@ def get_pug_keyboard_button() -> InlineKeyboardButton:
     return InlineKeyboardButton(
         text=f"🐶 Мопс Глеб: {status_label}",
         callback_data="admin_toggle_pug_mode"
+    )
+
+
+@router.message(F.text.in_(["/pug", "/mops", "/мопс", "🐶 Мопс"]))
+async def cmd_admin_toggle_pug_mode(message: Message, current_user: User):
+    if not is_admin(current_user, message.from_user.id):
+        return
+    new_state = toggle_pug_mode()
+    state_txt = "АКТИВИРОВАН 🟢" if new_state else "ВЫКЛЮЧЕН ⚪"
+    await message.answer(
+        f"🐶 Режим «Глеб Мопс» {state_txt}!\n\n"
+        f"Целевой пользователь: Глеб (ID: `{GLEB_TG_ID}`).\n"
+        f"В Mini App: {'полноэкранный мопс на черном фоне' if new_state else 'обычное школьное расписание'}.",
+        parse_mode="Markdown"
     )
 
 
