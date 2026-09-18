@@ -105,7 +105,19 @@ async def get_strict_natbirzha_user(
         )
         session.add(user)
         await session.commit()
-        await session.refresh(user)
+    # Check beta-tester permissions (like RPG: only testers, admins, or test harness)
+    if nat_settings.BETA_TESTERS_ONLY:
+        is_tester = bool(
+            getattr(user, "is_tester", False)
+            or user.role == "admin"
+            or (settings.ADMIN_ID and user.tg_id == settings.ADMIN_ID)
+            or nat_settings.ALLOW_TEST_AUTH
+        )
+        if not is_tester:
+            raise HTTPException(
+                status_code=403,
+                detail="Игра «НАТБИРЖА» находится в закрытом бета-тестировании и доступна только тестерам 11 «Б»."
+            )
 
     return user
 

@@ -126,23 +126,21 @@
           <span class="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-amber-50 dark:bg-slate-800 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-slate-700">${gameCountLabel}</span>
         </div>
 
-        <!-- Natbirzha Strategy Banner -->
-        <a href="/app/natbirzha${(typeof window !== 'undefined' && window.location && window.location.search) ? window.location.search : ''}" class="block p-3 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-600 text-white shadow-md active:scale-98 transition-all cursor-pointer">
+        <!-- Natbirzha Strategy Banner (Beta testers only) -->
+        ${isTesterUser ? `<a href="/app/natbirzha${(typeof window !== 'undefined' && window.location && window.location.search) ? window.location.search : ''}" class="block p-3 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-600 text-white shadow-md active:scale-98 transition-all cursor-pointer">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2.5">
               <span class="text-2xl">📈</span>
               <div>
                 <div class="text-xs font-black tracking-tight flex items-center gap-1.5">
-                  НАТБИРЖА <span class="text-[9px] px-1.5 py-0.5 rounded-md bg-white/20 uppercase font-bold tracking-wider">Новинка</span>
+                  НАТБИРЖА <span class="text-[9px] px-1.5 py-0.5 rounded-md bg-white/20 uppercase font-bold tracking-wider">Beta</span>
                 </div>
                 <div class="text-[10px] text-blue-100 font-medium">Экономика, заводы, акции и турниры</div>
               </div>
             </div>
-            <span class="px-2.5 py-1 rounded-xl bg-white text-blue-700 font-black text-[11px] shrink-0 shadow-sm">
-              Играть ➔
-            </span>
+            <span class="px-2.5 py-1 rounded-xl bg-white text-blue-700 font-black text-[11px] shrink-0 shadow-sm">Играть ➔</span>
           </div>
-        </a>
+        </a>` : ''}
 
         <!-- Games selector tabs -->
         <div class="gap-1 p-1 rounded-2xl bg-slate-200/70 dark:bg-slate-800/90 text-[10px] font-bold flex overflow-x-auto no-scrollbar">
@@ -366,11 +364,7 @@
     updateTesterStatus: updateTesterStatus,
     checkTesterStatus: checkTesterStatus,
     cleanup: cleanupCurrentGame,
-
-    // natarGRP RPG
     initRPG: () => window.RPG?.init?.(),
-
-    // 2048 & Tic-Tac-Toe
     reset2048: () => window.GAMES_2048?.reset?.(),
     setTTTMode: (m) => window.GAMES_TICTACTOE?.setTTTMode(m), cellClickTTT: (i) => window.GAMES_TICTACTOE?.cellClickTTT(i),
     resetTTT: () => window.GAMES_TICTACTOE?.resetTTT(), openOnlineRoom: openOnlineRoom,
@@ -378,15 +372,11 @@
     requestRematch: () => window.GAMES_TICTACTOE?.requestRematch(), cancelOnlineGame: () => window.GAMES_TICTACTOE?.cancelOnlineGame(),
     leaveOnlineGame: () => window.GAMES_TICTACTOE?.leaveOnlineGame(), backToLobby: () => window.GAMES_TICTACTOE?.backToLobby(),
     filterClassmates: (q) => window.GAMES_TICTACTOE?.filterClassmates(q), refreshClassmates: () => window.GAMES_TICTACTOE?.loadClassmates(),
-
-    // Snake & Tetris
     startSnakeGame: () => window.GAMES_SNAKE?.startSnakeGame(), setSnakeDir: (d) => window.GAMES_SNAKE?.setSnakeDir(d),
     startTetrisGame: () => window.GAMES_TETRIS?.startTetrisGame(), toggleTetrisPause: () => window.GAMES_TETRIS?.toggleTetrisPause(),
     tetrisMoveLeft: () => window.GAMES_TETRIS?.tetrisMoveLeft(), tetrisMoveRight: () => window.GAMES_TETRIS?.tetrisMoveRight(),
     tetrisRotate: () => window.GAMES_TETRIS?.tetrisRotate(), tetrisSoftDrop: () => window.GAMES_TETRIS?.tetrisSoftDrop(),
     tetrisHardDrop: () => window.GAMES_TETRIS?.tetrisHardDrop(),
-
-    // Chess
     startLocalChessGame: () => window.GAMES_CHESS?.startLocalChessGame(),
     toggleChessAutoRotate: () => window.GAMES_CHESS?.toggleChessAutoRotate(), flipChessBoardManual: () => window.GAMES_CHESS?.flipChessBoardManual(),
     openChessOnlineRoom: (c) => window.GAMES_CHESS?.openChessOnlineRoom(c), inviteChessClassmate: (id, n) => window.GAMES_CHESS?.inviteChessClassmate(id, n),
@@ -395,8 +385,6 @@
     cancelChessGame: () => window.GAMES_CHESS?.cancelChessGame(), leaveChessGame: () => window.GAMES_CHESS?.leaveChessGame(),
     backToChessLobby: () => window.GAMES_CHESS?.backToChessLobby(), setChessColor: (c) => window.GAMES_CHESS?.setChessColor(c),
     filterChessClassmates: (q) => window.GAMES_CHESS?.filterChessClassmates(q), refreshChessClassmates: () => window.GAMES_CHESS?.loadChessClassmates(),
-
-    // Casino games
     initBlackjack: () => window.BLACKJACK?.init(), initRoulette: () => window.ROULETTE?.init(),
     initDice: () => window.DICE?.init(), initSlots: () => window.SLOTS?.init(),
     initCoinflip: () => window.COINFLIP?.init(), initCasinoLeaderboard: () => window.CASINO_LEADERBOARD?.init()

@@ -1,7 +1,7 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
 from backend.config import settings
 
-def get_main_keyboard(is_admin: bool = False, user_id: int | None = None) -> ReplyKeyboardMarkup:
+def get_main_keyboard(is_admin: bool = False, user_id: int | None = None, is_tester: bool = False) -> ReplyKeyboardMarkup:
     kb = []
     
     # Buttons to open Telegram Mini App with explicit user ID attachment (Telegram requires HTTPS for WebAppInfo)
@@ -18,18 +18,20 @@ def get_main_keyboard(is_admin: bool = False, user_id: int | None = None) -> Rep
         )
         app_buttons.append(webapp_btn)
 
-    nat_url = f"{settings.BASE_URL.rstrip('/')}/app/natbirzha"
-    if nat_url.startswith("https://"):
-        if user_id:
-            separator = "&" if "?" in nat_url else "?"
-            nat_url = f"{nat_url}{separator}tg_user_id={user_id}"
-        nat_btn = KeyboardButton(
-            text="📈 НАТБИРЖА",
-            web_app=WebAppInfo(url=nat_url)
-        )
-        app_buttons.append(nat_btn)
-    else:
-        app_buttons.append(KeyboardButton(text="📈 НАТБИРЖА"))
+    # Natbirzha is in closed beta testing (only available to testers and admins)
+    if is_admin or is_tester:
+        nat_url = f"{settings.BASE_URL.rstrip('/')}/app/natbirzha"
+        if nat_url.startswith("https://"):
+            if user_id:
+                separator = "&" if "?" in nat_url else "?"
+                nat_url = f"{nat_url}{separator}tg_user_id={user_id}"
+            nat_btn = KeyboardButton(
+                text="📈 НАТБИРЖА (Beta)",
+                web_app=WebAppInfo(url=nat_url)
+            )
+            app_buttons.append(nat_btn)
+        else:
+            app_buttons.append(KeyboardButton(text="📈 НАТБИРЖА (Beta)"))
 
     if app_buttons:
         kb.append(app_buttons)

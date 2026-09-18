@@ -11,6 +11,7 @@ class NatbirzhaSettings(BaseSettings):
     GAME_TIMEZONE: str = Field(default="Asia/Yekaterinburg", description="Timezone for calendar settlements")
     ALLOW_TEST_AUTH: bool = Field(default=True, description="Allow test HMAC signature tokens in local dev/tests")
     TEST_AUTH_SECRET: str = Field(default="natbirzha_test_secret_key_2026", description="Secret for signing test initData")
+    BETA_TESTERS_ONLY: bool = Field(default=True, description="Restrict Natbirzha access to beta-testers and admins only")
 
     # Specialization efficiency limits (strict)
     OWN_SPEC_EFFICIENCY: float = 1.00       # 100%

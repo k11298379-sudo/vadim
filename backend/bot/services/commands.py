@@ -21,7 +21,6 @@ async def setup_bot_commands(bot: Bot):
             BotCommand(command="start", description="Запустить бота"),
             BotCommand(command="now", description="⏳ Какой сейчас урок?"),
             BotCommand(command="fact", description="💡 Интересный факт"),
-            BotCommand(command="natbirzha", description="📈 Игра «НАТБИРЖА»")
         ]
         await bot.set_my_commands(commands=commands, scope=BotCommandScopeAllPrivateChats())
         await bot.set_my_commands(commands=commands, scope=BotCommandScopeAllGroupChats())

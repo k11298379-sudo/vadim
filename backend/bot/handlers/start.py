@@ -67,12 +67,14 @@ async def cmd_start(message: Message, db_session: AsyncSession, bot: Bot, curren
     username = message.from_user.username
     full_name = message.from_user.full_name or "Ученик"
 
+    is_user_adm = bool((current_user and current_user.role == "admin") or (settings.ADMIN_ID and user_id == settings.ADMIN_ID))
+    is_tester = bool(getattr(current_user, "is_tester", False)) if current_user else False
+
     local_app_link = ""
     if not settings.WEBAPP_URL.startswith("https://"):
-        local_app_link = (
-            f"\n\n💻 **Mini App 11 «Б»:** http://localhost:{settings.PORT}/app?tg_user_id={user_id}"
-            f"\n📈 **Игра «НАТБИРЖА»:** http://localhost:{settings.PORT}/app/natbirzha?tg_user_id={user_id}"
-        )
+        local_app_link = f"\n\n💻 **Mini App 11 «Б»:** http://localhost:{settings.PORT}/app?tg_user_id={user_id}"
+        if is_user_adm or is_tester:
+            local_app_link += f"\n📈 **Игра «НАТБИРЖА» (Beta):** http://localhost:{settings.PORT}/app/natbirzha?tg_user_id={user_id}"
 
     # If user is admin
     if settings.ADMIN_ID and user_id == settings.ADMIN_ID:
@@ -80,20 +82,19 @@ async def cmd_start(message: Message, db_session: AsyncSession, bot: Bot, curren
             f"👋 **Здравствуйте, Администратор ({full_name})!**\n\n"
             "Вам доступно полное управление ботом класса, расписанием, ДЗ и заявками учеников."
             f"{local_app_link}",
-            reply_markup=get_main_keyboard(is_admin=True, user_id=user_id),
+            reply_markup=get_main_keyboard(is_admin=True, user_id=user_id, is_tester=True),
             parse_mode="Markdown"
         )
         return
 
     # If user is already registered and approved
     if current_user and current_user.role in ["student", "admin"]:
-        is_user_adm = (current_user.role == "admin" or (settings.ADMIN_ID and user_id == settings.ADMIN_ID))
         role_label = " (Администратор)" if is_user_adm else ""
         await message.answer(
             f"👋 **Привет, {current_user.display_name}!**{role_label}\n\n"
             "Добро пожаловать в бот класса! Выберите нужный раздел в меню ниже:"
             f"{local_app_link}",
-            reply_markup=get_main_keyboard(is_admin=is_user_adm, user_id=user_id),
+            reply_markup=get_main_keyboard(is_admin=is_user_adm, user_id=user_id, is_tester=is_tester),
             parse_mode="Markdown"
         )
         return
@@ -186,7 +187,11 @@ async def callback_admin_approve_keep(callback: CallbackQuery, state: FSMContext
                 f"👤 Ваше имя в системе: **{display_name}**\n\n"
                 "Теперь вам доступно расписание, домашние задания и Mini App класса."
             ),
-            reply_markup=get_main_keyboard(is_admin=False, user_id=target_tg_id),
+            reply_markup=get_main_keyboard(
+                is_admin=False,
+                user_id=target_tg_id,
+                is_tester=bool(getattr(user, "is_tester", False))
+            ),
             parse_mode="Markdown"
         )
     except Exception as e:
@@ -226,7 +231,11 @@ async def msg_admin_approve_custom_name(message: Message, state: FSMContext, db_
                 f"👤 Ваше имя в системе: **{name}**\n\n"
                 "Теперь вам доступно расписание, домашние задания и Mini App класса."
             ),
-            reply_markup=get_main_keyboard(is_admin=False, user_id=target_tg_id),
+            reply_markup=get_main_keyboard(
+                is_admin=False,
+                user_id=target_tg_id,
+                is_tester=bool(getattr(user, "is_tester", False))
+            ),
             parse_mode="Markdown"
         )
     except Exception as e:
