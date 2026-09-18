@@ -278,6 +278,20 @@ async def serve_webapp():
         )
     return {"message": "Frontend not found"}
 
+@app.get("/app/natbirzha")
+async def serve_natbirzha():
+    nat_index = os.path.join(frontend_path, "natbirzha", "index.html")
+    if os.path.exists(nat_index):
+        return FileResponse(
+            nat_index,
+            headers={
+                "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
+    return {"message": "Natbirzha frontend not found"}
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", settings.PORT))

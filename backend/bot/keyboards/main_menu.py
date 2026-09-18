@@ -4,8 +4,9 @@ from backend.config import settings
 def get_main_keyboard(is_admin: bool = False, user_id: int | None = None) -> ReplyKeyboardMarkup:
     kb = []
     
-    # Button to open Telegram Mini App with explicit user ID attachment (Telegram requires HTTPS for WebAppInfo)
+    # Buttons to open Telegram Mini App with explicit user ID attachment (Telegram requires HTTPS for WebAppInfo)
     url = settings.WEBAPP_URL
+    app_buttons = []
     if url and url.startswith("https://"):
         if user_id:
             separator = "&" if "?" in url else "?"
@@ -15,7 +16,23 @@ def get_main_keyboard(is_admin: bool = False, user_id: int | None = None) -> Rep
             text="📱 Mini App 11 «Б»",
             web_app=WebAppInfo(url=url)
         )
-        kb.append([webapp_btn])
+        app_buttons.append(webapp_btn)
+
+    nat_url = f"{settings.BASE_URL.rstrip('/')}/app/natbirzha"
+    if nat_url.startswith("https://"):
+        if user_id:
+            separator = "&" if "?" in nat_url else "?"
+            nat_url = f"{nat_url}{separator}tg_user_id={user_id}"
+        nat_btn = KeyboardButton(
+            text="📈 НАТБИРЖА",
+            web_app=WebAppInfo(url=nat_url)
+        )
+        app_buttons.append(nat_btn)
+    else:
+        app_buttons.append(KeyboardButton(text="📈 НАТБИРЖА"))
+
+    if app_buttons:
+        kb.append(app_buttons)
 
     kb.extend([
         [

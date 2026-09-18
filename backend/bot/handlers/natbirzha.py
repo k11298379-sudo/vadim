@@ -1,0 +1,74 @@
+import logging
+from aiogram import Router, F
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.filters import Command
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.config import settings
+from backend.db.models import User
+from backend.natbirzha.services.company_service import CompanyService
+
+logger = logging.getLogger(__name__)
+
+router = Router(name="natbirzha_router")
+
+
+def get_natbirzha_app_url(tg_user_id: int) -> str:
+    base = settings.BASE_URL.rstrip("/")
+    return f"{base}/app/natbirzha?tg_user_id={tg_user_id}"
+
+
+@router.message(Command("natbirzha"))
+@router.message(F.text.in_({"📈 НАТБИРЖА", "📈 Натбиржа", "📈 НатБиржа", "натбиржа", "Натбиржа"}))
+async def cmd_natbirzha(message: Message, db_session: AsyncSession, current_user: User | None = None):
+    user_id = message.from_user.id
+    app_url = get_natbirzha_app_url(user_id)
+
+    # Check if user already has a company
+    company = await CompanyService.get_by_owner_id(db_session, user_id)
+
+    kb_rows = []
+
+    # WebApp button if HTTPS or Base URL is available
+    if app_url.startswith("https://"):
+        kb_rows.append([
+            InlineKeyboardButton(
+                text="🚀 Открыть НАТБИРЖУ (Mini App)",
+                web_app=WebAppInfo(url=app_url)
+            )
+        ])
+    else:
+        kb_rows.append([
+            InlineKeyboardButton(
+                text="🌐 Открыть НАТБИРЖУ в браузере",
+                url=app_url
+            )
+        ])
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=kb_rows)
+
+    if company:
+        nav = await CompanyService.calculate_nav(db_session, company)
+        text = (
+            f"📈 <b>НАТБИРЖА • 11 «Б»</b>\n\n"
+            f"🏢 <b>Ваша корпорация:</b> <code>[{company.ticker}]</code> {company.name}\n"
+            f"🎯 <b>Специализация:</b> {company.specialization}\n"
+            f"💵 <b>Счёт компании:</b> <code>{company.cash:,.2f}</code> cash\n"
+            f"💎 <b>Оценка (NAV):</b> <code>{nav:,.2f}</code> cash\n"
+            f"⭐ <b>Уровень / XP:</b> Lvl {company.level} ({company.xp} XP)\n\n"
+            f"<i>Управляйте заводами, торгуйте ресурсами, выпускайте акции и побеждайте в турнирах!</i>"
+        )
+    else:
+        text = (
+            f"📈 <b>НАТБИРЖА • 11 «Б»</b>\n\n"
+            f"Добро пожаловать в масштабную экономическую мультиплеерную стратегию класса!\n\n"
+            f"✨ <b>Что вас ждёт:</b>\n"
+            f"• Основание собственной корпорации и выбор отрасли (металлургия, энергетика, нефтегаз, агро, IT...)\n"
+            f"• Заводы, технологические цепочки и рецепты производства\n"
+            f"• Биржа ресурсов: лимитные ордера, стакан цен и NPC-скупка\n"
+            f"• Выход на IPO, торговля акциями и выплата дивидендов\n"
+            f"• Армия, альянсы и 72-часовые турниры за NAT-фонд!\n\n"
+            f"Нажмите кнопку ниже, чтобы основать свою корпорацию:"
+        )
+
+    await message.answer(text, reply_markup=keyboard, parse_mode="HTML")

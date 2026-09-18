@@ -69,7 +69,10 @@ async def cmd_start(message: Message, db_session: AsyncSession, bot: Bot, curren
 
     local_app_link = ""
     if not settings.WEBAPP_URL.startswith("https://"):
-        local_app_link = f"\n\n💻 **Mini App (в браузере):**\nhttp://localhost:{settings.PORT}/app?tg_user_id={user_id}"
+        local_app_link = (
+            f"\n\n💻 **Mini App 11 «Б»:** http://localhost:{settings.PORT}/app?tg_user_id={user_id}"
+            f"\n📈 **Игра «НАТБИРЖА»:** http://localhost:{settings.PORT}/app/natbirzha?tg_user_id={user_id}"
+        )
 
     # If user is admin
     if settings.ADMIN_ID and user_id == settings.ADMIN_ID:

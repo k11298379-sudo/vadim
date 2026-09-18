@@ -109,8 +109,47 @@ def setup_scheduler(bot: Bot):
             replace_existing=True
         )
 
+        # Natbirzha: глобальный почасовой тик производства в :00
+        async def run_natbirzha_hourly_tick():
+            try:
+                from backend.db.session import async_session_factory
+                from backend.natbirzha.services.production_service import ProductionTickEngine
+                async with async_session_factory() as session:
+                    res = await ProductionTickEngine.process_global_scheduled_tick(session)
+                    if res.get("ticks_processed", 0) > 0:
+                        logger.info(f"Natbirzha tick processed {res.get('ticks_processed')} factories.")
+            except Exception as ex:
+                logger.error(f"Error in natbirzha hourly tick: {ex}")
+
+        scheduler.add_job(
+            run_natbirzha_hourly_tick,
+            trigger=CronTrigger(minute=0, timezone=settings.TIMEZONE),
+            id="natbirzha_hourly_tick_job",
+            replace_existing=True
+        )
+
+        # Natbirzha: ежедневная выплата дивидендов и ликвидации в 00:01
+        async def run_natbirzha_daily_settlement():
+            try:
+                from backend.db.session import async_session_factory
+                from backend.natbirzha.services.dividend_service import DividendService
+                from backend.natbirzha.services.bankruptcy_service import BankruptcyService
+                async with async_session_factory() as session:
+                    await DividendService.settle_all_public_dividends(session)
+                    await BankruptcyService.process_daily_liquidations(session)
+                    logger.info("Natbirzha daily settlement completed.")
+            except Exception as ex:
+                logger.error(f"Error in natbirzha daily settlement: {ex}")
+
+        scheduler.add_job(
+            run_natbirzha_daily_settlement,
+            trigger=CronTrigger(hour=0, minute=1, timezone=settings.TIMEZONE),
+            id="natbirzha_daily_settlement_job",
+            replace_existing=True
+        )
+
         scheduler.start()
-        logger.info(f"Scheduler started with evening digest ({settings.NOTIFICATION_TIME_EVENING}), canteen reminder, duty check (07:30), Monday duty reminder (06:00), fact rotation (every 30m), and daily cleanup (00:05, {settings.TIMEZONE})")
+        logger.info(f"Scheduler started with evening digest ({settings.NOTIFICATION_TIME_EVENING}), canteen reminder, duty check (07:30), Monday duty reminder (06:00), fact rotation (every 30m), daily cleanup (00:05), and Natbirzha tick/settlement ({settings.TIMEZONE})")
 
 
     except Exception as e:
