@@ -48,7 +48,7 @@
   }
 
   function formatCompact(num) {
-    if (num == null) return "0";
+    if (num == null || isNaN(num)) return "0";
     const n = Math.abs(num);
     if (n >= 1_000_000_000_000_000) return (num / 1_000_000_000_000_000).toFixed(1) + "Q";
     if (n >= 1_000_000_000_000) return (num / 1_000_000_000_000).toFixed(1) + "T";

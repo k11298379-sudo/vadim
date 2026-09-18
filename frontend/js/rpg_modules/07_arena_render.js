@@ -812,11 +812,27 @@
     if (ARENA.pet) {
       ctx.save();
       const pet = ARENA.pet;
-      const petIcon = pet.type === "fairy" ? "🧚" : (pet.type === "wolf" ? "🐺" : "🐉");
+      const petIcons = {
+        slime: "💧",
+        fairy: "🧚",
+        wolf: "🐺",
+        dragon: "🐉",
+        donkey: "🫏",
+        phoenix: "🦅"
+      };
+      const petIcon = petIcons[pet.type] || "🐾";
+      const petGlow = {
+        slime: "rgba(56, 189, 248, 0.35)",
+        fairy: "rgba(34, 197, 94, 0.35)",
+        wolf: "rgba(239, 68, 68, 0.35)",
+        dragon: "rgba(249, 115, 22, 0.35)",
+        donkey: "rgba(234, 179, 8, 0.35)",
+        phoenix: "rgba(245, 158, 11, 0.45)"
+      };
       // Gentle floating shadow/glow
-      ctx.fillStyle = pet.type === "fairy" ? "rgba(34, 197, 94, 0.25)" : (pet.type === "wolf" ? "rgba(56, 189, 248, 0.25)" : "rgba(249, 115, 22, 0.25)");
+      ctx.fillStyle = petGlow[pet.type] || "rgba(249, 115, 22, 0.25)";
       ctx.beginPath();
-      ctx.arc(pet.x, pet.y + 12, 10, 0, Math.PI * 2);
+      ctx.arc(pet.x, pet.y + 12, 11, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.font = "20px sans-serif";

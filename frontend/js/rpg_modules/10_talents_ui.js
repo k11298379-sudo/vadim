@@ -305,6 +305,12 @@ window.doRebirthUI = async function() {
     const res = await api.doRebirth();
     if (res.profile) {
       RPG_STATE.profile = res.profile;
+      if (typeof ARENA !== "undefined") {
+        ARENA.waveNumber = 1;
+        ARENA.totalCreepsSpawned = 0;
+        ARENA.creepsKilledInWave = 0;
+        ARENA.creeps = [];
+      }
       if (window.syncArenaPlayerStats) syncArenaPlayerStats();
       if (window.triggerHaptic) triggerHaptic("success");
       renderRoot();

@@ -137,7 +137,8 @@
     p.facing = Math.cos(fireAngle) >= 0 ? 1 : -1;
 
     const isCrit = Math.random() * 100 < (stats.crit_chance || 15);
-    const baseDmg = Math.floor(((stats.min_atk || 25) + (stats.max_atk || 35)) * 0.7);
+    let baseDmg = Math.floor(((stats.min_atk || 25) + (stats.max_atk || 35)) * 0.7);
+    if (p.donkeyBuffTimer && p.donkeyBuffTimer > 0) baseDmg = Math.floor(baseDmg * 1.35);
     const finalDmg = isCrit ? Math.floor(baseDmg * 2.2) : baseDmg;
 
     if (!ARENA.playerProjectiles) ARENA.playerProjectiles = [];
@@ -157,8 +158,8 @@
       maxDist: 850
     });
 
-    const agi = stats.agility || 15;
-    p.shootCooldown = Math.max(14, Math.floor(26 - Math.min(10, agi * 0.18)));
+    const atkSpeed = Math.max(0.5, stats.attack_speed || 1.0);
+    p.shootCooldown = Math.max(5, Math.round(60 / atkSpeed));
     triggerHaptic(isCrit ? "medium" : "light");
   }
 
@@ -215,8 +216,8 @@
     let speedRate = Math.max(0.7, stats.attack_speed || 1.0);
     if (p.bladeDanceActive > 0) speedRate *= 1.5; // +50% attack speed buff
 
-    // Base attack speed formula: cdFrames / speedRate, with floor of 18 frames (~3.3 attacks/s max)
-    p.attackCooldown = Math.max(18, Math.floor(cdFrames / speedRate));
+    // Attack speed formula directly scaled by stats.attack_speed
+    p.attackCooldown = Math.max(8, Math.round(cdFrames / speedRate));
     triggerHaptic(isHeavyFinisher ? "heavy" : "medium");
 
     let isCrit = Math.random() * 100 < (stats.crit_chance || 15);
@@ -227,6 +228,7 @@
 
     let baseDmg = Math.floor((stats.min_atk || 20) + Math.random() * ((stats.max_atk || 30) - (stats.min_atk || 20)));
     let dmg = Math.floor(baseDmg * stepMult);
+    if (p.donkeyBuffTimer && p.donkeyBuffTimer > 0) dmg = Math.floor(dmg * 1.35);
     if (isCrit) dmg = Math.floor(dmg * 2.2);
 
     // RANGED HERO (Invoker, Shadow Fiend) — fires flying magic orb projectile
@@ -1826,6 +1828,7 @@
     ARENA.player.x = 65;
     ARENA.player.y = ARENA.roadY - 18;
     ARENA.player.isInvulnerable = 0;
+    ARENA.player.isDead = false;
     ARENA.waveState = "fighting";
 
     // Re-render DOM to collapse canvas back to 320px and hide boss controls
@@ -2060,6 +2063,7 @@
     ARENA.player.currentMp = ARENA.player.maxMp;
     ARENA.player.isMoving = false;
     ARENA.player.isInvulnerable = 0;
+    ARENA.player.isDead = false;
     ARENA.player.shootCooldown = 0;
     ARENA.player.facingAngle = -Math.PI / 2;
     ARENA.player.facing = 1;
@@ -2128,6 +2132,7 @@
     if (ARENA.player) {
       ARENA.player.currentHp = 0;
       ARENA.player.isInvulnerable = 0;
+      ARENA.player.isDead = true;
     }
 
     if (ARENA.isRaidBossBattle) {
@@ -2151,6 +2156,7 @@
       const stats = RPG_STATE.profile?.stats || {};
       ARENA.player.maxHp = Math.max(450, stats.hp_max || 450);
       ARENA.player.currentHp = ARENA.player.maxHp;
+      ARENA.player.isDead = false;
       ARENA.player.maxMp = Math.max(80, stats.mp_max || 80);
       ARENA.player.currentMp = ARENA.player.maxMp;
       ARENA.creeps = [];

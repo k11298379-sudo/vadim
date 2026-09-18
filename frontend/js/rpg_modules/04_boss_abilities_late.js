@@ -11,11 +11,15 @@ function executeBossAbilityLate(boss, p, bId, abilityType, ARENA) {
     if (abilityType === "ultimate") {
       spawnFloatingText(boss.x, boss.y - 35, "😈 РАЗРЫВ ДУШИ (SUNDER)!", "#a855f7");
       triggerHaptic("heavy");
-      ARENA.cameraTrauma = 0.7;
-      const siphonDmg = Math.floor(p.currentHp * 0.25);
-      applyDamageToPlayer(siphonDmg, "sunder");
-      boss.hp = Math.min(boss.maxHp, boss.hp + siphonDmg * 150);
-      spawnFloatingText(p.x, p.y - 25, `🩸 SUNDER -${siphonDmg}`, "#a855f7");
+      const curHp = (p && typeof p.currentHp === "number" && !isNaN(p.currentHp) && p.currentHp > 0) ? p.currentHp : 0;
+      const siphonDmg = Math.max(0, Math.floor(curHp * 0.25));
+      if (siphonDmg > 0) {
+        applyDamageToPlayer(siphonDmg, "sunder");
+        const curBossHp = (typeof boss.hp === "number" && !isNaN(boss.hp) && boss.hp > 0) ? boss.hp : boss.maxHp;
+        const healAmt = Math.min(boss.maxHp * 0.08, siphonDmg * 10);
+        boss.hp = Math.min(boss.maxHp, curBossHp + healAmt);
+        spawnFloatingText(p.x, p.y - 25, `🩸 SUNDER -${siphonDmg}`, "#a855f7");
+      }
       if (typeof applyStatusEffectToPlayer === "function") {
         applyStatusEffectToPlayer({ slow: true, slowDuration: 90, slowRatio: 0.4 });
       }

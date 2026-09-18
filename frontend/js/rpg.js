@@ -69,7 +69,7 @@ loadRpgImages();
   }
 
   function formatCompact(num) {
-    if (num == null) return "0";
+    if (num == null || isNaN(num)) return "0";
     const n = Math.abs(num);
     if (n >= 1_000_000_000_000_000) return (num / 1_000_000_000_000_000).toFixed(1) + "Q";
     if (n >= 1_000_000_000_000) return (num / 1_000_000_000_000).toFixed(1) + "T";
@@ -2128,7 +2128,8 @@ loadRpgImages();
   // REAL RPG DAMAGE: Hero ATK vs Boss Defense (no more %-HP cheese!)
 
   function applyDamageToBoss(boss, rawDmg, isCrit) {
-    if (!boss || boss.hp <= 0) return 0;
+    if (!boss || boss.hp <= 0 || isNaN(boss.hp)) return 0;
+    if (rawDmg == null || isNaN(rawDmg) || rawDmg <= 0) return 0;
 
     const p = ARENA.player;
     const stats = RPG_STATE.profile?.stats || {};
@@ -2223,11 +2224,12 @@ loadRpgImages();
     }
 
     boss._dmgTakenThisSec = (boss._dmgTakenThisSec || 0) + finalDmg;
-    boss.hp = Math.max(0, boss.hp - finalDmg);
+    const curBossHp = (!isNaN(boss.hp) && boss.hp > 0) ? boss.hp : (boss.maxHp || 1000);
+    boss.hp = Math.max(0, curBossHp - finalDmg);
 
-    // Passive Item: Satanic & General Lifesteal (capped per hit to prevent infinite invulnerability)
+    // Passive Item: Satanic & General Lifesteal (only heals living player)
     const lifestealPct = stats.lifesteal || 0;
-    if (p && lifestealPct > 0) {
+    if (p && !p.isDead && typeof p.currentHp === "number" && p.currentHp > 0 && lifestealPct > 0) {
       const pMax = p.maxHp || 500;
       const rawHeal = Math.floor(finalDmg * (lifestealPct / 100));
       const heal = Math.max(1, Math.min(Math.floor(pMax * 0.08), rawHeal));
@@ -2271,12 +2273,13 @@ loadRpgImages();
 
   // UNIVERSAL SAFE DAMAGE: Routes all damage through applyDamageToBoss if target is a boss!
   function safeDamageCreep(c, rawDmg, isCrit) {
-    if (!c || c.hp <= 0) return 0;
+    if (!c || c.hp <= 0 || isNaN(c.hp)) return 0;
+    if (rawDmg == null || isNaN(rawDmg) || rawDmg <= 0) return 0;
     if (c.isBoss) {
       return applyDamageToBoss(c, rawDmg, isCrit);
     }
-    const dmg = Math.max(1, rawDmg);
-    c.hp -= dmg;
+    const dmg = Math.max(1, Math.floor(rawDmg));
+    c.hp = Math.max(0, c.hp - dmg);
     return dmg;
   }
 
@@ -2324,15 +2327,19 @@ loadRpgImages();
 
   function applyDamageToPlayer(rawDmg, attackType = "normal") {
     const p = ARENA.player;
-    if (!p || (typeof p.isInvulnerable === "number" && p.isInvulnerable > 0)) return 0;
+    if (!p || p.isDead || (typeof p.currentHp === "number" && p.currentHp <= 0) || (typeof p.isInvulnerable === "number" && p.isInvulnerable > 0)) return 0;
 
     const stats = RPG_STATE.profile?.stats || {};
     const eq = RPG_STATE.profile?.equipment || {};
 
-    // 1. Evasion (only for normal/physical attacks) & Boss MKB (30%)
+    const isMagic = (attackType === "magic" || attackType === "spell" || attackType === "burn" || attackType === "poison" ||
+      attackType === "beam" || attackType === "chain_frost" || attackType === "danger_zone" || attackType === "black_hole" ||
+      attackType === "doom" || attackType === "sunder");
+
+    // 1. Evasion (for physical/attack hits) & Boss MKB (20% pierce chance)
+    const canEvade = !isMagic;
     const dodgeChance = Math.min(70, stats.dodge_chance || 0);
-    const canEvade = (attackType !== "magic");
-    const bossMkbProcced = canEvade && (Math.random() < 0.30);
+    const bossMkbProcced = canEvade && (Math.random() < 0.20);
     
     if (canEvade && !bossMkbProcced && dodgeChance > 0 && Math.random() * 100 < dodgeChance) {
       spawnFloatingText(p.x, p.y - 25, "💨 УВОРОТ!", "#38bdf8");
@@ -2340,7 +2347,7 @@ loadRpgImages();
       return 0;
     }
 
-    // 2. Passive Item: Radiance Blind (17% chance boss misses attack, also bypassable by MKB)
+    // 2. Passive Item: Radiance Blind (17% chance boss misses attack, bypassable by MKB)
     const hasRadiance = Object.values(eq).some(it => it && (it.name?.includes("Radiance") || it.name?.includes("Сияние") || it.bonus?.miss_aura));
     if (hasRadiance && canEvade && !bossMkbProcced && Math.random() < 0.17) {
       spawnFloatingText(p.x, p.y - 25, "💨 ПРОМАХ БОССА!", "#f59e0b");
@@ -2350,7 +2357,15 @@ loadRpgImages();
 
     let finalDmg = Math.max(1, rawDmg);
 
-    // 3. Passive Item: Vanguard / Crimson Guard Damage Block (70% chance, capped at 50% on bosses)
+    // 3. Magic Resistance: Reducts all magic, elemental and spell damage (up to 80% cap)
+    if (isMagic) {
+      const mr = Math.min(80, Math.max(0, stats.magic_resist || 0));
+      if (mr > 0) {
+        finalDmg = Math.max(1, Math.floor(finalDmg * (1.0 - mr / 100)));
+      }
+    }
+
+    // 4. Passive Item: Vanguard / Crimson Guard Damage Block (70% chance, capped at 50% on bosses)
     const damageBlock = stats.damage_block || 0;
     if (damageBlock > 0 && Math.random() < 0.70) {
       const isBossEncounter = !!(ARENA.isRaidBossBattle || ARENA.isBossActive || ARENA.bossArenaMode);
@@ -2359,7 +2374,7 @@ loadRpgImages();
       spawnFloatingText(p.x, p.y - 20, `🛡️ БЛОК -${effectiveBlock} (АВАНГАРД)`, "#94a3b8");
     }
 
-    // 4. Passive Item: Blade Mail Damage Return (Reflect 35% damage back to boss)
+    // 5. Passive Item: Blade Mail Damage Return (Reflect 35% damage back to boss)
     const reflectPct = stats.reflect || 0;
     if (reflectPct > 0) {
       const reflectDmg = Math.max(1, Math.floor(rawDmg * (reflectPct / 100)));
@@ -2377,9 +2392,20 @@ loadRpgImages();
 
     const pMax = Math.max(100, p.maxHp || 500);
 
-    // HEALTH GATE PROTECTION:
-    // Only saves player ONCE per 60s from an unexpected lethal hit if they were at high health (>60% HP)
-    // Prevents cheap 1-frame deaths from full HP, but consecutive hits WILL KILL!
+    // 6. PET PHOENIX: Supernova Lethal Protection (Saves from death every 30s)
+    const equippedPet = (RPG_STATE.profile?.pets || []).find(pt => pt.is_equipped);
+    const petType = equippedPet ? (equippedPet.type || equippedPet.pet_id) : localStorage.getItem("rpg_active_pet");
+    if (petType === "phoenix" && finalDmg >= p.currentHp && (!p._phoenixShieldFrame || (ARENA.frameCount || 0) - p._phoenixShieldFrame > 1800)) {
+      p._phoenixShieldFrame = ARENA.frameCount || 0;
+      p.isInvulnerable = 180; // 3 seconds of immunity
+      p.currentHp = Math.max(1, Math.floor(pMax * 0.35));
+      spawnFloatingText(p.x, p.y - 30, "🦅 СВЕРХНОВАЯ ЗАЩИТА!", "#f59e0b");
+      triggerHaptic("heavy");
+      return 0;
+    }
+
+    // 7. HEALTH GATE PROTECTION:
+    // Saves player ONCE per 60s from an unexpected lethal hit if they were at high health (>60% HP)
     const nowFrame = ARENA.frameCount || 0;
     if (p.currentHp > pMax * 0.60 && finalDmg >= p.currentHp && (!p._lastHealthGateFrame || nowFrame - p._lastHealthGateFrame > 3600)) {
       p._lastHealthGateFrame = nowFrame;
@@ -2393,6 +2419,9 @@ loadRpgImages();
 
     p.currentHp = Math.max(0, p.currentHp - finalDmg);
     if (p.currentHp <= 0) {
+      p.currentHp = 0;
+      p.isDead = true;
+      p.isInvulnerable = 0;
       handlePlayerArenaDeath();
     }
     return finalDmg;
@@ -3989,13 +4018,15 @@ loadRpgImages();
               }
               if (p.fleshHeapActive > 0) rawDmg = Math.floor(rawDmg * 0.6);
               if (p.crimsonActive > 0) rawDmg = Math.max(4, rawDmg - (p.crimsonBlock || 85));
-              p.currentHp = Math.max(0, p.currentHp - rawDmg);
-              if (p.blademailActive > 0) {
-                spawnFloatingText(p.x, p.y - 25, `🪞 ВОЗВРАТКА -${rawDmg}`, "#facc15");
+              const takenDmg = applyDamageToPlayer(rawDmg, proj.isMagic ? "magic" : "projectile");
+              if (takenDmg > 0) {
+                if (p.blademailActive > 0) {
+                  spawnFloatingText(p.x, p.y - 25, `🪞 ВОЗВРАТКА -${takenDmg}`, "#facc15");
+                }
+                spawnFloatingText(p.x + 10, p.y - 20, `💥 -${takenDmg}`, "#ef4444");
+                triggerHaptic("light");
+                if (ARENA.styleMeter) ARENA.styleMeter.score = Math.max(0, ARENA.styleMeter.score - 120);
               }
-              spawnFloatingText(p.x + 10, p.y - 20, `💥 -${rawDmg}`, "#ef4444");
-              triggerHaptic("light");
-              if (ARENA.styleMeter) ARENA.styleMeter.score = Math.max(0, ARENA.styleMeter.score - 120);
               ARENA.enemyProjectiles.splice(j, 1);
               if (p.currentHp <= 0) { handlePlayerArenaDeath(); return; }
             }
@@ -4129,14 +4160,16 @@ loadRpgImages();
                   if (c.pureDamage) rawDmg = Math.floor(c.atk * 0.85); // Pure damage ignores armor!
                   if (p.fleshHeapActive > 0) rawDmg = Math.floor(rawDmg * 0.6);
                   if (p.crimsonActive > 0) rawDmg = Math.max(4, rawDmg - (p.crimsonBlock || 85));
-                  p.currentHp = Math.max(0, p.currentHp - rawDmg);
-                  if (p.blademailActive > 0) {
-                    safeDamageCreep(c, rawDmg, false);
-                    spawnFloatingText(c.x, c.y - 30, `🪞 ВОЗВРАТКА -${rawDmg}`, "#facc15");
+                  const takenDmg = applyDamageToPlayer(rawDmg, c.pureDamage ? "pure" : (c.isMagic ? "magic" : "melee"));
+                  if (takenDmg > 0) {
+                    if (p.blademailActive > 0) {
+                      safeDamageCreep(c, takenDmg, false);
+                      spawnFloatingText(c.x, c.y - 30, `🪞 ВОЗВРАТКА -${takenDmg}`, "#facc15");
+                    }
+                    spawnFloatingText(p.x + 10, p.y - 15 - Math.random() * 15, `-${takenDmg}`, "#ef4444");
+                    triggerHaptic("light");
+                    if (ARENA.styleMeter) ARENA.styleMeter.score = Math.max(0, ARENA.styleMeter.score - 80);
                   }
-                  spawnFloatingText(p.x + 10, p.y - 15 - Math.random() * 15, `-${rawDmg}`, "#ef4444");
-                  triggerHaptic("light");
-                  if (ARENA.styleMeter) ARENA.styleMeter.score = Math.max(0, ARENA.styleMeter.score - 80);
                   if (p.currentHp <= 0) { handlePlayerArenaDeath(); return; }
                 }
               }
@@ -5212,59 +5245,139 @@ loadRpgImages();
   function updatePetLogic() {
     const p = ARENA.player;
     if (!p) return;
-    const petId = localStorage.getItem("rpg_active_pet") || "dragon";
+
+    // Detect equipped pet from profile or fallback to localStorage
+    const equippedPet = (RPG_STATE.profile?.pets || []).find(pt => pt.is_equipped);
+    const petId = equippedPet ? (equippedPet.type || equippedPet.pet_id) : (localStorage.getItem("rpg_active_pet") || null);
+    if (!petId) {
+      ARENA.pet = null;
+      return;
+    }
+
+    const petStars = equippedPet ? (equippedPet.stars || 1) : 1;
+    const starMult = 1.0 + (petStars - 1) * 0.15;
+
     if (!ARENA.pet) {
       ARENA.pet = { x: p.x - 25, y: p.y - 25, timer: 0 };
     }
     const pet = ARENA.pet;
     pet.type = petId;
-    
+    pet.stars = petStars;
+
     // Smooth trailing physics behind the player
-    const targetX = p.x - (p.facing === "left" ? -30 : 30);
+    const targetX = p.x - (p.facing === "left" ? -32 : 32);
     const targetY = p.y - 26 + Math.sin((ARENA.frameCount || 0) * 0.08) * 6;
     pet.x += (targetX - pet.x) * 0.12;
     pet.y += (targetY - pet.y) * 0.12;
-    
+
     pet.timer = (pet.timer || 0) + 1;
-    
-    // Pet Action every ~2.5 - 3 seconds (150-180 frames)
+
+    const stats = RPG_STATE.profile?.stats || {};
+    const playerAtk = Math.max(50, stats.max_atk || 50);
+    const playerMaxHp = Math.max(100, p.maxHp || 500);
+
+    // Target for pet attacks (boss or first alive creep)
+    const target = (ARENA.bossEntity && ARENA.bossEntity.hp > 0) ? ARENA.bossEntity : (ARENA.creeps && ARENA.creeps.find(c => c.hp > 0));
+
+    // 1. DRAGON (🔥 Дыхание Богатства: огненный снаряд каждые 6с)
     if (petId === "dragon") {
-      if (pet.timer >= 150) {
+      if (pet.timer >= 360) {
         pet.timer = 0;
-        const target = ARENA.bossEntity || (ARENA.creeps && ARENA.creeps[0]);
         if (target && target.hp > 0) {
-          const dmg = 250 + Math.floor(Math.random() * 150);
+          const dmg = Math.floor((playerAtk * 2.5 + 1200) * starMult);
           if (ARENA.playerProjectiles) {
             ARENA.playerProjectiles.push({
-              x: pet.x,
-              y: pet.y,
-              vx: (target.x - pet.x) * 0.08,
-              vy: (target.y - pet.y) * 0.08,
-              speed: 7,
+              x: pet.x, y: pet.y,
+              vx: (target.x - pet.x) * 0.09,
+              vy: (target.y - pet.y) * 0.09,
+              speed: 8.5,
               target: target,
               dmg: dmg,
               color: "#f97316",
-              radius: 6,
+              radius: 9,
               isMagic: true,
               isCrit: true,
               isPetShot: true
             });
           }
-          spawnFloatingText(pet.x, pet.y - 14, "🔥 ДРАКОН!", "#f97316");
+          spawnFloatingText(pet.x, pet.y - 14, "🔥 ДЫХАНИЕ ДРАКОНА!", "#f97316");
+          triggerHaptic("medium");
         }
       }
-    } else if (petId === "fairy") {
-      if (pet.timer >= 180) {
+    }
+    // 2. FAIRY (🧚 Пыльца Свободы: лечит HP & MP, очищает дебаффы каждые 10с)
+    else if (petId === "fairy") {
+      if (pet.timer >= 600) {
         pet.timer = 0;
-        const heal = 45;
-        p.currentHp = Math.min(p.maxHp, (p.currentHp || p.maxHp) + heal);
-        p.currentMp = Math.min(p.maxMp, (p.currentMp || p.maxMp) + 15);
-        spawnFloatingText(p.x, p.y - 20, `💚 +${heal} HP`, "#22c55e");
+        p.stunTimer = 0;
+        p.freezeTimer = 0;
+        p.slowTimer = 0;
+        const healHp = Math.floor(playerMaxHp * 0.12 * starMult);
+        const healMp = Math.floor((p.maxMp || 100) * 0.25);
+        p.currentHp = Math.min(playerMaxHp, (p.currentHp || playerMaxHp) + healHp);
+        p.currentMp = Math.min(p.maxMp || 100, (p.currentMp || p.maxMp || 100) + healMp);
+        spawnFloatingText(p.x, p.y - 20, `🧚 ПЫЛЬЦА СВОБОДЫ! +${healHp} HP`, "#22c55e");
+        triggerHaptic("light");
       }
-    } else if (petId === "wolf") {
-      if (pet.timer >= 240) {
+    }
+    // 3. WOLF (🐺 Кровавый Укус: наносит урон и вешает кровотечение каждые 5с)
+    else if (petId === "wolf") {
+      if (pet.timer >= 300) {
         pet.timer = 0;
-        spawnFloatingText(pet.x, pet.y - 14, "🐺 ВОЙ ЯРОСТИ!", "#38bdf8");
+        if (target && target.hp > 0) {
+          const dmg = Math.floor((playerAtk * 1.8 + 800) * starMult);
+          safeDamageCreep(target, dmg, true);
+          spawnFloatingText(target.x, target.y - 25, `🐺 УКУС ВОЛКА -${dmg}!`, "#ef4444");
+          if (ARENA.specialEffects) {
+            ARENA.specialEffects.push({ x: target.x, y: target.y, radius: 25, color: "#dc2626", life: 20 });
+          }
+          triggerHaptic("medium");
+        }
+      }
+    }
+    // 4. SLIME (💧 Капля Исцеления: лечит 10% HP каждые 12с)
+    else if (petId === "slime") {
+      if (pet.timer >= 720) {
+        pet.timer = 0;
+        const heal = Math.floor(playerMaxHp * 0.10 * starMult);
+        p.currentHp = Math.min(playerMaxHp, (p.currentHp || playerMaxHp) + heal);
+        spawnFloatingText(p.x, p.y - 22, `💧 КАПЛЯ ЖИЗНИ +${heal} HP`, "#38bdf8");
+        triggerHaptic("light");
+      }
+    }
+    // 5. DONKEY (🫏 Курьерская Доставка: усиливает урон на +35% на 4с каждые 7с)
+    else if (petId === "donkey") {
+      if (pet.timer >= 420) {
+        pet.timer = 0;
+        p.donkeyBuffTimer = 240; // 4 seconds
+        spawnFloatingText(p.x, p.y - 20, "🫏 КУРЬЕР! +35% УРОНА", "#eab308");
+        triggerHaptic("medium");
+      }
+    }
+    // 6. PHOENIX (🦅 Пылающий Феникс: атакует огненным снарядом каждые 5с)
+    else if (petId === "phoenix") {
+      if (pet.timer >= 300) {
+        pet.timer = 0;
+        if (target && target.hp > 0) {
+          const dmg = Math.floor((playerAtk * 2.2 + 2000) * starMult);
+          if (ARENA.playerProjectiles) {
+            ARENA.playerProjectiles.push({
+              x: pet.x, y: pet.y,
+              vx: (target.x - pet.x) * 0.10,
+              vy: (target.y - pet.y) * 0.10,
+              speed: 9,
+              target: target,
+              dmg: dmg,
+              color: "#fbbf24",
+              radius: 10,
+              isMagic: true,
+              isCrit: true,
+              isPetShot: true
+            });
+          }
+          spawnFloatingText(pet.x, pet.y - 14, "🦅 ПЛАМЯ ФЕНИКСА!", "#f59e0b");
+          triggerHaptic("medium");
+        }
       }
     }
   }
@@ -5587,11 +5700,15 @@ function executeBossAbilityLate(boss, p, bId, abilityType, ARENA) {
     if (abilityType === "ultimate") {
       spawnFloatingText(boss.x, boss.y - 35, "😈 РАЗРЫВ ДУШИ (SUNDER)!", "#a855f7");
       triggerHaptic("heavy");
-      ARENA.cameraTrauma = 0.7;
-      const siphonDmg = Math.floor(p.currentHp * 0.25);
-      applyDamageToPlayer(siphonDmg, "sunder");
-      boss.hp = Math.min(boss.maxHp, boss.hp + siphonDmg * 150);
-      spawnFloatingText(p.x, p.y - 25, `🩸 SUNDER -${siphonDmg}`, "#a855f7");
+      const curHp = (p && typeof p.currentHp === "number" && !isNaN(p.currentHp) && p.currentHp > 0) ? p.currentHp : 0;
+      const siphonDmg = Math.max(0, Math.floor(curHp * 0.25));
+      if (siphonDmg > 0) {
+        applyDamageToPlayer(siphonDmg, "sunder");
+        const curBossHp = (typeof boss.hp === "number" && !isNaN(boss.hp) && boss.hp > 0) ? boss.hp : boss.maxHp;
+        const healAmt = Math.min(boss.maxHp * 0.08, siphonDmg * 10);
+        boss.hp = Math.min(boss.maxHp, curBossHp + healAmt);
+        spawnFloatingText(p.x, p.y - 25, `🩸 SUNDER -${siphonDmg}`, "#a855f7");
+      }
       if (typeof applyStatusEffectToPlayer === "function") {
         applyStatusEffectToPlayer({ slow: true, slowDuration: 90, slowRatio: 0.4 });
       }
@@ -6312,7 +6429,8 @@ function distToSegment(px, py, x1, y1, x2, y2) {
     p.facing = Math.cos(fireAngle) >= 0 ? 1 : -1;
 
     const isCrit = Math.random() * 100 < (stats.crit_chance || 15);
-    const baseDmg = Math.floor(((stats.min_atk || 25) + (stats.max_atk || 35)) * 0.7);
+    let baseDmg = Math.floor(((stats.min_atk || 25) + (stats.max_atk || 35)) * 0.7);
+    if (p.donkeyBuffTimer && p.donkeyBuffTimer > 0) baseDmg = Math.floor(baseDmg * 1.35);
     const finalDmg = isCrit ? Math.floor(baseDmg * 2.2) : baseDmg;
 
     if (!ARENA.playerProjectiles) ARENA.playerProjectiles = [];
@@ -6332,8 +6450,8 @@ function distToSegment(px, py, x1, y1, x2, y2) {
       maxDist: 850
     });
 
-    const agi = stats.agility || 15;
-    p.shootCooldown = Math.max(14, Math.floor(26 - Math.min(10, agi * 0.18)));
+    const atkSpeed = Math.max(0.5, stats.attack_speed || 1.0);
+    p.shootCooldown = Math.max(5, Math.round(60 / atkSpeed));
     triggerHaptic(isCrit ? "medium" : "light");
   }
 
@@ -6390,8 +6508,8 @@ function distToSegment(px, py, x1, y1, x2, y2) {
     let speedRate = Math.max(0.7, stats.attack_speed || 1.0);
     if (p.bladeDanceActive > 0) speedRate *= 1.5; // +50% attack speed buff
 
-    // Base attack speed formula: cdFrames / speedRate, with floor of 18 frames (~3.3 attacks/s max)
-    p.attackCooldown = Math.max(18, Math.floor(cdFrames / speedRate));
+    // Attack speed formula directly scaled by stats.attack_speed
+    p.attackCooldown = Math.max(8, Math.round(cdFrames / speedRate));
     triggerHaptic(isHeavyFinisher ? "heavy" : "medium");
 
     let isCrit = Math.random() * 100 < (stats.crit_chance || 15);
@@ -6402,6 +6520,7 @@ function distToSegment(px, py, x1, y1, x2, y2) {
 
     let baseDmg = Math.floor((stats.min_atk || 20) + Math.random() * ((stats.max_atk || 30) - (stats.min_atk || 20)));
     let dmg = Math.floor(baseDmg * stepMult);
+    if (p.donkeyBuffTimer && p.donkeyBuffTimer > 0) dmg = Math.floor(dmg * 1.35);
     if (isCrit) dmg = Math.floor(dmg * 2.2);
 
     // RANGED HERO (Invoker, Shadow Fiend) — fires flying magic orb projectile
@@ -8001,6 +8120,7 @@ function distToSegment(px, py, x1, y1, x2, y2) {
     ARENA.player.x = 65;
     ARENA.player.y = ARENA.roadY - 18;
     ARENA.player.isInvulnerable = 0;
+    ARENA.player.isDead = false;
     ARENA.waveState = "fighting";
 
     // Re-render DOM to collapse canvas back to 320px and hide boss controls
@@ -8235,6 +8355,7 @@ function distToSegment(px, py, x1, y1, x2, y2) {
     ARENA.player.currentMp = ARENA.player.maxMp;
     ARENA.player.isMoving = false;
     ARENA.player.isInvulnerable = 0;
+    ARENA.player.isDead = false;
     ARENA.player.shootCooldown = 0;
     ARENA.player.facingAngle = -Math.PI / 2;
     ARENA.player.facing = 1;
@@ -8303,6 +8424,7 @@ function distToSegment(px, py, x1, y1, x2, y2) {
     if (ARENA.player) {
       ARENA.player.currentHp = 0;
       ARENA.player.isInvulnerable = 0;
+      ARENA.player.isDead = true;
     }
 
     if (ARENA.isRaidBossBattle) {
@@ -8326,6 +8448,7 @@ function distToSegment(px, py, x1, y1, x2, y2) {
       const stats = RPG_STATE.profile?.stats || {};
       ARENA.player.maxHp = Math.max(450, stats.hp_max || 450);
       ARENA.player.currentHp = ARENA.player.maxHp;
+      ARENA.player.isDead = false;
       ARENA.player.maxMp = Math.max(80, stats.mp_max || 80);
       ARENA.player.currentMp = ARENA.player.maxMp;
       ARENA.creeps = [];
@@ -11906,11 +12029,27 @@ function drawBossModelMid(ctx, b, bId, time) {
     if (ARENA.pet) {
       ctx.save();
       const pet = ARENA.pet;
-      const petIcon = pet.type === "fairy" ? "🧚" : (pet.type === "wolf" ? "🐺" : "🐉");
+      const petIcons = {
+        slime: "💧",
+        fairy: "🧚",
+        wolf: "🐺",
+        dragon: "🐉",
+        donkey: "🫏",
+        phoenix: "🦅"
+      };
+      const petIcon = petIcons[pet.type] || "🐾";
+      const petGlow = {
+        slime: "rgba(56, 189, 248, 0.35)",
+        fairy: "rgba(34, 197, 94, 0.35)",
+        wolf: "rgba(239, 68, 68, 0.35)",
+        dragon: "rgba(249, 115, 22, 0.35)",
+        donkey: "rgba(234, 179, 8, 0.35)",
+        phoenix: "rgba(245, 158, 11, 0.45)"
+      };
       // Gentle floating shadow/glow
-      ctx.fillStyle = pet.type === "fairy" ? "rgba(34, 197, 94, 0.25)" : (pet.type === "wolf" ? "rgba(56, 189, 248, 0.25)" : "rgba(249, 115, 22, 0.25)");
+      ctx.fillStyle = petGlow[pet.type] || "rgba(249, 115, 22, 0.25)";
       ctx.beginPath();
-      ctx.arc(pet.x, pet.y + 12, 10, 0, Math.PI * 2);
+      ctx.arc(pet.x, pet.y + 12, 11, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.font = "20px sans-serif";
@@ -16172,6 +16311,12 @@ window.doRebirthUI = async function() {
     const res = await api.doRebirth();
     if (res.profile) {
       RPG_STATE.profile = res.profile;
+      if (typeof ARENA !== "undefined") {
+        ARENA.waveNumber = 1;
+        ARENA.totalCreepsSpawned = 0;
+        ARENA.creepsKilledInWave = 0;
+        ARENA.creeps = [];
+      }
       if (window.syncArenaPlayerStats) syncArenaPlayerStats();
       if (window.triggerHaptic) triggerHaptic("success");
       renderRoot();

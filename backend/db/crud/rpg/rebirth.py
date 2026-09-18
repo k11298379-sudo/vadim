@@ -157,6 +157,8 @@ async def perform_ascension(session: AsyncSession, char: RPGCharacter) -> Tuple[
     char.xp = 0
     char.stat_points = 0
     char.rebirths = next_rank
+    char.dungeon_floor = 1
+    char.dungeon_cleared = 0
 
     talents = dict(getattr(char, "talents", {}) or {})
     talents["rebirth_essence"] = talents.get("rebirth_essence", 0) + essence_reward

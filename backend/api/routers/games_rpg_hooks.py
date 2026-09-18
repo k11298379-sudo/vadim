@@ -102,19 +102,51 @@ async def handle_rpg_room_joined(room: Any, session: AsyncSession, user: Optiona
         except Exception as e:
             logger.warning(f"Could not sync stats for {g_type}: {e}")
 
-async def handle_rpg_room_moved(room: Any, session: AsyncSession, user: Optional[User]):
+async def handle_rpg_room_moved(room: Any, session: AsyncSession, user: Optional[User], viewer_tg_id: Optional[int] = None):
     if room and getattr(room, "game_type", None) == "rpg_coop" and room.status == "finished" and room.winner == "heroes":
         if not getattr(room, "reward_distributed", False):
             room.reward_distributed = True
             try:
+                from sqlalchemy import select
                 from backend.db.crud.rpg import get_or_create_rpg_character, add_xp_and_gold_to_character, open_boss_raid_chest
                 boss_gold = room.boss.get("gold_reward", 1000)
                 boss_xp = room.boss.get("xp_reward", 750)
-                user_id = user.id if user else 1
-                char = await get_or_create_rpg_character(session, user_id=user_id)
-                await add_xp_and_gold_to_character(session, char, xp_amount=boss_xp, gold_amount=boss_gold)
-                char.boss_kills = getattr(char, "boss_kills", 0) + 1
-                chest_res = await open_boss_raid_chest(session, char, boss_id=room.boss.get("id", "roshan"))
+
+                # Gather all real human participants from the coop room
+                participants_tg_ids = set()
+                players_dict = getattr(room, "players", {}) or {}
+                for role_key in ["host", "player_2", "player_3"]:
+                    p_info = players_dict.get(role_key)
+                    if p_info and not p_info.get("is_bot") and p_info.get("tg_id") and p_info.get("name") != "Свободный слот":
+                        participants_tg_ids.add(p_info["tg_id"])
+                if viewer_tg_id and viewer_tg_id > 0:
+                    participants_tg_ids.add(viewer_tg_id)
+                if user and getattr(user, "tg_id", None):
+                    participants_tg_ids.add(user.tg_id)
+
+                rewarded_user_ids = set()
+                primary_char = None
+
+                for tid in participants_tg_ids:
+                    q = select(User).where(User.tg_id == tid)
+                    u_obj = (await session.execute(q)).scalar_one_or_none()
+                    if u_obj and u_obj.id not in rewarded_user_ids:
+                        rewarded_user_ids.add(u_obj.id)
+                        c = await get_or_create_rpg_character(session, user_id=u_obj.id)
+                        await add_xp_and_gold_to_character(session, c, xp_amount=boss_xp, gold_amount=boss_gold)
+                        c.boss_kills = getattr(c, "boss_kills", 0) + 1
+                        if primary_char is None:
+                            primary_char = c
+
+                # Fallback if no matching User was registered via tg_id (e.g. guest/demo session)
+                if not rewarded_user_ids:
+                    uid = user.id if user else 1
+                    c = await get_or_create_rpg_character(session, user_id=uid)
+                    await add_xp_and_gold_to_character(session, c, xp_amount=boss_xp, gold_amount=boss_gold)
+                    c.boss_kills = getattr(c, "boss_kills", 0) + 1
+                    primary_char = c
+
+                chest_res = await open_boss_raid_chest(session, primary_char, boss_id=room.boss.get("id", "roshan"))
                 room.victory_rewards = {
                     "boss_name": room.boss.get("name"),
                     "boss_icon": room.boss.get("icon"),

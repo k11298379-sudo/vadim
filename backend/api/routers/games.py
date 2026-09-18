@@ -242,7 +242,8 @@ async def get_game_room_state(
     room_id: str,
     request: Request,
     tg_user_id: Optional[int] = Query(None),
-    user: Optional[User] = Depends(get_optional_webapp_user)
+    user: Optional[User] = Depends(get_optional_webapp_user),
+    session: AsyncSession = Depends(get_db_session)
 ):
     """Возвращает текущее состояние игровой комнаты."""
     from backend.api.game_rooms import game_manager
@@ -251,6 +252,10 @@ async def get_game_room_state(
         raise HTTPException(status_code=404, detail="Room not found")
 
     viewer_tg_id = _extract_viewer_tg_id(user, request, query_tg_id=tg_user_id)
+    if room and getattr(room, "game_type", None) == "rpg_coop" and room.status == "finished" and room.winner == "heroes":
+        if not getattr(room, "reward_distributed", False):
+            from backend.api.routers.games_rpg_hooks import handle_rpg_room_moved
+            await handle_rpg_room_moved(room, session, user, viewer_tg_id)
     return room.to_dict(viewer_tg_id=viewer_tg_id)
 
 
@@ -302,7 +307,7 @@ async def make_game_move(
     room = game_manager.get_room(room_id)
     if room:
         from backend.api.routers.games_rpg_hooks import handle_rpg_room_moved
-        await handle_rpg_room_moved(room, session, user)
+        await handle_rpg_room_moved(room, session, user, viewer_tg_id)
     return room.to_dict(viewer_tg_id=viewer_tg_id)
 
 

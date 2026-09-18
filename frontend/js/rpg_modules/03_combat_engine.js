@@ -1,5 +1,6 @@
   function applyDamageToBoss(boss, rawDmg, isCrit) {
-    if (!boss || boss.hp <= 0) return 0;
+    if (!boss || boss.hp <= 0 || isNaN(boss.hp)) return 0;
+    if (rawDmg == null || isNaN(rawDmg) || rawDmg <= 0) return 0;
 
     const p = ARENA.player;
     const stats = RPG_STATE.profile?.stats || {};
@@ -94,11 +95,12 @@
     }
 
     boss._dmgTakenThisSec = (boss._dmgTakenThisSec || 0) + finalDmg;
-    boss.hp = Math.max(0, boss.hp - finalDmg);
+    const curBossHp = (!isNaN(boss.hp) && boss.hp > 0) ? boss.hp : (boss.maxHp || 1000);
+    boss.hp = Math.max(0, curBossHp - finalDmg);
 
-    // Passive Item: Satanic & General Lifesteal (capped per hit to prevent infinite invulnerability)
+    // Passive Item: Satanic & General Lifesteal (only heals living player)
     const lifestealPct = stats.lifesteal || 0;
-    if (p && lifestealPct > 0) {
+    if (p && !p.isDead && typeof p.currentHp === "number" && p.currentHp > 0 && lifestealPct > 0) {
       const pMax = p.maxHp || 500;
       const rawHeal = Math.floor(finalDmg * (lifestealPct / 100));
       const heal = Math.max(1, Math.min(Math.floor(pMax * 0.08), rawHeal));
@@ -142,12 +144,13 @@
 
   // UNIVERSAL SAFE DAMAGE: Routes all damage through applyDamageToBoss if target is a boss!
   function safeDamageCreep(c, rawDmg, isCrit) {
-    if (!c || c.hp <= 0) return 0;
+    if (!c || c.hp <= 0 || isNaN(c.hp)) return 0;
+    if (rawDmg == null || isNaN(rawDmg) || rawDmg <= 0) return 0;
     if (c.isBoss) {
       return applyDamageToBoss(c, rawDmg, isCrit);
     }
-    const dmg = Math.max(1, rawDmg);
-    c.hp -= dmg;
+    const dmg = Math.max(1, Math.floor(rawDmg));
+    c.hp = Math.max(0, c.hp - dmg);
     return dmg;
   }
 
@@ -195,15 +198,19 @@
 
   function applyDamageToPlayer(rawDmg, attackType = "normal") {
     const p = ARENA.player;
-    if (!p || (typeof p.isInvulnerable === "number" && p.isInvulnerable > 0)) return 0;
+    if (!p || p.isDead || (typeof p.currentHp === "number" && p.currentHp <= 0) || (typeof p.isInvulnerable === "number" && p.isInvulnerable > 0)) return 0;
 
     const stats = RPG_STATE.profile?.stats || {};
     const eq = RPG_STATE.profile?.equipment || {};
 
-    // 1. Evasion (only for normal/physical attacks) & Boss MKB (30%)
+    const isMagic = (attackType === "magic" || attackType === "spell" || attackType === "burn" || attackType === "poison" ||
+      attackType === "beam" || attackType === "chain_frost" || attackType === "danger_zone" || attackType === "black_hole" ||
+      attackType === "doom" || attackType === "sunder");
+
+    // 1. Evasion (for physical/attack hits) & Boss MKB (20% pierce chance)
+    const canEvade = !isMagic;
     const dodgeChance = Math.min(70, stats.dodge_chance || 0);
-    const canEvade = (attackType !== "magic");
-    const bossMkbProcced = canEvade && (Math.random() < 0.30);
+    const bossMkbProcced = canEvade && (Math.random() < 0.20);
     
     if (canEvade && !bossMkbProcced && dodgeChance > 0 && Math.random() * 100 < dodgeChance) {
       spawnFloatingText(p.x, p.y - 25, "💨 УВОРОТ!", "#38bdf8");
@@ -211,7 +218,7 @@
       return 0;
     }
 
-    // 2. Passive Item: Radiance Blind (17% chance boss misses attack, also bypassable by MKB)
+    // 2. Passive Item: Radiance Blind (17% chance boss misses attack, bypassable by MKB)
     const hasRadiance = Object.values(eq).some(it => it && (it.name?.includes("Radiance") || it.name?.includes("Сияние") || it.bonus?.miss_aura));
     if (hasRadiance && canEvade && !bossMkbProcced && Math.random() < 0.17) {
       spawnFloatingText(p.x, p.y - 25, "💨 ПРОМАХ БОССА!", "#f59e0b");
@@ -221,7 +228,15 @@
 
     let finalDmg = Math.max(1, rawDmg);
 
-    // 3. Passive Item: Vanguard / Crimson Guard Damage Block (70% chance, capped at 50% on bosses)
+    // 3. Magic Resistance: Reducts all magic, elemental and spell damage (up to 80% cap)
+    if (isMagic) {
+      const mr = Math.min(80, Math.max(0, stats.magic_resist || 0));
+      if (mr > 0) {
+        finalDmg = Math.max(1, Math.floor(finalDmg * (1.0 - mr / 100)));
+      }
+    }
+
+    // 4. Passive Item: Vanguard / Crimson Guard Damage Block (70% chance, capped at 50% on bosses)
     const damageBlock = stats.damage_block || 0;
     if (damageBlock > 0 && Math.random() < 0.70) {
       const isBossEncounter = !!(ARENA.isRaidBossBattle || ARENA.isBossActive || ARENA.bossArenaMode);
@@ -230,7 +245,7 @@
       spawnFloatingText(p.x, p.y - 20, `🛡️ БЛОК -${effectiveBlock} (АВАНГАРД)`, "#94a3b8");
     }
 
-    // 4. Passive Item: Blade Mail Damage Return (Reflect 35% damage back to boss)
+    // 5. Passive Item: Blade Mail Damage Return (Reflect 35% damage back to boss)
     const reflectPct = stats.reflect || 0;
     if (reflectPct > 0) {
       const reflectDmg = Math.max(1, Math.floor(rawDmg * (reflectPct / 100)));
@@ -248,9 +263,20 @@
 
     const pMax = Math.max(100, p.maxHp || 500);
 
-    // HEALTH GATE PROTECTION:
-    // Only saves player ONCE per 60s from an unexpected lethal hit if they were at high health (>60% HP)
-    // Prevents cheap 1-frame deaths from full HP, but consecutive hits WILL KILL!
+    // 6. PET PHOENIX: Supernova Lethal Protection (Saves from death every 30s)
+    const equippedPet = (RPG_STATE.profile?.pets || []).find(pt => pt.is_equipped);
+    const petType = equippedPet ? (equippedPet.type || equippedPet.pet_id) : localStorage.getItem("rpg_active_pet");
+    if (petType === "phoenix" && finalDmg >= p.currentHp && (!p._phoenixShieldFrame || (ARENA.frameCount || 0) - p._phoenixShieldFrame > 1800)) {
+      p._phoenixShieldFrame = ARENA.frameCount || 0;
+      p.isInvulnerable = 180; // 3 seconds of immunity
+      p.currentHp = Math.max(1, Math.floor(pMax * 0.35));
+      spawnFloatingText(p.x, p.y - 30, "🦅 СВЕРХНОВАЯ ЗАЩИТА!", "#f59e0b");
+      triggerHaptic("heavy");
+      return 0;
+    }
+
+    // 7. HEALTH GATE PROTECTION:
+    // Saves player ONCE per 60s from an unexpected lethal hit if they were at high health (>60% HP)
     const nowFrame = ARENA.frameCount || 0;
     if (p.currentHp > pMax * 0.60 && finalDmg >= p.currentHp && (!p._lastHealthGateFrame || nowFrame - p._lastHealthGateFrame > 3600)) {
       p._lastHealthGateFrame = nowFrame;
@@ -264,6 +290,9 @@
 
     p.currentHp = Math.max(0, p.currentHp - finalDmg);
     if (p.currentHp <= 0) {
+      p.currentHp = 0;
+      p.isDead = true;
+      p.isInvulnerable = 0;
       handlePlayerArenaDeath();
     }
     return finalDmg;

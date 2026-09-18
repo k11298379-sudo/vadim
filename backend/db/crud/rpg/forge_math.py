@@ -158,13 +158,14 @@ def apply_forge_upgrade_to_item(item: Dict[str, Any], target_level: int) -> Dict
     """
     from backend.db.crud.rpg.loot import rebuild_item_description
 
+    cur_lvl = item.get("upgrade", 0)
+    cur_mult = max(1.0, calculate_forge_multiplier(cur_lvl))
+
     item["upgrade"] = target_level
     item["forge_level"] = target_level
     growth_mult = calculate_forge_multiplier(target_level)
 
     # 1. Base Weapon Attack
-    cur_lvl = item.get("upgrade", 0)
-    cur_mult = max(1.0, calculate_forge_multiplier(cur_lvl))
     if "base_min" not in item and "min_atk" in item:
         item["base_min"] = max(6, int(round(item["min_atk"] / cur_mult)))
     if "base_max" not in item and "max_atk" in item:
@@ -190,7 +191,7 @@ def apply_forge_upgrade_to_item(item: Dict[str, Any], target_level: int) -> Dict
     if "base_hp" in item:
         item["hp_bonus"] = int(round(item["base_hp"] * growth_mult))
 
-    # 3. Bonus Attributes
+    # 3. Bonus Attributes & Special Affixes Preservation
     bonus = dict(item.get("bonus", {}))
     if "base_bonus" not in item:
         item["base_bonus"] = dict(bonus)
@@ -210,8 +211,22 @@ def apply_forge_upgrade_to_item(item: Dict[str, Any], target_level: int) -> Dict
                 bonus[k] = min(60, int(round(v * (1.0 + target_level * 0.05))))
             elif k in ["spell_amp"]:
                 bonus[k] = min(75, int(round(v * (1.0 + target_level * 0.10))))
-            elif k in ["lightning", "chain_lightning", "burst_magic", "cleave", "reflect", "damage_block", "block"]:
+            elif k in ["freeze_chance", "slow_enemy", "silence_enemy", "stun_chance", "illusion_evade", "ethereal_evade"]:
+                bonus[k] = min(60, int(round(v * (1.0 + target_level * 0.06))))
+            elif k in ["magic_resist"]:
+                bonus[k] = min(75, int(round(v * (1.0 + target_level * 0.08))))
+            elif k in [
+                "lightning", "chain_lightning", "burst_magic", "cleave", "reflect", "damage_block", "block",
+                "pure_dmg", "meteor", "rot_aura", "water_surge", "chaos_burst", "ghost_strike", "black_hole",
+                "fire_aura", "burn", "frost_armor", "regen", "hp_regen", "mp_regen", "armor_reduction",
+                "weaken", "soul_steal", "execute_low_hp", "spell_lifesteal", "crit_multiplier", "magic_dmg",
+                "armor_pierce", "creep_dmg", "giant_stomp", "double_strike", "gold_boost"
+            ]:
                 bonus[k] = int(round(v * growth_mult))
+            else:
+                bonus[k] = int(round(v * growth_mult))
+        else:
+            bonus[k] = v
 
     item["bonus"] = bonus
     item["bonus_desc"] = rebuild_item_description(item)

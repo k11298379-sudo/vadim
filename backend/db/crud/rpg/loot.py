@@ -82,8 +82,11 @@ def rebuild_item_description(item: Dict[str, Any]) -> str:
         parts.append(f"🛡️ Блок {blk}")
     if bonus.get("armor_aura"):
         parts.append(f"🛡️ +{bonus['armor_aura']} Аура брони")
-    if bonus.get("burn_aura"):
-        parts.append(f"🔥 Аура огня {bonus['burn_aura']}/с")
+    if bonus.get("burn_aura") or bonus.get("fire_aura"):
+        fa = bonus.get("burn_aura") or bonus.get("fire_aura")
+        parts.append(f"🔥 Аура огня {fa}/с")
+    if bonus.get("burn"):
+        parts.append(f"🔥 Горение {bonus['burn']}/с")
     if bonus.get("double_strike"):
         parts.append(f"⚔️ Двойной удар {bonus['double_strike']}%")
     if bonus.get("gold_boost"):
@@ -92,6 +95,8 @@ def rebuild_item_description(item: Dict[str, Any]) -> str:
         parts.append(f"⏳ -{bonus['cooldown_reduct']}% Кулдаун")
     if bonus.get("magic_dmg"):
         parts.append(f"✨ +{bonus['magic_dmg']} Маг. урон")
+    if bonus.get("pure_dmg"):
+        parts.append(f"⚔️ +{bonus['pure_dmg']} Чистый урон")
     if bonus.get("magic_pierce"):
         parts.append(f"🔮 -{bonus['magic_pierce']}% Маг. защиты")
     if bonus.get("mana_burn"):
@@ -104,7 +109,7 @@ def rebuild_item_description(item: Dict[str, Any]) -> str:
         parts.append("👹 Призыв демонов")
     if bonus.get("dispel"):
         parts.append("✨ Очищение")
-    if bonus.get("silence"):
+    if bonus.get("silence") or bonus.get("silence_enemy"):
         parts.append("🤐 Безмолвие")
     if bonus.get("hex"):
         parts.append("🐸 Хекс")
@@ -114,8 +119,43 @@ def rebuild_item_description(item: Dict[str, Any]) -> str:
         parts.append("🎯 Точный удар")
     if bonus.get("revive"):
         parts.append("👑 Полное воскрешение")
-    if bonus.get("slow") or bonus.get("slow_aura"):
-        parts.append("❄️ Замедление")
+    if bonus.get("unholy_rage"):
+        parts.append("🩸 Нечестивая ярость")
+    if bonus.get("slow") or bonus.get("slow_aura") or bonus.get("slow_enemy"):
+        slw = bonus.get("slow_enemy") or bonus.get("slow") or bonus.get("slow_aura")
+        parts.append(f"❄️ Замедление {slw}%" if isinstance(slw, (int, float)) else "❄️ Замедление")
+    if bonus.get("freeze_chance"):
+        parts.append(f"❄️ Заморозка {bonus['freeze_chance']}%")
+    if bonus.get("frost_armor"):
+        parts.append(f"❄️ Ледяная броня +{bonus['frost_armor']}")
+    if bonus.get("regen"):
+        parts.append(f"🩹 +{bonus['regen']} Регенерация")
+    if bonus.get("armor_reduction"):
+        parts.append(f"🩸 -{bonus['armor_reduction']} Брони врага")
+    if bonus.get("weaken"):
+        parts.append(f"💥 Ослабление врага {bonus['weaken']}%")
+    if bonus.get("water_surge"):
+        parts.append(f"🌊 Водный всплеск {bonus['water_surge']}")
+    if bonus.get("soul_steal"):
+        parts.append(f"👻 Похищение души {bonus['soul_steal']}%")
+    if bonus.get("execute_low_hp"):
+        parts.append(f"☠️ Казнь {bonus['execute_low_hp']}%")
+    if bonus.get("spell_lifesteal"):
+        parts.append(f"🩸 +{bonus['spell_lifesteal']}% Вампиризм заклинаний")
+    if bonus.get("rot_aura"):
+        parts.append(f"☣️ Аура гниения {bonus['rot_aura']}/с")
+    if bonus.get("crit_multiplier"):
+        parts.append(f"💥 +{bonus['crit_multiplier']}% Сила крита")
+    if bonus.get("illusion_evade"):
+        parts.append(f"💨 Иллюзорный уворот {bonus['illusion_evade']}%")
+    if bonus.get("ethereal_evade"):
+        parts.append(f"👻 Эфирный уворот {bonus['ethereal_evade']}%")
+    if bonus.get("chaos_burst"):
+        parts.append(f"🔮 Всплеск хаоса {bonus['chaos_burst']}")
+    if bonus.get("ghost_strike"):
+        parts.append(f"👻 Призрачный удар {bonus['ghost_strike']}")
+    if bonus.get("black_hole"):
+        parts.append(f"🌌 Черная дыра {bonus['black_hole']}")
     if bonus.get("static_shield"):
         parts.append("⚡ Статический щит")
 
