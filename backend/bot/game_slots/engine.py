@@ -6,11 +6,11 @@ from typing import List, Dict, Any
 
 SLOT_SYMBOLS = [
     {"symbol": "🍒", "name": "Вишня", "weight": 16, "triple_mult": 5, "pair_mult": 1.0},
-    {"symbol": "🍋", "name": "Лимон", "weight": 28, "triple_mult": 6, "pair_mult": 0.5},
-    {"symbol": "🍇", "name": "Виноград", "weight": 24, "triple_mult": 8, "pair_mult": 1.0},
-    {"symbol": "🔔", "name": "Колокольчик", "weight": 14, "triple_mult": 12, "pair_mult": 1.4},
-    {"symbol": "💎", "name": "Алмаз", "weight": 6, "triple_mult": 20, "pair_mult": 2.0},
-    {"symbol": "7️⃣", "name": "Семёрка", "weight": 3, "triple_mult": 40, "pair_mult": 2.5},
+    {"symbol": "🍋", "name": "Лимон", "weight": 28, "triple_mult": 5, "pair_mult": 0.3},
+    {"symbol": "🍇", "name": "Виноград", "weight": 24, "triple_mult": 8, "pair_mult": 0.6},
+    {"symbol": "🔔", "name": "Колокольчик", "weight": 14, "triple_mult": 12, "pair_mult": 1.3},
+    {"symbol": "💎", "name": "Алмаз", "weight": 6, "triple_mult": 20, "pair_mult": 1.6},
+    {"symbol": "7️⃣", "name": "Семёрка", "weight": 3, "triple_mult": 35, "pair_mult": 2.2},
 ]
 
 _SYMBOLS_LIST = [s["symbol"] for s in SLOT_SYMBOLS]
@@ -25,10 +25,9 @@ def spin_reels() -> List[str]:
 
 def evaluate_slots(reels: List[str], stake: int) -> Dict[str, Any]:
     """
-    Расчет выигрыша по выпавшим 3 символам:
-    - 3 одинаковых: множитель triple_mult (до 40x)
-    - 2 одинаковых: множитель pair_mult (0.5x .. 2.5x)
-    - 1-я вишня (🍒 слева): утешительный возврат 0.5x
+    Расчет выигрыша по выпавшим 3 символам (RTP ~70%):
+    - 3 одинаковых: множитель triple_mult (до 35x)
+    - 2 одинаковых: множитель pair_mult (0.3x .. 2.2x)
     - Иначе: 0
     """
     if len(reels) != 3:
@@ -50,10 +49,6 @@ def evaluate_slots(reels: List[str], stake: int) -> Dict[str, Any]:
         mult = float(info.get("pair_mult", 1.0))
         combo_name = f"Пара {info.get('name', match_sym)}"
         status = "win" if mult > 1.0 else ("push" if mult == 1.0 else "loss")
-    elif s1 == "🍒":
-        mult = 0.5
-        combo_name = "Вишня на первом барабане"
-        status = "loss"
 
     payout = int(round(stake * mult))
     net_profit = payout - stake

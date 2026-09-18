@@ -156,11 +156,11 @@
       <div class="p-2.5 bg-slate-100 dark:bg-slate-900/90 rounded-2xl border border-slate-200 dark:border-slate-700 text-xs space-y-1 text-slate-700 dark:text-slate-300">
         <div class="font-black text-slate-900 dark:text-white flex justify-between"><span>📜 Таблица выплат</span><button onclick="window.SLOTS.togglePaytable()" class="text-slate-400">✕</button></div>
         <div class="grid grid-cols-2 gap-1 pt-0.5 text-[11px] font-semibold">
-          <div>7️⃣ 7️⃣ 7️⃣ — <b class="text-amber-500">40x</b> (Джекпот)</div><div>💎 💎 💎 — <b class="text-blue-400">20x</b></div>
+          <div>7️⃣ 7️⃣ 7️⃣ — <b class="text-amber-500">35x</b> (Джекпот)</div><div>💎 💎 💎 — <b class="text-blue-400">20x</b></div>
           <div>🔔 🔔 🔔 — <b class="text-yellow-400">12x</b></div><div>🍇 🍇 🍇 — <b class="text-purple-400">8x</b></div>
-          <div>🍋 🍋 🍋 — <b class="text-lime-400">6x</b></div><div>🍒 🍒 🍒 — <b class="text-rose-400">5x</b></div>
-          <div>Пара 7️⃣ / 💎 — <b>2x–2.5x</b></div><div>Пара 🔔 — <b>1.4x</b></div>
-          <div>Пара 🍇 / 🍒 — <b>1x (возврат)</b></div><div>Пара 🍋 / 🍒 слева — <b>0.5x</b></div>
+          <div>🍋 🍋 🍋 — <b class="text-lime-400">5x</b></div><div>🍒 🍒 🍒 — <b class="text-rose-400">5x</b></div>
+          <div>Пара 7️⃣ / 💎 — <b>1.6x–2.2x</b></div><div>Пара 🔔 — <b>1.3x</b></div>
+          <div>Пара 🍒 — <b>1x (возврат)</b></div><div>Пара 🍇 / 🍋 — <b>0.3x–0.6x</b></div>
         </div>
       </div>` : '';
 

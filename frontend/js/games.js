@@ -282,7 +282,7 @@
   function initCasinoLeaderboard() { const el = document.getElementById('casino-leaderboard-root'); if (el) window.CASINO_LEADERBOARD ? window.CASINO_LEADERBOARD.init(el) : loadScript('/static/js/casino_leaderboard.js?v=20260916_1', () => window.CASINO_LEADERBOARD?.init(el)); }
   function initRoulette() { const el = document.getElementById('roulette-root'); if (el) window.ROULETTE ? window.ROULETTE.init(el) : loadScript('/static/js/roulette.js?v=20260915_1', () => window.ROULETTE?.init(el)); }
   function initDice() { const el = document.getElementById('dice-root'); if (el) window.DICE ? window.DICE.init(el) : loadScript('/static/js/dice.js?v=20260915_1', () => window.DICE?.init(el)); }
-  function initSlots() { const el = document.getElementById('slots-root'); if (el) window.SLOTS ? window.SLOTS.init(el) : loadScript('/static/js/slots.js?v=20260918_slots_rebalance', () => window.SLOTS?.init(el)); }
+  function initSlots() { const el = document.getElementById('slots-root'); if (el) window.SLOTS ? window.SLOTS.init(el) : loadScript('/static/js/slots.js?v=20260918_70rtp', () => window.SLOTS?.init(el)); }
   function initCoinflip() { const el = document.getElementById('coinflip-root'); if (el) window.COINFLIP ? window.COINFLIP.init(el) : loadScript('/static/js/coinflip.js?v=20260916_1', () => window.COINFLIP?.init(el)); }
   function initBlackjack() { const el = document.getElementById('blackjack-root'); if (el) window.BLACKJACK ? window.BLACKJACK.init(el) : loadScript('/static/js/blackjack.js?v=20260915_1', () => window.BLACKJACK?.init(el)); }
 
