@@ -16,14 +16,11 @@ from backend.db.crud.rpg.character import get_or_create_rpg_character
 
 
 DEFAULT_ADMIN_PLAYERS = [
-    {"user_id": 101, "tg_id": 999001, "name": "🧪 Тест-Слот #1 (Воин)", "hero_class": "warrior", "hero_name": "Рыцарь", "hero_icon": "🛡️", "level": 10, "gold": 50000, "gems": 100, "rebirths": 0, "dungeon_floor": 10},
-    {"user_id": 102, "tg_id": 999002, "name": "🧪 Тест-Слот #2 (Маг)", "hero_class": "mage", "hero_name": "Архимаг", "hero_icon": "🔮", "level": 25, "gold": 250000, "gems": 500, "rebirths": 1, "dungeon_floor": 30},
-    {"user_id": 103, "tg_id": 999003, "name": "🧪 Тест-Слот #3 (Лучник)", "hero_class": "archer", "hero_name": "Снайпер", "hero_icon": "🏹", "level": 35, "gold": 1000000, "gems": 1500, "rebirths": 2, "dungeon_floor": 60},
-    {"user_id": 104, "tg_id": 999004, "name": "🧪 Тест-Слот #4 (Ассасин)", "hero_class": "rogue", "hero_name": "Тень", "hero_icon": "🗡️", "level": 50, "gold": 5000000, "gems": 5000, "rebirths": 3, "dungeon_floor": 100},
     {"user_id": 1, "tg_id": 7755842535, "name": "Не Вадим", "hero_class": "leshrac", "hero_name": "Мучитель Земли", "hero_icon": "🦌", "level": 28, "gold": 1645000, "gems": 140, "rebirths": 0, "dungeon_floor": 35},
     {"user_id": 5, "tg_id": 1440393642, "name": "Михаил Исайкин", "hero_class": "invoker", "hero_name": "Архимаг Стихий", "hero_icon": "🔮", "level": 43, "gold": 373000, "gems": 4120, "rebirths": 2, "dungeon_floor": 106},
     {"user_id": 24, "tg_id": 6926859962, "name": "Макар", "hero_class": "invoker", "hero_name": "Архимаг Стихий", "hero_icon": "🔮", "level": 35, "gold": 104000, "gems": 760, "rebirths": 0, "dungeon_floor": 16},
     {"user_id": 17, "tg_id": 5181261098, "name": "Глеб", "hero_class": "invoker", "hero_name": "Архимаг Стихий", "hero_icon": "🔮", "level": 21, "gold": 146000, "gems": 1360, "rebirths": 1, "dungeon_floor": 53},
+    {"user_id": 4, "tg_id": 1053722876, "name": "notariuspiva", "hero_class": "pudge", "hero_name": "Мясник (Танк)", "hero_icon": "🪝", "level": 18, "gold": 4236000, "gems": 100, "rebirths": 0, "dungeon_floor": 20},
 ]
 
 

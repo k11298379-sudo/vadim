@@ -153,6 +153,7 @@ def serialize_character_profile(char: RPGCharacter, user_name: str = "") -> Dict
     return {
         "id": char.id,
         "user_id": char.user_id,
+        "tg_id": getattr(char, "_tg_id", None) or (char.user.tg_id if hasattr(char, "user") and char.user else None),
         "user_name": user_name,
         "hero_class": canonical_class,
         "class_name": cfg["name"],

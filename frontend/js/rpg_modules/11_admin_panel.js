@@ -12,21 +12,14 @@ window._fetchingAdminCatalog = false;
 
 function getDefaultAdminPlayers() {
   const p = window.RPG_STATE?.profile;
-  const uid = p?.user_id || 1;
-  const tg = p?.tg_id || 1053722876;
-  const name = p?.user_name || "Я (Администратор)";
-  const lvl = p?.level || 1;
-  const gold = p?.gold || 0;
+  const uid = p?.user_id || 1, tg = p?.tg_id || 1053722876, name = p?.user_name || "Я (Администратор)", lvl = p?.level || 1, gold = p?.gold || 0;
   return [
     { user_id: uid, tg_id: tg, name: name, level: lvl, gold: gold, hero_icon: "👑" },
-    { user_id: 101, tg_id: 999001, name: "🧪 Тест-Слот #1 (Воин)", level: 10, gold: 50000, hero_icon: "🛡️" },
-    { user_id: 102, tg_id: 999002, name: "🧪 Тест-Слот #2 (Маг)", level: 25, gold: 250000, hero_icon: "🔮" },
-    { user_id: 103, tg_id: 999003, name: "🧪 Тест-Слот #3 (Лучник)", level: 35, gold: 1000000, hero_icon: "🏹" },
-    { user_id: 104, tg_id: 999004, name: "🧪 Тест-Слот #4 (Ассасин)", level: 50, gold: 5000000, hero_icon: "🗡️" },
     { user_id: 1, tg_id: 7755842535, name: "Не Вадим", level: 28, gold: 1645000, hero_icon: "🦌" },
     { user_id: 5, tg_id: 1440393642, name: "Михаил Исайкин", level: 43, gold: 373000, hero_icon: "🔮" },
     { user_id: 24, tg_id: 6926859962, name: "Макар", level: 35, gold: 104000, hero_icon: "🔮" },
     { user_id: 17, tg_id: 5181261098, name: "Глеб", level: 21, gold: 146000, hero_icon: "🔮" },
+    { user_id: 4, tg_id: 1053722876, name: "notariuspiva", level: 18, gold: 4236000, hero_icon: "🪝" },
   ];
 }
 
@@ -215,47 +208,25 @@ window.RPG.refreshAdminPlayers = async function() {
   try {
     const apiObj = window.api || (typeof api !== "undefined" ? api : null);
     let res = null;
-    if (apiObj && typeof apiObj.getAdminRpgPlayers === "function") {
-      try { res = await apiObj.getAdminRpgPlayers(); } catch (err) { console.warn(err); }
-    }
-    if (!res) {
-      try { res = await fetch("/api/rpg/admin/players").then(r => r.json()); } catch (err) { console.warn(err); }
-    }
-    if (res && res.players && res.players.length > 0) {
-      window._adminPlayersList = res.players;
-      updateAdminModalDOM();
-    }
-  } catch (e) {
-    console.warn("Failed to fetch admin players:", e);
-  } finally {
-    window._fetchingAdminPlayers = false;
-  }
+    if (apiObj?.getAdminRpgPlayers) { try { res = await apiObj.getAdminRpgPlayers(); } catch (err) { console.warn(err); } }
+    if (!res) { try { res = await fetch("/api/rpg/admin/players").then(r => r.json()); } catch (err) { console.warn(err); } }
+    if (res?.players?.length > 0) { window._adminPlayersList = res.players; updateAdminModalDOM(); }
+  } catch (e) { console.warn("Failed to fetch admin players:", e); }
+  finally { window._fetchingAdminPlayers = false; }
 };
 
 window.RPG.fetchAdminCatalog = async function() {
-  if (!window._adminCatalogItems || window._adminCatalogItems.length === 0) {
-    window._adminCatalogItems = window._DEFAULT_RPG_CATALOG || [];
-  }
+  if (!window._adminCatalogItems || window._adminCatalogItems.length === 0) window._adminCatalogItems = window._DEFAULT_RPG_CATALOG || [];
   if (window._fetchingAdminCatalog) return;
   window._fetchingAdminCatalog = true;
   try {
     const apiObj = window.api || (typeof api !== "undefined" ? api : null);
     let res = null;
-    if (apiObj && typeof apiObj.getAdminItemsCatalog === "function") {
-      try { res = await apiObj.getAdminItemsCatalog(); } catch (err) { console.warn(err); }
-    }
-    if (!res) {
-      try { res = await fetch("/api/rpg/admin/items_catalog").then(r => r.json()); } catch (err) { console.warn(err); }
-    }
-    if (res && res.items && res.items.length > 0) {
-      window._adminCatalogItems = res.items;
-      updateAdminModalDOM();
-    }
-  } catch (e) {
-    console.warn("Failed to fetch admin items catalog:", e);
-  } finally {
-    window._fetchingAdminCatalog = false;
-  }
+    if (apiObj?.getAdminItemsCatalog) { try { res = await apiObj.getAdminItemsCatalog(); } catch (err) { console.warn(err); } }
+    if (!res) { try { res = await fetch("/api/rpg/admin/items_catalog").then(r => r.json()); } catch (err) { console.warn(err); } }
+    if (res?.items?.length > 0) { window._adminCatalogItems = res.items; updateAdminModalDOM(); }
+  } catch (e) { console.warn("Failed to fetch admin items catalog:", e); }
+  finally { window._fetchingAdminCatalog = false; }
 };
 
 window.RPG.onAdminCatalogItemChange = function(itemName) {
@@ -268,15 +239,39 @@ window.RPG.onAdminCatalogItemChange = function(itemName) {
   }
 };
 
+function applyAdminProfileUpdate(res, target) {
+  if (!res || !res.profile) return;
+  const p = res.profile;
+  const curUid = String(RPG_STATE.profile?.user_id || "");
+  const curTg = String(RPG_STATE.profile?.tg_id || localStorage.getItem("admin_test_tg_uid") || localStorage.getItem("cached_tg_uid") || "");
+  const tgtStr = target ? String(target).trim() : "";
+  const isMe = !tgtStr || tgtStr === curUid || tgtStr === curTg || String(p.user_id) === curUid || (p.tg_id && String(p.tg_id) === curTg);
+
+  if (isMe) {
+    RPG_STATE.profile = p;
+    if (typeof syncArenaPlayerStats === "function") syncArenaPlayerStats();
+    const topNav = document.getElementById("rpg-top-nav");
+    if (topNav && typeof renderTopNavBarHTML === "function") topNav.outerHTML = renderTopNavBarHTML();
+    const viewContainer = document.getElementById("rpg-view-container");
+    if (viewContainer && RPG_STATE.activeTab === "hero" && typeof renderHeroViewHTML === "function") viewContainer.innerHTML = renderHeroViewHTML();
+  }
+  if (window._adminPlayersList && window._adminPlayersList.length > 0) {
+    const pItem = window._adminPlayersList.find(x => String(x.tg_id) === tgtStr || String(x.user_id) === tgtStr || (isMe && (String(x.user_id) === curUid || String(x.tg_id) === curTg)));
+    if (pItem) {
+      if (p.gold !== undefined) pItem.gold = p.gold;
+      if (p.gems !== undefined) pItem.gems = p.gems;
+      if (p.level !== undefined) pItem.level = p.level;
+    }
+  }
+}
+
 window.RPG.adminGiveGold = async function(amount) {
   try {
     const target = window._adminSelectedTarget || null;
     const apiObj = window.api || (typeof api !== "undefined" ? api : null);
     const res = await apiObj.adminGiveGold({ target, amount });
+    applyAdminProfileUpdate(res, target);
     alert(res.message || "Золото успешно выдано!");
-    if (res.profile && (!target || target === String(RPG_STATE.profile?.user_id) || target === String(RPG_STATE.profile?.tg_id))) {
-      RPG_STATE.profile = res.profile;
-    }
     window.RPG.refreshAdminPlayers();
     updateAdminModalDOM();
   } catch (e) {
@@ -295,10 +290,8 @@ window.RPG.adminGiveGems = async function(amount) {
     const target = window._adminSelectedTarget || null;
     const apiObj = window.api || (typeof api !== "undefined" ? api : null);
     const res = await apiObj.adminGiveGems({ target, amount });
+    applyAdminProfileUpdate(res, target);
     alert(res.message || "Кристаллы успешно выданы!");
-    if (res.profile && (!target || target === String(RPG_STATE.profile?.user_id) || target === String(RPG_STATE.profile?.tg_id))) {
-      RPG_STATE.profile = res.profile;
-    }
     window.RPG.refreshAdminPlayers();
     updateAdminModalDOM();
   } catch (e) {
@@ -315,12 +308,10 @@ window.RPG.adminGiveGemsCustom = function() {
 window.RPG.adminSetLevel = async function(lvl) {
   try {
     const target = window._adminSelectedTarget || null;
-    const res = await api.adminSetLevel({ target, level: lvl });
+    const apiObj = window.api || (typeof api !== "undefined" ? api : null);
+    const res = await apiObj.adminSetLevel({ target, level: lvl });
+    applyAdminProfileUpdate(res, target);
     alert(res.message || `Уровень успешно изменен на ${lvl}!`);
-    if (res.profile && (!target || target === String(RPG_STATE.profile?.user_id) || target === String(RPG_STATE.profile?.tg_id))) {
-      RPG_STATE.profile = res.profile;
-      if (window.syncArenaPlayerStats) syncArenaPlayerStats();
-    }
     window.RPG.refreshAdminPlayers();
     updateAdminModalDOM();
   } catch (e) {
@@ -340,12 +331,10 @@ window.RPG.adminGiveItemSubmit = async function() {
     const rarity = document.getElementById("admin-item-rarity-select")?.value || "legendary";
     const lvl = parseInt(document.getElementById("admin-item-level-input")?.value || "10", 10);
     const itemName = document.getElementById("admin-catalog-item-select")?.value || null;
-
-    const res = await api.adminGiveItem({ target, rarity, level: lvl, item_name: itemName });
+    const apiObj = window.api || (typeof api !== "undefined" ? api : null);
+    const res = await apiObj.adminGiveItem({ target, rarity, level: lvl, item_name: itemName });
+    applyAdminProfileUpdate(res, target);
     alert(res.message || "Предмет успешно выдан в инвентарь!");
-    if (res.profile && (!target || target === String(RPG_STATE.profile?.user_id) || target === String(RPG_STATE.profile?.tg_id))) {
-      RPG_STATE.profile = res.profile;
-    }
     updateAdminModalDOM();
   } catch (e) {
     alert(e.message || "Ошибка выдачи предмета");
@@ -359,12 +348,10 @@ window.RPG.adminResetPlayerSubmit = async function() {
 
   try {
     const target = window._adminSelectedTarget || null;
-    const res = await api.adminResetPlayer({ target });
+    const apiObj = window.api || (typeof api !== "undefined" ? api : null);
+    const res = await apiObj.adminResetPlayer({ target });
+    applyAdminProfileUpdate(res, target);
     alert(res.message || "Прогресс игрока успешно сброшен!");
-    if (res.profile && (!target || target === String(RPG_STATE.profile?.user_id) || target === String(RPG_STATE.profile?.tg_id))) {
-      RPG_STATE.profile = res.profile;
-      if (window.syncArenaPlayerStats) syncArenaPlayerStats();
-    }
     window.RPG.refreshAdminPlayers();
     updateAdminModalDOM();
   } catch (e) {
