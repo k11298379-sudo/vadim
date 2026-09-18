@@ -81,28 +81,37 @@ async def get_factories(
         select(NatFactory).where(NatFactory.company_id == company.id)
     )
     factories = fac_res.scalars().all()
-    return {
-        "factories": [
-            {
-                "id": f.id,
-                "building_type": f.building_type,
-                "factory_type": f.building_type,
-                "specialization": f.specialization,
-                "level": f.level,
-                "tier": f.level,
-                "efficiency": ProductionTickEngine.get_effective_efficiency(company, f),
-                "is_active": f.is_active,
-                "workers": f.workers,
-                "automation_level": f.automation_level,
-                "technology_level": f.technology_level,
-                "current_recipe": f.current_recipe or next((k for k, v in RECIPES.items() if v.get("factory_type") == f.building_type), None),
-                "cycle_started_at": _format_dt_iso(f.cycle_started_at),
-                "cycle_ready_at": _format_dt_iso(f.cycle_ready_at),
-                "last_produced_at": _format_dt_iso(f.last_produced_at)
-            }
-            for f in factories
-        ]
-    }
+    from backend.natbirzha.config import normalize_dt, get_game_now
+    now = normalize_dt(get_game_now())
+    items = []
+    for f in factories:
+        ready_at_norm = normalize_dt(f.cycle_ready_at)
+        is_running = bool(f.cycle_ready_at)
+        is_ready = bool(is_running and now >= ready_at_norm)
+        rem_sec = 0
+        if is_running and not is_ready:
+            rem_sec = max(1, int((ready_at_norm - now).total_seconds()))
+        items.append({
+            "id": f.id,
+            "building_type": f.building_type,
+            "factory_type": f.building_type,
+            "specialization": f.specialization,
+            "level": f.level,
+            "tier": f.level,
+            "efficiency": ProductionTickEngine.get_effective_efficiency(company, f),
+            "is_active": f.is_active,
+            "workers": f.workers,
+            "automation_level": f.automation_level,
+            "technology_level": f.technology_level,
+            "current_recipe": f.current_recipe or next((k for k, v in RECIPES.items() if v.get("factory_type") == f.building_type), None),
+            "cycle_started_at": _format_dt_iso(f.cycle_started_at),
+            "cycle_ready_at": _format_dt_iso(f.cycle_ready_at),
+            "last_produced_at": _format_dt_iso(f.last_produced_at),
+            "is_running": is_running,
+            "is_ready": is_ready,
+            "remaining_seconds": rem_sec
+        })
+    return {"factories": items}
 
 @router.post("/factory/build")
 async def build_factory(

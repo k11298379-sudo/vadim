@@ -68,9 +68,12 @@ function formatRecipeReqs(recipe) {
 function card(f, recipes) {
   const bType = f.building_type || f.factory_type;
   const list = Object.entries(recipes).filter(([,r]) => r.factory_type === bType);
-  const running = Boolean(f.cycle_ready_at);
-  const readyAtMs = running ? parseDateMs(f.cycle_ready_at) : 0;
-  const ready = running && readyAtMs > 0 && readyAtMs <= Date.now();
+  const running = Boolean(f.cycle_ready_at || f.is_running);
+  const remSec = typeof f.remaining_seconds === 'number'
+    ? f.remaining_seconds
+    : (f.cycle_ready_at ? Math.max(0, Math.ceil((parseDateMs(f.cycle_ready_at) - Date.now()) / 1000)) : 0);
+  const ready = running && (Boolean(f.is_ready) || remSec <= 0);
+  const readyAtMs = running && !ready ? (Date.now() + remSec * 1000) : 0;
   const selRecipeId = f.current_recipe || (list[0] ? list[0][0] : null);
   const curRecipe = selRecipeId ? recipes[selRecipeId] : null;
 

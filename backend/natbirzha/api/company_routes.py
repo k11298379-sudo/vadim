@@ -77,8 +77,17 @@ async def get_company_status(
             dt = dt.replace(tzinfo=get_game_tz())
         return dt.isoformat()
 
-    factories = [
-        {
+    from backend.natbirzha.config import normalize_dt, get_game_now
+    now = normalize_dt(get_game_now())
+    factories = []
+    for f in fac_res.scalars().all():
+        ready_at_norm = normalize_dt(f.cycle_ready_at)
+        is_running = bool(f.cycle_ready_at)
+        is_ready = bool(is_running and now >= ready_at_norm)
+        rem_sec = 0
+        if is_running and not is_ready:
+            rem_sec = max(1, int((ready_at_norm - now).total_seconds()))
+        factories.append({
             "id": f.id,
             "building_type": f.building_type,
             "specialization": f.specialization,
@@ -92,10 +101,11 @@ async def get_company_status(
             "current_recipe": f.current_recipe or recipe_for_type.get(f.building_type, "default"),
             "cycle_started_at": _format_dt_iso(f.cycle_started_at),
             "cycle_ready_at": _format_dt_iso(f.cycle_ready_at),
-            "last_produced_at": _format_dt_iso(f.last_produced_at)
-        }
-        for f in fac_res.scalars().all()
-    ]
+            "last_produced_at": _format_dt_iso(f.last_produced_at),
+            "is_running": is_running,
+            "is_ready": is_ready,
+            "remaining_seconds": rem_sec
+        })
     from backend.natbirzha.models.stocks import NatStock
     stock_res = await session.execute(
         select(NatStock).where(NatStock.company_id == company.id, NatStock.is_listed == True)

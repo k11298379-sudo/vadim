@@ -29,9 +29,12 @@ class ProductionTickEngine:
     @staticmethod
     def cycle_duration_seconds(factory: NatFactory, recipe: Dict[str, Any]) -> int:
         base = max(10, int(recipe.get("base_duration", 60)))
-        # Automation makes cycles faster, but never removes the interaction loop.
-        reduction = min(0.60, factory.automation_level * 0.10)
-        return max(10, int(round(base * (1.0 - reduction))))
+        # Early levels: 60-90s. Each factory level adds small scaling (+15s) while multiplying output
+        level_add = max(0, (factory.level - 1) * 15)
+        # Automation reduces cycle time by 10% per level (up to -50%)
+        reduction = min(0.50, factory.automation_level * 0.10)
+        final_sec = int(round((base + level_add) * (1.0 - reduction)))
+        return max(15, final_sec)
 
     @staticmethod
     def upgrade_cost(factory: NatFactory, kind: str) -> float:
@@ -116,7 +119,7 @@ class ProductionTickEngine:
         r_iso = (factory.cycle_ready_at.replace(tzinfo=tz) if factory.cycle_ready_at.tzinfo is None else factory.cycle_ready_at).isoformat()
         return {"success": True, "status": "running", "recipe_id": factory.current_recipe,
                 "started_at": c_iso, "ready_at": r_iso,
-                "duration_seconds": duration, "efficiency": eff}
+                "duration_seconds": duration, "remaining_seconds": duration, "efficiency": eff}
 
     @classmethod
     async def complete_cycle(cls, session: AsyncSession, company: NatCompany, factory: NatFactory,
