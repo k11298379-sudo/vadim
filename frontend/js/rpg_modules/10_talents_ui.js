@@ -107,9 +107,11 @@ function renderTalentNode(node, meta, charLvl, talentPts) {
   const isLocked = charLvl < unlockLvl;
   const isReqMissing = !node.is_bought && !node.can_buy && node.req && !isLocked;
 
+  const isPerk = node.desc && node.desc.includes("[ПЕРК]");
+
   let cardClass, badgeClass, btnHtml;
   if (node.is_bought) {
-    cardClass = "bg-emerald-900/40 border-emerald-500/60";
+    cardClass = isPerk ? "bg-emerald-950/50 border-emerald-400 shadow-md shadow-emerald-500/10" : "bg-emerald-900/40 border-emerald-500/60";
     badgeClass = "bg-emerald-600 text-white";
     btnHtml = `<span class="text-[9px] font-black text-emerald-400">✓ КУПЛЕНО</span>`;
   } else if (isLocked) {
@@ -121,11 +123,11 @@ function renderTalentNode(node, meta, charLvl, talentPts) {
     badgeClass = "bg-slate-700 text-slate-400";
     btnHtml = `<span class="text-[9px] text-slate-500">⛓ Нужен предыдущий талант</span>`;
   } else if (talentPts < (node.cost || 1)) {
-    cardClass = "bg-slate-800/60 border-slate-700/60";
+    cardClass = isPerk ? "bg-slate-800/80 border-amber-500/40" : "bg-slate-800/60 border-slate-700/60";
     badgeClass = `${meta.badge} opacity-60 text-white`;
     btnHtml = `<span class="text-[9px] text-amber-500/70">Нужно ${node.cost} очк.</span>`;
   } else {
-    cardClass = "bg-slate-800/80 border-amber-500/40 shadow-amber-500/10 shadow-md";
+    cardClass = isPerk ? "bg-gradient-to-br from-slate-800 to-amber-950/40 border-amber-400 shadow-amber-500/20 shadow-lg" : "bg-slate-800/80 border-amber-500/40 shadow-amber-500/10 shadow-md";
     badgeClass = `${meta.badge} text-white animate-pulse`;
     btnHtml = `<button onclick="buyTalentNodeUI('${node.id}')" class="px-3 py-1 rounded-lg ${meta.badge} hover:brightness-110 active:scale-95 text-white font-black text-[10px] shadow-sm transition-all">КУПИТЬ (${node.cost}⭐)</button>`;
   }
@@ -133,11 +135,12 @@ function renderTalentNode(node, meta, charLvl, talentPts) {
   return `
     <div class="p-2.5 rounded-xl border transition-all ${cardClass}">
       <div class="flex items-start gap-2">
-        <div class="w-9 h-9 rounded-xl ${node.is_bought ? 'bg-emerald-700/50' : 'bg-slate-900/60'} border border-slate-700 flex items-center justify-center text-xl shrink-0 shadow-inner">${node.icon}</div>
+        <div class="w-9 h-9 rounded-xl ${node.is_bought ? 'bg-emerald-700/50' : 'bg-slate-900/60'} border ${isPerk ? 'border-amber-400/80 shadow-amber-500/20' : 'border-slate-700'} flex items-center justify-center text-xl shrink-0 shadow-inner">${node.icon}</div>
         <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-1.5 mb-0.5">
+          <div class="flex items-center gap-1.5 mb-0.5 flex-wrap">
             <span class="text-xs font-black text-white leading-tight">${node.name}</span>
             <span class="text-[9px] px-1.5 py-0.5 rounded ${badgeClass} font-bold shrink-0">Т${node.tier}</span>
+            ${isPerk ? '<span class="text-[8px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/50 font-black shrink-0">✨ ПЕРК</span>' : ''}
           </div>
           <div class="text-[10px] text-slate-400 leading-snug mb-1.5">${node.desc}</div>
           <div class="flex items-center justify-between">

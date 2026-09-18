@@ -118,6 +118,7 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
     _flat_mp_regen_from_tree = 0.0
     _flat_atk_pct_str = 0.0
     _hp_to_crit = 0.0
+    _unlocked_perks = []
     _hero_tree = {}
     if _tree_talents:
         _hero_tree = get_hero_tree(canonical_class)
@@ -128,6 +129,8 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
             if not _ncfg:
                 continue
             _eff = _ncfg.get("effect", {})
+            if "perk" in _eff and _eff["perk"]:
+                _unlocked_perks.append(_eff["perk"])
             flat_hp += _eff.get("flat_hp", 0)
             flat_mp += _eff.get("flat_mp", 0)
             flat_atk += _eff.get("flat_atk", 0)
@@ -261,6 +264,7 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
         "pet_xp_mult": pet_xp_mult,
         "skill": hero_cfg.get("skill", {"name": "Навык", "icon": "⚡", "mp_cost": 20, "desc": "Навык героя"}),
         "rebirth_multiplier": rebirth_mult,
+        "perks": _unlocked_perks,
         "constellations_bonuses": {
             "vitality_hp": vit_level * 150,
             "vitality_armor": vit_level * 5,

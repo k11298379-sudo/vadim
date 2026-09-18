@@ -565,13 +565,14 @@
     // Largo Amphibian Rhapsody: переключаемая стойка (ВКЛ / ВЫКЛ, длится бесконечно пока есть мана).
     // Каждые 0.5 секунды (30 кадров) тратит ману, хилит Ларго и наносит AoE-урон вокруг!
     if (p.largoRhapsodyActive) {
+      const rhapsodyInterval = (window.hasTalentPerk && window.hasTalentPerk("perk_pulse_storm")) ? 15 : 30;
       if (!p.largoRhapsodyTickTimer || p.largoRhapsodyTickTimer <= 0) {
-        p.largoRhapsodyTickTimer = 30; // 0.5 сек при 60 FPS
+        p.largoRhapsodyTickTimer = rhapsodyInterval;
       }
       p.largoRhapsodyTickTimer--;
 
       if (p.largoRhapsodyTickTimer <= 0) {
-        p.largoRhapsodyTickTimer = 30; // Сброс таймера на следующие 0.5 секунды
+        p.largoRhapsodyTickTimer = rhapsodyInterval;
 
         // Расход маны за тик: 5 MP (или -60% при активном Кваканье Гения -> 2 MP!)
         let tickCost = 5;

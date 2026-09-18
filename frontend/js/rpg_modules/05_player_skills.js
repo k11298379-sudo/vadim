@@ -229,7 +229,49 @@
     let baseDmg = Math.floor((stats.min_atk || 20) + Math.random() * ((stats.max_atk || 30) - (stats.min_atk || 20)));
     let dmg = Math.floor(baseDmg * stepMult);
     if (p.donkeyBuffTimer && p.donkeyBuffTimer > 0) dmg = Math.floor(dmg * 1.35);
-    if (isCrit) dmg = Math.floor(dmg * 2.2);
+
+    // PA PERK: Mega Coup (20% chance for x10 mega crit)
+    if (isCrit) {
+      if (window.hasTalentPerk && window.hasTalentPerk("perk_mega_coup") && Math.random() < 0.20) {
+        dmg = Math.floor(dmg * 10.0);
+        spawnFloatingText(p.x, p.y - 45, "💥 СВЕРХКРИТ x10!", "#dc2626");
+        triggerHaptic("heavy");
+      } else {
+        dmg = Math.floor(dmg * 2.2);
+      }
+      // WK PERK: Vampiric Crit (Critical hits restore 100% of damage dealt)
+      if (window.hasTalentPerk && window.hasTalentPerk("perk_vampiric_crit")) {
+        const vampAmt = Math.min((p.maxHp || 500) - (p.currentHp || 0), dmg);
+        if (vampAmt > 0) {
+          p.currentHp = Math.min(p.maxHp || 500, (p.currentHp || 0) + vampAmt);
+          spawnFloatingText(p.x, p.y - 30, `💚 +${vampAmt} (ВАМПИРИЗМ)`, "#22c55e");
+        }
+      }
+    }
+
+    // PUDGE PERK: Flesh Dismember (Every 4th attack deal x2 dmg + stun target)
+    let isPudgeDismember = false;
+    if (window.hasTalentPerk && window.hasTalentPerk("perk_flesh_dismember")) {
+      ARENA.pudgeHitCounter = (ARENA.pudgeHitCounter || 0) + 1;
+      if (ARENA.pudgeHitCounter >= 4) {
+        ARENA.pudgeHitCounter = 0;
+        isPudgeDismember = true;
+        dmg = Math.floor(dmg * 2.0);
+        spawnFloatingText(p.x, p.y - 35, "🥩 РАСЧЛЕНЕНИЕ x2!", "#ef4444");
+      }
+    }
+
+    // SF PERK: Necromastery Soul Stacks (+3% damage per soul, up to 15 stacks)
+    if (window.hasTalentPerk && window.hasTalentPerk("perk_necromastery_stacks") && (ARENA.sfSouls || 0) > 0) {
+      dmg = Math.floor(dmg * (1.0 + ARENA.sfSouls * 0.03));
+    }
+
+    // ANTI-MAGE PERK: Mana Burn (+15% damage + target attack debuff)
+    let isManaBurn = false;
+    if (window.hasTalentPerk && window.hasTalentPerk("perk_mana_burn")) {
+      isManaBurn = true;
+      dmg = Math.floor(dmg * 1.15);
+    }
 
     // RANGED HERO (Invoker, Shadow Fiend) — fires flying magic orb projectile
     if (p.isRanged) {
@@ -386,6 +428,16 @@
             c.x += 30;
           }
           safeDamageCreep(c, finalDmg, false);
+        }
+
+        if (isPudgeDismember) {
+          c.stunTimer = 72;
+          spawnFloatingText(c.x, c.y - 35, "🥩 ОГЛУШЕНИЕ!", "#ef4444");
+        }
+        if (isManaBurn) {
+          c.atkDebuffTimer = 180;
+          c.atkDebuff = 0.15;
+          spawnFloatingText(c.x, c.y - 25, "⚡ ВЫЖИГАНИЕ!", "#38bdf8");
         }
 
         // Lifesteal on creeps (boss lifesteal is handled safely in applyDamageToBoss)
@@ -900,9 +952,33 @@
           ARENA.cameraTrauma = 0.85;
           triggerHaptic("heavy");
           spawnFloatingText(boss.x, boss.y - 45, `☄️ ХАОС МЕТЕОР! -${dmg}`, "#ea580c");
+          if (window.hasTalentPerk && window.hasTalentPerk("perk_double_cataclysm")) {
+            setTimeout(() => {
+              if (boss && boss.hp > 0) {
+                const dmg2 = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 4.0 * ultMultiplier));
+                ARENA.specialEffects.push({
+                  type: "topdown_meteor",
+                  startX: Math.max(30, Math.min(480, boss.x + 60)),
+                  startY: -70,
+                  targetX: boss.x,
+                  targetY: boss.y,
+                  x: Math.max(30, Math.min(480, boss.x + 60)),
+                  y: -70,
+                  radius: 30,
+                  timer: 40,
+                  maxTimer: 40,
+                  dmg: dmg2
+                });
+                spawnFloatingText(boss.x, boss.y - 60, `☄️ ВТОРОЙ МЕТЕОР! -${dmg2}`, "#f97316");
+              }
+            }, 350);
+          }
           return;
         } else if (hClass === "juggernaut") {
           // Omnislash: rapid slashing combo around the boss!
+          if (window.hasTalentPerk && window.hasTalentPerk("perk_omnislash_invuln")) {
+            p.isInvulnerable = 55;
+          }
           const dmg = applyDamageToBoss(boss, Math.floor((stats.max_atk || 30) * 6.0 * ultMultiplier));
           ARENA.specialEffects.push({
             type: "topdown_omnislash",
@@ -943,6 +1019,10 @@
             maxTimer: 45,
             dmg: dmg
           });
+          if (window.hasTalentPerk && window.hasTalentPerk("perk_requiem_fear")) {
+            boss.fearTimer = 150; // 2.5s
+            spawnFloatingText(boss.x, boss.y - 65, "😱 СТРАХ (2.5с)!", "#a855f7");
+          }
           ARENA.cameraTrauma = 0.85;
           triggerHaptic("heavy");
           spawnFloatingText(boss.x, boss.y - 45, `🌪️ РЕКВИЕМ ДУШ! -${dmg}`, "#a855f7");
@@ -1035,6 +1115,27 @@
 
       spawnFloatingText(p.x + 40, p.y - 45, `☄️ ХАОС МЕТЕОР ПАДАЕТ С НЕБА!${stats.ult_boost ? ` (+${stats.ult_boost}% Ульта)` : ""}`, "#ea580c");
       triggerHaptic("heavy");
+      if (window.hasTalentPerk && window.hasTalentPerk("perk_double_cataclysm")) {
+        setTimeout(() => {
+          if (!ARENA.playerProjectiles) ARENA.playerProjectiles = [];
+          ARENA.playerProjectiles.push({
+            type: "meteor",
+            x: p.x + 55,
+            y: -50,
+            targetY: ARENA.roadY - 16,
+            vx: 2.2,
+            vy: 9.5,
+            falling: true,
+            speed: 5.2,
+            radius: 30,
+            angle: 0,
+            dmg: Math.floor(meteorDmg * 0.75),
+            hitCreepIds: new Set(),
+            burnTrail: []
+          });
+          spawnFloatingText(p.x + 60, p.y - 45, "☄️ ВТОРОЙ МЕТЕОР!", "#f97316");
+        }, 350);
+      }
       return;
     }
 
@@ -1049,6 +1150,9 @@
 
     // 3. JUGGERNAUT: Omnislash (8 golden slashing strikes across the field)
     if (hClass === "juggernaut") {
+      if (window.hasTalentPerk && window.hasTalentPerk("perk_omnislash_invuln")) {
+        p.isInvulnerable = 65;
+      }
       ARENA.specialEffects.push({ type: "omnislash", slashes: 8, timer: 65, currentSlash: 0, mult: ultMultiplier });
       spawnFloatingText(p.x + 30, p.y - 45, `⚔️ ОМНИСЛЕШ ПО ВСЕЙ КАРТЕ!${stats.ult_boost ? ` (+${stats.ult_boost}% Ульта)` : ""}`, "#facc15");
       return;
@@ -1085,6 +1189,13 @@
           icon: "🌑",
           color: "#c084fc"
         });
+      }
+      if (window.hasTalentPerk && window.hasTalentPerk("perk_requiem_fear")) {
+        for (const c of ARENA.creeps) {
+          c.fearTimer = 150;
+          c.speed = -1.0;
+        }
+        spawnFloatingText(p.x + 30, p.y - 65, "😱 СТРАХ НА ВСЕХ!", "#a855f7");
       }
       spawnFloatingText(p.x + 30, p.y - 45, `🌪️ РЕКВИЕМ ДУШ!${stats.ult_boost ? ` (+${stats.ult_boost}% Ульта)` : ""}`, "#a855f7");
       return;
@@ -1709,6 +1820,11 @@
 
     if (!c.isMinion) {
       ARENA.creepsKilledInWave++;
+      // SF PERK: Necromastery Soul Stacks (+3% dmg per soul, up to 15 stacks)
+      if (window.hasTalentPerk && window.hasTalentPerk("perk_necromastery_stacks")) {
+        ARENA.sfSouls = Math.min(15, (ARENA.sfSouls || 0) + 1);
+        spawnFloatingText(ARENA.player.x, ARENA.player.y - 40, `👻 ДУША (${ARENA.sfSouls}/15)`, "#a855f7");
+      }
       if (ARENA.creepsKilledInWave >= ARENA.creepsNeededForWave) {
         advanceArenaWave();
       }
@@ -2125,6 +2241,49 @@
       ARENA.player.isInvulnerable = 60;
       spawnFloatingText(ARENA.player.x, ARENA.player.y - 35, "✨ ВОСКРЕШЕНИЕ ЭГИДОЙ! (+65% HP)", "#facc15");
       triggerHaptic("heavy");
+      return;
+    }
+
+    // WRAITH KING PERK: Reincarnation (Revives with 75% HP + 50% slow on enemies)
+    if (window.hasTalentPerk && window.hasTalentPerk("perk_reincarnation") && !ARENA.wkReincarnationUsed && ARENA.player) {
+      ARENA.wkReincarnationUsed = true;
+      const pMax = ARENA.player.maxHp || 500;
+      ARENA.player.currentHp = Math.floor(pMax * 0.75);
+      ARENA.player.isInvulnerable = 90;
+      ARENA.player.isDead = false;
+      spawnFloatingText(ARENA.player.x, ARENA.player.y - 35, "👑 ПЕРЕРОЖДЕНИЕ КОРОЛЯ! (+75% HP)", "#22c55e");
+      triggerHaptic("heavy");
+      if (ARENA.creeps) {
+        ARENA.creeps.forEach(c => {
+          c.slowTimer = 240;
+          c.speed = Math.max(0.4, (c.baseSpeed || c.speed || 1.5) * 0.5);
+        });
+      }
+      return;
+    }
+
+    // PUDGE PERK: Undying Meat (Survives with 35% HP + 2s invuln + poison explosion)
+    if (window.hasTalentPerk && window.hasTalentPerk("perk_undying_meat") && !ARENA.pudgeUndyingUsed && ARENA.player) {
+      ARENA.pudgeUndyingUsed = true;
+      const pMax = ARENA.player.maxHp || 500;
+      ARENA.player.currentHp = Math.floor(pMax * 0.35);
+      ARENA.player.isInvulnerable = 120;
+      ARENA.player.isDead = false;
+      spawnFloatingText(ARENA.player.x, ARENA.player.y - 35, "🥩 БЕССМЕРТНАЯ ТУША! (ВЗРЫВ ЯДА)", "#84cc16");
+      triggerHaptic("heavy");
+      const poisonBurst = Math.max(50, Math.floor((RPG_STATE.profile?.stats?.attack || 50) * 3));
+      if (ARENA.isBossActive && ARENA.bossEntity && ARENA.bossEntity.hp > 0) {
+        applyDamageToBoss(ARENA.bossEntity, poisonBurst, true);
+        spawnFloatingText(ARENA.bossEntity.x, ARENA.bossEntity.y - 25, `☣️ ВЗРЫВ ЯДА -${poisonBurst}!`, "#84cc16");
+      }
+      if (ARENA.creeps) {
+        ARENA.creeps.forEach(c => {
+          if (c.hp > 0) {
+            safeDamageCreep(c, poisonBurst);
+            spawnFloatingText(c.x, c.y - 20, `☣️ -${poisonBurst}`, "#84cc16");
+          }
+        });
+      }
       return;
     }
 

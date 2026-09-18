@@ -199,6 +199,12 @@
     if (canEvade && !bossMkbProcced && dodgeChance > 0 && Math.random() * 100 < dodgeChance) {
       spawnFloatingText(p.x, p.y - 25, "💨 УВОРОТ!", "#38bdf8");
       triggerHaptic("light");
+      // PA PERK: Blur Heal (Restores 5% max HP on dodge)
+      if (window.hasTalentPerk && window.hasTalentPerk("perk_blur_heal")) {
+        const healAmt = Math.max(1, Math.floor((p.maxHp || 500) * 0.05));
+        p.currentHp = Math.min(p.maxHp || 500, (p.currentHp || 0) + healAmt);
+        spawnFloatingText(p.x, p.y - 45, `💚 +${healAmt} (РАЗМЫТИЕ)`, "#10b981");
+      }
       return 0;
     }
 
@@ -207,6 +213,24 @@
     if (hasRadiance && canEvade && !bossMkbProcced && Math.random() < 0.17) {
       spawnFloatingText(p.x, p.y - 25, "💨 ПРОМАХ БОССА!", "#f59e0b");
       triggerHaptic("light");
+      return 0;
+    }
+
+    // Juggernaut PERK: Blade Parry (15% chance to parry boss/creep melee attack and counter-attack)
+    if (window.hasTalentPerk && window.hasTalentPerk("perk_blade_parry") && canEvade && Math.random() < 0.15) {
+      spawnFloatingText(p.x, p.y - 25, "⚔️ ПАРИРОВАНИЕ КЛИНКОМ!", "#f59e0b");
+      triggerHaptic("medium");
+      const counterDmg = Math.max(10, Math.floor((stats.attack || 50) * 1.5));
+      if (ARENA.isBossActive && ARENA.bossEntity && ARENA.bossEntity.hp > 0) {
+        applyDamageToBoss(ARENA.bossEntity, counterDmg, true);
+        spawnFloatingText(ARENA.bossEntity.x, ARENA.bossEntity.y - 25, `💥 КОНТРАТАКА -${counterDmg}!`, "#eab308");
+      } else if (ARENA.creeps && ARENA.creeps.length > 0) {
+        const tgt = ARENA.creeps.find(c => c.hp > 0);
+        if (tgt) {
+          safeDamageCreep(tgt, counterDmg);
+          spawnFloatingText(tgt.x, tgt.y - 25, `💥 КОНТРАТАКА -${counterDmg}!`, "#eab308");
+        }
+      }
       return 0;
     }
 
@@ -246,6 +270,38 @@
     }
 
     const pMax = Math.max(100, p.maxHp || 500);
+    const nowFrame = ARENA.frameCount || 0;
+
+    // Leshrac PERK: Earth Armor (Stone skin reduces physical damage up to 30% on low HP)
+    if (window.hasTalentPerk && window.hasTalentPerk("perk_earth_armor") && !isMagic) {
+      const missingPct = Math.max(0, 1 - ((p.currentHp || 0) / pMax));
+      const armorReductionPct = Math.min(30, Math.floor((missingPct * 100) / 3));
+      if (armorReductionPct > 0) {
+        finalDmg = Math.max(1, Math.floor(finalDmg * (1 - armorReductionPct / 100)));
+      }
+    }
+
+    // Invoker PERK: Mana Shield (30% incoming damage absorbed by MP: 1 MP = 2 HP)
+    if (window.hasTalentPerk && window.hasTalentPerk("perk_mana_shield") && (p.currentMp || 0) > 0 && finalDmg > 1) {
+      const absorbTarget = Math.floor(finalDmg * 0.30);
+      const neededMp = Math.ceil(absorbTarget / 2);
+      const usedMp = Math.min(p.currentMp, neededMp);
+      const actualAbsorbed = usedMp * 2;
+      p.currentMp = Math.max(0, p.currentMp - usedMp);
+      finalDmg = Math.max(1, finalDmg - actualAbsorbed);
+      if (actualAbsorbed > 0 && Math.random() < 0.35) {
+        spawnFloatingText(p.x, p.y - 35, `🔮 ЩИТ РАЗУМА -${actualAbsorbed}`, "#818cf8");
+      }
+    }
+
+    // Anti-Mage PERK: Blink Reflex (Auto-blinks with i-frame if taking >20% max HP)
+    if (window.hasTalentPerk && window.hasTalentPerk("perk_blink_reflex") && finalDmg >= pMax * 0.20 && (!ARENA.blinkReflexCd || nowFrame > ARENA.blinkReflexCd)) {
+      ARENA.blinkReflexCd = nowFrame + 1200; // 20s cooldown
+      p.isInvulnerable = 30; // 0.5s i-frame
+      spawnFloatingText(p.x, p.y - 35, "⚡ РЕФЛЕКС СКАЧКА!", "#a855f7");
+      triggerHaptic("heavy");
+      return 0;
+    }
 
     // 6. PET PHOENIX: Supernova Lethal Protection (Saves from death every 30s)
     const equippedPet = (RPG_STATE.profile?.pets || []).find(pt => pt.is_equipped);
@@ -261,7 +317,6 @@
 
     // 7. HEALTH GATE PROTECTION:
     // Saves player ONCE per 60s from an unexpected lethal hit if they were at high health (>60% HP)
-    const nowFrame = ARENA.frameCount || 0;
     if (p.currentHp > pMax * 0.60 && finalDmg >= p.currentHp && (!p._lastHealthGateFrame || nowFrame - p._lastHealthGateFrame > 3600)) {
       p._lastHealthGateFrame = nowFrame;
       finalDmg = Math.max(1, p.currentHp - 1);

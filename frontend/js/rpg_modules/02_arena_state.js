@@ -106,6 +106,13 @@
     physicalCoins: [],
     fallingChest: null,
 
+    // Hero Talent Perks State
+    pudgeUndyingUsed: false,
+    pudgeHitCounter: 0,
+    wkReincarnationUsed: false,
+    sfSouls: 0,
+    blinkReflexCd: 0,
+
     // Wave state machine
     // 'fighting' | 'wave_clear' | 'prompt' | 'boss_intro' | 'floor_clear' | 'retry_prompt'
     waveState: "fighting",
@@ -378,6 +385,13 @@
     ARENA.player.critBuff = false;
     ARENA.player.isBlocking = 0;
 
+    // Reset perk battle counters
+    ARENA.pudgeUndyingUsed = false;
+    ARENA.pudgeHitCounter = 0;
+    ARENA.wkReincarnationUsed = false;
+    ARENA.sfSouls = 0;
+    ARENA.blinkReflexCd = 0;
+
     if (!ARENA.bgInit) {
       ARENA.clouds = [];
       for (let i = 0; i < 5; i++) {
@@ -390,6 +404,12 @@
       ARENA.bgInit = true;
     }
   }
+
+  function hasTalentPerk(perkId) {
+    const perks = RPG_STATE.profile?.stats?.perks;
+    return Array.isArray(perks) && perks.includes(perkId);
+  }
+  window.hasTalentPerk = hasTalentPerk;
 
 
   // ===========================================================================
