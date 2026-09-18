@@ -97,6 +97,8 @@ async function loadUserData() {
   const userBadge = document.getElementById("user-badge");
   if (!userBadge) return;
 
+  userBadge.textContent = "Загрузка...";
+
   try {
     const me = await api.getMe();
     window.currentUser = me;

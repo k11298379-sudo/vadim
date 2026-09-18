@@ -86,6 +86,24 @@ function getTelegramUserId() {
   return null;
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function apiRequestWithRetry(endpoint, options = {}, retries = 3, delayMs = 3000) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await apiRequest(endpoint, options);
+    } catch (err) {
+      const isLast = attempt === retries;
+      // Не повторять 401/403 — это не сетевые ошибки
+      if (err.status === 401 || err.status === 403 || isLast) throw err;
+      console.warn(`[retry] attempt ${attempt}/${retries} failed for ${endpoint}, retrying in ${delayMs}ms...`, err.message);
+      await sleep(delayMs);
+    }
+  }
+}
+
 async function apiRequest(endpoint, options = {}) {
   const headers = {
     "Content-Type": "application/json",
@@ -148,7 +166,7 @@ async function apiRequest(endpoint, options = {}) {
 }
 
 const api = {
-  getMe: () => apiRequest("/api/me"),
+  getMe: () => apiRequestWithRetry("/api/me"),
   getStudents: () => apiRequest("/api/students"),
   getBells: () => apiRequest("/api/bells"),
   getSchedule: (dateStr) => apiRequest(`/api/schedule?target_date=${dateStr}`),
