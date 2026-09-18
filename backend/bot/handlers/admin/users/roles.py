@@ -19,7 +19,10 @@ async def cb_toggle_user_role(callback: CallbackQuery, db_session: AsyncSession,
     if not is_admin(current_user, callback.from_user.id):
         return
 
-    target_id = int(callback.data.replace("adm_toggle_role_", ""))
+    parts = callback.data.replace("adm_toggle_role_", "").split("_")
+    target_id = int(parts[0])
+    page = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
+
     if target_id == callback.from_user.id:
         await callback.answer("❌ Вы не можете снять права администратора с самого себя!", show_alert=True)
         return
@@ -60,9 +63,9 @@ async def cb_toggle_user_role(callback: CallbackQuery, db_session: AsyncSession,
             except Exception as e:
                 logger.warning(f"Could not notify demoted admin: {e}")
 
-        # Обновляем сообщение со списком учеников
+        # Обновляем сообщение со списком учеников на той же странице
         from backend.bot.handlers.admin.users.list import cb_view_students
-        await cb_view_students(callback, db_session)
+        await cb_view_students(callback, db_session, page=page)
     else:
         await callback.answer("Невозможно изменить права главного создателя", show_alert=True)
 
@@ -72,7 +75,10 @@ async def cb_toggle_user_tester(callback: CallbackQuery, db_session: AsyncSessio
     if not is_admin(current_user, callback.from_user.id):
         return
 
-    target_id = int(callback.data.replace("adm_tog_test_", ""))
+    parts = callback.data.replace("adm_tog_test_", "").split("_")
+    target_id = int(parts[0])
+    page = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
+
     user = await get_user_by_tg_id(db_session, target_id)
     if user:
         new_status = not bool(getattr(user, "is_tester", False))
@@ -83,7 +89,7 @@ async def cb_toggle_user_tester(callback: CallbackQuery, db_session: AsyncSessio
         except Exception:
             pass
         from backend.bot.handlers.admin.users.list import cb_view_students
-        await cb_view_students(callback, db_session)
+        await cb_view_students(callback, db_session, page=page)
     else:
         try:
             await callback.answer("Пользователь не найден", show_alert=True)

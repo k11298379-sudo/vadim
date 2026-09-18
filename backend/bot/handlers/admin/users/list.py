@@ -80,16 +80,41 @@ async def cb_view_pending(callback: CallbackQuery, db_session: AsyncSession):
         pass
 
 
+STUDENTS_PER_PAGE = 8
+
+
+@router.callback_query(F.data == "noop_page")
+async def cb_noop_page(callback: CallbackQuery):
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+
+
 @router.callback_query(F.data == "admin_view_students")
-async def cb_view_students(callback: CallbackQuery, db_session: AsyncSession):
+@router.callback_query(F.data.startswith("adm_students_page_"))
+async def cb_view_students(callback: CallbackQuery, db_session: AsyncSession, page: int = 0):
+    if callback.data and callback.data.startswith("adm_students_page_"):
+        try:
+            page = int(callback.data.replace("adm_students_page_", ""))
+        except ValueError:
+            page = 0
+
     students = await get_active_users(db_session)
     groups = await get_approved_group_chats(db_session)
 
-    buttons = []
-    lines = ["📋 **Управление правами доступа 11 «Б»:**\n"]
-    lines.append(f"👤 **Ученики ({len(students)}):**")
+    total_students = len(students)
+    total_pages = max(1, (total_students + STUDENTS_PER_PAGE - 1) // STUDENTS_PER_PAGE)
+    page = max(0, min(page, total_pages - 1))
 
-    for i, s in enumerate(students, start=1):
+    page_students = students[page * STUDENTS_PER_PAGE : (page + 1) * STUDENTS_PER_PAGE]
+
+    buttons = []
+    lines = [f"📋 **Управление правами доступа 11 «Б» (Стр. {page + 1}/{total_pages}):**\n"]
+    lines.append(f"👤 **Ученики (всего {total_students}):**")
+
+    start_idx = page * STUDENTS_PER_PAGE + 1
+    for i, s in enumerate(page_students, start=start_idx):
         role_label = "👑 [Админ]" if s.role == "admin" else "👤 [Ученик]"
         tester_badge = " 🧪 [Тестер]" if getattr(s, "is_tester", False) else ""
         safe_disp = escape_md(s.display_name)
@@ -100,17 +125,27 @@ async def cb_view_students(callback: CallbackQuery, db_session: AsyncSession):
         toggle_role_text = "👑 Снять админа" if s.role == "admin" else "👑 Сделать админом"
         log_icon = "🔴 Лог" if is_logged(s.tg_id) else "🔍 Лог"
 
-        # 1-й ряд: ник и админ
+        # 1-й ряд: ник и смена роли (сохраняем текущую страницу пагинации)
         buttons.append([
             InlineKeyboardButton(text=f"✏️ {s.display_name[:12]}", callback_data=f"adm_ren_ask_{s.tg_id}"),
-            InlineKeyboardButton(text=toggle_role_text, callback_data=f"adm_toggle_role_{s.tg_id}"),
+            InlineKeyboardButton(text=toggle_role_text, callback_data=f"adm_toggle_role_{s.tg_id}_{page}"),
         ])
-        # 2-й ряд: остальное (бутылочка квадрат, корзина, лупа лог)
+        # 2-й ряд: тестер, удаление, просмотр логов
         buttons.append([
-            InlineKeyboardButton(text=tester_icon, callback_data=f"adm_tog_test_{s.tg_id}"),
+            InlineKeyboardButton(text=tester_icon, callback_data=f"adm_tog_test_{s.tg_id}_{page}"),
             InlineKeyboardButton(text="🗑 Удалить", callback_data=f"adm_del_user_ask_{s.tg_id}"),
             InlineKeyboardButton(text=log_icon, callback_data=f"adm_log_open_{s.tg_id}")
         ])
+
+    # Панель пагинации страниц
+    if total_pages > 1:
+        nav_row = []
+        if page > 0:
+            nav_row.append(InlineKeyboardButton(text="◀️ Назад", callback_data=f"adm_students_page_{page - 1}"))
+        nav_row.append(InlineKeyboardButton(text=f"Стр. {page + 1}/{total_pages}", callback_data="noop_page"))
+        if page < total_pages - 1:
+            nav_row.append(InlineKeyboardButton(text="Вперёд ▶️", callback_data=f"adm_students_page_{page + 1}"))
+        buttons.append(nav_row)
 
     if groups:
         lines.append(f"\n👥 **Авторизованные группы ({len(groups)}):**")

@@ -141,9 +141,19 @@ class DurakGame:
             if card.rank not in ranks_on_table:
                 return {"ok": False, "error": "Можно подкидывать только карты тех же рангов"}
 
-        # Ограничение: не больше 6 карт на столе и не больше карт в руке защитника
-        if len(self.table) >= 6 or len(self.table) >= len(self.hands[self.current_defender]):
-            return {"ok": False, "error": "Больше карт подкидывать нельзя"}
+        # Ограничение: не больше 6 карт на столе
+        if len(self.table) >= 6:
+            return {"ok": False, "error": "Больше карт подкидывать нельзя (максимум 6 на столе)"}
+
+        # Защитник должен иметь карты в руке для отбоя
+        defender_hand = self.hands[self.current_defender]
+        if not defender_hand:
+            return {"ok": False, "error": "У защитника не осталось карт"}
+
+        # Число неотбитых карт на столе не должно превышать число карт в руке защитника
+        unclosed = sum(1 for slot in self.table if slot.get("defend") is None)
+        if unclosed >= len(defender_hand):
+            return {"ok": False, "error": "У защитника недостаточно карт для отбоя"}
 
         self.hands[attacker_id].remove(card_dict)
         self.table.append({"attack": card_dict, "defend": None})
@@ -181,8 +191,11 @@ class DurakGame:
         # Если все карты на столе отбиты → атакующий может подкинуть или завершить ход
         all_closed = all(s["defend"] is not None for s in self.table)
         if all_closed:
-            # Если колода пуста и у атакующего не осталось карт — авто-отбой
-            if not self.deck and not self.hands[self.current_attacker]:
+            # Если колода пуста и у одного из участников закончились карты — авто-отбой
+            if not self.deck and (not self.hands[self.current_attacker] or not self.hands[self.current_defender]):
+                return self.pass_attack(self.current_attacker)
+            # Если на столе уже 6 карт или у защитника не осталось карт — авто-отбой
+            if len(self.table) >= 6 or not self.hands[self.current_defender]:
                 return self.pass_attack(self.current_attacker)
             self.phase = "attack"
         return {"ok": True}
@@ -270,8 +283,9 @@ class DurakGame:
                 return self.pass_attack(self.current_attacker)
 
             non_trump = [c for c in candidates if c["suit"] != self.trump_suit]
-            choice = min(non_trump or candidates, key=lambda c: RANK_ORDER[c["rank"]])
             result = self.attack(self.current_attacker, choice)
+            if not result.get("ok"):
+                return self.pass_attack(self.current_attacker)
             return {"action": "attack", "card": choice, "result": result}
 
         elif self.phase == "defend" and self.current_defender in self.bot_indices:

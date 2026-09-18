@@ -5,12 +5,12 @@ import random
 from typing import List, Dict, Any
 
 SLOT_SYMBOLS = [
-    {"symbol": "🍒", "name": "Вишня", "weight": 28, "triple_mult": 5, "pair_mult": 1.5},
-    {"symbol": "🍋", "name": "Лимон", "weight": 22, "triple_mult": 7, "pair_mult": 1.5},
-    {"symbol": "🍇", "name": "Виноград", "weight": 18, "triple_mult": 10, "pair_mult": 1.5},
-    {"symbol": "🔔", "name": "Колокольчик", "weight": 12, "triple_mult": 15, "pair_mult": 1.5},
-    {"symbol": "💎", "name": "Алмаз", "weight": 6, "triple_mult": 25, "pair_mult": 2.5},
-    {"symbol": "7️⃣", "name": "Семёрка", "weight": 3, "triple_mult": 50, "pair_mult": 3.0},
+    {"symbol": "🍒", "name": "Вишня", "weight": 16, "triple_mult": 5, "pair_mult": 1.0},
+    {"symbol": "🍋", "name": "Лимон", "weight": 28, "triple_mult": 6, "pair_mult": 0.5},
+    {"symbol": "🍇", "name": "Виноград", "weight": 24, "triple_mult": 8, "pair_mult": 1.0},
+    {"symbol": "🔔", "name": "Колокольчик", "weight": 14, "triple_mult": 12, "pair_mult": 1.4},
+    {"symbol": "💎", "name": "Алмаз", "weight": 6, "triple_mult": 20, "pair_mult": 2.0},
+    {"symbol": "7️⃣", "name": "Семёрка", "weight": 3, "triple_mult": 40, "pair_mult": 2.5},
 ]
 
 _SYMBOLS_LIST = [s["symbol"] for s in SLOT_SYMBOLS]
@@ -26,9 +26,9 @@ def spin_reels() -> List[str]:
 def evaluate_slots(reels: List[str], stake: int) -> Dict[str, Any]:
     """
     Расчет выигрыша по выпавшим 3 символам:
-    - 3 одинаковых: множитель triple_mult (до 50x)
-    - 2 одинаковых: множитель pair_mult (1.5x .. 3x)
-    - 1 вишня: возврат ставки 1x
+    - 3 одинаковых: множитель triple_mult (до 40x)
+    - 2 одинаковых: множитель pair_mult (0.5x .. 2.5x)
+    - 1-я вишня (🍒 слева): утешительный возврат 0.5x
     - Иначе: 0
     """
     if len(reels) != 3:
@@ -43,17 +43,17 @@ def evaluate_slots(reels: List[str], stake: int) -> Dict[str, Any]:
         info = _LOOKUP.get(s1, {})
         mult = float(info.get("triple_mult", 5))
         combo_name = f"Три {info.get('name', s1)}!"
-        status = "jackpot" if s1 == "7️⃣" else ("big_win" if mult >= 15 else "win")
+        status = "jackpot" if s1 == "7️⃣" else ("big_win" if mult >= 12 else "win")
     elif s1 == s2 or s2 == s3 or s1 == s3:
         match_sym = s1 if (s1 == s2 or s1 == s3) else s2
         info = _LOOKUP.get(match_sym, {})
-        mult = float(info.get("pair_mult", 1.5))
+        mult = float(info.get("pair_mult", 1.0))
         combo_name = f"Пара {info.get('name', match_sym)}"
-        status = "win"
-    elif "🍒" in reels:
-        mult = 1.0
-        combo_name = "Одна Вишня (возврат)"
-        status = "push"
+        status = "win" if mult > 1.0 else ("push" if mult == 1.0 else "loss")
+    elif s1 == "🍒":
+        mult = 0.5
+        combo_name = "Вишня на первом барабане"
+        status = "loss"
 
     payout = int(round(stake * mult))
     net_profit = payout - stake
