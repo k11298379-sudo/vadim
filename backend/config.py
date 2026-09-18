@@ -63,7 +63,14 @@ class Settings(BaseSettings):
     )
     
     DATABASE_URL: str = Field(
-        default="sqlite+aiosqlite:///./data/bot.db",
+        default_factory=lambda: (
+            os.environ.get("DATABASE_URL")
+            or (
+                "postgresql+asyncpg://neondb_owner:npg_3xKsMiPz2gVB@ep-jolly-math-b1eqli8z-pooler.c-5.eu-central-1.aws.neon.tech/neondb"
+                if (os.environ.get("RENDER") or os.environ.get("RENDER_EXTERNAL_URL"))
+                else "sqlite+aiosqlite:///./data/bot.db"
+            )
+        ),
         description="Database connection URL"
     )
 

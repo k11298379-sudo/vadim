@@ -15,6 +15,18 @@ from backend.db.crud.rpg.progression_math import LEVEL_CAP
 from backend.db.crud.rpg.character import get_or_create_rpg_character
 
 
+DEFAULT_ADMIN_PLAYERS = [
+    {"user_id": 101, "tg_id": 999001, "name": "🧪 Тест-Слот #1 (Воин)", "hero_class": "warrior", "hero_name": "Рыцарь", "hero_icon": "🛡️", "level": 10, "gold": 50000, "gems": 100, "rebirths": 0, "dungeon_floor": 10},
+    {"user_id": 102, "tg_id": 999002, "name": "🧪 Тест-Слот #2 (Маг)", "hero_class": "mage", "hero_name": "Архимаг", "hero_icon": "🔮", "level": 25, "gold": 250000, "gems": 500, "rebirths": 1, "dungeon_floor": 30},
+    {"user_id": 103, "tg_id": 999003, "name": "🧪 Тест-Слот #3 (Лучник)", "hero_class": "archer", "hero_name": "Снайпер", "hero_icon": "🏹", "level": 35, "gold": 1000000, "gems": 1500, "rebirths": 2, "dungeon_floor": 60},
+    {"user_id": 104, "tg_id": 999004, "name": "🧪 Тест-Слот #4 (Ассасин)", "hero_class": "rogue", "hero_name": "Тень", "hero_icon": "🗡️", "level": 50, "gold": 5000000, "gems": 5000, "rebirths": 3, "dungeon_floor": 100},
+    {"user_id": 1, "tg_id": 7755842535, "name": "Не Вадим", "hero_class": "leshrac", "hero_name": "Мучитель Земли", "hero_icon": "🦌", "level": 28, "gold": 1645000, "gems": 140, "rebirths": 0, "dungeon_floor": 35},
+    {"user_id": 5, "tg_id": 1440393642, "name": "Михаил Исайкин", "hero_class": "invoker", "hero_name": "Архимаг Стихий", "hero_icon": "🔮", "level": 43, "gold": 373000, "gems": 4120, "rebirths": 2, "dungeon_floor": 106},
+    {"user_id": 24, "tg_id": 6926859962, "name": "Макар", "hero_class": "invoker", "hero_name": "Архимаг Стихий", "hero_icon": "🔮", "level": 35, "gold": 104000, "gems": 760, "rebirths": 0, "dungeon_floor": 16},
+    {"user_id": 17, "tg_id": 5181261098, "name": "Глеб", "hero_class": "invoker", "hero_name": "Архимаг Стихий", "hero_icon": "🔮", "level": 21, "gold": 146000, "gems": 1360, "rebirths": 1, "dungeon_floor": 53},
+]
+
+
 async def get_rpg_players_list(session: AsyncSession, limit: int = 100) -> List[Dict[str, Any]]:
     """Returns a list of all users and players with their current RPG stats for the admin panel."""
     stmt = (
@@ -31,7 +43,9 @@ async def get_rpg_players_list(session: AsyncSession, limit: int = 100) -> List[
     rows = result.all()
 
     players = []
+    seen_tg_ids = set()
     for user, char in rows:
+        seen_tg_ids.add(user.tg_id)
         if char:
             hero_cfg = NATAR_HEROES.get(char.hero_class, {})
             players.append({
@@ -65,6 +79,12 @@ async def get_rpg_players_list(session: AsyncSession, limit: int = 100) -> List[
                 "rebirths": 0,
                 "dungeon_floor": 0,
             })
+
+    if len(players) < 5:
+        for p in DEFAULT_ADMIN_PLAYERS:
+            if p["tg_id"] not in seen_tg_ids:
+                players.append(dict(p))
+                seen_tg_ids.add(p["tg_id"])
     return players
 
 
@@ -97,6 +117,13 @@ async def find_character_and_user(
             c = await get_or_create_rpg_character(session, user_id=u.id)
             return c, u
 
+        # Auto-create user for test slots or arbitrary IDs on the fly
+        new_u = User(tg_id=num, full_name=f"Игрок #{num}", role="student")
+        session.add(new_u)
+        await session.flush()
+        c = await get_or_create_rpg_character(session, user_id=new_u.id)
+        return c, new_u
+
     # Try username match
     clean_uname = str_target.lstrip("@").lower()
     u_res = await session.execute(select(User).where(User.username.ilike(clean_uname)))
@@ -105,7 +132,11 @@ async def find_character_and_user(
         c = await get_or_create_rpg_character(session, user_id=u.id)
         return c, u
 
-    return None, None
+    new_u = User(tg_id=random.randint(900000000, 999999999), username=clean_uname, full_name=f"@{clean_uname}", role="student")
+    session.add(new_u)
+    await session.flush()
+    c = await get_or_create_rpg_character(session, user_id=new_u.id)
+    return c, new_u
 
 
 async def admin_give_gold(

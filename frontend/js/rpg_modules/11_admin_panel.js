@@ -17,7 +17,17 @@ function getDefaultAdminPlayers() {
   const name = p?.user_name || "Я (Администратор)";
   const lvl = p?.level || 1;
   const gold = p?.gold || 0;
-  return [{ user_id: uid, tg_id: tg, name: name, level: lvl, gold: gold, hero_icon: "👑" }];
+  return [
+    { user_id: uid, tg_id: tg, name: name, level: lvl, gold: gold, hero_icon: "👑" },
+    { user_id: 101, tg_id: 999001, name: "🧪 Тест-Слот #1 (Воин)", level: 10, gold: 50000, hero_icon: "🛡️" },
+    { user_id: 102, tg_id: 999002, name: "🧪 Тест-Слот #2 (Маг)", level: 25, gold: 250000, hero_icon: "🔮" },
+    { user_id: 103, tg_id: 999003, name: "🧪 Тест-Слот #3 (Лучник)", level: 35, gold: 1000000, hero_icon: "🏹" },
+    { user_id: 104, tg_id: 999004, name: "🧪 Тест-Слот #4 (Ассасин)", level: 50, gold: 5000000, hero_icon: "🗡️" },
+    { user_id: 1, tg_id: 7755842535, name: "Не Вадим", level: 28, gold: 1645000, hero_icon: "🦌" },
+    { user_id: 5, tg_id: 1440393642, name: "Михаил Исайкин", level: 43, gold: 373000, hero_icon: "🔮" },
+    { user_id: 24, tg_id: 6926859962, name: "Макар", level: 35, gold: 104000, hero_icon: "🔮" },
+    { user_id: 17, tg_id: 5181261098, name: "Глеб", level: 21, gold: 146000, hero_icon: "🔮" },
+  ];
 }
 
 function updateAdminModalDOM() {
