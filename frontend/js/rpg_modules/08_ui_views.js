@@ -266,6 +266,96 @@
     const xpPct = Math.min(100, Math.max(0, Math.round((xp / xpNeeded) * 100)));
     const primaryAttr = p.primary_attr || stats.primary_attr || "Сила";
 
+    const userGold = p.gold || 0;
+
+    function calcCost(currentVal, count) {
+      let total = 0;
+      let pts = points;
+      let val = currentVal;
+      for (let i = 0; i < count; i++) {
+        if (pts > 0) {
+          pts--;
+        } else {
+          total += Math.floor(Math.pow(val, 1.35) * 6);
+        }
+        val++;
+      }
+      return total;
+    }
+
+    function calcMax(currentVal) {
+      let count = 0;
+      let pts = points;
+      let remGold = userGold;
+      let val = currentVal;
+      while (pts > 0) {
+        pts--;
+        count++;
+        val++;
+      }
+      while (true) {
+        const cost = Math.floor(Math.pow(val, 1.35) * 6);
+        if (remGold < cost) break;
+        remGold -= cost;
+        count++;
+        val++;
+        if (count >= 10000) break;
+      }
+      return count;
+    }
+
+    function formatShort(num) {
+      if (!num || num <= 0) return "0";
+      if (num >= 1e9) return (num / 1e9).toFixed(1) + "B";
+      if (num >= 1e6) return (num / 1e6).toFixed(1) + "M";
+      if (num >= 1e3) return Math.round(num / 1e3) + "k";
+      return num.toLocaleString();
+    }
+
+    function renderStatUpgradeButtons(statKey, baseVal, themeGradient) {
+      const cost1 = calcCost(baseVal, 1);
+      const cost10 = calcCost(baseVal, 10);
+      const cost100 = calcCost(baseVal, 100);
+      const maxCount = calcMax(baseVal);
+
+      const can1 = !isUpgradingStat && (cost1 <= userGold);
+      const can10 = !isUpgradingStat && (cost10 <= userGold);
+      const can100 = !isUpgradingStat && (cost100 <= userGold);
+      const canMax = !isUpgradingStat && (maxCount > 0);
+
+      const disabledCls = "bg-slate-100 dark:bg-slate-800/80 text-slate-400 dark:text-slate-500 opacity-50 cursor-not-allowed";
+      const btnBase = "py-2 px-1 rounded-xl flex flex-col items-center justify-center transition-all select-none";
+
+      const getSubLabel = (count, cost) => {
+        if (points >= count) return `✨ ${count}`;
+        return `${formatShort(cost)} 🪙`;
+      };
+
+      return `
+        <div class="grid grid-cols-4 gap-1.5 pt-2 border-t border-slate-200/50 dark:border-slate-700/50">
+          <button ${!can1 ? "disabled" : ""} onclick="window.RPG.upgradeStat('${statKey}', 1)" title="+1 уровень" class="${btnBase} ${can1 ? (points > 0 ? "bg-gradient-to-r from-emerald-600 to-green-500 text-white shadow-sm ring-1 ring-emerald-400/40 active:scale-95" : themeGradient + " active:scale-95") : disabledCls}">
+            <span class="text-xs font-black leading-tight">+1</span>
+            <span class="text-[9px] font-bold opacity-90 truncate max-w-full">${points > 0 ? "✨ 1" : `${formatShort(cost1)} 🪙`}</span>
+          </button>
+
+          <button ${!can10 ? "disabled" : ""} onclick="window.RPG.upgradeStat('${statKey}', 10)" title="+10 уровней" class="${btnBase} ${can10 ? themeGradient + " active:scale-95" : disabledCls}">
+            <span class="text-xs font-black leading-tight">+10</span>
+            <span class="text-[9px] font-bold opacity-90 truncate max-w-full">${getSubLabel(10, cost10)}</span>
+          </button>
+
+          <button ${!can100 ? "disabled" : ""} onclick="window.RPG.upgradeStat('${statKey}', 100)" title="+100 уровней" class="${btnBase} ${can100 ? themeGradient + " active:scale-95" : disabledCls}">
+            <span class="text-xs font-black leading-tight">+100</span>
+            <span class="text-[9px] font-bold opacity-90 truncate max-w-full">${getSubLabel(100, cost100)}</span>
+          </button>
+
+          <button ${!canMax ? "disabled" : ""} onclick="window.RPG.upgradeStat('${statKey}', 'max')" title="+Максимум на сколько хватает монет" class="${btnBase} ${canMax ? "bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-black shadow-sm ring-1 ring-amber-400/50 active:scale-95" : disabledCls}">
+            <span class="text-xs font-black leading-tight">+МАКС</span>
+            <span class="text-[9px] font-bold opacity-90 truncate max-w-full">${maxCount > 0 ? `+${maxCount}` : "0"}</span>
+          </button>
+        </div>
+      `;
+    }
+
     return `
       <div class="space-y-4">
         <!-- Level & EXP progress -->
@@ -324,66 +414,45 @@
 
           <div class="space-y-2">
             <!-- 1. STRENGTH (СИЛА) -->
-            <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border ${primaryAttr === "Сила" ? "border-red-500/50 shadow-sm bg-red-50/20" : "border-slate-200/60 dark:border-slate-700/60"} flex items-center justify-between">
-              <div class="space-y-0.5">
-                <div class="flex items-center gap-1.5 flex-wrap">
-                  <span class="text-xs font-black text-red-500">🥩 Сила: ${baseStr}${gearStr > 0 ? ` <span class="text-amber-500 font-extrabold">(+${gearStr})</span>` : ""}${gearStr > 0 ? ` <span class="text-slate-800 dark:text-slate-100 font-black">= ${totalStr}</span>` : ""}</span>
-                  ${primaryAttr === "Сила" ? `<span class="px-1.5 py-0.2 rounded bg-red-500/10 text-red-600 border border-red-500/30 text-[9px] font-black">ОСНОВНОЙ (+1 Урон)</span>` : ""}
+            <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border ${primaryAttr === "Сила" ? "border-red-500/50 shadow-sm bg-red-50/20" : "border-slate-200/60 dark:border-slate-700/60"} flex flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <div class="space-y-0.5">
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <span class="text-xs font-black text-red-500">🥩 Сила: ${baseStr}${gearStr > 0 ? ` <span class="text-amber-500 font-extrabold">(+${gearStr})</span>` : ""}${gearStr > 0 ? ` <span class="text-slate-800 dark:text-slate-100 font-black">= ${totalStr}</span>` : ""}</span>
+                    ${primaryAttr === "Сила" ? `<span class="px-1.5 py-0.2 rounded bg-red-500/10 text-red-600 border border-red-500/30 text-[9px] font-black">ОСНОВНОЙ (+1 Урон)</span>` : ""}
+                  </div>
+                  <span class="block text-[10px] text-slate-400">+22 HP за очко | +0.35 HP/сек регенерация</span>
                 </div>
-                <span class="block text-[10px] text-slate-400">+22 HP за очко | +0.35 HP/сек регенерация</span>
               </div>
-              <button ${isUpgradingStat ? "disabled" : ""} onclick="window.RPG.upgradeStat('str')" class="px-3.5 py-2 rounded-xl ${isUpgradingStat ? "opacity-50 pointer-events-none" : ""} ${
-                points > 0
-                  ? "bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 animate-pulse ring-2 ring-emerald-400/50"
-                  : (p.gold || 0) >= Math.floor(Math.pow(baseStr, 1.35) * 6)
-                    ? "bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500"
-                    : "bg-slate-300 dark:bg-slate-700 opacity-60 cursor-not-allowed"
-              } active:scale-90 text-white font-black text-xs shadow-sm flex items-center gap-1">
-                <span>+</span>
-                <span class="text-[10px]">${points > 0 ? "Очко ✨" : `${Math.floor(Math.pow(baseStr, 1.35) * 6).toLocaleString()} 🪙`}</span>
-              </button>
+              ${renderStatUpgradeButtons('str', baseStr, 'bg-gradient-to-r from-red-600 to-rose-600 text-white hover:from-red-500 hover:to-rose-500 shadow-sm shadow-red-500/20')}
             </div>
 
             <!-- 2. AGILITY (ЛОВКОСТЬ) -->
-            <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border ${primaryAttr === "Ловкость" ? "border-emerald-500/50 shadow-sm bg-emerald-50/20" : "border-slate-200/60 dark:border-slate-700/60"} flex items-center justify-between">
-              <div class="space-y-0.5">
-                <div class="flex items-center gap-1.5 flex-wrap">
-                  <span class="text-xs font-black text-emerald-500">🗡️ Ловкость: ${baseAgi}${gearAgi > 0 ? ` <span class="text-amber-500 font-extrabold">(+${gearAgi})</span>` : ""}${gearAgi > 0 ? ` <span class="text-slate-800 dark:text-slate-100 font-black">= ${totalAgi}</span>` : ""}</span>
-                  ${primaryAttr === "Ловкость" ? `<span class="px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/30 text-[9px] font-black">ОСНОВНОЙ (+1 Урон)</span>` : ""}
+            <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border ${primaryAttr === "Ловкость" ? "border-emerald-500/50 shadow-sm bg-emerald-50/20" : "border-slate-200/60 dark:border-slate-700/60"} flex flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <div class="space-y-0.5">
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <span class="text-xs font-black text-emerald-500">🗡️ Ловкость: ${baseAgi}${gearAgi > 0 ? ` <span class="text-amber-500 font-extrabold">(+${gearAgi})</span>` : ""}${gearAgi > 0 ? ` <span class="text-slate-800 dark:text-slate-100 font-black">= ${totalAgi}</span>` : ""}</span>
+                    ${primaryAttr === "Ловкость" ? `<span class="px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/30 text-[9px] font-black">ОСНОВНОЙ (+1 Урон)</span>` : ""}
+                  </div>
+                  <span class="block text-[10px] text-slate-400">+2.5% Скор. атаки | +0.4 Брони | Крит & Уворот</span>
                 </div>
-                <span class="block text-[10px] text-slate-400">+2.5% Скор. атаки | +0.4 Брони | Крит & Уворот</span>
               </div>
-              <button ${isUpgradingStat ? "disabled" : ""} onclick="window.RPG.upgradeStat('agi')" class="px-3.5 py-2 rounded-xl ${isUpgradingStat ? "opacity-50 pointer-events-none" : ""} ${
-                points > 0
-                  ? "bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 animate-pulse ring-2 ring-emerald-400/50"
-                  : (p.gold || 0) >= Math.floor(Math.pow(baseAgi, 1.35) * 6)
-                    ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500"
-                    : "bg-slate-300 dark:bg-slate-700 opacity-60 cursor-not-allowed"
-              } active:scale-90 text-white font-black text-xs shadow-sm flex items-center gap-1">
-                <span>+</span>
-                <span class="text-[10px]">${points > 0 ? "Очко ✨" : `${Math.floor(Math.pow(baseAgi, 1.35) * 6).toLocaleString()} 🪙`}</span>
-              </button>
+              ${renderStatUpgradeButtons('agi', baseAgi, 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-500 hover:to-teal-500 shadow-sm shadow-emerald-500/20')}
             </div>
 
             <!-- 3. INTELLIGENCE (ИНТЕЛЛЕКТ) -->
-            <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border ${primaryAttr === "Интеллект" ? "border-sky-500/50 shadow-sm bg-sky-50/20" : "border-slate-200/60 dark:border-slate-700/60"} flex items-center justify-between">
-              <div class="space-y-0.5">
-                <div class="flex items-center gap-1.5 flex-wrap">
-                  <span class="text-xs font-black text-sky-500">🧙 Интеллект: ${baseInt}${gearInt > 0 ? ` <span class="text-amber-500 font-extrabold">(+${gearInt})</span>` : ""}${gearInt > 0 ? ` <span class="text-slate-800 dark:text-slate-100 font-black">= ${totalInt}</span>` : ""}</span>
-                  ${primaryAttr === "Интеллект" ? `<span class="px-1.5 py-0.2 rounded bg-sky-500/10 text-sky-600 border border-sky-500/30 text-[9px] font-black">ОСНОВНОЙ (+1 Урон)</span>` : ""}
+            <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border ${primaryAttr === "Интеллект" ? "border-sky-500/50 shadow-sm bg-sky-50/20" : "border-slate-200/60 dark:border-slate-700/60"} flex flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <div class="space-y-0.5">
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <span class="text-xs font-black text-sky-500">🧙 Интеллект: ${baseInt}${gearInt > 0 ? ` <span class="text-amber-500 font-extrabold">(+${gearInt})</span>` : ""}${gearInt > 0 ? ` <span class="text-slate-800 dark:text-slate-100 font-black">= ${totalInt}</span>` : ""}</span>
+                    ${primaryAttr === "Интеллект" ? `<span class="px-1.5 py-0.2 rounded bg-sky-500/10 text-sky-600 border border-sky-500/30 text-[9px] font-black">ОСНОВНОЙ (+1 Урон)</span>` : ""}
+                  </div>
+                  <span class="block text-[10px] text-slate-400">+14 Маны за очко | +0.25 MP/сек | +0.4% Сопр. магии</span>
                 </div>
-                <span class="block text-[10px] text-slate-400">+14 Маны за очко | +0.25 MP/сек | +0.4% Сопр. магии</span>
               </div>
-              <button ${isUpgradingStat ? "disabled" : ""} onclick="window.RPG.upgradeStat('int')" class="px-3.5 py-2 rounded-xl ${isUpgradingStat ? "opacity-50 pointer-events-none" : ""} ${
-                points > 0
-                  ? "bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 animate-pulse ring-2 ring-emerald-400/50"
-                  : (p.gold || 0) >= Math.floor(Math.pow(baseInt, 1.35) * 6)
-                    ? "bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500"
-                    : "bg-slate-300 dark:bg-slate-700 opacity-60 cursor-not-allowed"
-              } active:scale-90 text-white font-black text-xs shadow-sm flex items-center gap-1">
-                <span>+</span>
-                <span class="text-[10px]">${points > 0 ? "Очко ✨" : `${Math.floor(Math.pow(baseInt, 1.35) * 6).toLocaleString()} 🪙`}</span>
-              </button>
+              ${renderStatUpgradeButtons('int', baseInt, 'bg-gradient-to-r from-sky-600 to-blue-600 text-white hover:from-sky-500 hover:to-blue-500 shadow-sm shadow-sky-500/20')}
             </div>
           </div>
 

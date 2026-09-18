@@ -244,11 +244,15 @@ const api = {
       method: "POST",
       body: JSON.stringify({ hero_class: heroClass })
     }),
-  upgradeRpgStat: (statName, extra = {}) =>
-    apiRequest("/api/rpg/upgrade/stat", {
+  upgradeRpgStat: (statName, extra = {}) => {
+    const payload = (typeof extra === "object" && extra !== null)
+      ? { stat: statName, ...extra }
+      : { stat: statName, amount: extra };
+    return apiRequest("/api/rpg/upgrade/stat", {
       method: "POST",
-      body: JSON.stringify({ stat: statName, ...extra })
-    }),
+      body: JSON.stringify(payload)
+    });
+  },
   equipRpgItem: (itemUid, targetSlot) =>
     apiRequest("/api/rpg/inventory/equip", {
       method: "POST",

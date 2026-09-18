@@ -244,9 +244,10 @@ async def upgrade_stat_endpoint(
     """Upgrades Strength, Agility, Intelligence using free stat points or farmed gold."""
     user_id = user.id if user else 1
     stat_name = payload.get("stat", "").strip().lower()
+    amount = payload.get("amount", 1)
 
     char = await get_or_create_rpg_character(session, user_id=user_id)
-    ok, msg = await upgrade_character_base_stat(session, char, stat_name)
+    ok, msg = await upgrade_character_base_stat(session, char, stat_name, amount=amount)
     if not ok:
         raise HTTPException(status_code=400, detail=msg)
 
