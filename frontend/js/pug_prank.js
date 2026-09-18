@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // frontend/js/pug_prank.js — Шуточный модуль «Глеб Мопс»
 // Для удаления: просто удалить этот файл и убрать тег из index.html
 // ============================================================
@@ -115,6 +115,8 @@
       playBarkSound();
 
       pugImg.src = `${PETTING_PUG_SRC}?t=${Date.now()}`;
+      pugImg.style.imageRendering = "pixelated";
+      pugImg.style.width = "210px";
       pugImg.style.transform = "scale(1.06)";
       setTimeout(() => { if (pugImg) pugImg.style.transform = "scale(1)"; }, 150);
 
@@ -125,7 +127,11 @@
 
       if (revertTimer) clearTimeout(revertTimer);
       revertTimer = setTimeout(() => {
-        if (pugImg) pugImg.src = STATIC_PUG_SRC;
+        if (pugImg) {
+          pugImg.src = STATIC_PUG_SRC;
+          pugImg.style.imageRendering = "auto";
+          pugImg.style.width = "240px";
+        }
         if (bubble) {
           bubble.style.opacity = "0";
           bubble.style.transform = "translateY(10px) scale(0.9)";
