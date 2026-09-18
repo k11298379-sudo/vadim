@@ -22,9 +22,12 @@ def create_bot_and_dispatcher() -> tuple[Bot, Dispatcher]:
     global _current_bot
     token = settings.BOT_TOKEN if (settings.BOT_TOKEN and ":" in settings.BOT_TOKEN) else "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
     
-    proxy = settings.TELEGRAM_PROXY
-    if not proxy:
-        import socket
+    import os
+    import socket
+
+    is_render = bool(os.environ.get("RENDER") or os.environ.get("RENDER_EXTERNAL_URL"))
+    proxy = None if is_render else settings.TELEGRAM_PROXY
+    if not proxy and not is_render:
         for test_port in (10809, 7890, 2080, 1080):
             try:
                 with socket.create_connection(("127.0.0.1", test_port), timeout=0.1):
@@ -34,14 +37,20 @@ def create_bot_and_dispatcher() -> tuple[Bot, Dispatcher]:
                 continue
 
     session = None
-    if proxy:
+    if proxy and not is_render:
         try:
-            session = AiohttpSession(proxy=proxy)
+            import urllib.parse
+            parsed = urllib.parse.urlparse(proxy)
+            p_host = parsed.hostname or "127.0.0.1"
+            p_port = parsed.port or 10809
+            with socket.create_connection((p_host, p_port), timeout=0.2):
+                session = AiohttpSession(proxy=proxy)
         except Exception:
             session = None
     elif settings.TELEGRAM_API_SERVER:
         server = TelegramAPIServer.from_base(settings.TELEGRAM_API_SERVER.rstrip("/"))
         session = AiohttpSession(api=server)
+
 
     bot = Bot(
         token=token,

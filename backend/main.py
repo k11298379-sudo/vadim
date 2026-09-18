@@ -168,13 +168,17 @@ async def lifespan(app: FastAPI):
             logger.info("Starting Telegram Bot long-polling...")
             while True:
                 try:
-                    await dp.start_polling(bot, handle_signals=False)
+                    if bot.session and getattr(bot.session, "closed", False):
+                        from aiogram.client.session.aiohttp import AiohttpSession
+                        bot.session = AiohttpSession()
+                    await dp.start_polling(bot, handle_signals=False, close_bot_session=False)
                     break
                 except asyncio.CancelledError:
                     break
                 except Exception as e:
                     logger.warning(f"Telegram polling error (retrying in 5s): {e}")
                     await asyncio.sleep(5)
+
 
         polling_task = asyncio.create_task(init_telegram_bot())
 

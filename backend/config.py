@@ -2,7 +2,7 @@ import os
 from datetime import datetime, date
 import zoneinfo
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+from pydantic import Field, field_validator
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
@@ -11,10 +11,29 @@ class Settings(BaseSettings):
         default="8434343019:AAFtmlYDJXzLZKOBIh-MGoscMC1KYJ3J0Qg",
         description="Telegram Bot API Token"
     )
+
+    @field_validator("BOT_TOKEN", mode="before")
+    @classmethod
+    def validate_bot_token(cls, v):
+        if not v or not isinstance(v, str) or ":" not in v:
+            return "8434343019:AAFtmlYDJXzLZKOBIh-MGoscMC1KYJ3J0Qg"
+        return v.strip()
+
     ADMIN_ID: int = Field(
         default=1053722876,
         description="Telegram ID of the primary administrator"
     )
+
+    @field_validator("ADMIN_ID", mode="before")
+    @classmethod
+    def validate_admin_id(cls, v):
+        if not v or str(v).strip() in ("", "0"):
+            return 1053722876
+        try:
+            return int(v)
+        except Exception:
+            return 1053722876
+
     TELEGRAM_API_SERVER: str = Field(
         default="",
         description="Custom Telegram Bot API server / reverse proxy (e.g. Cloudflare Worker)"

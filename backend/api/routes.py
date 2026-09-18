@@ -51,6 +51,9 @@ api_router.include_router(rebirth_engine_router)
 api_router.include_router(multiplayer_market_router)
 api_router.include_router(creeps_bestiary_router)
 api_router.include_router(natbirzha_router)
+from backend.api.routers.debug import router as debug_router
+api_router.include_router(debug_router)
+
 
 __all__ = [
     "api_router",

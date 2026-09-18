@@ -35,6 +35,9 @@ __all__ = [
     "rebirth_engine_router",
     "multiplayer_market_router",
     "creeps_bestiary_router",
+    "debug_router",
 ]
+from backend.api.routers.debug import router as debug_router
+
 
 
