@@ -1,5 +1,6 @@
 import { NatAPI } from '../api.js';
 import { store } from '../state.js';
+import { getItemInfo } from '../items.js';
 
 // Canonical recipes: food_processing, mine_rare_lithium
 const FACTORIES = [
@@ -60,8 +61,14 @@ export async function renderProduction(container, showToast) {
 
 function formatRecipeReqs(recipe) {
   if (!recipe) return '';
-  const inList = Object.entries(recipe.inputs || {}).map(([k, v]) => `${v} ${k}`).join(', ');
-  const outList = Object.entries(recipe.outputs || {}).map(([k, v]) => `+${v} ${k}`).join(', ');
+  const inList = Object.entries(recipe.inputs || {}).map(([k, v]) => {
+    const info = getItemInfo(k);
+    return `${v} ${info.unit} ${info.name}`;
+  }).join(', ');
+  const outList = Object.entries(recipe.outputs || {}).map(([k, v]) => {
+    const info = getItemInfo(k);
+    return `+${v} ${info.unit} ${info.name}`;
+  }).join(', ');
   return `<div class="text-[10px] text-slate-400 mt-1">📥 ${inList || 'Без затрат'} ➔ 📤 ${outList}</div>`;
 }
 

@@ -1,5 +1,6 @@
 import { NatAPI } from '../api.js';
 import { store } from '../state.js';
+import { getItemInfo } from '../items.js';
 
 export function renderOverview(container, showToast) {
   const company = store.company;
@@ -104,18 +105,24 @@ export function renderOverview(container, showToast) {
           </div>
         ` : `
           <div class="grid grid-cols-2 gap-2">
-            ${items.map(([itemId, qty]) => `
+            ${items.map(([itemId, qty]) => {
+              const info = getItemInfo(itemId);
+              return `
               <div class="resource-pill p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between">
-                <div>
-                  <div class="text-xs font-bold text-slate-800 dark:text-white uppercase font-mono">${itemId}</div>
+                <div class="flex items-center gap-2 min-w-0 pr-1">
+                  <span class="text-base shrink-0">${info.icon}</span>
+                  <div class="min-w-0">
+                    <div class="text-xs font-bold text-slate-800 dark:text-white leading-tight truncate">${info.name}</div>
+                    <div class="text-[10px] text-slate-400 font-mono">${info.unit}</div>
+                  </div>
                 </div>
-                <div class="text-right">
+                <div class="text-right shrink-0">
                   <div class="text-sm font-black font-mono text-slate-900 dark:text-white">
                     ${Number(qty).toLocaleString('ru-RU')}
                   </div>
                 </div>
               </div>
-            `).join('')}
+            `;}).join('')}
           </div>
         `}
       </div>

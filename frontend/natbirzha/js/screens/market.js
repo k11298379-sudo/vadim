@@ -101,7 +101,7 @@ export async function renderMarket(container, showToast) {
         <div class="glass-card rounded-2xl p-4 shadow-sm space-y-3">
           <div class="flex items-center justify-between">
             <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Биржевой стакан цен</h3>
-            <span class="text-[11px] text-slate-500 font-mono">${selectedItemId.toUpperCase()}</span>
+            <span class="text-[11px] text-slate-500 font-bold">${itemInfo.name}</span>
           </div>
 
           <div class="grid grid-cols-2 gap-3 text-xs">

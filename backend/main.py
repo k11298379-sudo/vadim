@@ -289,6 +289,7 @@ async def root():
     return RedirectResponse(url="/app")
 
 @app.get("/app")
+@app.get("/app/")
 async def serve_webapp():
     index_file = os.path.join(frontend_path, "index.html")
     if os.path.exists(index_file):
@@ -302,7 +303,12 @@ async def serve_webapp():
         )
     return {"message": "Frontend not found"}
 
+@app.get("/natbirzha")
+@app.get("/natbirzha/")
+@app.get("/natbirzha/index.html")
 @app.get("/app/natbirzha")
+@app.get("/app/natbirzha/")
+@app.get("/app/natbirzha/index.html")
 async def serve_natbirzha():
     nat_index = os.path.join(frontend_path, "natbirzha", "index.html")
     if os.path.exists(nat_index):

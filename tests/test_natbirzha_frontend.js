@@ -132,11 +132,24 @@ assert(appCode.includes('window.NatApp'), 'app.js must expose window.NatApp');
 assert(appCode.includes('navigateTo'), 'app.js must export navigateTo');
 console.log('All screen modules and app.js integration verified!');
 
-console.log('=== [Natbirzha Test 5/5] Testing games.js Natbirzha banner exposure ===');
+console.log('=== [Natbirzha Test 5/5] Testing games.js Natbirzha banner exposure & items localization ===');
 const gamesCode = fs.readFileSync(path.join(__dirname, '../frontend/js/games.js'), 'utf-8');
 assert(gamesCode.includes('НАТБИРЖА'), 'games.js must contain Natbirzha banner definition');
 assert(gamesCode.includes('${isTesterUser ?'), 'games.js must condition Natbirzha banner on isTesterUser');
 assert(gamesCode.includes('/app/natbirzha'), 'Natbirzha banner must link to /app/natbirzha');
-console.log('Natbirzha banner in games.js verified!');
+
+const itemsScript = fs.readFileSync(path.join(__dirname, '../frontend/natbirzha/js/items.js'), 'utf-8');
+const cleanedItemsScript = itemsScript.replace(/export\s+const\s+ITEMS\s+=/, 'const ITEMS =').replace(/export\s+function\s+getItemInfo/, 'function getItemInfo');
+const itemsFn = new Function(cleanedItemsScript + '\nreturn { ITEMS, getItemInfo };');
+const { ITEMS, getItemInfo } = itemsFn();
+assert(ITEMS.water && ITEMS.water.name === 'Техническая вода', 'water must map to Russian name');
+assert(ITEMS.grid_quota && ITEMS.grid_quota.name === 'Квота энергосети', 'grid_quota must map to Russian name');
+assert(ITEMS.steel && ITEMS.steel.name === 'Конструкционная сталь', 'steel must map to Russian name');
+assert(getItemInfo('WATER').name === 'Техническая вода', 'getItemInfo must be case-insensitive');
+assert(getItemInfo('UNKNOWN_X').icon === '📦', 'getItemInfo must have safe fallback');
+
+const overviewCode = fs.readFileSync(path.join(__dirname, '../frontend/natbirzha/js/screens/overview.js'), 'utf-8');
+assert(overviewCode.includes('getItemInfo'), 'overview.js must use getItemInfo for warehouse items');
+console.log('Natbirzha banner in games.js and items.js localization verified!');
 
 console.log('\n🌟 ALL NATBIRZHA FRONTEND TESTS PASSED WITH 100% SUCCESS! 🌟');

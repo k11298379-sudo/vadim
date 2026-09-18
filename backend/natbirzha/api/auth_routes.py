@@ -2,6 +2,7 @@ import logging
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from backend.config import settings
 from backend.db.session import get_db_session
 from backend.db.models import User
 from backend.natbirzha.models.company import NatCompany
