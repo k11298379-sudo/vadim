@@ -287,9 +287,9 @@
   function initBlackjack() {
     const el = document.getElementById('blackjack-root');
     if (!el) return;
-    loadScript('/static/js/blackjack/blackjack_table.js?v=20260918_table', () => {
+    loadScript('/static/js/blackjack/blackjack_table.js?v=20260918_table_fix1', () => {
       if (window.BLACKJACK) window.BLACKJACK.init(el);
-      else loadScript('/static/js/blackjack.js?v=20260918_table', () => window.BLACKJACK?.init(el));
+      else loadScript('/static/js/blackjack.js?v=20260918_table_fix1', () => window.BLACKJACK?.init(el));
     });
   }
 

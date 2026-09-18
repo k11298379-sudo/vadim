@@ -125,7 +125,7 @@
           <button type="button" class="py-1 px-2 rounded-lg text-xs font-black bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm">
             🤖 Соло (Дилер)
           </button>
-          <button type="button" onclick="window.BLACKJACK_TABLE?.openLobby ? window.BLACKJACK_TABLE.openLobby(document.getElementById('blackjack-root')) : alert('Загрузка стола...')" class="py-1 px-2 rounded-lg text-xs font-extrabold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors flex items-center justify-center gap-1">
+          <button type="button" onclick="window.BLACKJACK?.openTableLobby ? window.BLACKJACK.openTableLobby() : (window.BLACKJACK_TABLE?.openLobby && window.BLACKJACK_TABLE.openLobby(document.getElementById('blackjack-root')))" class="py-1 px-2 rounded-lg text-xs font-extrabold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors flex items-center justify-center gap-1">
             <span>👥 Общий стол</span>
             <span class="px-1 py-0.2 rounded bg-amber-500/20 text-amber-500 text-[10px] font-black">NEW</span>
           </button>
@@ -359,6 +359,20 @@
     syncState();
   }
 
+  function openTableLobby() {
+    const el = containerEl || document.getElementById('blackjack-root');
+    if (window.BLACKJACK_TABLE?.openLobby) {
+      window.BLACKJACK_TABLE.openLobby(el);
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = '/static/js/blackjack/blackjack_table.js?v=20260918_table_fix1';
+    s.onload = () => {
+      if (window.BLACKJACK_TABLE?.openLobby) window.BLACKJACK_TABLE.openLobby(el);
+    };
+    document.head.appendChild(s);
+  }
+
   function cleanup() {
     containerEl = null;
     currentGameState = null;
@@ -375,5 +389,6 @@
     setStake: setStake,
     setCustomStake: setCustomStake,
     setAllIn: setAllIn,
+    openTableLobby: openTableLobby,
   };
 })();

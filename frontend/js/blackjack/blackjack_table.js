@@ -17,12 +17,13 @@
   const SUIT_NAME_MAP = { '♠': 'spades', '♣': 'clubs', '♥': 'hearts', '♦': 'diamonds' };
 
   function getUserId() {
-    if (window.currentUser?.tg_id || window.currentUser?.id) return window.currentUser.tg_id || window.currentUser.id;
+    if (window.currentUser?.tg_id && window.currentUser.tg_id > 0) return parseInt(window.currentUser.tg_id, 10);
+    if (window.currentUser?.id && window.currentUser.id > 0) return parseInt(window.currentUser.id, 10);
     try {
       const p = new URLSearchParams(window.location.search);
       const u = p.get('tg_user_id') || p.get('uid') || p.get('user_id');
       if (u) return parseInt(u, 10);
-      if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) return window.Telegram.WebApp.initDataUnsafe.user.id;
+      if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) return parseInt(window.Telegram.WebApp.initDataUnsafe.user.id, 10);
       const c = localStorage.getItem('cached_tg_uid');
       if (c && /^[0-9]+$/.test(c)) return parseInt(c, 10);
     } catch (e) {}
@@ -106,6 +107,11 @@
     }
   }
 
+  function setStake(amount) {
+    selectedStake = Math.max(1, parseInt(amount, 10) || 10);
+    render();
+  }
+
   function render() {
     if (!containerEl) return;
     const s = currentTableState;
@@ -115,8 +121,8 @@
     }
 
     const uid = getUserId();
-    const myPlayer = s.players.find(p => p.user_id === uid);
-    const isMyTurn = s.phase === 'player_turns' && s.active_user_id === uid;
+    const myPlayer = s.players.find(p => Number(p.user_id) === Number(uid));
+    const isMyTurn = s.phase === 'player_turns' && Number(s.active_user_id) === Number(uid);
     const isBetting = s.phase === 'lobby' || s.phase === 'betting' || s.phase === 'settled';
 
     // Карты дилера
@@ -127,8 +133,8 @@
 
     // Сетка игроков (бокса)
     const playersHTML = s.players.map(p => {
-      const isMe = p.user_id === uid;
-      const isTurn = s.active_user_id === p.user_id;
+      const isMe = Number(p.user_id) === Number(uid);
+      const isTurn = Number(s.active_user_id) === Number(p.user_id);
       let statusBadge = '';
       if (p.status === 'acting') statusBadge = '<span class="px-1.5 py-0.5 rounded bg-amber-500 text-black font-black text-[10px] animate-pulse">Ходит...</span>';
       else if (p.status === 'bust') statusBadge = '<span class="px-1.5 py-0.5 rounded bg-rose-600 text-white font-black text-[10px]">Перебор 💥</span>';
@@ -238,9 +244,13 @@
   }
 
   async function openTable(tableId, container) {
-    containerEl = container;
+    if (container) containerEl = container;
+    if (!containerEl) containerEl = document.getElementById('blackjack-root');
     currentTableId = tableId;
     userCoins = window.currentUser?.coins || 0;
+    if (containerEl) {
+      containerEl.innerHTML = `<div class="p-6 text-center text-sm font-bold text-slate-500 animate-pulse">Загрузка стола #${tableId}...</div>`;
+    }
 
     const { ok, data } = await apiCall(`/api/blackjack/table/${tableId}`);
     if (!ok) {
@@ -400,6 +410,6 @@
     startDeal,
     doAction,
     setStake,
-    getContainer: () => containerEl
+    getContainer: () => containerEl || document.getElementById('blackjack-root')
   };
 })();
