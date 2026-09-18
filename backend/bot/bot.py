@@ -22,10 +22,21 @@ def create_bot_and_dispatcher() -> tuple[Bot, Dispatcher]:
     global _current_bot
     token = settings.BOT_TOKEN if (settings.BOT_TOKEN and ":" in settings.BOT_TOKEN) else "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
     
+    proxy = settings.TELEGRAM_PROXY
+    if not proxy:
+        import socket
+        for test_port in (10809, 7890, 2080, 1080):
+            try:
+                with socket.create_connection(("127.0.0.1", test_port), timeout=0.1):
+                    proxy = f"http://127.0.0.1:{test_port}"
+                    break
+            except (OSError, ConnectionRefusedError):
+                continue
+
     session = None
-    if settings.TELEGRAM_PROXY:
+    if proxy:
         try:
-            session = AiohttpSession(proxy=settings.TELEGRAM_PROXY)
+            session = AiohttpSession(proxy=proxy)
         except Exception:
             session = None
     elif settings.TELEGRAM_API_SERVER:
