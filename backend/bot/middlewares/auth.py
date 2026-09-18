@@ -76,6 +76,7 @@ class AuthMiddleware(BaseMiddleware):
                         if (
                             cb_data.startswith("admin_approve_") or
                             cb_data.startswith("admin_reject_") or
+                            cb_data.startswith("adm_appr_") or
                             cb_data.startswith("admin_chat_approve_") or
                             cb_data.startswith("admin_chat_reject_")
                         ):

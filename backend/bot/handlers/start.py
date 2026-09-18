@@ -125,8 +125,8 @@ async def callback_admin_approve(callback: CallbackQuery, state: FSMContext, db_
     if not target_user:
         await callback.answer("Пользователь не найден", show_alert=True)
         return
-    if target_user.role != "pending":
-        await callback.answer(f"Заявка уже обработана (статус: {target_user.role})!", show_alert=True)
+    if target_user.role not in ["pending", "rejected"]:
+        await callback.answer(f"Пользователь уже одобрен и имеет доступ (статус: {target_user.role})!", show_alert=True)
         return
 
     await state.set_state(ApproveUserStates.entering_name)
