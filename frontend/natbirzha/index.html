@@ -59,12 +59,17 @@
         </div>
       </div>
 
-      <!-- Quick Balance Ticker in Header -->
-      <div id="header-stats" class="hidden text-right">
-        <div id="header-cash" class="text-xs font-black font-mono text-emerald-600 dark:text-emerald-400">
-          0 cash
+      <!-- Quick Balance Ticker in Header & Creator Button -->
+      <div class="flex items-center gap-3">
+        <button id="creator-nav-btn" class="hidden px-2.5 py-1 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-600 dark:text-amber-400 text-[11px] font-bold flex items-center gap-1 hover:bg-amber-500/30 active:scale-95 transition-all">
+          👑 Государство
+        </button>
+        <div id="header-stats" class="hidden text-right">
+          <div id="header-cash" class="text-xs font-black font-mono text-emerald-600 dark:text-emerald-400">
+            0 cash
+          </div>
+          <div class="text-[9px] text-slate-400 uppercase tracking-widest font-semibold">Баланс</div>
         </div>
-        <div class="text-[9px] text-slate-400 uppercase tracking-widest font-semibold">Баланс</div>
       </div>
     </div>
   </header>

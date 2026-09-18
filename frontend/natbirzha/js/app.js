@@ -7,6 +7,7 @@ import { renderUpgrades } from './screens/upgrades.js';
 import { renderMarket } from './screens/market.js';
 import { renderStocks } from './screens/stocks.js';
 import { renderMilitary } from './screens/military.js';
+import { renderCreator } from './screens/creator.js';
 
 // Telegram Haptic Feedback Helper
 export function triggerHaptic(type = 'light') {
@@ -130,6 +131,9 @@ export async function renderCurrentScreen() {
     case 'military':
       await renderMilitary(container, showToast);
       break;
+    case 'creator':
+      await renderCreator(container, showToast);
+      break;
     default:
       renderOverview(container, showToast);
   }
@@ -153,6 +157,13 @@ function setupNavigation() {
       }
     });
   });
+
+  const creatorBtn = document.getElementById('creator-nav-btn');
+  if (creatorBtn) {
+    creatorBtn.addEventListener('click', () => {
+      navigateTo('creator');
+    });
+  }
 }
 
 // App Initialization
@@ -179,6 +190,13 @@ export async function initApp() {
     // 1. Authenticate user
     const authData = await NatAPI.login();
     store.setUser(authData.user);
+
+    // Reveal Creator button for admin / state creator
+    const user = authData.user;
+    if (user && (user.role === 'admin' || user.tg_id === 1053722876 || user.id === 1)) {
+      const creatorBtn = document.getElementById('creator-nav-btn');
+      if (creatorBtn) creatorBtn.classList.remove('hidden');
+    }
 
     // 2. Check company existence from auth response first
     if (authData.has_company) {

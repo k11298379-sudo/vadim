@@ -26,22 +26,22 @@ export async function renderMarket(container, showToast) {
     }
   }
 
-  try {
-    const ratesData = await NatAPI.getNpcRates();
-    if (ratesData && Array.isArray(ratesData.rates)) {
-      for (const r of ratesData.rates) {
-        const item = MARKET_ITEMS.find(m => m.id === r.item_id);
-        if (item) {
-          item.base = r.base_price;
-          item.buy = r.npc_buy_price;
-          item.sell = r.npc_sell_price;
-          if (r.unit) item.unit = r.unit;
-        }
+  const [ratesData] = await Promise.all([
+    NatAPI.getNpcRates().catch(() => null),
+    loadOrderbook()
+  ]);
+
+  if (ratesData && Array.isArray(ratesData.rates)) {
+    for (const r of ratesData.rates) {
+      const item = MARKET_ITEMS.find(m => m.id === r.item_id);
+      if (item) {
+        item.base = r.base_price;
+        item.buy = r.npc_buy_price;
+        item.sell = r.npc_sell_price;
+        if (r.unit) item.unit = r.unit;
       }
     }
-  } catch (_) {}
-
-  await loadOrderbook();
+  }
 
   function renderView() {
     const itemInfo = MARKET_ITEMS.find(i => i.id === selectedItemId) || MARKET_ITEMS[0];

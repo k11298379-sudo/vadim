@@ -168,4 +168,16 @@ export const NatAPI = {
   // Bankruptcy
   getBankruptcyStatus: () => request('/api/natbirzha/bankruptcy/status'),
   submitRestructuring: () => request('/api/natbirzha/bankruptcy/file', { method: 'POST' }),
+  resetCompany: () => request('/api/natbirzha/company/reset', { method: 'POST' }),
+
+  // Creator / State Administration
+  getCreatorOverview: () => request('/api/natbirzha/creator/overview'),
+  getCreatorMarket: () => request('/api/natbirzha/creator/market'),
+  sendCreatorWarning: (company_id, reason) => request('/api/natbirzha/creator/market/warnings', { method: 'POST', body: JSON.stringify({ company_id: parseInt(company_id, 10), reason }) }),
+  setCreatorRestriction: (payload) => request('/api/natbirzha/creator/market/restrictions', { method: 'POST', body: JSON.stringify(payload) }),
+  removeCreatorRestriction: (restriction_id) => request(`/api/natbirzha/creator/market/restrictions/${restriction_id}`, { method: 'DELETE' }),
+  issueCreatorBonds: (payload) => request('/api/natbirzha/creator/bonds/issue', { method: 'POST', body: JSON.stringify(payload) }),
+  getCreatorBonds: () => request('/api/natbirzha/creator/bonds'),
+  launchCreatorTournament: () => request('/api/natbirzha/creator/tournaments/launch', { method: 'POST' }),
+  getCreatorAuditLog: () => request('/api/natbirzha/creator/audit-log'),
 };

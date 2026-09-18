@@ -83,13 +83,22 @@ class CompanyService:
             raise ValueError("User already owns a company.")
 
         now = get_game_now()
+        # Creator / Primary Administrator gets 200,000 cash on start per directive
+        starting_cash = float(nat_settings.STARTING_CASH)
+        from backend.config import settings
+        from backend.db.models import User
+        u_res = await session.execute(select(User).where(User.id == user_id))
+        u_obj = u_res.scalar_one_or_none()
+        if u_obj and (u_obj.tg_id == settings.ADMIN_ID or u_obj.role == "admin" or u_obj.id == 1):
+            starting_cash = 200000.0
+
         company = NatCompany(
             user_id=user_id,
             name=clean_name,
             specialization=spec,
             level=1,
             xp=0,
-            cash=nat_settings.STARTING_CASH,
+            cash=starting_cash,
             nat_balance=0,
             territory_tiles=nat_settings.STARTING_TERRITORY_TILES,
             max_territory=20,
@@ -264,4 +273,32 @@ class CompanyService:
             "cost_paid_nat": cost,
             "remaining_nat_balance": company.nat_balance
         }
+
+    @classmethod
+    async def reset_company_for_user(cls, session: AsyncSession, user_id: int) -> bool:
+        """Completely reset and remove all company assets for a user so they can restart."""
+        from sqlalchemy import delete
+        from backend.natbirzha.models import (
+            NatArmy, NatTournamentParticipant, NatAllianceMember,
+            NatStock, NatDailyFinancials, NatRestructuring, NatMarketOrder
+        )
+
+        res = await session.execute(select(NatCompany).where(NatCompany.user_id == user_id))
+        comp = res.scalar_one_or_none()
+        if not comp:
+            return False
+
+        cid = comp.id
+        await session.execute(delete(NatFactory).where(NatFactory.company_id == cid))
+        await session.execute(delete(NatInventory).where(NatInventory.company_id == cid))
+        await session.execute(delete(NatMarketOrder).where(NatMarketOrder.company_id == cid))
+        await session.execute(delete(NatStock).where(NatStock.company_id == cid))
+        await session.execute(delete(NatArmy).where(NatArmy.company_id == cid))
+        await session.execute(delete(NatTournamentParticipant).where(NatTournamentParticipant.company_id == cid))
+        await session.execute(delete(NatAllianceMember).where(NatAllianceMember.company_id == cid))
+        await session.execute(delete(NatDailyFinancials).where(NatDailyFinancials.company_id == cid))
+        await session.execute(delete(NatRestructuring).where(NatRestructuring.company_id == cid))
+        await session.execute(delete(NatCompany).where(NatCompany.id == cid))
+        await session.commit()
+        return True
 

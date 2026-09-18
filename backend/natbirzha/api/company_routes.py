@@ -211,3 +211,18 @@ async def buy_foreign_license_route(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
+@router.post("/reset")
+async def reset_company_route(
+    user: User = Depends(get_strict_natbirzha_user),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Completely resets company and assets so the player can restart onboarding."""
+    ok = await CompanyService.reset_company_for_user(session, user.id)
+    return {
+        "success": True,
+        "reset": ok,
+        "message": "Company successfully reset. You can now choose a new specialization."
+    }
+
+

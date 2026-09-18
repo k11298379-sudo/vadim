@@ -5,6 +5,17 @@ import { openCatalogModal } from './catalog.js';
 
 // Canonical recipes: food_processing, mine_rare_lithium
 
+let cachedRecipes = null;
+
+async function getOrFetchRecipes() {
+  if (cachedRecipes && Object.keys(cachedRecipes).length > 0) return cachedRecipes;
+  try {
+    const res = await NatAPI.getRecipes();
+    if (res?.recipes) cachedRecipes = res.recipes;
+  } catch (_) {}
+  return cachedRecipes || {};
+}
+
 function parseDateMs(dateStr) {
   if (!dateStr) return 0;
   const normalized = typeof dateStr === 'string' ? dateStr.replace(' ', 'T') : dateStr;
@@ -14,17 +25,18 @@ function parseDateMs(dateStr) {
 
 export async function renderProduction(container, showToast) {
   let factories = (store.factories && store.factories.length > 0) ? store.factories : [];
-  try {
-    const data = await NatAPI.getProductionStatus();
-    if (data && Array.isArray(data.factories) && data.factories.length > 0) {
-      factories = data.factories;
-      store.updateCompany({ factories: data.factories });
-    }
-  } catch (e) {
-    console.warn('Could not fetch fresh factories, using cached state:', e);
+  
+  // Parallel fetch: fresh factories + cached recipes
+  const [data, recipes] = await Promise.all([
+    NatAPI.getProductionStatus().catch(() => null),
+    getOrFetchRecipes()
+  ]);
+
+  if (data?.factories && Array.isArray(data.factories)) {
+    factories = data.factories;
+    store.updateCompany({ factories: data.factories });
   }
 
-  const recipes = (await NatAPI.getRecipes().catch(() => ({ recipes: {} }))).recipes || {};
   container.innerHTML = `<div class="space-y-4 max-w-md mx-auto p-4 pb-24">
     <div class="flex justify-between items-center">
       <div>
@@ -121,20 +133,28 @@ function bindCycles(container, showToast, recipes) {
     container.querySelectorAll('.cycle-status[data-ready-ms]').forEach(el => {
       const readyMs = parseInt(el.dataset.readyMs, 10);
       if (readyMs > 0) {
-        hasActiveCountdown = true;
         if (now >= readyMs) {
-          needsRerender = true;
+          el.dataset.readyMs = "0";
+          el.className = "cycle-status text-xs font-mono text-center text-emerald-500 font-bold";
+          el.textContent = "✅ Продукция готова к сбору";
+          const card = el.closest('[data-factory-id]');
+          const btn = card?.querySelector('.produce-btn');
+          if (btn) {
+            btn.disabled = false;
+            btn.className = "produce-btn w-full py-2.5 rounded-xl bg-emerald-600 shadow-lg shadow-emerald-600/30 text-white text-xs font-bold";
+            btn.textContent = "📦 Забрать продукцию";
+          }
+          const sel = card?.querySelector('.recipe-select');
+          if (sel) sel.disabled = false;
         } else {
+          hasActiveCountdown = true;
           const diff = Math.ceil((readyMs - now) / 1000);
           el.textContent = `⏳ Цикл в процессе (${diff} сек.)`;
         }
       }
     });
 
-    if (needsRerender) {
-      clearInterval(cycleInterval);
-      renderProduction(container, showToast);
-    } else if (!hasActiveCountdown) {
+    if (!hasActiveCountdown) {
       clearInterval(cycleInterval);
     }
   }, 1000);

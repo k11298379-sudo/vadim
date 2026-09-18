@@ -49,13 +49,18 @@ export async function openCatalogModal(showToast, onBuilt) {
     if (e.target === modal) modal.classList.add('hidden');
   });
 
+  let cachedCatalog = null;
   const loadList = async () => {
     const listEl = modal.querySelector('#catalog-list');
     if (!listEl) return;
+    if (cachedCatalog) {
+      renderCatalogCards(listEl, cachedCatalog, showToast, onBuilt, modal);
+      return;
+    }
     try {
       const res = await NatAPI.getBuildingsCatalog();
-      const rawCatalog = res?.catalog || [];
-      renderCatalogCards(listEl, rawCatalog, showToast, onBuilt, modal);
+      cachedCatalog = res?.catalog || [];
+      renderCatalogCards(listEl, cachedCatalog, showToast, onBuilt, modal);
     } catch (err) {
       listEl.innerHTML = `<div class="p-4 text-center text-xs text-rose-400">Не удалось загрузить каталог: ${err.message}</div>`;
     }

@@ -66,6 +66,12 @@ class MarketService:
         if price <= 0 or quantity <= 0:
             raise ValueError("Price and quantity must be positive.")
 
+        # Check active State market restrictions (§28)
+        from backend.natbirzha.services.creator_service import CreatorService
+        allowed, restr_err = await CreatorService.check_market_restriction(session, company.id, item_id, price)
+        if not allowed:
+            raise ValueError(restr_err)
+
         now = get_game_now()
 
         if order_type == "BUY":

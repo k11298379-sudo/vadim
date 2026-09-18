@@ -9,6 +9,7 @@ from backend.natbirzha.api.military_routes import router as military_router
 from backend.natbirzha.api.alliance_routes import router as alliance_router
 from backend.natbirzha.api.bankruptcy_routes import router as bankruptcy_router
 from backend.natbirzha.api.building_routes import router as building_router
+from backend.natbirzha.api.creator_routes import router as creator_router
 
 natbirzha_router = APIRouter(prefix="/natbirzha")
 
@@ -21,5 +22,6 @@ natbirzha_router.include_router(stock_router)
 natbirzha_router.include_router(military_router)
 natbirzha_router.include_router(alliance_router)
 natbirzha_router.include_router(bankruptcy_router)
+natbirzha_router.include_router(creator_router)
 
 __all__ = ["natbirzha_router"]
