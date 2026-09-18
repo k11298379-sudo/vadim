@@ -46,7 +46,9 @@ class NatStateStore {
         this.company.id = companyData.company_id;
       }
       this.inventory = companyData.inventory || {};
-      this.factories = companyData.factories || [];
+      if (Array.isArray(companyData.factories) && companyData.factories.length > 0) {
+        this.factories = companyData.factories;
+      }
       this.nav = companyData.nav || companyData.audited_nav || companyData.cash || 0;
     }
     this.notify();
@@ -60,7 +62,9 @@ class NatStateStore {
         }
       }
       if (partial.inventory !== undefined) this.inventory = partial.inventory;
-      if (partial.factories !== undefined) this.factories = partial.factories;
+      if (Array.isArray(partial.factories) && partial.factories.length > 0) {
+        this.factories = partial.factories;
+      }
       if (partial.nav !== undefined) this.nav = partial.nav;
       else if (partial.audited_nav !== undefined) this.nav = partial.audited_nav;
       this.notify();

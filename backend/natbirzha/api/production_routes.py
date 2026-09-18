@@ -64,6 +64,14 @@ async def get_inventory(
         ]
     }
 
+def _format_dt_iso(dt):
+    if not dt:
+        return None
+    from backend.natbirzha.config import get_game_tz
+    if getattr(dt, 'tzinfo', None) is None:
+        dt = dt.replace(tzinfo=get_game_tz())
+    return dt.isoformat()
+
 @router.get("/factories")
 async def get_factories(
     company: NatCompany = Depends(get_current_company),
@@ -88,9 +96,9 @@ async def get_factories(
                 "automation_level": f.automation_level,
                 "technology_level": f.technology_level,
                 "current_recipe": f.current_recipe or next((k for k, v in RECIPES.items() if v.get("factory_type") == f.building_type), None),
-                "cycle_started_at": str(f.cycle_started_at) if f.cycle_started_at else None,
-                "cycle_ready_at": str(f.cycle_ready_at) if f.cycle_ready_at else None,
-                "last_produced_at": str(f.last_produced_at)
+                "cycle_started_at": _format_dt_iso(f.cycle_started_at),
+                "cycle_ready_at": _format_dt_iso(f.cycle_ready_at),
+                "last_produced_at": _format_dt_iso(f.last_produced_at)
             }
             for f in factories
         ]

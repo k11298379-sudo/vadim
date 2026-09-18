@@ -69,6 +69,14 @@ async def get_company_status(
     fac_res = await session.execute(select(NatFactory).where(NatFactory.company_id == company.id))
     from backend.natbirzha.services.recipes import RECIPES
     recipe_for_type = {r["factory_type"]: r_id for r_id, r in RECIPES.items()}
+    from backend.natbirzha.config import get_game_tz
+    def _format_dt_iso(dt):
+        if not dt:
+            return None
+        if getattr(dt, 'tzinfo', None) is None:
+            dt = dt.replace(tzinfo=get_game_tz())
+        return dt.isoformat()
+
     factories = [
         {
             "id": f.id,
@@ -78,8 +86,13 @@ async def get_company_status(
             "tier": f.level,
             "factory_type": f.building_type,
             "is_active": f.is_active,
-            "degradation": 0.0,
-            "current_recipe": recipe_for_type.get(f.building_type, "default")
+            "workers": f.workers,
+            "automation_level": f.automation_level,
+            "technology_level": f.technology_level,
+            "current_recipe": f.current_recipe or recipe_for_type.get(f.building_type, "default"),
+            "cycle_started_at": _format_dt_iso(f.cycle_started_at),
+            "cycle_ready_at": _format_dt_iso(f.cycle_ready_at),
+            "last_produced_at": _format_dt_iso(f.last_produced_at)
         }
         for f in fac_res.scalars().all()
     ]

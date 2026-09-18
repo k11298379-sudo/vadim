@@ -110,8 +110,12 @@ class ProductionTickEngine:
         factory.cycle_ready_at = current + timedelta(seconds=duration)
         factory.cycle_input_cost = 0.0
         await session.flush()
+        from backend.natbirzha.config import get_game_tz
+        tz = get_game_tz()
+        c_iso = (current.replace(tzinfo=tz) if current.tzinfo is None else current).isoformat()
+        r_iso = (factory.cycle_ready_at.replace(tzinfo=tz) if factory.cycle_ready_at.tzinfo is None else factory.cycle_ready_at).isoformat()
         return {"success": True, "status": "running", "recipe_id": factory.current_recipe,
-                "started_at": current.isoformat(), "ready_at": factory.cycle_ready_at.isoformat(),
+                "started_at": c_iso, "ready_at": r_iso,
                 "duration_seconds": duration, "efficiency": eff}
 
     @classmethod
@@ -123,8 +127,10 @@ class ProductionTickEngine:
         ready = normalize_dt(factory.cycle_ready_at)
         if current < ready:
             remaining = max(0, int((ready - current).total_seconds()))
+            from backend.natbirzha.config import get_game_tz
+            r_iso = (ready.replace(tzinfo=get_game_tz()) if ready.tzinfo is None else ready).isoformat()
             return {"success": False, "reason": "cycle_in_progress", "remaining_seconds": remaining,
-                    "ready_at": ready.isoformat()}
+                    "ready_at": r_iso}
 
         recipe = RECIPES.get(factory.current_recipe)
         if not recipe:

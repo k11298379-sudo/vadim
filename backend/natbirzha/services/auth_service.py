@@ -146,11 +146,18 @@ async def get_current_company(
     session: AsyncSession = Depends(get_db_session)
 ) -> NatCompany:
     """Returns the NatCompany owned by the strictly authenticated user."""
-    res = await session.execute(select(NatCompany).where(NatCompany.user_id == user.id))
+    res = await session.execute(
+        select(NatCompany).where(
+            (NatCompany.user_id == user.id) | (NatCompany.user_id == user.tg_id)
+        )
+    )
     company = res.scalar_one_or_none()
     if not company:
         raise HTTPException(
             status_code=404,
             detail="Company not found. Onboarding required."
         )
+    if company.user_id != user.id:
+        company.user_id = user.id
+        await session.commit()
     return company

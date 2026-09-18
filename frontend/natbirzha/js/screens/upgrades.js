@@ -9,8 +9,16 @@ const LABELS = {
 };
 
 export async function renderUpgrades(container, showToast) {
-  const data = await NatAPI.getProductionStatus().catch(() => ({ factories: [] }));
-  const factories = data.factories || store.factories || [];
+  let factories = (store.factories && store.factories.length > 0) ? store.factories : [];
+  try {
+    const data = await NatAPI.getProductionStatus();
+    if (data && Array.isArray(data.factories) && data.factories.length > 0) {
+      factories = data.factories;
+      store.updateCompany({ factories: data.factories });
+    }
+  } catch (e) {
+    console.warn('Could not fetch factories for upgrades, using cache:', e);
+  }
   container.innerHTML = `<div class="space-y-4 max-w-md mx-auto p-4 pb-24">
     <div><h2 class="text-xl font-black">Прокачка заводов</h2><p class="text-xs text-slate-500">Каждое улучшение покупается отдельно и применяется сервером.</p></div>
     <div class="space-y-3">${factories.map(f => factoryCard(f)).join('') || '<div class="glass-card rounded-2xl p-6 text-center text-sm text-slate-500">Сначала постройте завод.</div>'}</div>

@@ -8,10 +8,25 @@ const FACTORIES = [
   ['refinery','🏗️ НПЗ'],['deep_mine','💎 Глубокий рудник'],['food_factory','🍞 Пищевой завод'],['sawmill','🪵 Лесопилка']
 ];
 
+function parseDateMs(dateStr) {
+  if (!dateStr) return 0;
+  const normalized = typeof dateStr === 'string' ? dateStr.replace(' ', 'T') : dateStr;
+  const time = new Date(normalized).getTime();
+  return isNaN(time) ? 0 : time;
+}
+
 export async function renderProduction(container, showToast) {
-  const data = await NatAPI.getProductionStatus().catch(() => ({ factories: [] }));
-  if (data.factories) store.updateCompany({ factories: data.factories });
-  const factories = data.factories || store.factories || [];
+  let factories = (store.factories && store.factories.length > 0) ? store.factories : [];
+  try {
+    const data = await NatAPI.getProductionStatus();
+    if (data && Array.isArray(data.factories) && data.factories.length > 0) {
+      factories = data.factories;
+      store.updateCompany({ factories: data.factories });
+    }
+  } catch (e) {
+    console.warn('Could not fetch fresh factories, using cached state:', e);
+  }
+
   const recipes = (await NatAPI.getRecipes().catch(() => ({ recipes: {} }))).recipes || {};
   container.innerHTML = `<div class="space-y-4 max-w-md mx-auto p-4 pb-24">
     <div class="flex justify-between items-center">
@@ -54,8 +69,8 @@ function card(f, recipes) {
   const bType = f.building_type || f.factory_type;
   const list = Object.entries(recipes).filter(([,r]) => r.factory_type === bType);
   const running = Boolean(f.cycle_ready_at);
-  const readyAtMs = running ? new Date(f.cycle_ready_at).getTime() : 0;
-  const ready = running && readyAtMs <= Date.now();
+  const readyAtMs = running ? parseDateMs(f.cycle_ready_at) : 0;
+  const ready = running && readyAtMs > 0 && readyAtMs <= Date.now();
   const selRecipeId = f.current_recipe || (list[0] ? list[0][0] : null);
   const curRecipe = selRecipeId ? recipes[selRecipeId] : null;
 
@@ -63,20 +78,20 @@ function card(f, recipes) {
     <div class="flex justify-between">
       <div>
         <div class="text-sm font-black">${f.name || bType}</div>
-        <div class="text-[10px] text-slate-500">${f.specialization} · уровень ${f.level}</div>
+        <div class="text-[10px] text-slate-500">${f.specialization || ''} · уровень ${f.level || 1}</div>
       </div>
       <div class="text-right text-[10px]">👷 ${f.workers || 10}<br>🤖 ${f.automation_level || 0}</div>
     </div>
     <div>
-      <select class="recipe-select w-full p-2 rounded-lg border bg-transparent text-xs" ${running ? 'disabled' : ''}>
+      <select class="recipe-select w-full p-2 rounded-lg border bg-transparent text-xs" ${running && !ready ? 'disabled' : ''}>
         ${list.map(([id,r])=>`<option value="${id}" ${selRecipeId===id?'selected':''}>${r.name}</option>`).join('')}
       </select>
       <div class="recipe-reqs">${formatRecipeReqs(curRecipe)}</div>
     </div>
-    <div class="cycle-status text-xs font-mono text-center ${ready ? 'text-emerald-500 font-bold' : (running ? 'text-amber-500' : 'text-slate-400')}" data-ready-ms="${readyAtMs}">
+    <div class="cycle-status text-xs font-mono text-center ${ready ? 'text-emerald-500 font-bold' : (running ? 'text-amber-500' : 'text-slate-400')}" data-ready-ms="${running && !ready ? readyAtMs : 0}">
       ${ready ? '✅ Продукция готова к сбору' : (running ? '⏳ Цикл в процессе...' : '⭕ Готов к запуску')}
     </div>
-    <button class="produce-btn w-full py-2.5 rounded-xl ${ready ? 'bg-emerald-600' : (running ? 'bg-slate-600 cursor-not-allowed opacity-80' : 'bg-emerald-600')} text-white text-xs font-bold" data-id="${f.id}" ${running && !ready ? 'disabled' : ''}>
+    <button class="produce-btn w-full py-2.5 rounded-xl ${ready ? 'bg-emerald-600 shadow-lg shadow-emerald-600/30' : (running ? 'bg-slate-600 cursor-not-allowed opacity-80' : 'bg-emerald-600')} text-white text-xs font-bold" data-id="${f.id}" ${running && !ready ? 'disabled' : ''}>
       ${ready ? '📦 Забрать продукцию' : (running ? '⏳ Выполняется...' : '▶️ Запустить цикл')}
     </button>
   </div>`;
@@ -90,9 +105,12 @@ function bindCycles(container, showToast, recipes) {
   cycleInterval = setInterval(() => {
     const now = Date.now();
     let needsRerender = false;
+    let hasActiveCountdown = false;
+
     container.querySelectorAll('.cycle-status[data-ready-ms]').forEach(el => {
       const readyMs = parseInt(el.dataset.readyMs, 10);
       if (readyMs > 0) {
+        hasActiveCountdown = true;
         if (now >= readyMs) {
           needsRerender = true;
         } else {
@@ -101,9 +119,12 @@ function bindCycles(container, showToast, recipes) {
         }
       }
     });
+
     if (needsRerender) {
       clearInterval(cycleInterval);
       renderProduction(container, showToast);
+    } else if (!hasActiveCountdown) {
+      clearInterval(cycleInterval);
     }
   }, 1000);
 
@@ -128,6 +149,7 @@ function bindCycles(container, showToast, recipes) {
         showToast('Цикл запущен! Идет производство...', 'success');
       } else {
         showToast('Продукция успешно получена на склад!', 'success');
+        NatAPI.getMyCompany().then(c => store.setCompany(c)).catch(() => {});
       }
       await renderProduction(container, showToast);
     } catch (e) {
