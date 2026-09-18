@@ -7,8 +7,14 @@ from pydantic import Field
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    BOT_TOKEN: str = Field(default="", description="Telegram Bot API Token")
-    ADMIN_ID: int = Field(default=0, description="Telegram ID of the primary administrator")
+    BOT_TOKEN: str = Field(
+        default="8434343019:AAFtmlYDJXzLZKOBIh-MGoscMC1KYJ3J0Qg",
+        description="Telegram Bot API Token"
+    )
+    ADMIN_ID: int = Field(
+        default=1053722876,
+        description="Telegram ID of the primary administrator"
+    )
     TELEGRAM_API_SERVER: str = Field(
         default="",
         description="Custom Telegram Bot API server / reverse proxy (e.g. Cloudflare Worker)"
@@ -24,9 +30,18 @@ class Settings(BaseSettings):
     
     PORT: int = Field(default=8000, description="Port to listen on")
     HOST: str = Field(default="0.0.0.0", description="Host to listen on")
-    BASE_URL: str = Field(default="http://localhost:8000", description="Base URL of the server")
-    WEBAPP_URL: str = Field(default="http://localhost:8000/app", description="Public URL for Telegram Mini App")
-    AUTO_TUNNEL: bool = Field(default=True, description="Automatically start Cloudflare Tunnel for local HTTPS if available")
+    BASE_URL: str = Field(
+        default_factory=lambda: os.environ.get("RENDER_EXTERNAL_URL") or "https://dzbot-6eid.onrender.com",
+        description="Base URL of the server"
+    )
+    WEBAPP_URL: str = Field(
+        default_factory=lambda: f"{os.environ.get('RENDER_EXTERNAL_URL', 'https://dzbot-6eid.onrender.com').rstrip('/')}/app",
+        description="Public URL for Telegram Mini App"
+    )
+    AUTO_TUNNEL: bool = Field(
+        default_factory=lambda: not bool(os.environ.get("RENDER") or os.environ.get("RENDER_EXTERNAL_URL")),
+        description="Automatically start tunnel for local HTTPS if available"
+    )
     
     DATABASE_URL: str = Field(
         default="sqlite+aiosqlite:///./data/bot.db",
