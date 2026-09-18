@@ -62,24 +62,26 @@
     if (header) header.style.display = "none";
     const main = document.querySelector("main");
     if (main) main.style.display = "none";
+    const nav = document.querySelector("nav");
+    if (nav) nav.style.display = "none";
 
     const overlay = document.createElement("div");
     overlay.id = "pug-prank-overlay";
     overlay.style.cssText = `
-      position: fixed; inset: 0; bottom: 58px;
-      background: #000000; z-index: 45;
+      position: fixed; inset: 0;
+      background: #000000; z-index: 99999;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
       user-select: none; -webkit-user-select: none;
-      touch-action: manipulation;
+      touch-action: manipulation; cursor: pointer;
     `;
 
     overlay.innerHTML = `
-      <div id="pug-click-area" style="position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer;">
+      <div id="pug-click-area" style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 380px;">
         <div id="pug-bubble" style="
           opacity: 0; transform: translateY(10px) scale(0.9);
           transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-          position: absolute; top: -45px;
+          position: absolute; top: -30px;
           background: #ffffff; color: #000000;
           font-weight: 900; font-size: 14px;
           padding: 6px 14px; border-radius: 18px;
@@ -87,14 +89,14 @@
           pointer-events: none; white-space: nowrap; z-index: 48;
         ">Гав! 🐾</div>
         <img id="pug-main-img" src="${STATIC_PUG_SRC}" alt="Мопс" style="
-          width: 240px; max-width: 78vw; max-height: 55vh;
+          width: 260px; max-width: 82vw; max-height: 60vh;
           object-fit: contain; filter: drop-shadow(0 0 25px rgba(255,255,255,0.06));
           transition: transform 0.15s ease;
         " />
         <p id="pug-action-hint" style="
           color: #64748b; font-size: 12px; font-weight: 700;
           margin-top: 20px; letter-spacing: 0.5px;
-        ">(нажми, чтобы погладить)</p>
+        ">(нажми на мопса, чтобы погладить)</p>
       </div>
     `;
 
@@ -106,9 +108,8 @@
 
     function triggerPetting(e) {
       if (e) {
-        const rect = clickArea.getBoundingClientRect();
-        const px = e.clientX || (rect.left + rect.width / 2);
-        const py = e.clientY || (rect.top + rect.height / 2);
+        const px = e.clientX || (window.innerWidth / 2);
+        const py = e.clientY || (window.innerHeight / 2);
         spawnPawParticle(px, py);
       }
 
@@ -116,7 +117,7 @@
 
       pugImg.src = `${PETTING_PUG_SRC}?t=${Date.now()}`;
       pugImg.style.imageRendering = "pixelated";
-      pugImg.style.width = "210px";
+      pugImg.style.width = "220px";
       pugImg.style.transform = "scale(1.06)";
       setTimeout(() => { if (pugImg) pugImg.style.transform = "scale(1)"; }, 150);
 
@@ -130,7 +131,7 @@
         if (pugImg) {
           pugImg.src = STATIC_PUG_SRC;
           pugImg.style.imageRendering = "auto";
-          pugImg.style.width = "240px";
+          pugImg.style.width = "260px";
         }
         if (bubble) {
           bubble.style.opacity = "0";
@@ -139,43 +140,10 @@
       }, 3500);
     }
 
-    clickArea.addEventListener("click", triggerPetting);
-    clickArea.addEventListener("touchstart", (e) => {
+    overlay.addEventListener("click", triggerPetting);
+    overlay.addEventListener("touchstart", (e) => {
       triggerPetting(e.touches ? e.touches[0] : null);
     }, { passive: true });
-
-    transformBottomNav(triggerPetting);
-  }
-
-  function transformBottomNav(triggerPetting) {
-    const nav = document.querySelector("nav.fixed.bottom-0");
-    if (!nav) return;
-
-    nav.style.backgroundColor = "#000000";
-    nav.style.borderTop = "1px solid #1e293b";
-
-    const barkLabels = ["Гав", "Гав-гав", "Тяф", "Гав!", "Вуф"];
-    const dogIcons = ["🐶", "🐾", "🐶", "🐾", "🦴"];
-
-    const buttons = nav.querySelectorAll("button.tab-btn");
-    buttons.forEach((btn, idx) => {
-      const labelSpan = btn.querySelector("span");
-      if (labelSpan) {
-        labelSpan.textContent = barkLabels[idx % barkLabels.length];
-        labelSpan.style.color = "#94a3b8";
-        labelSpan.style.fontWeight = "800";
-      }
-      btn.innerHTML = `
-        <span style="font-size: 18px; line-height: 1; margin-bottom: 2px;">${dogIcons[idx % dogIcons.length]}</span>
-        <span style="font-size: 11px; font-weight: 800; color: #cbd5e1;">${barkLabels[idx % barkLabels.length]}</span>
-      `;
-      btn.onclick = function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        triggerPetting(e);
-        return false;
-      };
-    });
   }
 
   async function checkPugMode() {
