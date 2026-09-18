@@ -108,7 +108,8 @@ global.document = {
       sharedElements[id] = {
         innerHTML: '',
         classList: { add: () => {}, remove: () => {} },
-        appendChild: () => {}
+        appendChild: () => {},
+        remove: () => {}
       };
     }
     return sharedElements[id];
@@ -265,6 +266,7 @@ global.document.getElementById = (id) => {
   if (!el.getBoundingClientRect) el.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600 });
   if (!el.addEventListener) el.addEventListener = () => {};
   if (!el.removeEventListener) el.removeEventListener = () => {};
+  if (!el.remove) el.remove = () => {};
   return el;
 };
 global.document.createElement = (tag) => global.document.getElementById('el_' + tag + '_' + Math.random());
