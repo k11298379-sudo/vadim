@@ -48,6 +48,9 @@ async def resolve_target_character(session: AsyncSession, user: Optional[User], 
     return char, user
 
 
+from backend.db.crud.rpg.items_catalog import NATAR_ITEMS_CATALOG
+
+
 @rpg_router.get("/admin/players")
 async def list_admin_players_endpoint(
     user: Optional[User] = Depends(get_optional_webapp_user),
@@ -57,6 +60,25 @@ async def list_admin_players_endpoint(
     verify_admin_access(user)
     players = await get_rpg_players_list(session, limit=100)
     return {"success": True, "players": players}
+
+
+@rpg_router.get("/admin/items_catalog")
+async def get_admin_items_catalog_endpoint(
+    user: Optional[User] = Depends(get_optional_webapp_user),
+):
+    """Returns all available items in the game catalog for the admin grant selector."""
+    verify_admin_access(user)
+    items = []
+    for it in NATAR_ITEMS_CATALOG:
+        items.append({
+            "name": it.get("name"),
+            "icon": it.get("icon", "📦"),
+            "type": it.get("type", "relic"),
+            "slot": it.get("slot", "relic"),
+            "rarity": it.get("rarity", "common"),
+            "bonus_desc": it.get("bonus_desc", ""),
+        })
+    return {"success": True, "items": items}
 
 
 @rpg_router.post("/admin/give_gold")

@@ -12,35 +12,59 @@ from backend.db.crud.rpg.loot import rebuild_item_description
 from backend.db.crud.rpg.progression_math import LEVEL_CAP
 
 
+from backend.db.crud.rpg.character import get_or_create_rpg_character
+
+
 async def get_rpg_players_list(session: AsyncSession, limit: int = 100) -> List[Dict[str, Any]]:
-    """Returns a list of all RPG players with their current stats for the admin panel."""
+    """Returns a list of all users and players with their current RPG stats for the admin panel."""
     stmt = (
-        select(RPGCharacter, User)
-        .join(User, RPGCharacter.user_id == User.id)
-        .order_by(desc(RPGCharacter.level), desc(RPGCharacter.gold))
+        select(User, RPGCharacter)
+        .outerjoin(RPGCharacter, RPGCharacter.user_id == User.id)
+        .order_by(
+            desc(RPGCharacter.level.isnot(None)),
+            desc(RPGCharacter.level),
+            User.id
+        )
         .limit(limit)
     )
     result = await session.execute(stmt)
     rows = result.all()
 
     players = []
-    for char, user in rows:
-        hero_cfg = NATAR_HEROES.get(char.hero_class, {})
-        players.append({
-            "char_id": char.id,
-            "user_id": user.id,
-            "tg_id": user.tg_id,
-            "name": user.display_name or f"Игрок #{user.id}",
-            "username": user.username or "",
-            "hero_class": char.hero_class,
-            "hero_name": hero_cfg.get("name", char.hero_class),
-            "hero_icon": hero_cfg.get("icon", "⚔️"),
-            "level": char.level,
-            "gold": char.gold,
-            "gems": char.gems,
-            "rebirths": char.rebirths,
-            "dungeon_floor": char.dungeon_floor,
-        })
+    for user, char in rows:
+        if char:
+            hero_cfg = NATAR_HEROES.get(char.hero_class, {})
+            players.append({
+                "char_id": char.id,
+                "user_id": user.id,
+                "tg_id": user.tg_id,
+                "name": user.display_name or f"Игрок #{user.id}",
+                "username": user.username or "",
+                "hero_class": char.hero_class,
+                "hero_name": hero_cfg.get("name", char.hero_class),
+                "hero_icon": hero_cfg.get("icon", "⚔️"),
+                "level": char.level,
+                "gold": char.gold,
+                "gems": char.gems,
+                "rebirths": char.rebirths,
+                "dungeon_floor": char.dungeon_floor,
+            })
+        else:
+            players.append({
+                "char_id": None,
+                "user_id": user.id,
+                "tg_id": user.tg_id,
+                "name": user.display_name or f"Пользователь #{user.id}",
+                "username": user.username or "",
+                "hero_class": "newbie",
+                "hero_name": "Новичок",
+                "hero_icon": "👤",
+                "level": 0,
+                "gold": 0,
+                "gems": 0,
+                "rebirths": 0,
+                "dungeon_floor": 0,
+            })
     return players
 
 
@@ -63,29 +87,23 @@ async def find_character_and_user(
         u_res = await session.execute(select(User).where(User.tg_id == num))
         u = u_res.scalars().first()
         if u:
-            c_res = await session.execute(select(RPGCharacter).where(RPGCharacter.user_id == u.id))
-            c = c_res.scalars().first()
-            if c:
-                return c, u
+            c = await get_or_create_rpg_character(session, user_id=u.id)
+            return c, u
 
         # Check by User.id
         u_res = await session.execute(select(User).where(User.id == num))
         u = u_res.scalars().first()
         if u:
-            c_res = await session.execute(select(RPGCharacter).where(RPGCharacter.user_id == u.id))
-            c = c_res.scalars().first()
-            if c:
-                return c, u
+            c = await get_or_create_rpg_character(session, user_id=u.id)
+            return c, u
 
     # Try username match
     clean_uname = str_target.lstrip("@").lower()
     u_res = await session.execute(select(User).where(User.username.ilike(clean_uname)))
     u = u_res.scalars().first()
     if u:
-        c_res = await session.execute(select(RPGCharacter).where(RPGCharacter.user_id == u.id))
-        c = c_res.scalars().first()
-        if c:
-            return c, u
+        c = await get_or_create_rpg_character(session, user_id=u.id)
+        return c, u
 
     return None, None
 

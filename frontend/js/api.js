@@ -335,6 +335,7 @@ const api = {
       method: "POST"
     }),
   getAdminRpgPlayers: () => apiRequest("/api/rpg/admin/players"),
+  getAdminItemsCatalog: () => apiRequest("/api/rpg/admin/items_catalog"),
   adminGiveGold: (payload) =>
     apiRequest("/api/rpg/admin/give_gold", {
       method: "POST",
