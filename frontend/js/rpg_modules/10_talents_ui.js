@@ -12,10 +12,9 @@ function renderTalentsTab() {
   const rebirthMult = (p.rebirth_info && p.rebirth_info.multiplier) || 1.0;
   const essence = (p.rebirth_info && p.rebirth_info.essence) || p.rebirth_essence || 0;
   const charLvl = p.level || 1;
-  const charFloor = p.dungeon_floor || 1;
-  const effectiveProgress = Math.max(charLvl, charFloor);
   const talentPts = p.talent_points || 0;
 
+  const reqLvl = (p.rebirth_info && p.rebirth_info.next_min_level) || (rebirths === 0 ? 30 : (rebirths === 1 ? 40 : (rebirths === 2 ? 45 : 50)));
   const canAscend = charLvl >= reqLvl && rebirths < 25;
 
   let html = `<div class="p-3 bg-slate-900 min-h-screen text-slate-200 space-y-4">`;

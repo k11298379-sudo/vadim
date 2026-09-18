@@ -95,6 +95,14 @@ from backend.db.crud.rpg.creeps_ai import (
     LEASH_RADIUS,
 )
 from backend.db.crud.rpg.dungeon import run_dungeon_wave
+from backend.db.crud.rpg.admin import (
+    get_rpg_players_list,
+    find_character_and_user,
+    admin_give_gold,
+    admin_set_character_level,
+    admin_give_custom_item,
+    admin_full_reset_player,
+)
 
 __all__ = [
     "NATAR_HEROES", "DOTA_HEROES", "HERO_CLASSES",
@@ -121,6 +129,8 @@ __all__ = [
     "get_world_boss_status", "record_world_boss_attack", "reset_world_boss",
     "get_market_listings", "list_item_for_sale", "cancel_market_listing", "buy_market_item",
     "MARKET_FEE_PCT", "DEFAULT_WORLD_BOSS_HP",
+    "get_rpg_players_list", "find_character_and_user", "admin_give_gold",
+    "admin_set_character_level", "admin_give_custom_item", "admin_full_reset_player",
 ]
 
 

@@ -334,6 +334,27 @@ const api = {
     apiRequest("/api/rpg/reset", {
       method: "POST"
     }),
+  getAdminRpgPlayers: () => apiRequest("/api/rpg/admin/players"),
+  adminGiveGold: (payload) =>
+    apiRequest("/api/rpg/admin/give_gold", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
+  adminSetLevel: (payload) =>
+    apiRequest("/api/rpg/admin/set_level", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
+  adminGiveItem: (payload) =>
+    apiRequest("/api/rpg/admin/give_item", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
+  adminResetPlayer: (payload) =>
+    apiRequest("/api/rpg/admin/reset_player", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
   request: apiRequest
 };
 

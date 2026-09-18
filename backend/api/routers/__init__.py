@@ -18,6 +18,7 @@ from backend.api.routers.creeps_bestiary import creeps_bestiary_router
 from backend.api.routers.talent_tree_router import talent_tree_router
 import backend.api.routers.bosses_dynamic  # Registers combat routes onto rpg_router
 import backend.api.routers.items_forge  # Registers inventory & shop routes onto rpg_router
+import backend.api.routers.rpg_admin  # Registers admin management routes onto rpg_router
 
 __all__ = [
     "common_router",
