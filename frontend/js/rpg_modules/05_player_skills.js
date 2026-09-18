@@ -1725,8 +1725,9 @@
     try {
       const currentFloor = RPG_STATE.profile?.dungeon_floor || 1;
       const totalWaveCleared = (currentFloor - 1) * 20 + ARENA.waveNumber;
-      const baseGold = 20 + Math.floor(ARENA.waveNumber * 8);
-      const baseXp = 12 + Math.floor(ARENA.waveNumber * 6);
+      const floorMult = 1.0 + Math.pow(currentFloor - 1, 1.22) * 0.38;
+      const baseGold = Math.floor((40 + ARENA.waveNumber * 12) * floorMult);
+      const baseXp = Math.floor((25 + ARENA.waveNumber * 8) * (1.0 + (currentFloor - 1) * 0.20));
 
       // DMC Style Meter Reward Multiplier (D..SSS)
       const rank = ARENA.styleMeter?.rank || "D";
@@ -1852,8 +1853,8 @@
 
     try {
       const totalFloorCleared = currentFloor * 20;
-      const goldGain = 350 + currentFloor * 50;
-      const xpGain = 250 + currentFloor * 40;
+      const goldGain = Math.floor(1000 * Math.pow(1.15, Math.min(30, currentFloor - 1)) + currentFloor * 600);
+      const xpGain = Math.floor(600 * Math.pow(1.12, Math.min(30, currentFloor - 1)) + currentFloor * 400);
       const res = await api.slashCreepWave({
         wave_cleared: totalFloorCleared,
         earned_gold: goldGain,
@@ -1964,26 +1965,26 @@
     RPG_STATE.coopRoomData = null;
 
     const bossTmpls = {
-      golem: { id: "golem", name: "Древний Гранитный Голем", icon: "🗿", baseHp: 75000, baseAtk: 416, defense: 35, scale: 1.35, gold: 2000, xp: 1500, desc: "[75 ТЫС. ХП] Каменный колосс глубин" },
-      lich: { id: "lich", name: "Архилич Некрополя", icon: "☠️", baseHp: 225000, baseAtk: 1250, defense: 50, scale: 1.30, gold: 3500, xp: 2500, desc: "[225 ТЫС. ХП] Владыка темных заклятий" },
-      tormentor: { id: "tormentor", name: "Древний Терзатель (Tormentor)", icon: "🔮", baseHp: 700000, baseAtk: 3888, defense: 75, scale: 1.30, gold: 5000, xp: 4000, desc: "[700 ТЫС. ХП] Отражает 35% урона" },
-      dragon: { id: "dragon", name: "Дракон Инферно", icon: "🌋", baseHp: 2200000, baseAtk: 12222, defense: 105, scale: 1.50, gold: 8000, xp: 6000, desc: "[2.2 МЛН ХП] Огнедышащий титан" },
-      pudge_boss: { id: "pudge_boss", name: "Мясник из Чрева (Pudge)", icon: "🪝", baseHp: 7500000, baseAtk: 41666, defense: 140, scale: 1.40, gold: 12000, xp: 9000, desc: "[7.5 МЛН ХП] Хук цепью, вонь гнили и пожирание" },
-      faceless_void: { id: "faceless_void", name: "Хроно-Владыка (Faceless Void)", icon: "⏳", baseHp: 25000000, baseAtk: 138888, defense: 180, scale: 1.35, gold: 18000, xp: 14000, desc: "[25 МЛН ХП] Остановка времени и баши" },
-      roshan: { id: "roshan", name: "Рошан (Roshan)", icon: "🐲", baseHp: 85000000, baseAtk: 472222, defense: 230, scale: 1.45, gold: 26000, xp: 20000, desc: "[85 МЛН ХП] Хозяин Ямы, дропает Рапиру и Сыр" },
-      tidehunter: { id: "tidehunter", name: "Левиафан Бездны (Tidehunter)", icon: "🐙", baseHp: 300000000, baseAtk: 1666666, defense: 290, scale: 1.40, gold: 40000, xp: 30000, desc: "[300 МЛН ХП] Владыка пучин с якорным ударом и Раважем" },
-      sf_boss: { id: "sf_boss", name: "Архидемон Nevermore", icon: "💀", baseHp: 1000000000, baseAtk: 5555555, defense: 370, scale: 1.35, gold: 60000, xp: 45000, desc: "[1 МИЛЛИАРД ХП] Пожиратель душ с черными коилами и Реквиемом" },
-      necrophos: { id: "necrophos", name: "Чумной Владыка (Necrophos)", icon: "🧟", baseHp: 3500000000, baseAtk: 19444444, defense: 460, scale: 1.30, gold: 90000, xp: 70000, desc: "[3.5 МЛРД ХП] Аура мора истощает HP, Коса Смерти рубит" },
-      terrorblade: { id: "terrorblade", name: "Демон Бездны (Terrorblade)", icon: "😈", baseHp: 12000000000, baseAtk: 66666666, defense: 570, scale: 1.40, gold: 140000, xp: 100000, desc: "[12 МЛРД ХП] Метаморфоза Тьмы и разрыв души Sunder" },
-      invoker_boss: { id: "invoker_boss", name: "Демиург Арсенала (Invoker)", icon: "🧙‍♂️", baseHp: 42000000000, baseAtk: 233333333, defense: 700, scale: 1.25, gold: 200000, xp: 150000, desc: "[42 МЛРД ХП] Повелитель стихий, хаос-метеоров и ЭМИ" },
-      chaos_knight: { id: "chaos_knight", name: "Всадник Хаоса (Chaos Knight)", icon: "🐎", baseHp: 150000000000, baseAtk: 833333333, defense: 860, scale: 1.45, gold: 300000, xp: 220000, desc: "[150 МЛРД ХП] Фантомы параллельных миров и криты" },
-      dark_tormentor: { id: "dark_tormentor", name: "Тёмный Терзатель Бездны", icon: "💎", baseHp: 550000000000, baseAtk: 3055555555, defense: 1050, scale: 1.40, gold: 450000, xp: 350000, desc: "[550 МЛРД ХП] Отражает 50% урона и стреляет шипами тьмы" },
-      storm_spirit: { id: "storm_spirit", name: "Громовой Дух (Storm Spirit)", icon: "⚡", baseHp: 2000000000000, baseAtk: 11111111111, defense: 1300, scale: 1.35, gold: 700000, xp: 500000, desc: "[2 ТРИЛЛИОНА ХП] Молниеносные перелеты через арену и ремнанты" },
-      doom: { id: "doom", name: "Вестник Апокалипсиса (Lord Doom)", icon: "👹", baseHp: 7500000000000, baseAtk: 41666666666, defense: 1600, scale: 1.45, gold: 1100000, xp: 800000, desc: "[7.5 ТРИЛЛИОНОВ ХП] Владыка Преисподней с роком и пламенем" },
-      primal_beast: { id: "primal_beast", name: "Первобытный Титан (Primal Beast)", icon: "🦣", baseHp: 28000000000000, baseAtk: 155555555555, defense: 1950, scale: 1.60, gold: 1800000, xp: 1300000, desc: "[28 ТРИЛЛИОНОВ ХП] Сокрушитель материков с диким топотом" },
-      phantom_roshan: { id: "phantom_roshan", name: "Призрачный Рошан Хаоса", icon: "👻", baseHp: 100000000000000, baseAtk: 555555555555, defense: 2400, scale: 1.55, gold: 3000000, xp: 2200000, desc: "[100 ТРИЛЛИОНОВ ХП] Восставший призрак Рошана с астральным Slam" },
-      tinker_boss: { id: "tinker_boss", name: "Архиинженер (Omega Tinker)", icon: "🤖", baseHp: 350000000000000, baseAtk: 1944444444444, defense: 3000, scale: 1.45, gold: 5000000, xp: 3500000, desc: "[350 ТРИЛЛИОНОВ ХП] Ослепляющий лазер, микроракеты и марш роботов" },
-      enigma: { id: "enigma", name: "Пожиратель Миров (Enigma Cosmic)", icon: "🌌", baseHp: 1200000000000000, baseAtk: 6666666666666, defense: 3800, scale: 1.35, gold: 10000000, xp: 7500000, desc: "[1.2 КВАДРИЛЛИОНА ХП!] Битва на месяц! Схлопывает пространство в Черную Дыру" }
+      golem: { id: "golem", name: "Древний Гранитный Голем", icon: "🗿", baseHp: 75000, baseAtk: 140, defense: 35, scale: 1.35, gold: 2500, xp: 1800, desc: "[75 ТЫС. ХП] Каменный колосс глубин" },
+      lich: { id: "lich", name: "Архилич Некрополя", icon: "☠️", baseHp: 225000, baseAtk: 210, defense: 50, scale: 1.30, gold: 4500, xp: 3200, desc: "[225 ТЫС. ХП] Владыка темных заклятий" },
+      tormentor: { id: "tormentor", name: "Древний Терзатель (Tormentor)", icon: "🔮", baseHp: 700000, baseAtk: 320, defense: 75, scale: 1.30, gold: 8000, xp: 5500, desc: "[700 ТЫС. ХП] Отражает 35% урона" },
+      dragon: { id: "dragon", name: "Дракон Инферно", icon: "🌋", baseHp: 2200000, baseAtk: 500, defense: 105, scale: 1.50, gold: 15000, xp: 10000, desc: "[2.2 МЛН ХП] Огнедышащий титан" },
+      pudge_boss: { id: "pudge_boss", name: "Мясник из Чрева (Pudge)", icon: "🪝", baseHp: 6500000, baseAtk: 800, defense: 140, scale: 1.40, gold: 25000, xp: 16000, desc: "[6.5 МЛН ХП] Хук цепью, вонь гнили и пожирание" },
+      faceless_void: { id: "faceless_void", name: "Хроно-Владыка (Faceless Void)", icon: "⏳", baseHp: 18000000, baseAtk: 1250, defense: 180, scale: 1.35, gold: 40000, xp: 26000, desc: "[18 МЛН ХП] Остановка времени и баши" },
+      roshan: { id: "roshan", name: "Рошан (Roshan)", icon: "🐲", baseHp: 50000000, baseAtk: 1600, defense: 200, scale: 1.45, gold: 65000, xp: 42000, desc: "[50 МЛН ХП] Хозяин Ямы, дропает Рапиру и Сыр" },
+      tidehunter: { id: "tidehunter", name: "Левиафан Бездны (Tidehunter)", icon: "🐙", baseHp: 80000000, baseAtk: 2200, defense: 260, scale: 1.40, gold: 95000, xp: 62000, desc: "[80 МЛН ХП] Владыка пучин с якорным ударом и Раважем" },
+      sf_boss: { id: "sf_boss", name: "Архидемон Nevermore", icon: "💀", baseHp: 125000000, baseAtk: 2900, defense: 320, scale: 1.35, gold: 135000, xp: 88000, desc: "[125 МЛН ХП] Пожиратель душ с черными коилами и Реквиемом" },
+      necrophos: { id: "necrophos", name: "Чумной Владыка (Necrophos)", icon: "🧟", baseHp: 180000000, baseAtk: 3700, defense: 380, scale: 1.30, gold: 185000, xp: 120000, desc: "[180 МЛН ХП] Аура мора истощает HP, Коса Смерти рубит" },
+      terrorblade: { id: "terrorblade", name: "Демон Бездны (Terrorblade)", icon: "😈", baseHp: 250000000, baseAtk: 4700, defense: 450, scale: 1.40, gold: 245000, xp: 160000, desc: "[250 МЛН ХП] Метаморфоза Тьмы и разрыв души Sunder" },
+      invoker_boss: { id: "invoker_boss", name: "Демиург Арсенала (Invoker)", icon: "🧙‍♂️", baseHp: 330000000, baseAtk: 5900, defense: 520, scale: 1.25, gold: 320000, xp: 210000, desc: "[330 МЛН ХП] Повелитель стихий, хаос-метеоров и ЭМИ" },
+      chaos_knight: { id: "chaos_knight", name: "Всадник Хаоса (Chaos Knight)", icon: "🐎", baseHp: 420000000, baseAtk: 7300, defense: 600, scale: 1.45, gold: 420000, xp: 270000, desc: "[420 МЛН ХП] Фантомы параллельных миров и криты" },
+      dark_tormentor: { id: "dark_tormentor", name: "Тёмный Терзатель Бездны", icon: "💎", baseHp: 520000000, baseAtk: 8900, defense: 700, scale: 1.40, gold: 540000, xp: 350000, desc: "[520 МЛН ХП] Отражает входящий урон и стреляет шипами" },
+      storm_spirit: { id: "storm_spirit", name: "Громовой Дух (Storm Spirit)", icon: "⚡", baseHp: 630000000, baseAtk: 10800, defense: 800, scale: 1.35, gold: 680000, xp: 450000, desc: "[630 МЛН ХП] Молниеносные перелеты через арену и ремнанты" },
+      doom: { id: "doom", name: "Вестник Апокалипсиса (Lord Doom)", icon: "👹", baseHp: 750000000, baseAtk: 13000, defense: 920, scale: 1.45, gold: 850000, xp: 560000, desc: "[750 МЛН ХП] Владыка Преисподней с роком и пламенем" },
+      primal_beast: { id: "primal_beast", name: "Первобытный Титан (Primal Beast)", icon: "🦣", baseHp: 880000000, baseAtk: 15500, defense: 1050, scale: 1.60, gold: 1100000, xp: 700000, desc: "[880 МЛН ХП] Сокрушитель материков с диким топотом" },
+      phantom_roshan: { id: "phantom_roshan", name: "Призрачный Рошан Хаоса", icon: "👻", baseHp: 1050000000, baseAtk: 18500, defense: 1200, scale: 1.55, gold: 1450000, xp: 950000, desc: "[1.05 МЛРД ХП] Восставший призрак Рошана с астральным Slam" },
+      tinker_boss: { id: "tinker_boss", name: "Архиинженер (Omega Tinker)", icon: "🤖", baseHp: 1250000000, baseAtk: 22000, defense: 1350, scale: 1.45, gold: 1900000, xp: 1250000, desc: "[1.25 МЛРД ХП] Ослепляющий лазер, микроракеты и марш роботов" },
+      enigma: { id: "enigma", name: "Пожиратель Миров (Enigma Cosmic)", icon: "🌌", baseHp: 1500000000, baseAtk: 26500, defense: 1500, scale: 1.35, gold: 2500000, xp: 1700000, desc: "[1.5 МЛРД ХП!] Испытание для мастеров с максимальным снаряжением! Схлопывает пространство в Черную Дыру" }
     };
 
     const b = bossTmpls[bossId] || bossTmpls.golem;

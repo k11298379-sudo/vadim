@@ -9,6 +9,16 @@ from backend.db.crud.rpg.items_catalog import RARITY_MULTIPLIERS
 from backend.db.crud.rpg.character import get_or_create_rpg_character, serialize_character_profile
 from backend.db.crud.rpg.heroes import NATAR_HEROES
 
+def calculate_item_sell_price(item: Dict[str, Any], char_floor: int = 1) -> int:
+    """Calculates progressive gold value for selling an item based on rarity, floor and upgrades."""
+    rarity = item.get("rarity", "common")
+    base_price = RARITY_MULTIPLIERS.get(rarity, {}).get("sell", 40)
+    item_floor = max(1, item.get("floor") or char_floor)
+    floor_multiplier = 1.0 + (item_floor - 1) * 0.18
+    upgrade_bonus = item.get("upgrade", 0) * 150
+    return int(base_price * floor_multiplier) + upgrade_bonus
+
+
 async def sell_item_from_inventory(
     session: AsyncSession,
     char: RPGCharacter,
@@ -22,11 +32,10 @@ async def sell_item_from_inventory(
             target_idx = idx
             break
 
+    char_floor = getattr(char, "dungeon_floor", 1) or 1
     if target_idx is not None:
         item = inventory.pop(target_idx)
-        rarity = item.get("rarity", "common")
-        price = RARITY_MULTIPLIERS.get(rarity, {}).get("sell", 40)
-        price += item.get("upgrade", 0) * 35
+        price = calculate_item_sell_price(item, char_floor)
 
         char.gold += price
         char.inventory = inventory
@@ -46,9 +55,7 @@ async def sell_item_from_inventory(
             break
 
     if target_slot is not None and equipped_item:
-        rarity = equipped_item.get("rarity", "common")
-        price = RARITY_MULTIPLIERS.get(rarity, {}).get("sell", 40)
-        price += equipped_item.get("upgrade", 0) * 35
+        price = calculate_item_sell_price(equipped_item, char_floor)
 
         del equipment[target_slot]
         char.equipment = equipment
@@ -77,12 +84,11 @@ async def sell_multiple_items_from_inventory(
     remaining_inv = []
     total_gold = 0
 
+    char_floor = getattr(char, "dungeon_floor", 1) or 1
     for it in inventory:
         it_uid = str(it.get("uid") or it.get("id") or "")
         if it_uid in uid_set:
-            rarity = it.get("rarity", "common")
-            price = RARITY_MULTIPLIERS.get(rarity, {}).get("sell", 40)
-            price += it.get("upgrade", 0) * 35
+            price = calculate_item_sell_price(it, char_floor)
             total_gold += price
             sold_items.append(it)
         else:
@@ -93,9 +99,7 @@ async def sell_multiple_items_from_inventory(
         if eq_it:
             it_uid = str(eq_it.get("uid") or eq_it.get("id") or "")
             if it_uid in uid_set:
-                rarity = eq_it.get("rarity", "common")
-                price = RARITY_MULTIPLIERS.get(rarity, {}).get("sell", 40)
-                price += eq_it.get("upgrade", 0) * 35
+                price = calculate_item_sell_price(eq_it, char_floor)
                 total_gold += price
                 sold_items.append(eq_it)
                 del equipment[slot_k]

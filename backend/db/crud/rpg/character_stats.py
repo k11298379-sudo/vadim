@@ -120,22 +120,22 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
     stat_hp = hero_cfg.get("base_hp", 150) + int(total_str * 24) + flat_hp
     stat_hp_regen = round(0.5 + (total_str * 0.08) + flat_hp_regen, 1)
 
-    stat_atk_speed = round(1.0 + (total_agi * 0.025) + flat_atk_speed, 2)
+    stat_atk_speed = min(4.5, round(1.0 + (total_agi * 0.012) + flat_atk_speed, 2))
     stat_def = int(math.floor(total_agi * 0.18)) + flat_def
-    crit_chance = min(85, round(5.0 + (total_agi * 0.12) + crit_chance, 1))
-    dodge_chance = min(60, int(total_agi * 0.3) + dodge_chance)
+    crit_chance = min(85, round(5.0 + (total_agi * 0.10) + crit_chance, 1))
+    dodge_chance = min(60, int(total_agi * 0.25) + dodge_chance)
 
     stat_mp = hero_cfg.get("base_mp", 100) + int(total_int * 16) + flat_mp
     stat_mp_regen = round(1.0 + (total_int * 0.10) + flat_mp_regen, 1)
     magic_res = min(80, int(total_int * 0.35) + magic_res)
 
-    # Primary attribute attack bonus (1.8x according to Volume III)
+    # Primary attribute attack bonus (1.35x to balance with increased attack speed DPS)
     if hero_cfg["attr"] == "Сила":
-        primary_bonus = total_str * 1.8
+        primary_bonus = total_str * 1.35
     elif hero_cfg["attr"] == "Ловкость":
-        primary_bonus = total_agi * 1.8
+        primary_bonus = total_agi * 1.35
     else:  # Интеллект
-        primary_bonus = total_int * 1.8
+        primary_bonus = total_int * 1.35
 
     stat_atk = int(primary_bonus) + flat_atk
     total_min_atk = stat_atk + w_min

@@ -9,10 +9,10 @@
       // Boss defense: stored on entity, or fallback by tier
     const BOSS_DEF_BY_TIER = {
       golem: 35, lich: 50, tormentor: 75, dragon: 105, pudge_boss: 140,
-      faceless_void: 180, roshan: 230, tidehunter: 290, sf_boss: 370,
-      necrophos: 460, terrorblade: 570, invoker_boss: 700, chaos_knight: 860,
-      dark_tormentor: 1050, storm_spirit: 1300, doom: 1600, primal_beast: 1950,
-      phantom_roshan: 2400, tinker_boss: 3000, enigma: 3800
+      faceless_void: 180, roshan: 200, tidehunter: 260, sf_boss: 320,
+      necrophos: 380, terrorblade: 450, invoker_boss: 520, chaos_knight: 600,
+      dark_tormentor: 700, storm_spirit: 800, doom: 920, primal_beast: 1050,
+      phantom_roshan: 1200, tinker_boss: 1350, enigma: 1500
     };
     let bossDefense = boss.defense !== undefined ? boss.defense : 35;
     if (!boss.defense) {
@@ -147,19 +147,17 @@
     // Real boss attack: from entity, template, or tier scaling fallback
     const BOSS_TIER_ATK = {
       golem: 140, lich: 210, tormentor: 320, dragon: 500, pudge_boss: 800,
-      faceless_void: 1250, roshan: 1950, tidehunter: 3000, sf_boss: 4600,
-      necrophos: 7000, terrorblade: 11000, invoker_boss: 17500, chaos_knight: 26500,
-      dark_tormentor: 42000, storm_spirit: 64000, doom: 98000, primal_beast: 150000,
-      phantom_roshan: 230000, tinker_boss: 350000, enigma: 500000
+      faceless_void: 1250, roshan: 1600, tidehunter: 2200, sf_boss: 2900,
+      necrophos: 3700, terrorblade: 4700, invoker_boss: 5900, chaos_knight: 7300,
+      dark_tormentor: 8900, storm_spirit: 10800, doom: 13000, primal_beast: 15500,
+      phantom_roshan: 18500, tinker_boss: 22000, enigma: 26500
     };
     let bossAtk = boss.atk || boss.baseAtk;
-    if (!bossAtk) {
-      const bId = ((boss && (boss.id || boss.bossType || boss.name)) || "golem").toLowerCase();
-      for (const [k, v] of Object.entries(BOSS_TIER_ATK)) {
-        if (bId.includes(k)) { bossAtk = v; break; }
-      }
-      bossAtk = bossAtk || 140;
+    const bId = ((boss && (boss.id || boss.bossType || boss.name)) || "golem").toLowerCase();
+    for (const [k, v] of Object.entries(BOSS_TIER_ATK)) {
+      if (bId.includes(k)) { bossAtk = v; break; }
     }
+    bossAtk = bossAtk || 140;
 
     // Phase Enrage multiplier (when boss is enraged/furious/angry)
     let enrageMult = 1.0;

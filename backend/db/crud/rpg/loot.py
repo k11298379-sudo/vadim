@@ -269,6 +269,7 @@ def generate_random_natar_item(floor: int, quality_luck: float = 0.0, hero_class
     rarity_data = RARITY_MULTIPLIERS.get(rarity, RARITY_MULTIPLIERS["common"])
     chosen["rarity_color"] = rarity_data["color"]
     chosen["rarity_name"] = rarity_data["name"]
+    chosen["floor"] = max(1, floor)
 
     floor_scale = 1.0 + (floor * 0.08)
 

@@ -61,6 +61,7 @@ async def run_dungeon_wave(
     creep_atk_scale = (1.15 ** max(0, floor - 1))
     boss_atk_scale = (1.18 ** max(0, floor - 1))
 
+    gold_scale = (1.14 ** max(0, min(35, floor - 1)))
     if is_boss_wave:
         available_creeps = [c for c in NATAR_CREEPS_POOL if c.get("floor_min", 1) <= floor]
         if not available_creeps:
@@ -71,8 +72,8 @@ async def run_dungeon_wave(
         enemy_hp = int(target_template["base_hp"] * 15 * creep_scale)
         enemy_atk = int(target_template["base_atk"] * 10 * creep_atk_scale)
         enemy_def = int(target_template["base_def"] + (floor - 1) * 3)
-        base_gold = int(target_template["gold"] * 10 * (1.0 + (floor - 1) * 0.15))
-        base_xp = int(target_template["xp"] * 10 * (1.0 + (floor - 1) * 0.15))
+        base_gold = int(target_template["gold"] * 20 * gold_scale)
+        base_xp = int(target_template["xp"] * 15 * gold_scale)
     else:
         available_creeps = [c for c in NATAR_CREEPS_POOL if c.get("floor_min", 1) <= floor]
         if not available_creeps:
@@ -84,8 +85,8 @@ async def run_dungeon_wave(
         enemy_hp = int((target_template["base_hp"] * creep_count) * creep_scale)
         enemy_atk = int((target_template["base_atk"] + creep_count * 2) * creep_atk_scale)
         enemy_def = int(target_template["base_def"] + (floor - 1) * 2)
-        base_gold = int((target_template["gold"] * creep_count) * (1.0 + (floor - 1) * 0.12))
-        base_xp = int((target_template["xp"] * creep_count) * (1.0 + (floor - 1) * 0.12))
+        base_gold = int((target_template["gold"] * creep_count * 2.5) * gold_scale)
+        base_xp = int((target_template["xp"] * creep_count * 2.0) * gold_scale)
 
     # Simulate combat
     hero_hp = stats["hp_max"]

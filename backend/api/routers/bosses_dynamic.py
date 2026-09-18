@@ -87,8 +87,8 @@ async def slash_creep_wave_endpoint(
     direct_xp = payload.get("earned_xp")
     direct_wave = payload.get("wave_cleared")
     if direct_gold is not None or direct_xp is not None or direct_wave is not None:
-        gold_earned = min(int(direct_gold or 0), 8000)
-        xp_earned = min(int(direct_xp or 0), 8000)
+        gold_earned = min(int(direct_gold or 0), 5000000)
+        xp_earned = min(int(direct_xp or 0), 5000000)
         if direct_wave:
             claimed_wave = int(direct_wave)
             if claimed_wave > char.dungeon_cleared + 1:

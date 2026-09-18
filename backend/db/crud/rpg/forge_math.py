@@ -78,14 +78,14 @@ FORGE_MAX_LEVEL = 100
 def calculate_forge_multiplier(level: int) -> float:
     """
     Computes stat multiplier for forge level:
-    - Level 0..15: Linear +15% per level (1.0 -> 3.25x)
-    - Level 16..100: Compound +14.15% per level above 15, reaching ~250,000x at +100
+    - Level 0..15: +7% per level (1.0 -> 2.05x at +15)
+    - Level 16..100: Controlled linear +8% per level (reaching ~8.85x at +100)
     """
     if level <= 0:
         return 1.0
     if level <= 15:
-        return round(1.0 + (level * 0.15), 3)
-    return round(3.25 * math.pow(1.1415, level - 15), 2)
+        return round(1.0 + (level * 0.07), 3)
+    return round(2.05 + (level - 15) * 0.08, 2)
 
 
 def get_forge_upgrade_requirements(current_level: int) -> Dict[str, Any]:
@@ -204,13 +204,13 @@ def apply_forge_upgrade_to_item(item: Dict[str, Any], target_level: int) -> Dict
             elif k in ["hp", "mp"]:
                 bonus[k] = int(round(v * growth_mult))
             elif k in ["crit", "dodge", "lifesteal", "atk_speed"]:
-                bonus[k] = min(65, int(round(v * (1.0 + target_level * 0.10))))
+                bonus[k] = min(45, int(round(v * (1.0 + target_level * 0.04))))
             elif k in ["ult_boost"]:
-                bonus[k] = min(250, int(round(v * (1.0 + target_level * 0.08))))
+                bonus[k] = min(120, int(round(v * (1.0 + target_level * 0.04))))
             elif k in ["ult_cd", "cooldown_reduct"]:
-                bonus[k] = min(60, int(round(v * (1.0 + target_level * 0.05))))
+                bonus[k] = min(50, int(round(v * (1.0 + target_level * 0.03))))
             elif k in ["spell_amp"]:
-                bonus[k] = min(75, int(round(v * (1.0 + target_level * 0.10))))
+                bonus[k] = min(50, int(round(v * (1.0 + target_level * 0.04))))
             elif k in ["freeze_chance", "slow_enemy", "silence_enemy", "stun_chance", "illusion_evade", "ethereal_evade"]:
                 bonus[k] = min(60, int(round(v * (1.0 + target_level * 0.06))))
             elif k in ["magic_resist"]:

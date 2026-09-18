@@ -18,26 +18,28 @@ async def open_wave_chest(
     Opens a reward chest earned every 10-20 waves!
     Guarantees impactful functional equipment and gold/gems.
     """
+    char_floor = getattr(char, "dungeon_floor", 1) or 1
+    floor_mult = 1.0 + (char_floor - 1) * 0.35
     if wave >= 50:
         tier = "mythic"
         chest_name = "Мифический Сундук Владыки"
         chest_icon = "👑"
-        gold_reward = 180 + random.randint(40, 80)
-        gems_reward = 15
+        gold_reward = int((1500 + wave * 40) * floor_mult) + random.randint(100, 300)
+        gems_reward = min(40, 15 + char_floor // 2)
         allowed_rarities = ["epic", "legendary", "immortal"]
     elif wave >= 20:
         tier = "gold"
         chest_name = "Золотой Сундук Катакомб"
         chest_icon = "🎁"
-        gold_reward = 90 + random.randint(20, 50)
-        gems_reward = 8
-        allowed_rarities = ["rare", "epic"]
+        gold_reward = int((600 + wave * 25) * floor_mult) + random.randint(50, 150)
+        gems_reward = min(25, 8 + char_floor // 3)
+        allowed_rarities = ["rare", "epic", "legendary"]
     else:
         tier = "silver"
         chest_name = "Серебряный Сундук Награды"
         chest_icon = "📦"
-        gold_reward = 45 + random.randint(10, 25)
-        gems_reward = 3
+        gold_reward = int((250 + wave * 15) * floor_mult) + random.randint(25, 60)
+        gems_reward = 4
         allowed_rarities = ["uncommon", "rare"]
 
     pool = [
@@ -126,8 +128,18 @@ async def open_boss_raid_chest(
     if "bonus" in item:
         item["bonus"] = dict(item["bonus"])
 
-    gold_reward = 220 + random.randint(50, 120)
-    gems_reward = 12 + random.randint(5, 10)
+    RAID_CHEST_GOLD = {
+        "golem": 3500, "lich": 6000, "tormentor": 10000, "dragon": 18000,
+        "pudge_boss": 30000, "faceless_void": 50000, "roshan": 85000,
+        "tidehunter": 130000, "sf_boss": 190000, "necrophos": 260000,
+        "terrorblade": 350000, "invoker_boss": 460000, "chaos_knight": 600000,
+        "dark_tormentor": 760000, "storm_spirit": 950000, "doom": 1200000,
+        "primal_beast": 1500000, "phantom_roshan": 1900000, "tinker_boss": 2400000,
+        "enigma": 3200000
+    }
+    base_chest_gold = RAID_CHEST_GOLD.get(boss_id, 25000)
+    gold_reward = int(base_chest_gold * random.uniform(0.9, 1.15))
+    gems_reward = max(10, min(65, int(base_chest_gold / 50000) + 12))
 
     char.gold += gold_reward
     char.gems += gems_reward
