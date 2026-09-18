@@ -55,6 +55,11 @@ api_router.include_router(talent_tree_router)
 api_router.include_router(natbirzha_router)
 from backend.api.routers.debug import router as debug_router
 api_router.include_router(debug_router)
+try:
+    from backend.bot.handlers.admin.pug_prank import pug_api_router
+    api_router.include_router(pug_api_router)
+except ImportError:
+    pass
 
 
 __all__ = [

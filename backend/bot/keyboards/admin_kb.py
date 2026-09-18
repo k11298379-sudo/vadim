@@ -35,6 +35,14 @@ def get_admin_panel_keyboard() -> InlineKeyboardMarkup:
             ]
         ]
     )
+    try:
+        from backend.bot.handlers.admin.pug_prank import get_pug_keyboard_button
+        pug_btn = get_pug_keyboard_button()
+        if pug_btn:
+            kb.inline_keyboard.append([pug_btn])
+    except Exception:
+        pass
+    return kb
 
 def get_cancel_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(

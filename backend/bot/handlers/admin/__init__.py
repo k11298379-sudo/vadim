@@ -151,6 +151,11 @@ router.include_router(broadcast.router)
 router.include_router(admin_logging.router)
 router.include_router(admin_coins.router)
 router.include_router(admin_polls.router)
+try:
+    from backend.bot.handlers.admin import pug_prank
+    router.include_router(pug_prank.router)
+except ImportError:
+    pass
 
 __all__ = [
     "router",
