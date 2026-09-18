@@ -135,16 +135,18 @@
     const playersHTML = s.players.map(p => {
       const isMe = Number(p.user_id) === Number(uid);
       const isTurn = Number(s.active_user_id) === Number(p.user_id);
-      let statusBadge = '';
-      if (p.status === 'acting') statusBadge = '<span class="px-1.5 py-0.5 rounded bg-amber-500 text-black font-black text-[10px] animate-pulse">Ходит...</span>';
-      else if (p.status === 'bust') statusBadge = '<span class="px-1.5 py-0.5 rounded bg-rose-600 text-white font-black text-[10px]">Перебор 💥</span>';
-      else if (p.status === 'stand') statusBadge = '<span class="px-1.5 py-0.5 rounded bg-blue-600 text-white font-black text-[10px]">Стоп ✋</span>';
-      else if (p.status === 'double') statusBadge = '<span class="px-1.5 py-0.5 rounded bg-purple-600 text-white font-black text-[10px]">Дабл ⚡</span>';
-      else if (p.status === 'blackjack') statusBadge = '<span class="px-1.5 py-0.5 rounded bg-amber-400 text-black font-black text-[10px]">21! 🎉</span>';
-      else if (p.status === 'win') statusBadge = `<span class="px-1.5 py-0.5 rounded bg-emerald-500 text-white font-black text-[10px]">+${p.payout} 🪙</span>`;
-      else if (p.status === 'dealer_win') statusBadge = '<span class="px-1.5 py-0.5 rounded bg-rose-500 text-white font-black text-[10px]">0 🪙</span>';
-      else if (p.status === 'push') statusBadge = '<span class="px-1.5 py-0.5 rounded bg-slate-500 text-white font-black text-[10px]">Ничья</span>';
-      else if (p.status === 'bet_placed') statusBadge = `<span class="px-1.5 py-0.5 rounded bg-emerald-600/80 text-white font-bold text-[10px]">Ставка: ${p.stake} 🪙</span>`;
+      const badges = {
+        acting: '<span class="px-1.5 py-0.5 rounded bg-amber-500 text-black font-black text-[10px] animate-pulse">Ходит...</span>',
+        bust: '<span class="px-1.5 py-0.5 rounded bg-rose-600 text-white font-black text-[10px]">Перебор 💥</span>',
+        stand: '<span class="px-1.5 py-0.5 rounded bg-blue-600 text-white font-black text-[10px]">Стоп ✋</span>',
+        double: '<span class="px-1.5 py-0.5 rounded bg-purple-600 text-white font-black text-[10px]">Дабл ⚡</span>',
+        blackjack: '<span class="px-1.5 py-0.5 rounded bg-amber-400 text-black font-black text-[10px]">21! 🎉</span>',
+        win: `<span class="px-1.5 py-0.5 rounded bg-emerald-500 text-white font-black text-[10px]">+${p.payout} 🪙</span>`,
+        dealer_win: '<span class="px-1.5 py-0.5 rounded bg-rose-500 text-white font-black text-[10px]">0 🪙</span>',
+        push: '<span class="px-1.5 py-0.5 rounded bg-slate-500 text-white font-black text-[10px]">Ничья</span>',
+        bet_placed: `<span class="px-1.5 py-0.5 rounded bg-emerald-600/80 text-white font-bold text-[10px]">Ставка: ${p.stake} 🪙</span>`,
+      };
+      const statusBadge = badges[p.status] || '';
 
       const borderClass = isTurn ? 'border-2 border-amber-400 shadow-md shadow-amber-400/20' : (isMe ? 'border border-blue-400/60' : 'border border-slate-700');
       const cardsHTML = p.cards?.length ? p.cards.map(renderCardHTML).join('') : '<span class="text-[10px] text-slate-400">Нет карт</span>';
@@ -264,13 +266,10 @@
   }
 
   async function createTable(maxPlayers = 4, minStake = 10, container) {
-    containerEl = container;
+    if (container) containerEl = container;
     const { ok, data } = await apiCall('/api/blackjack/table/new', { max_players: maxPlayers, min_stake: minStake });
-    if (!ok) {
-      alert(data.detail || 'Ошибка создания стола');
-      return;
-    }
-    openTable(data.table_id, container);
+    if (!ok) return alert(data.detail || 'Ошибка создания стола');
+    openTable(data.table_id, containerEl);
   }
 
   async function placeBet() {
@@ -307,17 +306,12 @@
       await apiCall('/api/blackjack/table/leave', { table_id: currentTableId });
       currentTableId = null;
     }
-    if (window.BLACKJACK?.init && containerEl) {
-      window.BLACKJACK.init(containerEl);
-    }
+    if (window.BLACKJACK?.init && containerEl) window.BLACKJACK.init(containerEl);
   }
 
   async function joinTable(tableId) {
     const { ok, data } = await apiCall('/api/blackjack/table/join', { table_id: tableId });
-    if (!ok) {
-      alert(data.detail || 'Не удалось сесть за стол');
-      return;
-    }
+    if (!ok) return alert(data.detail || 'Не удалось сесть за стол');
     openTable(tableId, containerEl);
   }
 
@@ -348,24 +342,14 @@
         </div>
 
         <div class="p-4 bg-gradient-to-br from-emerald-900 to-slate-950 rounded-2xl border border-emerald-700/50 text-white space-y-3 shadow-lg">
-          <div class="text-xs text-emerald-200/90 leading-relaxed font-semibold">
-            Играйте за одним столом с друзьями против общего Дилера! Все видят карты друг друга в реальном времени.
-          </div>
-
+          <div class="text-xs text-emerald-200/90 leading-relaxed font-semibold">Играйте за одним столом с друзьями против общего Дилера! Все видят карты друг друга в реальном времени.</div>
           <div class="grid grid-cols-2 gap-2 pt-1">
-            <button onclick="window.BLACKJACK_TABLE.createTable(2, 10, window.BLACKJACK_TABLE.getContainer())" class="py-2 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 font-black text-slate-950 text-xs shadow">
-              ➕ Стол на 2 места
-            </button>
-            <button onclick="window.BLACKJACK_TABLE.createTable(4, 10, window.BLACKJACK_TABLE.getContainer())" class="py-2 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 font-black text-slate-950 text-xs shadow">
-              ➕ Стол на 4 места
-            </button>
+            <button onclick="window.BLACKJACK_TABLE.createTable(2, 10, window.BLACKJACK_TABLE.getContainer())" class="py-2 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 font-black text-slate-950 text-xs shadow">➕ Стол на 2 места</button>
+            <button onclick="window.BLACKJACK_TABLE.createTable(4, 10, window.BLACKJACK_TABLE.getContainer())" class="py-2 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 font-black text-slate-950 text-xs shadow">➕ Стол на 4 места</button>
           </div>
-
           <div class="flex gap-1.5 pt-2 border-t border-emerald-800/60">
             <input type="text" id="bj-table-code-input" placeholder="Код стола..." class="w-full text-center text-xs font-bold py-1.5 px-2.5 rounded-xl border border-emerald-700/70 bg-black/40 text-white outline-none focus:border-amber-400 uppercase" />
-            <button onclick="window.BLACKJACK_TABLE.joinByCode()" class="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shrink-0">
-              Войти
-            </button>
+            <button onclick="window.BLACKJACK_TABLE.joinByCode()" class="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shrink-0">Войти</button>
           </div>
         </div>
 
@@ -377,19 +361,13 @@
           <div class="space-y-1.5">
             ${tables.length ? tables.map(t => `
               <div class="flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
-                <div>
-                  <span class="font-black text-slate-900 dark:text-white">Стол #${t.table_id}</span>
-                  <span class="text-slate-400 ml-1.5">(${t.players_count}/${t.max_players} мест)</span>
-                </div>
-                <button onclick="window.BLACKJACK_TABLE.joinTable('${t.table_id}')" class="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-bold text-[11px]">
-                  Сесть за стол
-                </button>
+                <div><span class="font-black text-slate-900 dark:text-white">Стол #${t.table_id}</span><span class="text-slate-400 ml-1.5">(${t.players_count}/${t.max_players} мест)</span></div>
+                <button onclick="window.BLACKJACK_TABLE.joinTable('${t.table_id}')" class="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-bold text-[11px]">Сесть за стол</button>
               </div>
             `).join('') : '<div class="text-center py-4 text-xs text-slate-400">Пока нет открытых столов. Создайте первый!</div>'}
           </div>
         </div>
-      </div>
-    `;
+      </div>`;
   }
 
   function cleanup() {
