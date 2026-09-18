@@ -13880,6 +13880,7 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
           ${RPG_STATE.activeChestModal ? renderChestModalHTML(RPG_STATE.activeChestModal) : ""}
           ${RPG_STATE.shopModalOpen ? renderShopModalHTML() : ""}
           ${RPG_STATE.slotFilterModal ? renderSlotFilterModalHTML(RPG_STATE.slotFilterModal) : ""}
+          ${(isUserAdmin() && RPG_STATE.adminModalOpen) ? renderAdminModalHTML() : ""}
         `;
       }
       if (ARENA.canvas !== existingCanvas || !ARENA.ctx) {
@@ -16669,6 +16670,15 @@ window._adminCatalogItems = window._adminCatalogItems || null;
 window._adminSelectedTarget = window._adminSelectedTarget || "";
 window._adminSubTab = window._adminSubTab || "actions"; // "actions" | "slots"
 
+function updateAdminModalDOM() {
+  const backdrop = document.getElementById("rpg-admin-modal-backdrop");
+  if (backdrop && RPG_STATE.adminModalOpen) {
+    backdrop.outerHTML = renderAdminModalHTML();
+  } else {
+    renderRoot();
+  }
+}
+
 function renderAdminFloatingBadgeHTML() {
   const activeTestSlot = localStorage.getItem("admin_test_tg_uid");
   const currentSlotLabel = activeTestSlot ? `🧪 #${activeTestSlot}` : `👑 Админ`;
@@ -16692,15 +16702,15 @@ function renderAdminModalHTML() {
 
   if (!window._adminPlayersList && !window._fetchingAdminPlayers) {
     window._fetchingAdminPlayers = true;
-    setTimeout(() => { window._fetchingAdminPlayers = false; window.RPG.refreshAdminPlayers(); }, 0);
+    setTimeout(() => { window._fetchingAdminPlayers = false; window.RPG.refreshAdminPlayers(); }, 10);
   }
   if (!window._adminCatalogItems && !window._fetchingAdminCatalog) {
     window._fetchingAdminCatalog = true;
-    setTimeout(() => { window._fetchingAdminCatalog = false; window.RPG.fetchAdminCatalog(); }, 0);
+    setTimeout(() => { window._fetchingAdminCatalog = false; window.RPG.fetchAdminCatalog(); }, 10);
   }
 
   return `
-    <div class="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3">
+    <div id="rpg-admin-modal-backdrop" class="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3">
       <div class="w-full max-w-md max-h-[92vh] flex flex-col rounded-3xl bg-slate-900 border-2 border-amber-400/90 shadow-2xl text-white animate-scale-up overflow-hidden">
         <div class="p-3.5 border-b border-slate-700/80 flex items-center justify-between bg-slate-800/60 shrink-0">
           <div class="flex items-center gap-2">
@@ -16737,11 +16747,12 @@ function renderAdminActionsTabHTML(players, catalog) {
     <!-- 1. Player Selector -->
     <div class="p-2.5 rounded-2xl bg-slate-800/80 border border-slate-700 space-y-2">
       <div class="flex items-center justify-between">
-        <span class="text-[10px] font-black uppercase text-amber-400 tracking-wider">🎯 Целевой Игрок (${players.length || '...'}):</span>
+        <span class="text-[10px] font-black uppercase text-amber-400 tracking-wider">🎯 Целевой Игрок (${players.length ? `${players.length} чел.` : 'Загрузка...'}):</span>
         <button onclick="window.RPG.refreshAdminPlayers()" class="text-[10px] text-sky-400 hover:underline flex items-center gap-1 font-bold"><span>🔄</span> Обновить</button>
       </div>
-      <select id="admin-target-select" onchange="window._adminSelectedTarget = this.value; renderRoot();"
+      <select id="admin-target-select" onchange="window._adminSelectedTarget = this.value; updateAdminModalDOM();"
         class="w-full bg-slate-950 border border-slate-600 rounded-xl px-2.5 py-1.5 text-xs text-amber-200 font-bold focus:outline-none">
+        ${players.length === 0 ? '<option value="">⏳ Загрузка игроков из базы...</option>' : ''}
         <option value="" ${!window._adminSelectedTarget ? 'selected' : ''}>👤 Текущий аккаунт (Я)</option>
         ${players.map(p => `<option value="${p.tg_id || p.user_id}" ${window._adminSelectedTarget == (p.tg_id || p.user_id) ? 'selected' : ''}>${p.hero_icon || '👤'} ${p.name} ${p.level > 0 ? `[Ур. ${p.level} | 🪙 ${p.gold >= 1000 ? Math.round(p.gold/1000)+'k' : p.gold}]` : '[Новичок]'} (ID: ${p.tg_id || p.user_id})</option>`).join('')}
       </select>
@@ -16756,14 +16767,14 @@ function renderAdminActionsTabHTML(players, catalog) {
     <div class="p-2.5 rounded-2xl bg-slate-800/80 border border-slate-700 space-y-2">
       <span class="text-[10px] font-black uppercase text-amber-400 tracking-wider flex items-center gap-1"><span>🪙</span> Выдать Золото</span>
       <div class="grid grid-cols-4 gap-1.5">
-        <button onclick="window.RPG.adminGiveGold(50000)" class="py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 rounded-xl font-black text-amber-300 text-[11px]">+50k</button>
-        <button onclick="window.RPG.adminGiveGold(250000)" class="py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 rounded-xl font-black text-amber-300 text-[11px]">+250k</button>
-        <button onclick="window.RPG.adminGiveGold(1000000)" class="py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 rounded-xl font-black text-amber-300 text-[11px]">+1M</button>
-        <button onclick="window.RPG.adminGiveGold(10000000)" class="py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 rounded-xl font-black text-amber-300 text-[11px]">+10M</button>
+        <button onclick="window.RPG.adminGiveGold(50000)" class="py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 rounded-xl font-black text-amber-300 text-[11px] active:scale-95">+50k</button>
+        <button onclick="window.RPG.adminGiveGold(250000)" class="py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 rounded-xl font-black text-amber-300 text-[11px] active:scale-95">+250k</button>
+        <button onclick="window.RPG.adminGiveGold(1000000)" class="py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 rounded-xl font-black text-amber-300 text-[11px] active:scale-95">+1M</button>
+        <button onclick="window.RPG.adminGiveGold(10000000)" class="py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 rounded-xl font-black text-amber-300 text-[11px] active:scale-95">+10M</button>
       </div>
       <div class="flex gap-2">
         <input type="number" id="admin-gold-custom-input" placeholder="Своя сумма золота" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white">
-        <button onclick="window.RPG.adminGiveGoldCustom()" class="px-3 py-1 bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 rounded-xl font-black text-xs">Выдать</button>
+        <button onclick="window.RPG.adminGiveGoldCustom()" class="px-3 py-1 bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 rounded-xl font-black text-xs active:scale-95">Выдать</button>
       </div>
     </div>
 
@@ -16771,27 +16782,30 @@ function renderAdminActionsTabHTML(players, catalog) {
     <div class="p-2.5 rounded-2xl bg-slate-800/80 border border-slate-700 space-y-2">
       <span class="text-[10px] font-black uppercase text-sky-400 tracking-wider flex items-center gap-1"><span>🆙</span> Изменить Уровень Героя (1..50)</span>
       <div class="grid grid-cols-4 gap-1.5">
-        <button onclick="window.RPG.adminSetLevel(1)" class="py-1 bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/50 rounded-xl font-black text-sky-300 text-[11px]">Ур. 1</button>
-        <button onclick="window.RPG.adminSetLevel(15)" class="py-1 bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/50 rounded-xl font-black text-sky-300 text-[11px]">Ур. 15</button>
-        <button onclick="window.RPG.adminSetLevel(30)" class="py-1 bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/50 rounded-xl font-black text-sky-300 text-[11px]">Ур. 30 (Возн.)</button>
-        <button onclick="window.RPG.adminSetLevel(50)" class="py-1 bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/50 rounded-xl font-black text-sky-300 text-[11px]">Ур. 50 (MAX)</button>
+        <button onclick="window.RPG.adminSetLevel(1)" class="py-1 bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/50 rounded-xl font-black text-sky-300 text-[11px] active:scale-95">Ур. 1</button>
+        <button onclick="window.RPG.adminSetLevel(15)" class="py-1 bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/50 rounded-xl font-black text-sky-300 text-[11px] active:scale-95">Ур. 15</button>
+        <button onclick="window.RPG.adminSetLevel(30)" class="py-1 bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/50 rounded-xl font-black text-sky-300 text-[11px] active:scale-95">Ур. 30 (Возн.)</button>
+        <button onclick="window.RPG.adminSetLevel(50)" class="py-1 bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/50 rounded-xl font-black text-sky-300 text-[11px] active:scale-95">Ур. 50 (MAX)</button>
       </div>
       <div class="flex gap-2">
         <input type="number" id="admin-level-custom-input" min="1" max="50" placeholder="Уровень 1..50" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white">
-        <button onclick="window.RPG.adminSetLevelCustom()" class="px-3 py-1 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-xl font-black text-xs">Установить</button>
+        <button onclick="window.RPG.adminSetLevelCustom()" class="px-3 py-1 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-xl font-black text-xs active:scale-95">Установить</button>
       </div>
     </div>
 
     <!-- 4. Give Item from Catalog -->
     <div class="p-2.5 rounded-2xl bg-slate-800/80 border border-slate-700 space-y-2">
       <div class="flex items-center justify-between">
-        <span class="text-[10px] font-black uppercase text-purple-400 tracking-wider flex items-center gap-1"><span>🎁</span> Выдать Предмет из Каталога (${catalog.length || '...'})</span>
+        <span class="text-[10px] font-black uppercase text-purple-400 tracking-wider flex items-center gap-1">
+          <span>🎁</span> Выдать Предмет из Каталога (${catalog.length ? `${catalog.length} предм.` : 'Загрузка...'})
+        </span>
         <button onclick="window.RPG.fetchAdminCatalog()" class="text-[10px] text-purple-300 hover:underline font-bold">🔄 Обновить</button>
       </div>
       <div>
         <label class="text-[9px] text-slate-400 block mb-0.5">Выберите предмет из игры:</label>
         <select id="admin-catalog-item-select" onchange="window.RPG.onAdminCatalogItemChange(this.value)"
-          class="w-full bg-slate-950 border border-slate-700 rounded-xl px-2 py-1.5 text-xs text-amber-300 font-bold focus:outline-none">
+          class="w-full bg-slate-950 border border-slate-700 rounded-xl px-2 py-1.5 text-xs text-amber-300 font-bold focus:outline-none focus:border-purple-400">
+          ${catalog.length === 0 ? '<option value="">⏳ Загрузка каталога предметов...</option>' : ''}
           <option value="">🎲 [Случайный предмет под выбранную редкость]</option>
           ${catalog.map(it => `<option value="${it.name}">${it.icon || '📦'} ${it.name} (${it.rarity || 'common'})</option>`).join('')}
         </select>
@@ -16869,7 +16883,7 @@ window.RPG.setAdminSubTab = function(tab) {
     if (!window._adminPlayersList) window.RPG.refreshAdminPlayers();
     if (!window._adminCatalogItems) window.RPG.fetchAdminCatalog();
   }
-  renderRoot();
+  updateAdminModalDOM();
 };
 
 window.RPG.applyAdminCustomTarget = function() {
@@ -16877,16 +16891,16 @@ window.RPG.applyAdminCustomTarget = function() {
   if (inp && inp.value) {
     window._adminSelectedTarget = inp.value.trim();
     alert(`Целевой игрок выбран: ${window._adminSelectedTarget}`);
-    renderRoot();
+    updateAdminModalDOM();
   }
 };
 
 window.RPG.refreshAdminPlayers = async function() {
   try {
-    const res = await api.getAdminRpgPlayers();
+    const res = await (api.getAdminRpgPlayers ? api.getAdminRpgPlayers() : fetch("/api/rpg/admin/players").then(r => r.json()));
     if (res && res.players) {
       window._adminPlayersList = res.players;
-      renderRoot();
+      updateAdminModalDOM();
     }
   } catch (e) {
     console.warn("Failed to fetch admin players:", e);
@@ -16895,10 +16909,10 @@ window.RPG.refreshAdminPlayers = async function() {
 
 window.RPG.fetchAdminCatalog = async function() {
   try {
-    const res = await api.getAdminItemsCatalog();
+    const res = await (api.getAdminItemsCatalog ? api.getAdminItemsCatalog() : fetch("/api/rpg/admin/items_catalog").then(r => r.json()));
     if (res && res.items) {
       window._adminCatalogItems = res.items;
-      renderRoot();
+      updateAdminModalDOM();
     }
   } catch (e) {
     console.warn("Failed to fetch admin items catalog:", e);
@@ -16924,7 +16938,7 @@ window.RPG.adminGiveGold = async function(amount) {
       RPG_STATE.profile = res.profile;
     }
     window.RPG.refreshAdminPlayers();
-    renderRoot();
+    updateAdminModalDOM();
   } catch (e) {
     alert(e.message || "Ошибка выдачи золота");
   }
@@ -16947,7 +16961,7 @@ window.RPG.adminSetLevel = async function(lvl) {
       if (window.syncArenaPlayerStats) syncArenaPlayerStats();
     }
     window.RPG.refreshAdminPlayers();
-    renderRoot();
+    updateAdminModalDOM();
   } catch (e) {
     alert(e.message || "Ошибка изменения уровня");
   }
@@ -16972,7 +16986,7 @@ window.RPG.adminGiveItemSubmit = async function() {
     if (res.profile && (!target || target === String(RPG_STATE.profile?.user_id) || target === String(RPG_STATE.profile?.tg_id))) {
       RPG_STATE.profile = res.profile;
     }
-    renderRoot();
+    updateAdminModalDOM();
   } catch (e) {
     alert(e.message || "Ошибка выдачи предмета");
   }
@@ -16992,11 +17006,19 @@ window.RPG.adminResetPlayerSubmit = async function() {
       if (window.syncArenaPlayerStats) syncArenaPlayerStats();
     }
     window.RPG.refreshAdminPlayers();
-    renderRoot();
+    updateAdminModalDOM();
   } catch (e) {
     alert(e.message || "Ошибка сброса игрока");
   }
 };
+
+// Immediate pre-fetch in background on script initialization
+setTimeout(() => {
+  if (window.RPG) {
+    if (window.RPG.fetchAdminCatalog) window.RPG.fetchAdminCatalog();
+    if (window.RPG.refreshAdminPlayers) window.RPG.refreshAdminPlayers();
+  }
+}, 300);
 
   window.RPG = {
     init: initRPG,

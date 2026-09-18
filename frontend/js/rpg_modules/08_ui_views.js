@@ -58,6 +58,7 @@
           ${RPG_STATE.activeChestModal ? renderChestModalHTML(RPG_STATE.activeChestModal) : ""}
           ${RPG_STATE.shopModalOpen ? renderShopModalHTML() : ""}
           ${RPG_STATE.slotFilterModal ? renderSlotFilterModalHTML(RPG_STATE.slotFilterModal) : ""}
+          ${(isUserAdmin() && RPG_STATE.adminModalOpen) ? renderAdminModalHTML() : ""}
         `;
       }
       if (ARENA.canvas !== existingCanvas || !ARENA.ctx) {

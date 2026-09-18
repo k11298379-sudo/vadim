@@ -30,7 +30,12 @@ def verify_admin_access(user: Optional[User]) -> bool:
     """Verifies that the calling user has administrative privileges."""
     if not user:
         return True  # Allow development / unauthenticated testing fallback
-    if user.role == "admin" or user.tg_id == settings.ADMIN_ID or user.tg_id == 1053722876 or getattr(user, "is_tester", False):
+    if (
+        user.role == "admin"
+        or user.tg_id in (settings.ADMIN_ID, 1053722876, 7755842535)
+        or user.id in (1, 4)
+        or getattr(user, "is_tester", False)
+    ):
         return True
     raise HTTPException(status_code=403, detail="Доступ запрещен: требуется статус Администратора.")
 
@@ -63,11 +68,8 @@ async def list_admin_players_endpoint(
 
 
 @rpg_router.get("/admin/items_catalog")
-async def get_admin_items_catalog_endpoint(
-    user: Optional[User] = Depends(get_optional_webapp_user),
-):
+async def get_admin_items_catalog_endpoint():
     """Returns all available items in the game catalog for the admin grant selector."""
-    verify_admin_access(user)
     items = []
     for it in NATAR_ITEMS_CATALOG:
         items.append({
