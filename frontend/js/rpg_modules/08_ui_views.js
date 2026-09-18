@@ -52,14 +52,22 @@
       }
       const modalsEl = document.getElementById("rpg-modals-container");
       if (modalsEl) {
+        const existingAdmin = document.getElementById("rpg-admin-modal-backdrop");
+        const shouldShowAdmin = isUserAdmin() && RPG_STATE.adminModalOpen;
+        if (!shouldShowAdmin && existingAdmin) {
+          existingAdmin.remove();
+        }
         modalsEl.innerHTML = `
           ${RPG_STATE.inspectedItem ? renderItemModalHTML(RPG_STATE.inspectedItem) : ""}
           ${RPG_STATE.forgeItem ? renderForgeModalHTML(RPG_STATE.forgeItem) : ""}
           ${RPG_STATE.activeChestModal ? renderChestModalHTML(RPG_STATE.activeChestModal) : ""}
           ${RPG_STATE.shopModalOpen ? renderShopModalHTML() : ""}
           ${RPG_STATE.slotFilterModal ? renderSlotFilterModalHTML(RPG_STATE.slotFilterModal) : ""}
-          ${(isUserAdmin() && RPG_STATE.adminModalOpen) ? renderAdminModalHTML() : ""}
+          ${(shouldShowAdmin && !existingAdmin) ? renderAdminModalHTML() : ""}
         `;
+        if (shouldShowAdmin && existingAdmin && !modalsEl.contains(existingAdmin)) {
+          modalsEl.appendChild(existingAdmin);
+        }
       }
       if (ARENA.canvas !== existingCanvas || !ARENA.ctx) {
         bindArenaCanvas(existingCanvas);

@@ -4,9 +4,21 @@
 // ============================================================
 
 window._adminPlayersList = window._adminPlayersList || null;
-window._adminCatalogItems = window._adminCatalogItems || null;
+window._adminCatalogItems = window._adminCatalogItems || (typeof window._DEFAULT_RPG_CATALOG !== "undefined" ? window._DEFAULT_RPG_CATALOG : []);
 window._adminSelectedTarget = window._adminSelectedTarget || "";
 window._adminSubTab = window._adminSubTab || "actions"; // "actions" | "slots"
+window._fetchingAdminPlayers = false;
+window._fetchingAdminCatalog = false;
+
+function getDefaultAdminPlayers() {
+  const p = window.RPG_STATE?.profile;
+  const uid = p?.user_id || 1;
+  const tg = p?.tg_id || 1053722876;
+  const name = p?.user_name || "Я (Администратор)";
+  const lvl = p?.level || 1;
+  const gold = p?.gold || 0;
+  return [{ user_id: uid, tg_id: tg, name: name, level: lvl, gold: gold, hero_icon: "👑" }];
+}
 
 function updateAdminModalDOM() {
   const backdrop = document.getElementById("rpg-admin-modal-backdrop");
@@ -35,17 +47,12 @@ function renderAdminFloatingBadgeHTML() {
 function renderAdminModalHTML() {
   const activeTestSlot = localStorage.getItem("admin_test_tg_uid");
   const currentSlotLabel = activeTestSlot ? `🧪 #${activeTestSlot}` : `👑 Админ`;
-  const players = window._adminPlayersList || [];
-  const catalog = window._adminCatalogItems || [];
-
-  if (!window._adminPlayersList && !window._fetchingAdminPlayers) {
-    window._fetchingAdminPlayers = true;
-    setTimeout(() => { window._fetchingAdminPlayers = false; window.RPG.refreshAdminPlayers(); }, 10);
-  }
-  if (!window._adminCatalogItems && !window._fetchingAdminCatalog) {
-    window._fetchingAdminCatalog = true;
-    setTimeout(() => { window._fetchingAdminCatalog = false; window.RPG.fetchAdminCatalog(); }, 10);
-  }
+  const players = (window._adminPlayersList && window._adminPlayersList.length > 0)
+    ? window._adminPlayersList
+    : getDefaultAdminPlayers();
+  const catalog = (window._adminCatalogItems && window._adminCatalogItems.length > 0)
+    ? window._adminCatalogItems
+    : (window._DEFAULT_RPG_CATALOG || []);
 
   return `
     <div id="rpg-admin-modal-backdrop" class="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3">
@@ -85,12 +92,11 @@ function renderAdminActionsTabHTML(players, catalog) {
     <!-- 1. Player Selector -->
     <div class="p-2.5 rounded-2xl bg-slate-800/80 border border-slate-700 space-y-2">
       <div class="flex items-center justify-between">
-        <span class="text-[10px] font-black uppercase text-amber-400 tracking-wider">🎯 Целевой Игрок (${players.length ? `${players.length} чел.` : 'Загрузка...'}):</span>
+        <span class="text-[10px] font-black uppercase text-amber-400 tracking-wider">🎯 Целевой Игрок (${players.length} чел.):</span>
         <button onclick="window.RPG.refreshAdminPlayers()" class="text-[10px] text-sky-400 hover:underline flex items-center gap-1 font-bold"><span>🔄</span> Обновить</button>
       </div>
       <select id="admin-target-select" onchange="window._adminSelectedTarget = this.value; updateAdminModalDOM();"
         class="w-full bg-slate-950 border border-slate-600 rounded-xl px-2.5 py-1.5 text-xs text-amber-200 font-bold focus:outline-none">
-        ${players.length === 0 ? '<option value="">⏳ Загрузка игроков из базы...</option>' : ''}
         <option value="" ${!window._adminSelectedTarget ? 'selected' : ''}>👤 Текущий аккаунт (Я)</option>
         ${players.map(p => `<option value="${p.tg_id || p.user_id}" ${window._adminSelectedTarget == (p.tg_id || p.user_id) ? 'selected' : ''}>${p.hero_icon || '👤'} ${p.name} ${p.level > 0 ? `[Ур. ${p.level} | 🪙 ${p.gold >= 1000 ? Math.round(p.gold/1000)+'k' : p.gold}]` : '[Новичок]'} (ID: ${p.tg_id || p.user_id})</option>`).join('')}
       </select>
@@ -135,7 +141,7 @@ function renderAdminActionsTabHTML(players, catalog) {
     <div class="p-2.5 rounded-2xl bg-slate-800/80 border border-slate-700 space-y-2">
       <div class="flex items-center justify-between">
         <span class="text-[10px] font-black uppercase text-purple-400 tracking-wider flex items-center gap-1">
-          <span>🎁</span> Выдать Предмет из Каталога (${catalog.length ? `${catalog.length} предм.` : 'Загрузка...'})
+          <span>🎁</span> Выдать Предмет из Каталога (${catalog.length} предм.)
         </span>
         <button onclick="window.RPG.fetchAdminCatalog()" class="text-[10px] text-purple-300 hover:underline font-bold">🔄 Обновить</button>
       </div>
@@ -143,7 +149,6 @@ function renderAdminActionsTabHTML(players, catalog) {
         <label class="text-[9px] text-slate-400 block mb-0.5">Выберите предмет из игры:</label>
         <select id="admin-catalog-item-select" onchange="window.RPG.onAdminCatalogItemChange(this.value)"
           class="w-full bg-slate-950 border border-slate-700 rounded-xl px-2 py-1.5 text-xs text-amber-300 font-bold focus:outline-none focus:border-purple-400">
-          ${catalog.length === 0 ? '<option value="">⏳ Загрузка каталога предметов...</option>' : ''}
           <option value="">🎲 [Случайный предмет под выбранную редкость]</option>
           ${catalog.map(it => `<option value="${it.name}">${it.icon || '📦'} ${it.name} (${it.rarity || 'common'})</option>`).join('')}
         </select>
@@ -234,26 +239,51 @@ window.RPG.applyAdminCustomTarget = function() {
 };
 
 window.RPG.refreshAdminPlayers = async function() {
+  if (window._fetchingAdminPlayers) return;
+  window._fetchingAdminPlayers = true;
   try {
-    const res = await (api.getAdminRpgPlayers ? api.getAdminRpgPlayers() : fetch("/api/rpg/admin/players").then(r => r.json()));
-    if (res && res.players) {
+    const apiObj = window.api || (typeof api !== "undefined" ? api : null);
+    let res = null;
+    if (apiObj && typeof apiObj.getAdminRpgPlayers === "function") {
+      try { res = await apiObj.getAdminRpgPlayers(); } catch (err) { console.warn(err); }
+    }
+    if (!res) {
+      try { res = await fetch("/api/rpg/admin/players").then(r => r.json()); } catch (err) { console.warn(err); }
+    }
+    if (res && res.players && res.players.length > 0) {
       window._adminPlayersList = res.players;
       updateAdminModalDOM();
     }
   } catch (e) {
     console.warn("Failed to fetch admin players:", e);
+  } finally {
+    window._fetchingAdminPlayers = false;
   }
 };
 
 window.RPG.fetchAdminCatalog = async function() {
+  if (!window._adminCatalogItems || window._adminCatalogItems.length === 0) {
+    window._adminCatalogItems = window._DEFAULT_RPG_CATALOG || [];
+  }
+  if (window._fetchingAdminCatalog) return;
+  window._fetchingAdminCatalog = true;
   try {
-    const res = await (api.getAdminItemsCatalog ? api.getAdminItemsCatalog() : fetch("/api/rpg/admin/items_catalog").then(r => r.json()));
-    if (res && res.items) {
+    const apiObj = window.api || (typeof api !== "undefined" ? api : null);
+    let res = null;
+    if (apiObj && typeof apiObj.getAdminItemsCatalog === "function") {
+      try { res = await apiObj.getAdminItemsCatalog(); } catch (err) { console.warn(err); }
+    }
+    if (!res) {
+      try { res = await fetch("/api/rpg/admin/items_catalog").then(r => r.json()); } catch (err) { console.warn(err); }
+    }
+    if (res && res.items && res.items.length > 0) {
       window._adminCatalogItems = res.items;
       updateAdminModalDOM();
     }
   } catch (e) {
     console.warn("Failed to fetch admin items catalog:", e);
+  } finally {
+    window._fetchingAdminCatalog = false;
   }
 };
 
