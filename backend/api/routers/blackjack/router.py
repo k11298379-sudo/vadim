@@ -202,3 +202,142 @@ async def blackjack_double(
         "state": state,
         "coins": user_coins,
     }
+
+
+# ==========================================
+# Многопользовательский стол (2–4 игрока)
+# ==========================================
+from fastapi import WebSocket, WebSocketDisconnect
+from .table_state import (
+    get_table, list_open_tables, create_table, join_table, leave_table,
+    place_table_bet, start_table_deal, player_table_action, broadcast_table
+)
+
+
+@router.get("/tables")
+async def get_blackjack_tables():
+    """Список открытых столов Блэкджек для лобби."""
+    return {"ok": True, "tables": list_open_tables()}
+
+
+@router.post("/table/new")
+async def blackjack_table_new(
+    request: Request,
+    payload: Dict[str, Any] = Body(default={}),
+    user: Optional[User] = Depends(get_optional_webapp_user),
+):
+    """Создать новый общий стол (на 2–4 игрока)."""
+    viewer_id, db_user = await _resolve_user_and_check_ecosystem(request, user, payload=payload)
+    max_players = int(payload.get("max_players", 4))
+    min_stake = int(payload.get("min_stake", 10))
+    entry = create_table(viewer_id, db_user.display_name or db_user.full_name, max_players, min_stake)
+    return {"ok": True, "table_id": entry["game"].table_id, "state": entry["game"].to_dict()}
+
+
+@router.post("/table/join")
+async def blackjack_table_join(
+    request: Request,
+    payload: Dict[str, Any] = Body(default={}),
+    user: Optional[User] = Depends(get_optional_webapp_user),
+):
+    """Сесть за общий стол."""
+    viewer_id, db_user = await _resolve_user_and_check_ecosystem(request, user, payload=payload)
+    table_id = payload.get("table_id", "")
+    res = join_table(table_id, viewer_id, db_user.display_name or db_user.full_name)
+    if not res.get("ok"):
+        raise HTTPException(status_code=400, detail=res.get("error", "Не удалось войти за стол"))
+    await broadcast_table(table_id)
+    return {"ok": True, "state": res["state"]}
+
+
+@router.post("/table/leave")
+async def blackjack_table_leave(
+    request: Request,
+    payload: Dict[str, Any] = Body(default={}),
+    user: Optional[User] = Depends(get_optional_webapp_user),
+):
+    """Покинуть общий стол."""
+    viewer_id = _extract_viewer_tg_id(user, request, payload=payload) or 0
+    table_id = payload.get("table_id", "")
+    if table_id and viewer_id:
+        await leave_table(table_id, viewer_id)
+    return {"ok": True}
+
+
+@router.post("/table/bet")
+async def blackjack_table_bet(
+    request: Request,
+    payload: Dict[str, Any] = Body(default={}),
+    user: Optional[User] = Depends(get_optional_webapp_user),
+):
+    """Сделать ставку за общим столом."""
+    viewer_id, _ = await _resolve_user_and_check_ecosystem(request, user, payload=payload)
+    table_id = payload.get("table_id", "")
+    stake = int(payload.get("stake", 0))
+    res = await place_table_bet(table_id, viewer_id, stake)
+    if not res.get("ok"):
+        raise HTTPException(status_code=400, detail=res.get("error", "Ошибка ставки"))
+    return res
+
+
+@router.post("/table/deal")
+async def blackjack_table_deal(
+    request: Request,
+    payload: Dict[str, Any] = Body(default={}),
+    user: Optional[User] = Depends(get_optional_webapp_user),
+):
+    """Начать раздачу карт за столом."""
+    table_id = payload.get("table_id", "")
+    res = await start_table_deal(table_id)
+    if not res.get("ok"):
+        raise HTTPException(status_code=400, detail=res.get("error", "Не удалось начать раздачу"))
+    return res
+
+
+@router.post("/table/action")
+async def blackjack_table_action_endpoint(
+    request: Request,
+    payload: Dict[str, Any] = Body(default={}),
+    user: Optional[User] = Depends(get_optional_webapp_user),
+):
+    """Действие игрока за столом: hit / stand / double."""
+    viewer_id, _ = await _resolve_user_and_check_ecosystem(request, user, payload=payload)
+    table_id = payload.get("table_id", "")
+    action = payload.get("action", "")
+    res = await player_table_action(table_id, viewer_id, action)
+    if not res.get("ok"):
+        raise HTTPException(status_code=400, detail=res.get("error", "Недопустимый ход"))
+    return res
+
+
+@router.get("/table/{table_id}")
+async def blackjack_table_state(table_id: str):
+    """Получить текущее состояние стола."""
+    entry = get_table(table_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Стол не найден")
+    return {"ok": True, "state": entry["game"].to_dict()}
+
+
+@router.websocket("/ws/{table_id}/{user_id}")
+async def blackjack_table_ws(websocket: WebSocket, table_id: str, user_id: int):
+    """Вебсокет синхронизации общего стола в реальном времени."""
+    await websocket.accept()
+    entry = get_table(table_id)
+    if not entry:
+        await websocket.send_text('{"type":"error","message":"Стол не найден"}')
+        await websocket.close()
+        return
+
+    entry.setdefault("connections", {})[user_id] = websocket
+    import json
+    await websocket.send_text(json.dumps({"type": "table_state", "state": entry["game"].to_dict()}))
+
+    try:
+        while True:
+            msg = await websocket.receive_text()
+            if msg == "ping":
+                await websocket.send_text("pong")
+    except WebSocketDisconnect:
+        entry.get("connections", {}).pop(user_id, None)
+

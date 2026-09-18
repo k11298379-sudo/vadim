@@ -7,6 +7,7 @@ from backend.bot.game_blackjack.cards import (
     calculate_hand_value,
 )
 from backend.bot.game_blackjack.game import BlackjackGame
+from backend.bot.game_blackjack.table_game import BlackjackTableGame, TablePlayer
 
 __all__ = [
     "Card",
@@ -15,4 +16,6 @@ __all__ = [
     "RANKS",
     "calculate_hand_value",
     "BlackjackGame",
+    "BlackjackTableGame",
+    "TablePlayer",
 ]

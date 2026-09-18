@@ -120,6 +120,17 @@
           </div>
         </div>
 
+        <!-- Переключатель режима: Соло / Общий стол -->
+        <div class="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/90 rounded-xl border border-slate-200 dark:border-slate-700">
+          <button type="button" class="py-1 px-2 rounded-lg text-xs font-black bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm">
+            🤖 Соло (Дилер)
+          </button>
+          <button type="button" onclick="window.BLACKJACK_TABLE?.openLobby ? window.BLACKJACK_TABLE.openLobby(document.getElementById('blackjack-root')) : alert('Загрузка стола...')" class="py-1 px-2 rounded-lg text-xs font-extrabold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors flex items-center justify-center gap-1">
+            <span>👥 Общий стол</span>
+            <span class="px-1 py-0.2 rounded bg-amber-500/20 text-amber-500 text-[10px] font-black">NEW</span>
+          </button>
+        </div>
+
         <!-- Игровой стол сукно -->
         <div class="bj-table space-y-3 text-center">
           <!-- Дилер -->
@@ -302,31 +313,16 @@
     }
   }
 
-  async function deal() {
-    if (userCoins < selectedStake || selectedStake <= 0) return;
-    await performAction('/api/blackjack/deal', { stake: selectedStake });
-  }
-
-  async function hit() {
-    await performAction('/api/blackjack/hit');
-  }
-
-  async function stand() {
-    await performAction('/api/blackjack/stand');
-  }
-
-  async function doubleDown() {
-    await performAction('/api/blackjack/double');
-  }
-
+  const deal = async () => { if (userCoins >= selectedStake && selectedStake > 0) await performAction('/api/blackjack/deal', { stake: selectedStake }); };
+  const hit = () => performAction('/api/blackjack/hit');
+  const stand = () => performAction('/api/blackjack/stand');
+  const doubleDown = () => performAction('/api/blackjack/double');
 
   function syncStakeUI() {
     const disp = document.getElementById('bj-stake-display');
     if (disp) disp.textContent = `${selectedStake} 🪙`;
     const input = document.getElementById('bj-custom-stake-input');
-    if (input && document.activeElement !== input) {
-      input.value = selectedStake > 0 ? selectedStake : '';
-    }
+    if (input && document.activeElement !== input) input.value = selectedStake > 0 ? selectedStake : '';
     const chips = containerEl?.querySelectorAll('.bj-chip');
     chips?.forEach(c => {
       const v = parseInt(c.textContent, 10);
@@ -342,11 +338,7 @@
     }
   }
 
-  function setStake(amount) {
-    selectedStake = Math.min(Math.max(1, amount), userCoins || 1);
-    syncStakeUI();
-  }
-
+  function setStake(amount) { selectedStake = Math.min(Math.max(1, amount), userCoins || 1); syncStakeUI(); }
   function setCustomStake(amount, isChange = false) {
     let num = parseInt(amount, 10);
     if (isNaN(num) || num < 1) num = isChange ? 1 : 0;
@@ -354,11 +346,7 @@
     selectedStake = num;
     syncStakeUI();
   }
-
-  function setAllIn() {
-    selectedStake = Math.max(1, userCoins);
-    syncStakeUI();
-  }
+  function setAllIn() { selectedStake = Math.max(1, userCoins); syncStakeUI(); }
 
   function init(el) {
     containerEl = el || document.getElementById('blackjack-root');
