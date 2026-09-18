@@ -91,6 +91,18 @@ async def init_db():
                 for col in ["topic_hw_id", "topic_schedule_id", "topic_duty_id", "topic_announcements_id"]:
                     if col not in cols_gc:
                         await conn.execute(text(f"ALTER TABLE group_chats ADD COLUMN {col} INTEGER;"))
+                res_nf = await conn.execute(text("PRAGMA table_info(nat_factories);"))
+                cols_nf = [row[1] for row in res_nf.fetchall()]
+                for col, ddl in {
+                    "technology_level": "INTEGER DEFAULT 0",
+                    "current_recipe": "VARCHAR(100)",
+                    "cycle_started_at": "DATETIME",
+                    "cycle_ready_at": "DATETIME",
+                    "cycle_input_cost": "FLOAT DEFAULT 0"
+                }.items():
+                    if col not in cols_nf:
+                        await conn.execute(text(f"ALTER TABLE nat_factories ADD COLUMN {col} {ddl};"))
+
                 res_rc = await conn.execute(text("PRAGMA table_info(rpg_characters);"))
                 cols_rc = [row[1] for row in res_rc.fetchall()]
                 if "stat_points" not in cols_rc:
@@ -123,6 +135,11 @@ async def init_db():
                 await conn.execute(text("ALTER TABLE duty_groups ADD COLUMN IF NOT EXISTS member_ids JSONB;"))
                 await conn.execute(text("ALTER TABLE daily_facts ADD COLUMN IF NOT EXISTS hour INTEGER DEFAULT 0;"))
                 await conn.execute(text("ALTER TABLE daily_facts ADD COLUMN IF NOT EXISTS minute INTEGER DEFAULT 0;"))
+                await conn.execute(text("ALTER TABLE nat_factories ADD COLUMN IF NOT EXISTS technology_level INTEGER DEFAULT 0;"))
+                await conn.execute(text("ALTER TABLE nat_factories ADD COLUMN IF NOT EXISTS current_recipe VARCHAR(100);"))
+                await conn.execute(text("ALTER TABLE nat_factories ADD COLUMN IF NOT EXISTS cycle_started_at TIMESTAMP;"))
+                await conn.execute(text("ALTER TABLE nat_factories ADD COLUMN IF NOT EXISTS cycle_ready_at TIMESTAMP;"))
+                await conn.execute(text("ALTER TABLE nat_factories ADD COLUMN IF NOT EXISTS cycle_input_cost DOUBLE PRECISION DEFAULT 0;"))
                 await conn.execute(text("ALTER TABLE rpg_characters ADD COLUMN IF NOT EXISTS stat_points INTEGER DEFAULT 2;"))
                 await conn.execute(text("ALTER TABLE rpg_characters ADD COLUMN IF NOT EXISTS rebirths INTEGER DEFAULT 0;"))
                 await conn.execute(text("ALTER TABLE rpg_characters ADD COLUMN IF NOT EXISTS talent_points INTEGER DEFAULT 0;"))

@@ -60,17 +60,6 @@ def validate_test_init_data(init_data: str) -> Optional[Dict[str, Any]]:
     if res:
         return res
 
-    # Browser / dev environment fallback when ALLOW_TEST_AUTH is active
-    try:
-        parsed = dict(urllib.parse.parse_qsl(init_data, keep_blank_values=True))
-        if "user" in parsed:
-            u_data = json.loads(parsed["user"]) if isinstance(parsed["user"], str) else parsed["user"]
-            if isinstance(u_data, dict) and u_data.get("id"):
-                return {"user": u_data}
-        if "test_user_id" in parsed:
-            return {"user": {"id": int(parsed["test_user_id"]), "first_name": "DevUser"}}
-    except Exception:
-        pass
     return None
 
 

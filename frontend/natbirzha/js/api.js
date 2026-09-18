@@ -128,6 +128,8 @@ export const NatAPI = {
     body: JSON.stringify({ factory_id: parseInt(factory_id, 10), recipe_id })
   }),
 
+  upgradeFactory: (factory_id, upgrade_type) => request('/api/natbirzha/production/factory/upgrade', { method: 'POST', body: JSON.stringify({ factory_id: Number(factory_id), upgrade_type }) }),
+
   // Market
   getOrderbook: (item_id) => request(`/api/natbirzha/market/orderbook?item_id=${item_id}`),
   getNpcRates: () => request('/api/natbirzha/market/npc/rates'),

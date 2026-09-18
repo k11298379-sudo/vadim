@@ -6,6 +6,7 @@ from backend.natbirzha.config import nat_settings, get_game_now, get_game_today,
 from backend.natbirzha.models.company import NatCompany, NatFactory
 from backend.natbirzha.models.inventory import NatInventory, get_item_base_price
 from backend.natbirzha.models.military import NatArmy
+from backend.natbirzha.services.recipes import RECIPES
 
 VALID_SPECIALIZATIONS = {
     "agrarian": "Аграрий",
@@ -74,7 +75,7 @@ class CompanyService:
         company = NatCompany(
             user_id=user_id,
             name=clean_name,
-            specialization=specialization,
+            specialization=spec,
             level=1,
             xp=0,
             cash=nat_settings.STARTING_CASH,
@@ -89,20 +90,29 @@ class CompanyService:
         await session.flush()
 
         # Build initial starter factory
-        b_type = STARTER_FACTORIES.get(specialization, "farm")
+        b_type = STARTER_FACTORIES.get(spec, "farm")
+        default_recipe = next((k for k, v in RECIPES.items() if v.get("factory_type") == b_type), None)
         starter_factory = NatFactory(
             company_id=company.id,
             building_type=b_type,
-            specialization=specialization,
+            specialization=spec,
             level=1,
             efficiency=1.0,
             is_active=True,
             workers=10,
             automation_level=0,
+            current_recipe=default_recipe,
             last_produced_at=now,
             created_at=now
         )
         session.add(starter_factory)
+
+        # Starter utilities keep every specialization playable from minute one.
+        for item_id, quantity in (("water", 100.0), ("grid_quota", 100.0)):
+            session.add(NatInventory(
+                company_id=company.id, item_id=item_id, quantity=quantity,
+                reserved_quantity=0.0, avg_cost_basis=0.0
+            ))
 
         # Initialize base army garrison
         army = NatArmy(

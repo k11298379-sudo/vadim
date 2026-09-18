@@ -85,6 +85,11 @@ async def get_factories(
                 "efficiency": ProductionTickEngine.get_effective_efficiency(company, f),
                 "is_active": f.is_active,
                 "workers": f.workers,
+                "automation_level": f.automation_level,
+                "technology_level": f.technology_level,
+                "current_recipe": f.current_recipe or next((k for k, v in RECIPES.items() if v.get("factory_type") == f.building_type), None),
+                "cycle_started_at": str(f.cycle_started_at) if f.cycle_started_at else None,
+                "cycle_ready_at": str(f.cycle_ready_at) if f.cycle_ready_at else None,
                 "last_produced_at": str(f.last_produced_at)
             }
             for f in factories
@@ -156,6 +161,54 @@ async def build_factory(
     )
     return resp
 
+
+class UpgradeFactoryRequest(BaseModel):
+    factory_id: int
+    upgrade_type: str
+
+@router.post("/factory/upgrade")
+async def upgrade_factory(
+    req: UpgradeFactoryRequest,
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    company: NatCompany = Depends(get_current_company),
+    session: AsyncSession = Depends(get_db_session)
+):
+    cached = await IdempotencyService.check_or_conflict(
+        session, company.user_id, "/api/natbirzha/production/factory/upgrade", idempotency_key, req.model_dump()
+    )
+    if cached:
+        return cached[1]
+    factory = await session.get(NatFactory, req.factory_id)
+    if not factory or factory.company_id != company.id:
+        raise HTTPException(status_code=404, detail="Предприятие не найдено")
+    kind = req.upgrade_type.lower().strip()
+    limits = {"workers": 100, "automation": 5, "technology": 5, "level": 5}
+    current = {"workers": factory.workers // 10, "automation": factory.automation_level,
+               "technology": factory.technology_level, "level": factory.level}[kind] if kind in limits else -1
+    if current < 0:
+        raise HTTPException(status_code=400, detail="Неизвестный тип улучшения")
+    if current >= limits[kind]:
+        raise HTTPException(status_code=400, detail="Достигнут максимум этого улучшения")
+    cost = ProductionTickEngine.upgrade_cost(factory, kind)
+    if company.cash < cost:
+        raise HTTPException(status_code=400, detail=f"Недостаточно средств. Требуется {cost:,.0f} cash")
+    company.cash = round(company.cash - cost, 2)
+    if kind == "workers":
+        factory.workers += 10
+    elif kind == "automation":
+        factory.automation_level += 1
+    elif kind == "technology":
+        factory.technology_level += 1
+    else:
+        factory.level += 1
+    await session.commit()
+    resp = {"success": True, "factory_id": factory.id, "upgrade_type": kind,
+            "cost_paid": cost, "remaining_cash": company.cash, "workers": factory.workers,
+            "automation_level": factory.automation_level, "technology_level": factory.technology_level,
+            "level": factory.level}
+    await IdempotencyService.save_record(session, company.user_id, "/api/natbirzha/production/factory/upgrade", idempotency_key, req.model_dump(), 200, resp)
+    return resp
+
 @router.post("/factory/produce")
 async def produce_manual(
     req: ProduceRequest,
@@ -173,7 +226,7 @@ async def produce_manual(
     if cached:
         return cached[1]
 
-    res = await ProductionTickEngine.execute_manual_produce(session, company.id, req.factory_id)
+    res = await ProductionTickEngine.execute_manual_produce(session, company.id, req.factory_id, req.recipe_id)
     if not res.get("success"):
         err_msg = res.get("error") or res.get("message") or "Ошибка производственного цикла."
         raise HTTPException(status_code=400, detail=str(err_msg))

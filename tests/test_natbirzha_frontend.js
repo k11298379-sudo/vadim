@@ -1,4 +1,4 @@
-﻿const fs = require('fs');
+const fs = require('fs');
 const path = require('path');
 const assert = require('assert');
 
@@ -107,7 +107,7 @@ requiredMethods.forEach(m => {
 console.log('api.js methods, auth headers and error handling resilience verified!');
 
 console.log('=== [Natbirzha Test 4/5] Testing screen modules syntax & exports ===');
-const screens = ['onboarding.js', 'overview.js', 'production.js', 'market.js', 'stocks.js', 'military.js'];
+const screens = ['onboarding.js', 'overview.js', 'production.js', 'upgrades.js', 'market.js', 'stocks.js', 'military.js'];
 screens.forEach(s => {
   const code = fs.readFileSync(path.join(__dirname, '../frontend/natbirzha/js/screens/', s), 'utf-8');
   const renderFnName = 'render' + s[0].toUpperCase() + s.slice(1).replace('.js', '');

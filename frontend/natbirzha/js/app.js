@@ -3,6 +3,7 @@ import { store } from './state.js';
 import { renderOnboarding } from './screens/onboarding.js';
 import { renderOverview } from './screens/overview.js';
 import { renderProduction } from './screens/production.js';
+import { renderUpgrades } from './screens/upgrades.js';
 import { renderMarket } from './screens/market.js';
 import { renderStocks } from './screens/stocks.js';
 import { renderMilitary } from './screens/military.js';
@@ -116,6 +117,9 @@ export async function renderCurrentScreen() {
       break;
     case 'production':
       await renderProduction(container, showToast);
+      break;
+    case 'upgrades':
+      await renderUpgrades(container, showToast);
       break;
     case 'market':
       await renderMarket(container, showToast);

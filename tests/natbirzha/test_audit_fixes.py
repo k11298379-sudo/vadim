@@ -32,12 +32,17 @@ from backend.natbirzha.services.bankruptcy_service import BankruptcyService
 
 
 def make_test_auth_headers(tg_id: int) -> dict:
-    return {
-        "X-Telegram-Init-Data": f"user=%7B%22id%22%3A{tg_id}%2C%22first_name%22%3A%22Tester{tg_id}%22%7D"
-    }
+    import hashlib, hmac, json, urllib.parse, time as _time
+    payload = {"id": tg_id, "first_name": f"Tester{tg_id}"}
+    data = {"auth_date": str(int(_time.time())), "user": json.dumps(payload, separators=(",", ":"))}
+    check = "\n".join(f"{k}={v}" for k, v in sorted(data.items()))
+    secret = hmac.new(b"WebAppData", nat_settings.TEST_AUTH_SECRET.encode(), hashlib.sha256).digest()
+    data["hash"] = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
+    return {"X-Telegram-Init-Data": urllib.parse.urlencode(data)}
 
 
 async def test_audit_fixes():
+    nat_settings.ALLOW_TEST_AUTH = True
     await init_db()
     print("\n================================================================")
     print("🛡️ RUNNING AUDIT FIXES COMPREHENSIVE VERIFICATION")
@@ -62,6 +67,10 @@ async def test_audit_fixes():
         )
         assert create_res.status_code == 200
         company_id = create_res.json()["company_id"]
+        assert create_res.json()["specialization"] == "power_engineer"
+        status = await client.get("/api/natbirzha/company/me", headers=headers_1)
+        assert status.status_code == 200
+        assert status.json()["specialization"] == "power_engineer"
 
         # Backdate the hydro_solar factory's last_produced_at by 2 hours (120 minutes)
         # using an offset-naive datetime (simulating raw SQLite storage)

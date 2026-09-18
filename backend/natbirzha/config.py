@@ -9,7 +9,7 @@ class NatbirzhaSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     GAME_TIMEZONE: str = Field(default="Asia/Yekaterinburg", description="Timezone for calendar settlements")
-    ALLOW_TEST_AUTH: bool = Field(default=True, description="Allow test HMAC signature tokens in local dev/tests")
+    ALLOW_TEST_AUTH: bool = Field(default=False, description="Allow test HMAC signature tokens in local dev/tests")
     TEST_AUTH_SECRET: str = Field(default="natbirzha_test_secret_key_2026", description="Secret for signing test initData")
     BETA_TESTERS_ONLY: bool = Field(default=True, description="Restrict Natbirzha access to beta-testers and admins only")
 
