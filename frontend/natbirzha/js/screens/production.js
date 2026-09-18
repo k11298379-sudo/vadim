@@ -1,13 +1,9 @@
 import { NatAPI } from '../api.js';
 import { store } from '../state.js';
 import { getItemInfo } from '../items.js';
+import { openCatalogModal } from './catalog.js';
 
 // Canonical recipes: food_processing, mine_rare_lithium
-const FACTORIES = [
-  ['farm','🌾 Ферма'],['mine','⛏️ Рудник'],['smelter','🏭 Металлургический комбинат'],['oil_rig','🛢️ Нефтяная вышка'],
-  ['hydro_solar','⚡ ГЭС/СЭС'],['logging_camp','🌲 Лесозаготовка'],['chem_plant','⚗️ Химзавод'],['machinery_plant','🤖 Машиностроительный завод'],
-  ['refinery','🏗️ НПЗ'],['deep_mine','💎 Глубокий рудник'],['food_factory','🍞 Пищевой завод'],['sawmill','🪵 Лесопилка']
-];
 
 function parseDateMs(dateStr) {
   if (!dateStr) return 0;
@@ -33,15 +29,14 @@ export async function renderProduction(container, showToast) {
     <div class="flex justify-between items-center">
       <div>
         <h2 class="text-xl font-black">Заводы</h2>
-        <p class="text-xs text-slate-500">Один клик запускает один реальный производственный цикл.</p>
+        <p class="text-xs text-slate-500">Производственные комплексы вашей компании</p>
       </div>
       <div class="flex gap-2">
         <button id="go-upgrades" class="px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-100 text-xs font-bold">⚡ Прокачка</button>
-        <button id="build" class="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold">➕ Завод</button>
+        <button id="build" class="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold shadow-lg shadow-blue-600/30">➕ Каталог (48)</button>
       </div>
     </div>
     <div class="space-y-3">${factories.map(f => card(f, recipes)).join('') || empty()}</div>
-    <div id="modal" class="fixed inset-0 z-50 hidden bg-black/60 items-center justify-center p-4"><div class="glass-card rounded-2xl p-5 w-full max-w-sm"><div class="flex justify-between mb-3"><b>Построить предприятие</b><button id="close">✕</button></div><div class="space-y-2 max-h-80 overflow-y-auto">${FACTORIES.map(([id,name]) => `<button data-build="${id}" class="build-btn w-full text-left p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold">${name}</button>`).join('')}</div></div></div>
   </div>`;
 
   container.querySelector('#go-upgrades')?.addEventListener('click', () => {
@@ -50,12 +45,12 @@ export async function renderProduction(container, showToast) {
     }
   });
 
-  container.querySelector('#build')?.addEventListener('click', () => { const m=container.querySelector('#modal'); m.classList.remove('hidden'); m.classList.add('flex'); });
-  container.querySelector('#close')?.addEventListener('click', closeModal);
-  container.querySelectorAll('.build-btn').forEach(b => b.addEventListener('click', async () => {
-    try { b.disabled=true; await NatAPI.buildFactory(b.dataset.build); showToast('Завод построен', 'success'); await renderProduction(container, showToast); }
-    catch(e){ showToast(e.message,'error'); } finally { b.disabled=false; }
-  }));
+  container.querySelector('#build')?.addEventListener('click', () => {
+    openCatalogModal(showToast, async () => {
+      await renderProduction(container, showToast);
+    });
+  });
+
   bindCycles(container, showToast, recipes);
 }
 
@@ -83,14 +78,20 @@ function card(f, recipes) {
   const readyAtMs = running && !ready ? (Date.now() + remSec * 1000) : 0;
   const selRecipeId = f.current_recipe || (list[0] ? list[0][0] : null);
   const curRecipe = selRecipeId ? recipes[selRecipeId] : null;
+  const isOwn = (f.specialization === store.company?.specialization) || (f.efficiency >= 0.99);
 
   return `<div class="glass-card rounded-2xl p-4 space-y-3" data-factory-id="${f.id}">
-    <div class="flex justify-between">
+    <div class="flex justify-between items-start">
       <div>
-        <div class="text-sm font-black">${f.name || bType}</div>
+        <div class="text-sm font-black flex items-center gap-1.5">
+          <span>${f.name || bType}</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded ${isOwn ? 'bg-amber-500/20 text-amber-300 font-bold' : 'bg-slate-700 text-slate-400 font-medium'}">
+            ${isOwn ? '🌟 100%' : '⚠️ 10%'}
+          </span>
+        </div>
         <div class="text-[10px] text-slate-500">${f.specialization || ''} · уровень ${f.level || 1}</div>
       </div>
-      <div class="text-right text-[10px]">👷 ${f.workers || 10}<br>🤖 ${f.automation_level || 0}</div>
+      <div class="text-right text-[10px] text-slate-400">👷 ${f.workers || 10} · 🤖 ${f.automation_level || 0}</div>
     </div>
     <div>
       <select class="recipe-select w-full p-2 rounded-lg border bg-transparent text-xs" ${running && !ready ? 'disabled' : ''}>

@@ -41,14 +41,14 @@ SPECIALIZATION_ALIASES = {
 }
 
 STARTER_FACTORIES = {
-    "agrarian": "farm",
-    "miner": "mine",
-    "metallurgist": "smelter",
+    "agrarian": "farm_grain",
+    "miner": "iron_mine",
+    "metallurgist": "steel_mill",
     "oilman": "oil_rig",
-    "power_engineer": "hydro_solar",
+    "power_engineer": "solar_plant",
     "forester": "logging_camp",
-    "chemist": "chem_plant",
-    "technoprom": "machinery_plant",
+    "chemist": "chemical_plant",
+    "technoprom": "component_factory",
 }
 
 STARTER_INVENTORIES: Dict[str, Dict[str, float]] = {
@@ -56,10 +56,10 @@ STARTER_INVENTORIES: Dict[str, Dict[str, float]] = {
     "miner": {"water": 100.0, "grid_quota": 100.0},
     "oilman": {"water": 100.0, "grid_quota": 100.0},
     "forester": {"water": 100.0, "grid_quota": 100.0},
-    "power_engineer": {"water": 100.0, "grid_quota": 100.0, "energy": 100.0},
+    "power_engineer": {"water": 100.0, "grid_quota": 100.0},
     "metallurgist": {"water": 100.0, "grid_quota": 100.0, "iron_ore": 60.0, "coal": 40.0, "energy": 60.0},
-    "chemist": {"water": 100.0, "grid_quota": 100.0, "bio_raw": 60.0, "oil_crude": 40.0, "energy": 60.0},
-    "technoprom": {"water": 100.0, "grid_quota": 100.0, "steel": 60.0, "polymers": 40.0, "energy": 60.0},
+    "chemist": {"water": 100.0, "grid_quota": 100.0, "oil_crude": 40.0, "energy": 60.0},
+    "technoprom": {"water": 100.0, "grid_quota": 100.0, "copper": 40.0, "plastics": 40.0, "energy": 60.0},
 }
 
 class CompanyService:
@@ -101,7 +101,9 @@ class CompanyService:
         await session.flush()
 
         # Build initial starter factory
-        b_type = STARTER_FACTORIES.get(spec, "farm")
+        if spec not in STARTER_FACTORIES:
+            raise ValueError(f"Unknown specialization: {specialization}")
+        b_type = STARTER_FACTORIES[spec]
         default_recipe = next((k for k, v in RECIPES.items() if v.get("factory_type") == b_type), None)
         starter_factory = NatFactory(
             company_id=company.id,

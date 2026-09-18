@@ -10,6 +10,7 @@ from backend.natbirzha.models.inventory import NatInventory, CANONICAL_ITEMS
 from backend.natbirzha.services.auth_service import get_current_company
 from backend.natbirzha.services.recipes import RECIPES
 from backend.natbirzha.services.production_service import ProductionTickEngine
+from backend.natbirzha.services.building_service import BuildingService
 from backend.natbirzha.services.idempotency_service import IdempotencyService
 
 router = APIRouter(prefix="/production", tags=["Natbirzha Production"])
@@ -127,52 +128,11 @@ async def build_factory(
         return cached[1]
 
     b_type = req.canonical_type
-    recipe = next((r for r in RECIPES.values() if r["factory_type"] == b_type), None)
-    if not recipe:
-        raise HTTPException(status_code=400, detail=f"Неизвестный тип предприятия: '{b_type or 'не указан'}'.")
-
-    # Check territory space (1 factory per tile)
-    fac_res = await session.execute(select(NatFactory).where(NatFactory.company_id == company.id))
-    existing_factories = fac_res.scalars().all()
-    existing_count = len(existing_factories)
-    if existing_count >= company.territory_tiles:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Недостаточно территории ({existing_count}/{company.territory_tiles} занято). Расширьте территорию компании."
-        )
-
-    cost = nat_settings.get_factory_cost(b_type, existing_count)
-    if company.cash < cost:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Недостаточно средств. Требуется: {cost:,.0f} cash, доступно: {company.cash:,.0f} cash"
-        )
-
-    company.cash -= cost
-    now = get_game_now()
-    factory = NatFactory(
-        company_id=company.id,
-        building_type=b_type,
-        specialization=recipe["specialization"],
-        level=1,
-        efficiency=1.0,
-        is_active=True,
-        workers=10,
-        automation_level=0,
-        last_produced_at=now,
-        created_at=now
-    )
-    session.add(factory)
+    try:
+        resp = await BuildingService.build_factory(session, company, b_type, idempotency_key)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     await session.commit()
-    await session.refresh(factory)
-
-    resp = {
-        "success": True,
-        "factory_id": factory.id,
-        "building_type": factory.building_type,
-        "cost_paid": cost,
-        "remaining_cash": company.cash
-    }
     await IdempotencyService.save_record(
         session, company.user_id, "/api/natbirzha/production/factory/build", idempotency_key, req.model_dump(), 200, resp
     )
@@ -195,35 +155,14 @@ async def upgrade_factory(
     )
     if cached:
         return cached[1]
-    factory = await session.get(NatFactory, req.factory_id)
-    if not factory or factory.company_id != company.id:
-        raise HTTPException(status_code=404, detail="Предприятие не найдено")
-    kind = req.upgrade_type.lower().strip()
-    limits = {"workers": 100, "automation": 5, "technology": 5, "level": 5}
-    current = {"workers": factory.workers // 10, "automation": factory.automation_level,
-               "technology": factory.technology_level, "level": factory.level}[kind] if kind in limits else -1
-    if current < 0:
-        raise HTTPException(status_code=400, detail="Неизвестный тип улучшения")
-    if current >= limits[kind]:
-        raise HTTPException(status_code=400, detail="Достигнут максимум этого улучшения")
-    cost = ProductionTickEngine.upgrade_cost(factory, kind)
-    if company.cash < cost:
-        raise HTTPException(status_code=400, detail=f"Недостаточно средств. Требуется {cost:,.0f} cash")
-    company.cash = round(company.cash - cost, 2)
-    if kind == "workers":
-        factory.workers += 10
-    elif kind == "automation":
-        factory.automation_level += 1
-    elif kind == "technology":
-        factory.technology_level += 1
-    else:
-        factory.level += 1
+    try:
+        resp = await BuildingService.upgrade_factory(session, company, req.factory_id, req.upgrade_type)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     await session.commit()
-    resp = {"success": True, "factory_id": factory.id, "upgrade_type": kind,
-            "cost_paid": cost, "remaining_cash": company.cash, "workers": factory.workers,
-            "automation_level": factory.automation_level, "technology_level": factory.technology_level,
-            "level": factory.level}
-    await IdempotencyService.save_record(session, company.user_id, "/api/natbirzha/production/factory/upgrade", idempotency_key, req.model_dump(), 200, resp)
+    await IdempotencyService.save_record(
+        session, company.user_id, "/api/natbirzha/production/factory/upgrade", idempotency_key, req.model_dump(), 200, resp
+    )
     return resp
 
 @router.post("/factory/produce")
@@ -273,5 +212,54 @@ async def produce_manual(
     await session.commit()
     await IdempotencyService.save_record(
         session, company.user_id, "/api/natbirzha/production/factory/produce", idempotency_key, req.model_dump(), 200, res
+    )
+    return res
+
+@router.post("/factory/{factory_id}/start")
+async def start_factory_production(
+    factory_id: int,
+    recipe_id: Optional[str] = None,
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    company: NatCompany = Depends(get_current_company),
+    session: AsyncSession = Depends(get_db_session)
+):
+    cached = await IdempotencyService.check_or_conflict(
+        session, company.user_id, f"/api/natbirzha/production/factory/{factory_id}/start", idempotency_key, {"recipe_id": recipe_id}
+    )
+    if cached:
+        return cached[1]
+    factory = await session.get(NatFactory, factory_id)
+    if not factory or factory.company_id != company.id:
+        raise HTTPException(status_code=404, detail="Предприятие не найдено")
+    res = await ProductionTickEngine.start_cycle(session, company, factory, recipe_id)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("reason", "Невозможно запустить цикл"))
+    await session.commit()
+    await IdempotencyService.save_record(
+        session, company.user_id, f"/api/natbirzha/production/factory/{factory_id}/start", idempotency_key, {"recipe_id": recipe_id}, 200, res
+    )
+    return res
+
+@router.post("/factory/{factory_id}/collect")
+async def collect_factory_production(
+    factory_id: int,
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    company: NatCompany = Depends(get_current_company),
+    session: AsyncSession = Depends(get_db_session)
+):
+    cached = await IdempotencyService.check_or_conflict(
+        session, company.user_id, f"/api/natbirzha/production/factory/{factory_id}/collect", idempotency_key, {}
+    )
+    if cached:
+        return cached[1]
+    factory = await session.get(NatFactory, factory_id)
+    if not factory or factory.company_id != company.id:
+        raise HTTPException(status_code=404, detail="Предприятие не найдено")
+    res = await ProductionTickEngine.complete_cycle(session, company, factory)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("reason", "Невозможно собрать продукцию"))
+    await session.commit()
+    await IdempotencyService.save_record(
+        session, company.user_id, f"/api/natbirzha/production/factory/{factory_id}/collect", idempotency_key, {}, 200, res
     )
     return res

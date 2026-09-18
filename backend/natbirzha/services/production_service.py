@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 from sqlalchemy import select
@@ -10,6 +11,14 @@ from backend.natbirzha.services.recipes import RECIPES
 
 class ProductionTickEngine:
     """Single deterministic engine for starting, completing and catching up cycles."""
+
+    _factory_locks: Dict[int, asyncio.Lock] = {}
+
+    @classmethod
+    def _get_lock(cls, factory_id: int) -> asyncio.Lock:
+        if factory_id not in cls._factory_locks:
+            cls._factory_locks[factory_id] = asyncio.Lock()
+        return cls._factory_locks[factory_id]
 
     @staticmethod
     def recipe_for(factory: NatFactory, recipe_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
@@ -59,6 +68,12 @@ class ProductionTickEngine:
     @classmethod
     async def start_cycle(cls, session: AsyncSession, company: NatCompany, factory: NatFactory,
                           recipe_id: Optional[str] = None, now: Optional[datetime] = None) -> Dict[str, Any]:
+        async with cls._get_lock(factory.id):
+            return await cls._start_cycle_locked(session, company, factory, recipe_id, now)
+
+    @classmethod
+    async def _start_cycle_locked(cls, session: AsyncSession, company: NatCompany, factory: NatFactory,
+                                  recipe_id: Optional[str] = None, now: Optional[datetime] = None) -> Dict[str, Any]:
         if not factory.is_active:
             return {"success": False, "reason": "factory_inactive"}
         if factory.cycle_ready_at:
@@ -124,6 +139,12 @@ class ProductionTickEngine:
     @classmethod
     async def complete_cycle(cls, session: AsyncSession, company: NatCompany, factory: NatFactory,
                              now: Optional[datetime] = None) -> Dict[str, Any]:
+        async with cls._get_lock(factory.id):
+            return await cls._complete_cycle_locked(session, company, factory, now)
+
+    @classmethod
+    async def _complete_cycle_locked(cls, session: AsyncSession, company: NatCompany, factory: NatFactory,
+                                     now: Optional[datetime] = None) -> Dict[str, Any]:
         if not factory.cycle_ready_at or not factory.current_recipe:
             return {"success": False, "reason": "no_cycle_in_progress"}
         current = normalize_dt(now or get_game_now())

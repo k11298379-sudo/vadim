@@ -125,11 +125,17 @@ export const NatAPI = {
   createCompany: (payload) => request('/api/natbirzha/company/create', { method: 'POST', body: JSON.stringify(payload) }),
   respecCompany: (specialization) => request('/api/natbirzha/company/respec', { method: 'POST', body: JSON.stringify({ new_specialization: specialization }) }),
 
-  // Production
+  // Production & Buildings
   getProductionStatus: () => request('/api/natbirzha/production/factories'),
   getRecipes: () => request('/api/natbirzha/production/recipes'),
   getInventory: () => request('/api/natbirzha/production/inventory'),
-  buildFactory: (factory_type) => request('/api/natbirzha/production/factory/build', {
+  getBuildingsCatalog: () => request('/api/natbirzha/buildings/catalog'),
+  getBuildingDetails: (factory_id) => request(`/api/natbirzha/buildings/${factory_id}`),
+  buildEnterprise: (building_type) => request('/api/natbirzha/buildings/build', {
+    method: 'POST',
+    body: JSON.stringify({ building_type })
+  }),
+  buildFactory: (factory_type) => request('/api/natbirzha/buildings/build', {
     method: 'POST',
     body: JSON.stringify({ building_type: factory_type, factory_type })
   }),
@@ -138,7 +144,7 @@ export const NatAPI = {
     body: JSON.stringify({ factory_id: parseInt(factory_id, 10), recipe_id })
   }),
 
-  upgradeFactory: (factory_id, upgrade_type) => request('/api/natbirzha/production/factory/upgrade', { method: 'POST', body: JSON.stringify({ factory_id: Number(factory_id), upgrade_type }) }),
+  upgradeFactory: (factory_id, upgrade_type) => request('/api/natbirzha/factories/' + factory_id + '/upgrade', { method: 'POST', body: JSON.stringify({ upgrade_type }) }),
 
   // Market
   getOrderbook: (item_id) => request(`/api/natbirzha/market/orderbook?item_id=${item_id}`),

@@ -28,24 +28,63 @@ export const ITEMS = {
   // Tier 2: Intermediate Processing
   steel: { name: 'Конструкционная сталь', icon: '🔩', unit: 'т' },
   aluminum: { name: 'Алюминий', icon: '🪙', unit: 'т' },
+  copper: { name: 'Медь первичная', icon: '🟠', unit: 'т' },
+  rolled_metal: { name: 'Прокат металлический', icon: '🏗️', unit: 'т' },
+  metal_structures: { name: 'Металлоконструкции', icon: '🔩', unit: 'т' },
   lumber: { name: 'Пиломатериалы', icon: '🪵', unit: 'м³' },
   cellulose: { name: 'Целлюлоза', icon: '📄', unit: 'т' },
   food: { name: 'Продовольственные пайки', icon: '🥫', unit: 'ящ.' },
+  feed: { name: 'Комбикорм', icon: '🌽', unit: 'т' },
+  flour: { name: 'Мука', icon: '🍞', unit: 'т' },
+  meat: { name: 'Мясо', icon: '🥩', unit: 'т' },
+  milk: { name: 'Молоко', icon: '🥛', unit: 'т' },
   fuel_diesel: { name: 'Дизельное топливо', icon: '⛽', unit: 'л' },
+  gasoline: { name: 'Товарный бензин', icon: '⛽', unit: 'л' },
+  jet_fuel: { name: 'Авиакеросин', icon: '✈️', unit: 'л' },
   basic_chem: { name: 'Базовые реагенты', icon: '🧪', unit: 'т' },
   fertilizer: { name: 'Удобрения', icon: '🌱', unit: 'т' },
+  cardboard: { name: 'Тарный картон', icon: '📦', unit: 'т' },
+  furniture: { name: 'Мебель', icon: '🪑', unit: 'шт.' },
+  composite: { name: 'Древесные композиты', icon: '🧱', unit: 'т' },
+  electrolyte: { name: 'Электролит', icon: '🔋', unit: 'л' },
+  bioreagent: { name: 'Биореактивы', icon: '🧬', unit: 'кг' },
 
   // Tier 3: Advanced & High-Tech
-  plastics: { name: 'Полимеры', icon: '🧪', unit: 'т' },
+  plastics: { name: 'Полимеры и пластик', icon: '🧴', unit: 'т' },
   catalyst: { name: 'Катализаторы', icon: '💠', unit: 'кг' },
   lithium_pure: { name: 'Аккумуляторный литий', icon: '🔋', unit: 'кг' },
   uranium_enriched: { name: 'Обогащённый уран', icon: '⚛️', unit: 'шт.' },
+  components: { name: 'Электронные компоненты', icon: '🔧', unit: 'шт.' },
   machinery: { name: 'Механические узлы', icon: '⚙️', unit: 'шт.' },
+  auto_components: { name: 'Автокомпоненты', icon: '🚗', unit: 'шт.' },
+  superalloy: { name: 'Жаропрочные спецсплавы', icon: '🧪', unit: 'кг' },
   electronics: { name: 'Электронные чипы', icon: '💻', unit: 'шт.' },
   batteries: { name: 'Тяговые батареи', icon: '🔋', unit: 'шт.' },
+  servers: { name: 'Серверные стойки', icon: '🖥️', unit: 'шт.' },
+  robots: { name: 'Промышленные роботы', icon: '🤖', unit: 'шт.' },
+  ai_accelerator: { name: 'AI-ускорители', icon: '🧠', unit: 'шт.' },
+  aerospace_system: { name: 'Аэрокосмические узлы', icon: '🛰️', unit: 'шт.' },
 
   // Tier 4: Military
   military_gear: { name: 'Военное снаряжение', icon: '🪖', unit: 'компл.' },
+};
+
+const ITEM_ALIASES = {
+  wheat: 'grain',
+  wood: 'wood_raw',
+  oil: 'oil_crude',
+  gas: 'gas_natural',
+  reagent: 'basic_chem',
+  polymer: 'plastics',
+  plastic: 'plastics',
+  chips: 'electronics',
+  machines: 'machinery',
+  parts: 'components',
+  battery: 'batteries',
+  uranium: 'uranium_raw',
+  lithium: 'lithium_raw',
+  bio_raw_material: 'bio_raw',
+  rations: 'food',
 };
 
 /**
@@ -55,7 +94,8 @@ export const ITEMS = {
  */
 export function getItemInfo(itemId) {
   if (!itemId) return { name: 'Неизвестно', icon: '📦', unit: 'шт.' };
-  const key = String(itemId).toLowerCase().trim();
+  let key = String(itemId).toLowerCase().trim();
+  if (ITEM_ALIASES[key]) key = ITEM_ALIASES[key];
   return ITEMS[key] || {
     name: key.replace(/_/g, ' '),
     icon: '📦',
