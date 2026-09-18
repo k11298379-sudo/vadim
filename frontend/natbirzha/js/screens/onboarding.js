@@ -144,7 +144,25 @@ export function renderOnboarding(container, showToast) {
       }
       setTimeout(() => window.location.reload(), 600);
     } catch (err) {
-      showToast(err.message || 'Ошибка создания компании', 'error');
+      const errMsg = String(err?.message || err || '');
+      if (errMsg.includes('already owns') || errMsg.includes('уже владеет')) {
+        showToast('У вас уже есть компания! Загружаем...', 'info');
+        try {
+          const existingComp = await NatAPI.getMyCompany();
+          if (existingComp) {
+            store.setCompany(existingComp);
+            store.setTab('overview');
+            document.getElementById('bottom-nav')?.classList.remove('hidden');
+            document.getElementById('header-stats')?.classList.remove('hidden');
+            if (typeof window !== 'undefined' && window.NatApp?.renderCurrentScreen) {
+              window.NatApp.renderCurrentScreen();
+            }
+            setTimeout(() => window.location.reload(), 400);
+            return;
+          }
+        } catch (_) {}
+      }
+      showToast(errMsg || 'Ошибка создания компании', 'error');
     } finally {
       submitBtn.disabled = false;
       submitBtn.innerText = '🚀 Зарегистрировать компанию (+50,000 cash)';

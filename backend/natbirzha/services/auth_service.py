@@ -60,6 +60,16 @@ def validate_test_init_data(init_data: str) -> Optional[Dict[str, Any]]:
     if res:
         return res
 
+    # Support browser dev / local testing payload: user={"id": ...}
+    try:
+        parsed = dict(urllib.parse.parse_qsl(init_data, keep_blank_values=True))
+        if "user" in parsed:
+            u_data = json.loads(parsed["user"])
+            if isinstance(u_data, dict) and u_data.get("id"):
+                return {"user": u_data, "auth_date": int(time.time())}
+    except Exception:
+        pass
+
     return None
 
 
