@@ -93,11 +93,11 @@ def get_forge_upgrade_requirements(current_level: int) -> Dict[str, Any]:
     """
     Returns success rate, gold and gem costs:
     - +1..+3: 100% success, (L+1) * 350 gold, 0 gems
-    - +4..+6: 95% success, (L+1) * 800 gold, 2 gems (increased by +10%)
-    - +7..+9: 75% success, (L+1) * 2000 gold, 6 gems (increased by +10%)
-    - +10..+12: 55% success, (L+1) * 5500 gold, 15 gems (increased by +10%)
-    - +13..+15: 35% success, (L+1) * 15000 gold, 45 gems (increased by +10%)
-    - +16..+100: 30% success, (L+1) * 25000 gold, 45 + (L-15)*2 gems
+    - +4..+6: 98% success, (L+1) * 800 gold, 2 gems
+    - +7..+9: 90% success, (L+1) * 2000 gold, 6 gems
+    - +10..+12: 75% success, (L+1) * 5500 gold, 15 gems
+    - +13..+15: 60% success, (L+1) * 15000 gold, 45 gems
+    - +16..+100: 50% success, (L+1) * 25000 gold, 45 + (L-15)*2 gems
     """
     cur_mult = calculate_forge_multiplier(current_level)
     if current_level >= FORGE_MAX_LEVEL:
@@ -119,23 +119,23 @@ def get_forge_upgrade_requirements(current_level: int) -> Dict[str, Any]:
         gold = target_level * 350
         gems = 0
     elif target_level <= 6:
-        rate = 0.95
+        rate = 0.98
         gold = target_level * 800
         gems = 2
     elif target_level <= 9:
-        rate = 0.75
+        rate = 0.90
         gold = target_level * 2000
         gems = 6
     elif target_level <= 12:
-        rate = 0.55
+        rate = 0.75
         gold = target_level * 5500
         gems = 15
     elif target_level <= 15:
-        rate = 0.35
+        rate = 0.60
         gold = target_level * 15000
         gems = 45
     else:  # 16..100
-        rate = 0.30
+        rate = 0.50
         gold = target_level * 25000
         gems = 45 + (target_level - 15) * 2
 

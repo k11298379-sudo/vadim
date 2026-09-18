@@ -1822,23 +1822,23 @@
       goldCost = targetUpg * 350;
       gemsCost = 0;
     } else if (targetUpg <= 6) {
-      rate = 0.95;
+      rate = 0.98;
       goldCost = targetUpg * 800;
       gemsCost = 2;
     } else if (targetUpg <= 9) {
-      rate = 0.75;
+      rate = 0.90;
       goldCost = targetUpg * 2000;
       gemsCost = 6;
     } else if (targetUpg <= 12) {
-      rate = 0.55;
+      rate = 0.75;
       goldCost = targetUpg * 5500;
       gemsCost = 15;
     } else if (targetUpg <= 15) {
-      rate = 0.35;
+      rate = 0.60;
       goldCost = targetUpg * 15000;
       gemsCost = 45;
     } else {
-      rate = 0.30;
+      rate = 0.50;
       goldCost = targetUpg * 25000;
       gemsCost = 45 + (targetUpg - 15) * 2;
     }
