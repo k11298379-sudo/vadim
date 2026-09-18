@@ -10,8 +10,8 @@ LATE_BOSSES: Dict[str, Any] = {
         "atk_min": 10500,
         "atk_max": 13500,
         "defense": 600,
-        "gold_reward": 180000,
-        "xp_reward": 130000,
+        "gold_reward": 65000,
+        "xp_reward": 45000,
         "skills": [
             {"name": "Метаморфоза Тьмы", "mult": 1.35, "text": "принимает облик могучего демона с колоссальным уроном"},
             {"name": "Разрыв Души (Sunder)", "mult": 1.7, "text": "разрывает жизненные нити, высасывая колоссальное здоровье"}
@@ -26,8 +26,8 @@ LATE_BOSSES: Dict[str, Any] = {
         "atk_min": 18000,
         "atk_max": 24000,
         "defense": 800,
-        "gold_reward": 260000,
-        "xp_reward": 190000,
+        "gold_reward": 85000,
+        "xp_reward": 60000,
         "skills": [
             {"name": "Метеор Катастрофы (Chaos Meteor)", "mult": 1.4, "text": "обрушивает огненный болид, сжигающий арену"},
             {"name": "Абсолютный EMP", "mult": 1.65, "text": "сжигает всю ману и оглушает защитников колоссальным разрядом"}
@@ -42,8 +42,8 @@ LATE_BOSSES: Dict[str, Any] = {
         "atk_min": 27000,
         "atk_max": 36000,
         "defense": 950,
-        "gold_reward": 360000,
-        "xp_reward": 260000,
+        "gold_reward": 110000,
+        "xp_reward": 78000,
         "skills": [
             {"name": "Стрела Хаоса (Chaos Bolt)", "mult": 1.3, "text": "запускает непредсказуемый сгусток энергии"},
             {"name": "Реальность Фантазма (Phantasm)", "mult": 1.75, "text": "призывает полчища темных отражений, атакующих в унисон"}
@@ -58,8 +58,8 @@ LATE_BOSSES: Dict[str, Any] = {
         "atk_min": 38000,
         "atk_max": 50000,
         "defense": 1100,
-        "gold_reward": 480000,
-        "xp_reward": 350000,
+        "gold_reward": 140000,
+        "xp_reward": 100000,
         "skills": [
             {"name": "Зеркало Погибели", "mult": 1.35, "text": "возвращает колоссальный урон героям в десятикратном размере"},
             {"name": "Гравитационный взрыв", "mult": 1.6, "text": "схлопывает пространство вокруг кристалла"}
@@ -74,8 +74,8 @@ LATE_BOSSES: Dict[str, Any] = {
         "atk_min": 55000,
         "atk_max": 72000,
         "defense": 1300,
-        "gold_reward": 620000,
-        "xp_reward": 460000,
+        "gold_reward": 180000,
+        "xp_reward": 125000,
         "skills": [
             {"name": "Бросок Шаровой Молнии (Ball Lightning)", "mult": 1.4, "text": "стремительно проносится сквозь героя, выжигая зарядами"},
             {"name": "Электрический Вихрь (Electric Vortex)", "mult": 1.6, "text": "притягивает цель в эпицентр сокрушительного вихря"}
@@ -90,8 +90,8 @@ LATE_BOSSES: Dict[str, Any] = {
         "atk_min": 85000,
         "atk_max": 112000,
         "defense": 1600,
-        "gold_reward": 800000,
-        "xp_reward": 600000,
+        "gold_reward": 230000,
+        "xp_reward": 160000,
         "skills": [
             {"name": "Инфернальный клинок", "mult": 1.35, "text": "рассекает плоть адским огнем преисподней"},
             {"name": "Печать Апокалипсиса (DOOM)", "mult": 1.8, "text": "проклинает героя неизбежной погибелью"}
@@ -106,8 +106,8 @@ LATE_BOSSES: Dict[str, Any] = {
         "atk_min": 130000,
         "atk_max": 170000,
         "defense": 1950,
-        "gold_reward": 1050000,
-        "xp_reward": 800000,
+        "gold_reward": 290000,
+        "xp_reward": 200000,
         "skills": [
             {"name": "Яростный Разгон (Onslaught)", "mult": 1.4, "text": "несется вперед, ломая кости и титановую броню"},
             {"name": "Дикий Топот (Trample)", "mult": 1.7, "text": "неистово сотрясает континент сокрушительными волнами"}
@@ -122,8 +122,8 @@ LATE_BOSSES: Dict[str, Any] = {
         "atk_min": 200000,
         "atk_max": 260000,
         "defense": 2400,
-        "gold_reward": 1400000,
-        "xp_reward": 1050000,
+        "gold_reward": 360000,
+        "xp_reward": 250000,
         "skills": [
             {"name": "Призрачный Slam Бездны", "mult": 1.45, "text": "сотрясает измерения мощнейшим призрачным ударом лап"},
             {"name": "Астральный Эктоплазменный Шок", "mult": 1.75, "text": "выжигает души героев потусторонней эктоплазмой"}
@@ -138,8 +138,8 @@ LATE_BOSSES: Dict[str, Any] = {
         "atk_min": 300000,
         "atk_max": 400000,
         "defense": 3000,
-        "gold_reward": 1850000,
-        "xp_reward": 1400000,
+        "gold_reward": 450000,
+        "xp_reward": 320000,
         "skills": [
             {"name": "Ослепляющий Лазер (Laser)", "mult": 1.4, "text": "прожигает сетчатку героя, вызывая 100% промахи"},
             {"name": "Марш Роботов (March of the Machines)", "mult": 1.8, "text": "заполняет арену сотнями взрывающихся дроидов"}
@@ -154,8 +154,8 @@ LATE_BOSSES: Dict[str, Any] = {
         "atk_min": 400000,
         "atk_max": 550000,
         "defense": 3800,
-        "gold_reward": 2500000,
-        "xp_reward": 2000000,
+        "gold_reward": 600000,
+        "xp_reward": 420000,
         "skills": [
             {"name": "Пульсация Полночи (Midnight Pulse)", "mult": 1.45, "text": "заливает ткань пространства гравитационной материей"},
             {"name": "Черная Дыра (Black Hole)", "mult": 2.2, "text": "схлопывает поле боя в бесконечную сингулярность"}

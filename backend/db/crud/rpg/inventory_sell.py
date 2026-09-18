@@ -10,13 +10,13 @@ from backend.db.crud.rpg.character import get_or_create_rpg_character, serialize
 from backend.db.crud.rpg.heroes import NATAR_HEROES
 
 def calculate_item_sell_price(item: Dict[str, Any], char_floor: int = 1) -> int:
-    """Calculates progressive gold value for selling an item based on rarity, floor and upgrades."""
+    """Calculates balanced gold value for selling an item based on rarity, floor and upgrades."""
     rarity = item.get("rarity", "common")
     base_price = RARITY_MULTIPLIERS.get(rarity, {}).get("sell", 40)
     item_floor = max(1, item.get("floor") or char_floor)
-    floor_multiplier = 1.0 + (item_floor - 1) * 0.18
-    upgrade_bonus = item.get("upgrade", 0) * 150
-    return int(base_price * floor_multiplier) + upgrade_bonus
+    floor_multiplier = 1.0 + min(20, item_floor - 1) * 0.05
+    upgrade_bonus = min(item.get("upgrade", 0), 15) * 40
+    return int(base_price * 0.5 * floor_multiplier) + upgrade_bonus
 
 
 async def sell_item_from_inventory(

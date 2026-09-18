@@ -10,8 +10,8 @@ EARLY_BOSSES: Dict[str, Any] = {
         "atk_min": 120,
         "atk_max": 160,
         "defense": 35,
-        "gold_reward": 1500,
-        "xp_reward": 1200,
+        "gold_reward": 800,
+        "xp_reward": 600,
         "skills": [
             {"name": "Удар гранитным кулаком", "mult": 1.0, "text": "обрушивает каменный кулак"},
             {"name": "Камнепад подземелья", "mult": 1.35, "text": "сотрясает подземелье мощным обвалом"}
@@ -26,8 +26,8 @@ EARLY_BOSSES: Dict[str, Any] = {
         "atk_min": 180,
         "atk_max": 240,
         "defense": 50,
-        "gold_reward": 2500,
-        "xp_reward": 2000,
+        "gold_reward": 1500,
+        "xp_reward": 1200,
         "skills": [
             {"name": "Стрела вечной тьмы", "mult": 1.1, "text": "запускает заряд черного пламени"},
             {"name": "Жатва душ", "mult": 1.45, "text": "высасывает жизненные силы героя"}
@@ -42,8 +42,8 @@ EARLY_BOSSES: Dict[str, Any] = {
         "atk_min": 280,
         "atk_max": 360,
         "defense": 75,
-        "gold_reward": 4000,
-        "xp_reward": 3200,
+        "gold_reward": 2800,
+        "xp_reward": 2200,
         "skills": [
             {"name": "Зеркальный резонанс", "mult": 1.15, "text": "концентрирует отраженную энергию в барьер"},
             {"name": "Псионический импульс", "mult": 1.4, "text": "выпускает круговой взрыв чистой энергии"}
@@ -58,8 +58,8 @@ EARLY_BOSSES: Dict[str, Any] = {
         "atk_min": 440,
         "atk_max": 560,
         "defense": 105,
-        "gold_reward": 6500,
-        "xp_reward": 5000,
+        "gold_reward": 4500,
+        "xp_reward": 3500,
         "skills": [
             {"name": "Дыхание бездны", "mult": 1.25, "text": "изрыгает столб первородного пламени"},
             {"name": "Хвост магмы", "mult": 1.5, "text": "сокрушает платформу гигантским хвостом"}
@@ -74,8 +74,8 @@ EARLY_BOSSES: Dict[str, Any] = {
         "atk_min": 700,
         "atk_max": 900,
         "defense": 140,
-        "gold_reward": 9000,
-        "xp_reward": 7500,
+        "gold_reward": 7500,
+        "xp_reward": 5500,
         "skills": [
             {"name": "Мясницкий Крюк (Meat Hook)", "mult": 1.3, "text": "выбрасывает кровавый крюк, притягивая жертву"},
             {"name": "Гнилостная Вонь (Rot)", "mult": 1.55, "text": "заливает арену ядовитыми газами, замедляя врагов"}
@@ -90,8 +90,8 @@ EARLY_BOSSES: Dict[str, Any] = {
         "atk_min": 1100,
         "atk_max": 1400,
         "defense": 180,
-        "gold_reward": 13000,
-        "xp_reward": 10500,
+        "gold_reward": 12000,
+        "xp_reward": 8500,
         "skills": [
             {"name": "Хроносфера (Chronosphere)", "mult": 1.35, "text": "разрывает пространство, сковывая время во всей арене"},
             {"name": "Временной Замок (Time Lock)", "mult": 1.6, "text": "наносит сокрушительный удар сквозь временные измерения"}
@@ -106,8 +106,8 @@ EARLY_BOSSES: Dict[str, Any] = {
         "atk_min": 1700,
         "atk_max": 2200,
         "defense": 230,
-        "gold_reward": 45000,
-        "xp_reward": 35000,
+        "gold_reward": 18000,
+        "xp_reward": 13000,
         "skills": [
             {"name": "Сокрушительный Slam", "mult": 1.3, "text": "бьет кулаками оземь, порождая сейсмическую волну"},
             {"name": "Огненное дыхание ярости", "mult": 1.6, "text": "выжигает ряды защитников потоком первородного огня"}
@@ -122,8 +122,8 @@ EARLY_BOSSES: Dict[str, Any] = {
         "atk_min": 2600,
         "atk_max": 3400,
         "defense": 290,
-        "gold_reward": 70000,
-        "xp_reward": 55000,
+        "gold_reward": 25000,
+        "xp_reward": 18000,
         "skills": [
             {"name": "Опустошение Бездны (Ravage)", "mult": 1.35, "text": "пронзает всю площадь арены гигантскими морскими щупальцами"},
             {"name": "Якорный Удар (Anchor Smash)", "mult": 1.5, "text": "вращает тяжеленный морской якорь, ломая оружие противника"}
@@ -138,8 +138,8 @@ EARLY_BOSSES: Dict[str, Any] = {
         "atk_min": 4000,
         "atk_max": 5200,
         "defense": 370,
-        "gold_reward": 100000,
-        "xp_reward": 80000,
+        "gold_reward": 35000,
+        "xp_reward": 25000,
         "skills": [
             {"name": "Теневой Койл (Shadowraze)", "mult": 1.25, "text": "взрывает темную энергию под ногами цели"},
             {"name": "Реквием Душ (Requiem of Souls)", "mult": 1.7, "text": "высвобождает тысячи поглощенных душ в разрушительном вихре"}
@@ -154,8 +154,8 @@ EARLY_BOSSES: Dict[str, Any] = {
         "atk_min": 6200,
         "atk_max": 8000,
         "defense": 460,
-        "gold_reward": 140000,
-        "xp_reward": 105000,
+        "gold_reward": 48000,
+        "xp_reward": 34000,
         "skills": [
             {"name": "Пульс Смерти (Death Pulse)", "mult": 1.2, "text": "выпускает волну чумных снарядов, исцеляя себя"},
             {"name": "Коса Жнеца (Reaper's Scythe)", "mult": 1.8, "text": "обрушивает колоссальную косу, казнить истощенных героев"}
