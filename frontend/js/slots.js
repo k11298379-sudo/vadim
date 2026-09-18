@@ -69,16 +69,26 @@
     } catch (e) {}
   }
 
+  function fmtNum(n) {
+    if (typeof n !== 'number') n = Number(n) || 0;
+    return n.toLocaleString('ru-RU');
+  }
+
   function syncStakeUI() {
     const disp = document.getElementById('slots-stake-display');
-    if (disp) disp.textContent = `${currentStake} 🪙`;
+    if (disp) disp.textContent = `${fmtNum(currentStake)} 🪙`;
+    const spinBtn = document.getElementById('slots-spin-btn');
+    if (spinBtn && !isSpinning) {
+      spinBtn.innerHTML = `<span>🎰</span> <span>Крутить! (${fmtNum(currentStake)} 🪙)</span>`;
+      spinBtn.disabled = currentStake <= 0 || (userCoins > 0 && currentStake > userCoins);
+    }
     const input = document.getElementById('slots-custom-stake-input');
     if (input && document.activeElement !== input) {
       input.value = currentStake > 0 ? currentStake : '';
     }
     const btns = containerEl?.querySelectorAll('.slots-chip-btn');
     btns?.forEach(b => {
-      const v = parseInt(b.textContent, 10);
+      const v = parseInt(b.textContent.replace(/\s+/g, ''), 10);
       if (v === currentStake) {
         b.className = 'slots-chip-btn px-2.5 py-1.5 rounded-xl text-xs font-black border bg-amber-500 text-black border-amber-500 shadow';
       } else {
@@ -95,7 +105,8 @@
 
   function setCustomStake(val, isChange = false) {
     if (isSpinning) return;
-    let num = parseInt(val, 10);
+    const cleanStr = String(val || '').replace(/\s+/g, '');
+    let num = parseInt(cleanStr, 10);
     if (isNaN(num) || num < 1) num = isChange ? 1 : 0;
     if (userCoins > 0 && num > userCoins) num = userCoins;
     currentStake = num;
@@ -130,13 +141,13 @@
       statusBg = 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300/40';
     } else if (lastResult) {
       if (lastResult.status === 'jackpot') {
-        statusText = `🔥 ДЖЕКПОТ! ${lastResult.combination} (+${lastResult.payout} 🪙)!`;
+        statusText = `🔥 ДЖЕКПОТ! ${lastResult.combination} (+${fmtNum(lastResult.payout)} 🪙)!`;
         statusBg = 'bg-amber-500 text-black border-amber-400 font-black animate-pulse';
       } else if (lastResult.payout > 0) {
-        statusText = `🎉 ${lastResult.combination}! Выигрыш: +${lastResult.payout} 🪙 (x${lastResult.multiplier})`;
+        statusText = `🎉 ${lastResult.combination}! Выигрыш: +${fmtNum(lastResult.payout)} 🪙 (x${lastResult.multiplier})`;
         statusBg = 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border-emerald-400';
       } else {
-        statusText = `Выпало [ ${lastResult.reels.join(' ')} ]. Ставка не сыграла (-${lastResult.stake} 🪙)`;
+        statusText = `Выпало [ ${lastResult.reels.join(' ')} ]. Ставка не сыграла (-${fmtNum(lastResult.stake)} 🪙)`;
         statusBg = 'bg-rose-100 dark:bg-rose-950/70 text-rose-800 dark:text-rose-300 border-rose-300';
       }
     }
@@ -162,7 +173,7 @@
             <button onclick="window.SLOTS.togglePaytable()" class="ml-1 text-[11px] text-amber-500 font-bold underline" title="Таблица выплат">инфо</button>
           </div>
           <div class="text-xs font-black px-2.5 py-1 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300/40">
-            🪙 ${userCoins} монет
+            🪙 ${fmtNum(userCoins)} монет
           </div>
         </div>
 
@@ -189,7 +200,7 @@
         <div class="p-3 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2.5">
           <div class="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
             <span>Размер ставки:</span>
-            <span class="text-amber-600 dark:text-amber-400 font-black text-sm" id="slots-stake-display">${currentStake} 🪙</span>
+            <span class="text-amber-600 dark:text-amber-400 font-black text-sm" id="slots-stake-display">${fmtNum(currentStake)} 🪙</span>
           </div>
 
           <div class="flex items-center gap-1 flex-wrap">
@@ -220,8 +231,8 @@
         </div>
 
         <!-- Кнопка вращения -->
-        <button onclick="window.SLOTS.spin()" ${isSpinning || currentStake <= 0 || currentStake > userCoins ? 'disabled' : ''} class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 disabled:opacity-50 text-slate-950 font-black text-base shadow-lg transition-all flex items-center justify-center gap-2">
-          <span>🎰</span> <span>${isSpinning ? 'Крутим...' : `Крутить! (${currentStake} 🪙)`}</span>
+        <button id="slots-spin-btn" onclick="window.SLOTS.spin()" ${isSpinning || currentStake <= 0 || currentStake > userCoins ? 'disabled' : ''} class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 disabled:opacity-50 text-slate-950 font-black text-base shadow-lg transition-all flex items-center justify-center gap-2">
+          <span>🎰</span> <span>${isSpinning ? 'Крутим...' : `Крутить! (${fmtNum(currentStake)} 🪙)`}</span>
         </button>
       </div>
     `;

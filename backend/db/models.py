@@ -22,7 +22,7 @@ class User(Base):
     notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     canteen_reminder_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="0")
     currency_ecosystem_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="0")
-    coins: Mapped[int] = mapped_column(Integer, default=100, nullable=False, server_default="100")
+    coins: Mapped[int] = mapped_column(BigInteger, default=100, nullable=False, server_default="100")
     last_work_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
@@ -198,8 +198,8 @@ class RPGCharacter(Base):
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
     hero_class: Mapped[str] = mapped_column(String(50), default="knight", nullable=False)  # knight, mage, ranger, etc.
     level: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    xp: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    gold: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
+    xp: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    gold: Mapped[int] = mapped_column(BigInteger, default=150, nullable=False)
     gems: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
 
     # Base attributes

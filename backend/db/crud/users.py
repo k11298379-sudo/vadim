@@ -293,11 +293,14 @@ async def perform_user_work(session: AsyncSession, tg_id: int, reward: int = 75)
     if user.last_work_date == today:
         return False, user.coins or 0, "Вы уже работали сегодня! Приходите завтра за следующей сменой."
 
-    user.coins = (user.coins or 0) + reward
+    user.coins = min((user.coins or 0) + reward, MAX_COINS)
     user.last_work_date = today
     await session.commit()
     await session.refresh(user)
     return True, user.coins, f"Отличная работа! Вы заработали +{reward} 🪙 монет."
+
+
+MAX_COINS = 9_000_000_000_000_000  # 9 quadrillion (safely within JS MAX_SAFE_INTEGER and SQL BIGINT)
 
 
 async def add_user_coins(session: AsyncSession, tg_id: int, amount: int) -> Optional[int]:
@@ -308,7 +311,7 @@ async def add_user_coins(session: AsyncSession, tg_id: int, amount: int) -> Opti
     current = user.coins or 0
     if current + amount < 0:
         return None  # Insufficient funds
-    user.coins = current + amount
+    user.coins = min(current + amount, MAX_COINS)
     await session.commit()
     await session.refresh(user)
     return user.coins

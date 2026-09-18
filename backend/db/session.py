@@ -69,7 +69,7 @@ async def init_db():
                 if "currency_ecosystem_enabled" not in cols_u:
                     await conn.execute(text("ALTER TABLE users ADD COLUMN currency_ecosystem_enabled BOOLEAN DEFAULT 0;"))
                 if "coins" not in cols_u:
-                    await conn.execute(text("ALTER TABLE users ADD COLUMN coins INTEGER DEFAULT 100;"))
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN coins BIGINT DEFAULT 100;"))
                 if "last_work_date" not in cols_u:
                     await conn.execute(text("ALTER TABLE users ADD COLUMN last_work_date DATE;"))
 
@@ -117,7 +117,8 @@ async def init_db():
                 await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_tester BOOLEAN DEFAULT FALSE;"))
                 await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS canteen_reminder_enabled BOOLEAN DEFAULT FALSE;"))
                 await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS currency_ecosystem_enabled BOOLEAN DEFAULT FALSE;"))
-                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS coins INTEGER DEFAULT 100;"))
+                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS coins BIGINT DEFAULT 100;"))
+                await conn.execute(text("ALTER TABLE users ALTER COLUMN coins TYPE BIGINT;"))
                 await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_work_date DATE;"))
                 await conn.execute(text("ALTER TABLE duty_groups ADD COLUMN IF NOT EXISTS member_ids JSONB;"))
                 await conn.execute(text("ALTER TABLE daily_facts ADD COLUMN IF NOT EXISTS hour INTEGER DEFAULT 0;"))
@@ -128,6 +129,8 @@ async def init_db():
                 await conn.execute(text("ALTER TABLE rpg_characters ADD COLUMN IF NOT EXISTS talents JSONB DEFAULT '{}'::jsonb;"))
                 await conn.execute(text("ALTER TABLE rpg_characters ADD COLUMN IF NOT EXISTS boss_kills INTEGER DEFAULT 0;"))
                 await conn.execute(text("ALTER TABLE rpg_characters ADD COLUMN IF NOT EXISTS pets JSONB DEFAULT '[]'::jsonb;"))
+                await conn.execute(text("ALTER TABLE rpg_characters ALTER COLUMN gold TYPE BIGINT;"))
+                await conn.execute(text("ALTER TABLE rpg_characters ALTER COLUMN xp TYPE BIGINT;"))
                 # Clean up any legacy columns or constraints in rpg_characters from earlier prototypes
                 await conn.execute(text("""
                     DO $$

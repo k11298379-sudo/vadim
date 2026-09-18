@@ -69,19 +69,20 @@ async def dice_duel(
             detail=f"Недостаточно монет для ставки. Ваш баланс: {db_user.coins or 0} 🪙"
         )
 
-    # 1. Списание ставки
-    async with async_session_factory() as session:
-        await add_user_coins(session, viewer_id, -stake)
-
-    # 2. Игра
+    # 1. Игра
     result = play_dice_duel(stake)
+    net_change = result["payout"] - stake
 
-    # 3. Начисление выигрыша
+    # 2. Атомарное обновление баланса
     async with async_session_factory() as session:
-        if result["payout"] > 0:
-            await add_user_coins(session, viewer_id, result["payout"])
-        refreshed = await get_user_by_tg_id(session, viewer_id)
-        user_coins = refreshed.coins or 0
+        cur_user = await get_user_by_tg_id(session, viewer_id)
+        if not cur_user or (cur_user.coins or 0) < stake:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Недостаточно монет для ставки. Ваш баланс: {getattr(cur_user, 'coins', 0) or 0} 🪙"
+            )
+        new_balance = await add_user_coins(session, viewer_id, net_change)
+        user_coins = new_balance if new_balance is not None else 0
 
     return {
         "ok": True,
@@ -116,19 +117,20 @@ async def dice_over_under(
             detail=f"Недостаточно монет для ставки. Ваш баланс: {db_user.coins or 0} 🪙"
         )
 
-    # 1. Списание ставки
-    async with async_session_factory() as session:
-        await add_user_coins(session, viewer_id, -stake)
-
-    # 2. Игра
+    # 1. Игра
     result = play_dice_over_under(stake, pred)
+    net_change = result["payout"] - stake
 
-    # 3. Начисление выигрыша
+    # 2. Атомарное обновление баланса
     async with async_session_factory() as session:
-        if result["payout"] > 0:
-            await add_user_coins(session, viewer_id, result["payout"])
-        refreshed = await get_user_by_tg_id(session, viewer_id)
-        user_coins = refreshed.coins or 0
+        cur_user = await get_user_by_tg_id(session, viewer_id)
+        if not cur_user or (cur_user.coins or 0) < stake:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Недостаточно монет для ставки. Ваш баланс: {getattr(cur_user, 'coins', 0) or 0} 🪙"
+            )
+        new_balance = await add_user_coins(session, viewer_id, net_change)
+        user_coins = new_balance if new_balance is not None else 0
 
     return {
         "ok": True,

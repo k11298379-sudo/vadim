@@ -77,21 +77,22 @@ async def roulette_spin(
             detail=f"Недостаточно монет. Общая ставка: {total_stake} 🪙, баланс: {db_user.coins or 0} 🪙"
         )
 
-    # 1. Списание суммы ставок
-    async with async_session_factory() as session:
-        await add_user_coins(session, viewer_id, -total_stake)
-
-    # 2. Вращение рулетки и оценка ставок
+    # 1. Вращение рулетки и оценка ставок
     winning_num = spin_wheel()
     color = get_number_color(winning_num)
     _, total_payout, evaluated_bets = evaluate_roulette_spin(bets, winning_num)
+    net_change = total_payout - total_stake
 
-    # 3. Начисление выигрыша
+    # 2. Атомарное обновление баланса
     async with async_session_factory() as session:
-        if total_payout > 0:
-            await add_user_coins(session, viewer_id, total_payout)
-        refreshed = await get_user_by_tg_id(session, viewer_id)
-        user_coins = refreshed.coins or 0
+        cur_user = await get_user_by_tg_id(session, viewer_id)
+        if not cur_user or (cur_user.coins or 0) < total_stake:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Недостаточно монет. Общая ставка: {total_stake} 🪙, баланс: {getattr(cur_user, 'coins', 0) or 0} 🪙"
+            )
+        new_balance = await add_user_coins(session, viewer_id, net_change)
+        user_coins = new_balance if new_balance is not None else 0
 
     return {
         "ok": True,
