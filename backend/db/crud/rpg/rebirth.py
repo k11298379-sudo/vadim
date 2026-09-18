@@ -148,10 +148,8 @@ async def perform_ascension(session: AsyncSession, char: RPGCharacter) -> Tuple[
     next_cfg = REBIRTH_RANKS_CONFIG.get(next_rank, {"min_level": 50, "essence_reward": 25})
     req_level = next_cfg["min_level"]
 
-    char_floor = getattr(char, "dungeon_floor", 1) or 1
-    effective_progress = max(char.level, char_floor)
-    if effective_progress < req_level:
-        return False, f"Для Вознесения на Ранг {next_rank} требуется достичь {req_level} уровня или {req_level} этажа (текущий: ур. {char.level}, эт. {char_floor})!", {}
+    if char.level < req_level:
+        return False, f"Для Вознесения на Ранг {next_rank} требуется достичь {req_level} уровня героя (ваш текущий уровень: {char.level})!", {}
 
     essence_reward = next_cfg["essence_reward"]
 
