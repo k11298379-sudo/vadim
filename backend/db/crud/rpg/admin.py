@@ -120,6 +120,18 @@ async def admin_give_gold(
     return True, f"Баланс золота изменен на {'+' if amount >= 0 else ''}{amount} 🪙. Новый баланс: {char.gold} 🪙", char.gold
 
 
+async def admin_give_gems(
+    session: AsyncSession,
+    char: RPGCharacter,
+    amount: int
+) -> Tuple[bool, str, int]:
+    """Awards or deducts gems (crystals) for a character."""
+    char.gems = max(0, int(char.gems + amount))
+    await session.commit()
+    await session.refresh(char)
+    return True, f"Баланс кристаллов изменен на {'+' if amount >= 0 else ''}{amount} 💎. Новый баланс: {char.gems} 💎", char.gems
+
+
 async def admin_set_character_level(
     session: AsyncSession,
     char: RPGCharacter,

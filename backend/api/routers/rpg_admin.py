@@ -20,6 +20,7 @@ from backend.db.crud.rpg.admin import (
     get_rpg_players_list,
     find_character_and_user,
     admin_give_gold,
+    admin_give_gems,
     admin_set_character_level,
     admin_give_custom_item,
     admin_full_reset_player,
@@ -101,6 +102,29 @@ async def admin_give_gold_endpoint(
         "success": ok,
         "message": msg,
         "gold": new_balance,
+        "profile": serialize_character_profile(char, user_name=u_name)
+    }
+
+
+@rpg_router.post("/admin/give_gems")
+async def admin_give_gems_endpoint(
+    payload: Dict[str, Any] = Body(...),
+    user: Optional[User] = Depends(get_optional_webapp_user),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Gives or modifies gems (crystals) for the target or current player."""
+    verify_admin_access(user)
+    target = payload.get("target")
+    amount = int(payload.get("amount", 100))
+
+    char, target_user = await resolve_target_character(session, user, target)
+    ok, msg, new_balance = await admin_give_gems(session, char, amount)
+
+    u_name = target_user.display_name if target_user else "Герой"
+    return {
+        "success": ok,
+        "message": msg,
+        "gems": new_balance,
         "profile": serialize_character_profile(char, user_name=u_name)
     }
 

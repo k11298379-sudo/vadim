@@ -11,6 +11,17 @@
     return a;
   }
 
+  let paronymLetterFilter = "Все";
+  let paronymSearchQuery = "";
+  let pQuizTotal = 10;
+  let pQuizQuestions = [];
+  let pQuizIndex = 0;
+  let pQuizAnswered = false;
+  let pQuizCorrectCount = 0;
+  let pQuizMistakes = [];
+  let lastPSelectedWord = null;
+  let lastPAnswerCorrect = false;
+
 // РАЗДЕЛ ЗАДАНИЯ 5: ПАРОНИМЫ (СЛОВАРЬ + ТРЕНАЖЕР)
   // ==============================================================================
 

@@ -341,6 +341,11 @@ const api = {
       method: "POST",
       body: JSON.stringify(payload)
     }),
+  adminGiveGems: (payload) =>
+    apiRequest("/api/rpg/admin/give_gems", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
   adminSetLevel: (payload) =>
     apiRequest("/api/rpg/admin/set_level", {
       method: "POST",
