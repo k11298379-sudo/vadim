@@ -41,6 +41,10 @@ class NatStateStore {
       this.nav = 0;
     } else {
       this.company = companyData;
+      // Normalize company_id to id for consistency
+      if (companyData.company_id && !companyData.id) {
+        this.company.id = companyData.company_id;
+      }
       this.inventory = companyData.inventory || {};
       this.factories = companyData.factories || [];
       this.nav = companyData.nav || 0;

@@ -2,18 +2,18 @@ import { NatAPI } from '../api.js';
 import { store } from '../state.js';
 
 const SPECIALIZATIONS = [
-  { id: 'metallurgy', name: 'Металлургия', icon: '⚙️', desc: 'Добыча руды, выплавка чугуна, стали и сплавов' },
-  { id: 'energy', name: 'Энергетика', icon: '⚡', desc: 'Угольные, газовые и АЭС, генерация МВт·ч' },
-  { id: 'oil_gas', name: 'Нефтегаз', icon: '🛢️', desc: 'Бурение, сырая нефть, бензин и полимеры' },
-  { id: 'agriculture', name: 'Агропром', icon: '🌾', desc: 'Зерно, биоэтанол, фермы и продовольствие' },
-  { id: 'chemicals', name: 'Химия', icon: '🧪', desc: 'Удобрения, кислоты, реагенты и синтетика' },
-  { id: 'electronics', name: 'Электроника', icon: '🔌', desc: 'Микрочипы, процессоры, квантовые платы' },
-  { id: 'construction', name: 'Строительство', icon: '🏗️', desc: 'Цемент, бетон, инфраструктура и заводы' },
-  { id: 'it_telecom', name: 'IT & Телеком', icon: '💻', desc: 'Дата-центры, ПО, ИИ-модели и облака' },
+  { id: 'metallurgist', name: 'Металлургия', icon: '⚙️', desc: 'Добыча руды, выплавка чугуна, стали и сплавов' },
+  { id: 'power_engineer', name: 'Энергетика', icon: '⚡', desc: 'Угольные, газовые и АЭС, генерация МВт·ч' },
+  { id: 'oilman', name: 'Нефтегаз', icon: '🛢️', desc: 'Бурение, сырая нефть, бензин и полимеры' },
+  { id: 'agrarian', name: 'Агропром', icon: '🌾', desc: 'Зерно, биоэтанол, фермы и продовольствие' },
+  { id: 'chemist', name: 'Химия', icon: '🧪', desc: 'Удобрения, кислоты, реагенты и синтетика' },
+  { id: 'technoprom', name: 'Технопром', icon: '🔌', desc: 'Оборудование, электроника, высокие технологии' },
+  { id: 'miner', name: 'Горнодобыча', icon: '⛏️', desc: 'Уголь, руда, минералы, литий и редкоземы' },
+  { id: 'forester', name: 'Лесопром', icon: '🌲', desc: 'Лесозаготовка, пиломатериалы и целлюлоза' },
 ];
 
 export function renderOnboarding(container, showToast) {
-  let selectedSpec = 'metallurgy';
+  let selectedSpec = 'metallurgist';
 
   container.innerHTML = `
     <div class="max-w-md mx-auto p-4 space-y-6">
@@ -23,7 +23,7 @@ export function renderOnboarding(container, showToast) {
         </div>
         <h1 class="text-2xl font-black text-slate-900 dark:text-white">Основание Корпорации</h1>
         <p class="text-sm text-slate-500 dark:text-slate-400">
-          Зарегистрируйте предприятие на НАТБИРЖЕ и получите стартовый капитал 10,000 cash.
+          Зарегистрируйте предприятие на НАТБИРЖЕ и получите стартовый капитал 50,000 cash.
         </p>
       </div>
 
@@ -85,7 +85,7 @@ export function renderOnboarding(container, showToast) {
           id="submit-create-btn"
           class="w-full py-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-sm shadow-lg shadow-blue-500/30 hover:from-blue-700 hover:to-indigo-700 active:scale-[0.98] transition-all"
         >
-          🚀 Зарегистрировать компанию (+10,000 cash)
+          🚀 Зарегистрировать компанию (+50,000 cash)
         </button>
       </form>
     </div>
@@ -132,12 +132,14 @@ export function renderOnboarding(container, showToast) {
       });
       store.setCompany(company);
       store.setTab('overview');
-      showToast(`Корпорация [${company.ticker}] успешно создана!`, 'success');
+      showToast(`Корпорация успешно создана!`, 'success');
+      // Force full re-render by reloading
+      setTimeout(() => window.location.reload(), 500);
     } catch (err) {
       showToast(err.message || 'Ошибка создания компании', 'error');
     } finally {
       submitBtn.disabled = false;
-      submitBtn.innerText = '🚀 Зарегистрировать компанию (+10,000 cash)';
+      submitBtn.innerText = '🚀 Зарегистрировать компанию (+50,000 cash)';
     }
   });
 }

@@ -36,6 +36,46 @@ async def get_military_status(
         "nat_balance": company.nat_balance
     }
 
+@router.get("/tournaments/current")
+async def get_current_tournament(
+    company: NatCompany = Depends(get_current_company),
+    session: AsyncSession = Depends(get_db_session)
+):
+    from backend.natbirzha.models.military import NatTournamentParticipant
+    res = await session.execute(
+        select(NatTournament).order_by(NatTournament.id.desc()).limit(1)
+    )
+    tourn = res.scalar_one_or_none()
+    if not tourn:
+        return {"tournament": None, "participants": []}
+
+    part_res = await session.execute(
+        select(NatTournamentParticipant, NatCompany)
+        .join(NatCompany, NatTournamentParticipant.company_id == NatCompany.id)
+        .where(NatTournamentParticipant.tournament_id == tourn.id)
+        .order_by(NatTournamentParticipant.snapshot_strength.desc())
+        .limit(10)
+    )
+    participants = [
+        {
+            "company_id": c.id,
+            "company_name": c.name,
+            "score": p.snapshot_strength,
+            "rank": p.final_rank
+        }
+        for p, c in part_res.all()
+    ]
+    return {
+        "tournament": {
+            "id": tourn.id,
+            "cycle_number": tourn.cycle_number,
+            "status": tourn.status,
+            "snapshot_time": str(tourn.snapshot_time) if tourn.snapshot_time else None,
+            "finish_time": str(tourn.finish_time) if tourn.finish_time else None,
+        },
+        "participants": participants
+    }
+
 @router.post("/recruit")
 async def recruit_units(
     req: RecruitRequest,
@@ -83,6 +123,7 @@ async def join_alliance(
 @router.post("/tournament/{tournament_id}/resolve")
 async def resolve_tournament(
     tournament_id: int,
+    company: NatCompany = Depends(get_current_company),
     session: AsyncSession = Depends(get_db_session)
 ):
     try:

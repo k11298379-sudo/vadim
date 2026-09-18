@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from typing import Dict, Any, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -20,6 +20,7 @@ class DividendService:
           - Looks up closed cash profit for the date
           - Excludes unrealized inventory/stock gains
           - Allocates 10% pool
+          - Deducts pool from issuer company cash (checks solvency)
           - Distributes pro-rata to all shareholders in NatStockHolding
           - Idempotent per (stock_id, settlement_date)
         """
@@ -45,8 +46,10 @@ class DividendService:
         fin = fin_res.scalar_one_or_none()
         closed_profit = fin.closed_profit if fin else 0.0
 
-        if closed_profit <= 0:
-            # Zero or negative profit -> 0 dividend
+        issuer_comp = await session.get(NatCompany, stock.company_id)
+
+        if closed_profit <= 0 or not issuer_comp or issuer_comp.cash <= 0:
+            # Zero or negative profit / insolvent issuer -> 0 dividend
             div_record = NatDividend(
                 stock_id=stock.id,
                 settlement_date=settlement_date,
@@ -60,7 +63,26 @@ class DividendService:
             await session.commit()
             return {"status": "zero_profit", "stock_id": stock.id, "closed_profit": closed_profit}
 
-        dividend_pool = round(closed_profit * nat_settings.DIVIDEND_POOL_PCT, 2)
+        desired_pool = round(closed_profit * nat_settings.DIVIDEND_POOL_PCT, 2)
+        dividend_pool = min(desired_pool, round(issuer_comp.cash, 2))
+
+        if dividend_pool <= 0:
+            div_record = NatDividend(
+                stock_id=stock.id,
+                settlement_date=settlement_date,
+                closed_profit=closed_profit,
+                dividend_pool=0.0,
+                per_share_amount=0.0,
+                is_settled=True,
+                created_at=get_game_now()
+            )
+            session.add(div_record)
+            await session.commit()
+            return {"status": "zero_profit", "stock_id": stock.id, "closed_profit": closed_profit}
+
+        # Deduct dividend pool from issuer company cash (no money out of thin air)
+        issuer_comp.cash = round(issuer_comp.cash - dividend_pool, 2)
+
         per_share = round(dividend_pool / stock.total_shares, 4)
 
         # Distribute dividend payouts to shareholders
@@ -74,7 +96,7 @@ class DividendService:
             if payout > 0:
                 holder_comp = await session.get(NatCompany, h.holder_company_id)
                 if holder_comp:
-                    holder_comp.cash += payout
+                    holder_comp.cash = round(holder_comp.cash + payout, 2)
 
         # Record settlement
         div_record = NatDividend(
@@ -100,13 +122,13 @@ class DividendService:
 
     @classmethod
     async def settle_all_public_dividends(cls, session: AsyncSession) -> int:
-        """Global daily job executed at 00:00 GAME_TIMEZONE."""
+        """Global daily job executed at 00:01 GAME_TIMEZONE for the closed previous day."""
         stocks_res = await session.execute(select(NatStock).where(NatStock.is_listed == True))
         stocks = stocks_res.scalars().all()
         settled_count = 0
-        today = get_game_today()
+        yesterday = get_game_today() - timedelta(days=1)
         for s in stocks:
-            res = await cls.settle_daily_dividends_for_stock(session, s, today)
+            res = await cls.settle_daily_dividends_for_stock(session, s, yesterday)
             if res.get("status") in ("settled", "zero_profit"):
                 settled_count += 1
         return settled_count

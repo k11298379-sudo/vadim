@@ -24,7 +24,7 @@ export function showToast(message, type = 'info') {
   } else if (message instanceof Error) {
     msgText = message.message;
   } else if (typeof message === 'object' && message !== null) {
-    msgText = message.message || message.error || message.detail || JSON.stringify(message);
+    msgText = message.message || message.error || (typeof message.detail === 'string' ? message.detail : JSON.stringify(message.detail || message));
   } else {
     msgText = String(message || '');
   }
@@ -138,16 +138,27 @@ async function initApp() {
     const authData = await NatAPI.login();
     store.setUser(authData.user);
 
-    // 2. Load existing company
-    try {
-      const company = await NatAPI.getMyCompany();
-      if (company && company.id) {
-        store.setCompany(company);
+    // 2. Check company existence from auth response first
+    if (authData.has_company) {
+      try {
+        const company = await NatAPI.getMyCompany();
+        if (company) {
+          store.setCompany(company);
+        }
+      } catch (e) {
+        // If getMyCompany fails but auth says has_company=true,
+        // create minimal company from auth data
+        store.setCompany({
+          id: authData.company_id,
+          company_id: authData.company_id,
+          name: authData.company_name,
+          specialization: authData.specialization,
+          cash: 0,
+          ticker: authData.company_name ? authData.company_name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,5) : 'CORP'
+        });
       }
-    } catch (e) {
-      // 404 means no company registered yet -> proceed to onboarding
-      console.log('No company found, directing to onboarding.');
     }
+    // If has_company is false, store.company stays null -> onboarding
   } catch (err) {
     console.error('App init error:', err);
     showToast(err.message || 'Ошибка подключения к серверу', 'error');

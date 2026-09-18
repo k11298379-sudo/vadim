@@ -203,3 +203,39 @@ class CompanyService:
 
         await session.commit()
         return {"success": True, "new_specialization": new_specialization, "fee_paid": fee}
+
+    @staticmethod
+    async def buy_foreign_license(
+        session: AsyncSession,
+        company: NatCompany,
+        target_spec: str
+    ) -> Dict[str, Any]:
+        """NAT currency sink: Purchase secondary industry foreign license (up to 12% eff)."""
+        if target_spec not in VALID_SPECIALIZATIONS:
+            raise ValueError("Invalid target specialization.")
+        if target_spec == company.specialization:
+            raise ValueError("Cannot license own primary specialization.")
+        if company.licensed_foreign_spec == target_spec:
+            raise ValueError(f"Company already holds license for {target_spec}.")
+
+        cost = nat_settings.FOREIGN_LICENSE_COST_NAT
+        if company.nat_balance < cost:
+            raise ValueError(f"Insufficient NAT balance. Required: {cost} NAT, Available: {company.nat_balance} NAT.")
+
+        company.nat_balance -= cost
+        company.licensed_foreign_spec = target_spec
+
+        # Boost matching foreign factories to licensed cap (12%)
+        fac_res = await session.execute(select(NatFactory).where(NatFactory.company_id == company.id))
+        for f in fac_res.scalars().all():
+            if f.specialization == target_spec:
+                f.efficiency = nat_settings.FOREIGN_LICENSED_MAX
+
+        await session.commit()
+        return {
+            "success": True,
+            "licensed_foreign_spec": target_spec,
+            "cost_paid_nat": cost,
+            "remaining_nat_balance": company.nat_balance
+        }
+

@@ -75,17 +75,17 @@ export async function renderStocks(container, showToast) {
             <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
               <div>
                 <div class="flex items-center gap-1.5">
-                  <span class="font-mono font-black text-xs text-blue-600 dark:text-blue-400">[${s.ticker}]</span>
+                  <span class="font-mono font-black text-xs text-blue-600 dark:text-blue-400">[${s.company_name ? s.company_name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,5) : '???'}]</span>
                   <span class="font-bold text-xs text-slate-900 dark:text-white">${s.company_name}</span>
                 </div>
-                <div class="text-[10px] text-slate-400 mt-0.5">Free-float: ${s.free_float_shares?.toLocaleString()} шт.</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">Free-float: ${s.float_shares?.toLocaleString()} шт.</div>
               </div>
               <div class="text-right">
                 <div class="font-mono font-black text-xs text-slate-900 dark:text-white">${s.current_price?.toFixed(2)} cash</div>
                 <button
                   class="buy-shares-btn mt-1 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] active:scale-95 transition-all"
-                  data-stock-id="${s.id}"
-                  data-ticker="${s.ticker}"
+                  data-stock-id="${s.stock_id}"
+                  data-ticker="${s.company_name ? s.company_name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,5) : '???'}"
                   data-price="${s.current_price}"
                 >
                   Купить
@@ -105,7 +105,7 @@ export async function renderStocks(container, showToast) {
           <button id="close-ipo-modal-btn" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
         </div>
         <p class="text-xs text-slate-400">
-          При выходе на биржу выпускается 1,000,000 акций. 60% остаётся у вас, 40% выставляется на свободный рынок.
+          При выходе на биржу выпускается 10,000 акций. 60% остаётся у вас, 40% выставляется на свободный рынок.
         </p>
         <div class="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs space-y-1 font-mono">
           <div class="flex justify-between">
@@ -114,7 +114,7 @@ export async function renderStocks(container, showToast) {
           </div>
           <div class="flex justify-between">
             <span class="text-slate-500">Цена размещения:</span>
-            <span class="font-bold text-emerald-500">${((store.nav || 10000) / 1000000).toFixed(4)} cash / акция</span>
+            <span class="font-bold text-emerald-500">${((store.nav || 10000) / 10000).toFixed(4)} cash / акция</span>
           </div>
         </div>
         <button
@@ -168,7 +168,7 @@ export async function renderStocks(container, showToast) {
       if (!count || count <= 0) return;
 
       try {
-        await NatAPI.placeStockOrder({ stock_id: stockId, side: 'buy', amount: count, price });
+        await NatAPI.buyShares(parseInt(stockId), count);
         showToast(`Ордер на покупку акций [${ticker}] размещен!`, 'success');
         const refreshed = await NatAPI.getMyCompany();
         store.setCompany(refreshed);

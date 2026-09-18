@@ -2,10 +2,11 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
-from backend.natbirzha.config import get_game_now
+from backend.natbirzha.config import get_game_now, get_game_today
 from backend.natbirzha.models.company import NatCompany
 from backend.natbirzha.models.inventory import NatInventory, CANONICAL_ITEMS
 from backend.natbirzha.models.market import NatMarketOrder, NatMarketTrade
+from backend.natbirzha.models.restructuring import NatDailyFinancials
 
 class MarketService:
     @staticmethod
@@ -219,6 +220,35 @@ class MarketService:
                 executed_at=now
             )
             session.add(trade)
+
+            # Update daily financials for buyer (opex) and seller (revenue)
+            today = get_game_today()
+            for comp_id, rev_delta, opex_delta in [
+                (buyer_comp.id, 0.0, total_amount),
+                (seller_comp.id, round(total_amount - fee, 2), 0.0)
+            ]:
+                f_res = await session.execute(
+                    select(NatDailyFinancials).where(
+                        NatDailyFinancials.company_id == comp_id,
+                        NatDailyFinancials.calendar_date == today
+                    )
+                )
+                fin = f_res.scalar_one_or_none()
+                if not fin:
+                    fin = NatDailyFinancials(
+                        company_id=comp_id,
+                        calendar_date=today,
+                        gross_revenue=rev_delta,
+                        opex=opex_delta,
+                        closed_profit=round(rev_delta - opex_delta, 2),
+                        developer_fee_paid=0.0
+                    )
+                    session.add(fin)
+                else:
+                    fin.gross_revenue += rev_delta
+                    fin.opex += opex_delta
+                    fin.closed_profit = round(fin.gross_revenue - fin.opex, 2)
+
             trades_count += 1
             await session.flush()
 

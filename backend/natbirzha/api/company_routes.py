@@ -153,3 +153,30 @@ async def respec_specialization(
         return res
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+class BuyLicenseRequest(BaseModel):
+    target_specialization: str
+
+@router.post("/license/buy")
+async def buy_foreign_license_route(
+    req: BuyLicenseRequest,
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    company: NatCompany = Depends(get_current_company),
+    session: AsyncSession = Depends(get_db_session)
+):
+    cached = await IdempotencyService.check_or_conflict(
+        session, company.user_id, "/api/natbirzha/company/license/buy", idempotency_key, req.model_dump()
+    )
+    if cached:
+        return cached[1]
+
+    try:
+        res = await CompanyService.buy_foreign_license(session, company, req.target_specialization)
+        await IdempotencyService.save_record(
+            session, company.user_id, "/api/natbirzha/company/license/buy", idempotency_key, req.model_dump(), 200, res
+        )
+        return res
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+

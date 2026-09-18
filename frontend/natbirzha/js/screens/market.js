@@ -6,11 +6,12 @@ const MARKET_ITEMS = [
   { id: 'iron_ore', name: 'Железная руда', unit: 'т', base: 35.0, buy: 28.0, sell: 43.75 },
   { id: 'coal', name: 'Каменный уголь', unit: 'т', base: 30.0, buy: 24.0, sell: 37.5 },
   { id: 'energy', name: 'Электроэнергия', unit: 'МВт·ч', base: 10.0, buy: 8.0, sell: 12.5 },
-  { id: 'crude_oil', name: 'Сырая нефть', unit: 'барр', base: 50.0, buy: 40.0, sell: 62.5 },
-  { id: 'gasoline', name: 'Бензин АИ-95', unit: 'т', base: 85.0, buy: 68.0, sell: 106.25 },
+  { id: 'oil_crude', name: 'Сырая нефть', unit: 'барр', base: 50.0, buy: 40.0, sell: 62.5 },
+  { id: 'fuel_diesel', name: 'Дизельное топливо', unit: 'т', base: 8.0, buy: 6.4, sell: 10.0 },
   { id: 'grain', name: 'Зерно', unit: 'т', base: 25.0, buy: 20.0, sell: 31.25 },
   { id: 'fertilizer', name: 'Удобрения', unit: 'т', base: 45.0, buy: 36.0, sell: 56.25 },
-  { id: 'cement', name: 'Цемент', unit: 'т', base: 40.0, buy: 32.0, sell: 50.0 },
+  { id: 'wood_raw', name: 'Лес-кругляк', unit: 'т', base: 20.0, buy: 16.0, sell: 25.0 },
+  { id: 'aluminum', name: 'Алюминий', unit: 'т', base: 120.0, buy: 96.0, sell: 150.0 },
 ];
 
 export async function renderMarket(container, showToast) {
@@ -95,7 +96,7 @@ export async function renderMarket(container, showToast) {
               ${asks.length === 0 ? '<div class="text-slate-400 text-[10px]">Нет заявок</div>' : asks.slice(0, 5).map(a => `
                 <div class="flex justify-between font-mono p-1 rounded depth-ask text-[11px]">
                   <span class="text-rose-600 font-bold">${a.price.toFixed(2)}</span>
-                  <span class="text-slate-500">${a.amount} ${itemInfo.unit}</span>
+                  <span class="text-slate-500">${a.remaining_qty} ${itemInfo.unit}</span>
                 </div>
               `).join('')}
             </div>
@@ -106,7 +107,7 @@ export async function renderMarket(container, showToast) {
               ${bids.length === 0 ? '<div class="text-slate-400 text-[10px]">Нет заявок</div>' : bids.slice(0, 5).map(b => `
                 <div class="flex justify-between font-mono p-1 rounded depth-bid text-[11px]">
                   <span class="text-emerald-600 font-bold">${b.price.toFixed(2)}</span>
-                  <span class="text-slate-500">${b.amount} ${itemInfo.unit}</span>
+                  <span class="text-slate-500">${b.remaining_qty} ${itemInfo.unit}</span>
                 </div>
               `).join('')}
             </div>

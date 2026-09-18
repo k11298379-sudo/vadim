@@ -16,6 +16,13 @@ async def login_user(
 ):
     comp_res = await session.execute(select(NatCompany).where(NatCompany.user_id == user.id))
     company = comp_res.scalar_one_or_none()
+    if company and not company.is_bankrupt:
+        from backend.natbirzha.services.production_service import ProductionTickEngine
+        try:
+            await ProductionTickEngine.catch_up_company(session, company.id)
+        except Exception:
+            pass
+
     return {
         "authenticated": True,
         "user": {

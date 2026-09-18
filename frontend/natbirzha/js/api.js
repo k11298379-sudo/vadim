@@ -65,13 +65,13 @@ async function request(endpoint, options = {}) {
     } else if (Array.isArray(data.detail) && data.detail.length > 0) {
       errorMsg = data.detail.map(e => e.msg || e.message || JSON.stringify(e)).join('; ');
     } else if (data.detail && typeof data.detail === 'object') {
-      errorMsg = data.detail.error || data.detail.message || JSON.stringify(data.detail);
+      errorMsg = data.detail.error || data.detail.message || data.detail.reason || JSON.stringify(data.detail);
     } else if (data.message && typeof data.message === 'string') {
       errorMsg = data.message;
     } else if (data.error && typeof data.error === 'string') {
       errorMsg = data.error;
     }
-    const error = new Error(errorMsg);
+    const error = new Error(typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : String(errorMsg));
     error.status = response.status;
     error.data = data;
     throw error;
@@ -83,11 +83,12 @@ export const NatAPI = {
   // Auth & Company
   login: () => request('/api/natbirzha/auth/login', { method: 'POST' }),
   getMyCompany: () => request('/api/natbirzha/company/me'),
+  expandTerritory: () => request('/api/natbirzha/company/territory/expand', { method: 'POST' }),
   createCompany: (payload) => request('/api/natbirzha/company/create', { method: 'POST', body: JSON.stringify(payload) }),
-  respecCompany: (specialization) => request('/api/natbirzha/company/respec', { method: 'POST', body: JSON.stringify({ specialization }) }),
+  respecCompany: (specialization) => request('/api/natbirzha/company/respec', { method: 'POST', body: JSON.stringify({ new_specialization: specialization }) }),
 
   // Production
-  getProductionStatus: () => request('/api/natbirzha/production/status'),
+  getProductionStatus: () => request('/api/natbirzha/production/factories'),
   buildFactory: (factory_type) => request('/api/natbirzha/production/factory/build', {
     method: 'POST',
     body: JSON.stringify({ building_type: factory_type, factory_type })
@@ -104,17 +105,17 @@ export const NatAPI = {
   npcTrade: (payload) => request('/api/natbirzha/market/npc/trade', { method: 'POST', body: JSON.stringify(payload) }),
 
   // Stocks & IPO
-  getStocksList: () => request('/api/natbirzha/stocks/list'),
-  issueIPO: (payload) => request('/api/natbirzha/stocks/ipo', { method: 'POST', body: JSON.stringify(payload) }),
-  placeStockOrder: (payload) => request('/api/natbirzha/stocks/order/place', { method: 'POST', body: JSON.stringify(payload) }),
-  claimDividends: (holding_id) => request('/api/natbirzha/stocks/dividends/claim', { method: 'POST', body: JSON.stringify({ holding_id }) }),
+  getStocksList: () => request('/api/natbirzha/stocks/market'),
+  issueIPO: (payload) => request('/api/natbirzha/stocks/ipo/apply', { method: 'POST', body: JSON.stringify(payload) }),
+  buyShares: (stock_id, shares_count) => request('/api/natbirzha/stocks/buy', { method: 'POST', body: JSON.stringify({ stock_id, shares_count }) }),
+  getPortfolio: () => request('/api/natbirzha/stocks/portfolio'),
 
   // Military & Tournaments
   getMilitaryStatus: () => request('/api/natbirzha/military/status'),
   recruitUnits: (unit_type, count) => request('/api/natbirzha/military/recruit', { method: 'POST', body: JSON.stringify({ unit_type, count }) }),
-  getCurrentTournament: () => request('/api/natbirzha/military/tournaments/current'),
+  getCurrentTournament: () => request('/api/natbirzha/military/status'),
 
   // Bankruptcy
   getBankruptcyStatus: () => request('/api/natbirzha/bankruptcy/status'),
-  submitRestructuring: (terms) => request('/api/natbirzha/bankruptcy/plan/submit', { method: 'POST', body: JSON.stringify({ terms }) }),
+  submitRestructuring: () => request('/api/natbirzha/bankruptcy/file', { method: 'POST' }),
 };

@@ -2,24 +2,34 @@ import { NatAPI } from '../api.js';
 import { store } from '../state.js';
 
 const AVAILABLE_FACTORIES = [
-  { type: 'smelter', name: 'Металлургический комбинат', cost: 5000, spec: 'metallurgy', tier: 1 },
-  { type: 'thermal_plant', name: 'Угольная ТЭС', cost: 6000, spec: 'energy', tier: 1 },
-  { type: 'hydro_solar', name: 'ВИЭ / ГЭС электростанция', cost: 6000, spec: 'energy', tier: 1 },
-  { type: 'oil_rig', name: 'Нефтяная вышка', cost: 5500, spec: 'oil_gas', tier: 1 },
-  { type: 'refinery', name: 'НПЗ (Нефтепереработка)', cost: 7000, spec: 'oil_gas', tier: 2 },
-  { type: 'chem_plant', name: 'Химический комбинат', cost: 5500, spec: 'chemicals', tier: 1 },
-  { type: 'mine', name: 'Угольно-рудная шахта', cost: 5000, spec: 'mining', tier: 1 },
-  { type: 'farm', name: 'Агрокомплекс (ферма)', cost: 5000, spec: 'agriculture', tier: 1 },
-  { type: 'logging_camp', name: 'Лесозаготовительный лагерь', cost: 5000, spec: 'forestry', tier: 1 },
-  { type: 'sawmill', name: 'Лесопильный комбинат', cost: 6500, spec: 'forestry', tier: 2 },
-  { type: 'machinery_plant', name: 'Машиностроительный завод', cost: 7500, spec: 'manufacturing', tier: 1 },
-  { type: 'electronics_fab', name: 'Фабрика электроники', cost: 8000, spec: 'manufacturing', tier: 2 },
+  { type: 'smelter', name: 'Металлургический комбинат', cost: 5000, spec: 'metallurgist', tier: 1 },
+  { type: 'aluminum_plant', name: 'Алюминиевый завод', cost: 8000, spec: 'metallurgist', tier: 2 },
+  { type: 'thermal_plant', name: 'Угольная ТЭС', cost: 6000, spec: 'power_engineer', tier: 1 },
+  { type: 'hydro_solar', name: 'ВИЭ / ГЭС электростанция', cost: 6000, spec: 'power_engineer', tier: 1 },
+  { type: 'nuclear_plant', name: 'Атомная электростанция', cost: 25000, spec: 'power_engineer', tier: 3 },
+  { type: 'oil_rig', name: 'Нефтяная вышка', cost: 5500, spec: 'oilman', tier: 1 },
+  { type: 'refinery', name: 'НПЗ (Нефтепереработка)', cost: 7000, spec: 'oilman', tier: 2 },
+  { type: 'chem_plant', name: 'Химический комбинат', cost: 5500, spec: 'chemist', tier: 1 },
+  { type: 'polymer_plant', name: 'Завод полимеров', cost: 8500, spec: 'chemist', tier: 2 },
+  { type: 'mine', name: 'Угольно-рудная шахта', cost: 5000, spec: 'miner', tier: 1 },
+  { type: 'deep_mine', name: 'Глубокая шахта (литий/редкоземы)', cost: 9000, spec: 'miner', tier: 2 },
+  { type: 'uranium_quarry', name: 'Урановый карьер', cost: 15000, spec: 'miner', tier: 3 },
+  { type: 'farm', name: 'Агрокомплекс (ферма)', cost: 5000, spec: 'agrarian', tier: 1 },
+  { type: 'food_factory', name: 'Пищевой комбинат', cost: 7000, spec: 'agrarian', tier: 2 },
+  { type: 'logging_camp', name: 'Лесозаготовительный лагерь', cost: 5000, spec: 'forester', tier: 1 },
+  { type: 'sawmill', name: 'Лесопильный комбинат', cost: 6500, spec: 'forester', tier: 2 },
+  { type: 'machinery_plant', name: 'Машиностроительный завод', cost: 7500, spec: 'technoprom', tier: 1 },
+  { type: 'electronics_fab', name: 'Фабрика электроники', cost: 8000, spec: 'technoprom', tier: 2 },
+  { type: 'centrifuge', name: 'Газоцентрифужный завод', cost: 18000, spec: 'miner', tier: 3 },
+  { type: 'defense_plant', name: 'Оборонный завод ВПК', cost: 30000, spec: 'technoprom', tier: 3 },
 ];
 
 const RECIPES = {
   smelter: [
-    { id: 'smelt_steel', name: 'Выплавка стали', in: '2 iron_ore + 1 coal + 2 МВт·ч', out: '1 steel', xp: 50 },
-    { id: 'smelt_aluminum', name: 'Электролиз алюминия', in: '2 bauxite + 1 minerals + 3.5 МВт·ч', out: '1 aluminum', xp: 60 },
+    { id: 'smelt_steel', name: 'Выплавка стали', in: '2 iron_ore + 1 coal + 2 energy', out: '1 steel', xp: 50 },
+  ],
+  aluminum_plant: [
+    { id: 'smelt_aluminum', name: 'Электролиз алюминия', in: '2 bauxite + 1 minerals + 3.5 energy', out: '1 aluminum', xp: 60 },
   ],
   thermal_plant: [
     { id: 'generate_thermal', name: 'Генерация электроэнергии', in: '2 coal + 1 water', out: '25 energy', xp: 40 },
@@ -27,32 +37,53 @@ const RECIPES = {
   hydro_solar: [
     { id: 'generate_solar_hydro', name: 'Бестопливная генерация (ВИЭ/ГЭС)', in: '0 сырья', out: '15 energy', xp: 35 },
   ],
+  nuclear_plant: [
+    { id: 'generate_nuclear', name: 'Ядерная генерация', in: '0.5 uranium_enriched + 3 water', out: '60 energy', xp: 70 },
+  ],
   oil_rig: [
-    { id: 'pump_oil_gas', name: 'Добыча нефти и газа', in: '2 квоты + 1 water', out: '3 oil_crude + 2 gas_natural', xp: 35 },
+    { id: 'pump_oil_gas', name: 'Добыча нефти и газа', in: '2 grid_quota + 1 water', out: '3 oil_crude + 2 gas_natural', xp: 35 },
   ],
   refinery: [
-    { id: 'refine_fuel', name: 'Переработка топлива', in: '2 oil_crude + 2 МВт·ч', out: '80 fuel_diesel', xp: 45 },
+    { id: 'refine_fuel', name: 'Переработка топлива', in: '2 oil_crude + 2 energy', out: '80 fuel_diesel', xp: 45 },
   ],
   chem_plant: [
-    { id: 'synth_chem_fertilizer', name: 'Синтез удобрений и кислот', in: '1.5 minerals + 1.5 water + 2 МВт·ч', out: '2 basic_chem + 2 fertilizer', xp: 40 },
+    { id: 'synth_chem_fertilizer', name: 'Синтез удобрений и кислот', in: '1.5 minerals + 1.5 water + 2 energy', out: '2 basic_chem + 2 fertilizer', xp: 40 },
+  ],
+  polymer_plant: [
+    { id: 'synth_plastics_catalyst', name: 'Синтез пластиков и катализаторов', in: '2 oil_crude + 1 basic_chem + 2 energy', out: '2 plastics + 1 catalyst', xp: 55 },
   ],
   mine: [
-    { id: 'mine_coal_iron', name: 'Добыча угля и железной руды', in: '2 квоты + 1 water', out: '4 coal + 3 iron_ore + 2 minerals', xp: 35 },
+    { id: 'mine_coal_iron', name: 'Добыча угля и железной руды', in: '2 grid_quota + 1 water', out: '4 coal + 3 iron_ore + 2 minerals', xp: 35 },
+  ],
+  deep_mine: [
+    { id: 'mine_deep_rare', name: 'Глубокая добыча лития и редкоземов', in: '3 grid_quota + 2 water', out: '2 lithium_raw + 1.5 rare_earths + 1 bauxite', xp: 45 },
+  ],
+  uranium_quarry: [
+    { id: 'mine_uranium', name: 'Добыча урановой руды', in: '3 grid_quota + 2 water', out: '2 uranium_raw', xp: 50 },
   ],
   farm: [
-    { id: 'farm_grain', name: 'Выращивание зерна', in: '1 water + 1 квота', out: '5 grain + 2 bio_raw', xp: 30 },
+    { id: 'farm_grain', name: 'Выращивание зерна', in: '1 water + 1 grid_quota', out: '5 grain + 2 bio_raw', xp: 30 },
+  ],
+  food_factory: [
+    { id: 'process_food', name: 'Переработка продовольствия', in: '3 grain + 1 water + 1 energy', out: '5 food', xp: 35 },
   ],
   logging_camp: [
-    { id: 'log_timber', name: 'Лесозаготовка', in: '1.5 квоты', out: '5 wood_raw', xp: 30 },
+    { id: 'log_timber', name: 'Лесозаготовка', in: '1.5 grid_quota', out: '5 wood_raw', xp: 30 },
   ],
   sawmill: [
-    { id: 'mill_lumber', name: 'Производство пиломатериалов', in: '3 wood_raw + 1.5 МВт·ч', out: '2 lumber + 1 cellulose', xp: 35 },
+    { id: 'mill_lumber', name: 'Производство пиломатериалов', in: '3 wood_raw + 1.5 energy', out: '2 lumber + 1 cellulose', xp: 35 },
   ],
   machinery_plant: [
-    { id: 'manufacture_machinery', name: 'Производство оборудования', in: '1.5 steel + 2 МВт·ч', out: '1 machinery', xp: 45 },
+    { id: 'manufacture_machinery', name: 'Производство оборудования', in: '1.5 steel + 2 energy', out: '1 machinery', xp: 45 },
   ],
   electronics_fab: [
-    { id: 'manufacture_electronics', name: 'Производство чипов и батарей', in: '0.5 rare_earths + 1 lithium + 1 plastics', out: '1 electronics + 1 batteries', xp: 50 },
+    { id: 'manufacture_electronics', name: 'Производство чипов и батарей', in: '0.5 rare_earths + 1 lithium_raw + 1 plastics + 3 energy', out: '1 electronics + 1 batteries', xp: 50 },
+  ],
+  centrifuge: [
+    { id: 'enrich_uranium', name: 'Обогащение урана', in: '2 uranium_raw + 1 minerals + 3 grid_quota', out: '1 uranium_enriched', xp: 60 },
+  ],
+  defense_plant: [
+    { id: 'manufacture_military', name: 'Производство военного снаряжения', in: '2 steel + 1 electronics + 1 machinery + 5 energy', out: '1 military_gear', xp: 70 },
   ],
 };
 

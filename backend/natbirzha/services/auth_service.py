@@ -51,27 +51,12 @@ def validate_strict_telegram_init_data(init_data: str, bot_token: str) -> Option
         return None
 
 def validate_test_init_data(init_data: str) -> Optional[Dict[str, Any]]:
-    """Allows testing when ALLOW_TEST_AUTH is enabled using dedicated TEST_AUTH_SECRET or dev user payload."""
+    """Allows testing when ALLOW_TEST_AUTH is enabled using strict HMAC with TEST_AUTH_SECRET."""
     if not nat_settings.ALLOW_TEST_AUTH or not init_data:
         return None
 
-    # 1. First attempt strict HMAC validation against TEST_AUTH_SECRET (used by integration tests)
-    hmac_res = validate_strict_telegram_init_data(init_data, nat_settings.TEST_AUTH_SECRET)
-    if hmac_res:
-        return hmac_res
-
-    # 2. Local browser fallback when ALLOW_TEST_AUTH is True (e.g. user={"id": 12345, ...})
-    try:
-        parsed = dict(urllib.parse.parse_qsl(init_data, keep_blank_values=True))
-        if "user" in parsed:
-            user_raw = parsed["user"]
-            user_data = json.loads(user_raw) if isinstance(user_raw, str) else user_raw
-            if isinstance(user_data, dict) and user_data.get("id"):
-                return {"user": user_data}
-    except Exception:
-        pass
-
-    return None
+    # Strict HMAC validation against TEST_AUTH_SECRET (cryptographically signed)
+    return validate_strict_telegram_init_data(init_data, nat_settings.TEST_AUTH_SECRET)
 
 
 async def get_strict_natbirzha_user(

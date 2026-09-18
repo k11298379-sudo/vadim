@@ -2,8 +2,10 @@ import { NatAPI } from '../api.js';
 import { store } from '../state.js';
 
 const UNITS = [
-  { id: 'infantry', name: 'Пехотный взвод', cost: 100, steel: 1, power: 5, icon: '🪖' },
-  { id: 'heavy_tank', name: 'Тяжёлый танк', cost: 500, steel: 5, power: 30, icon: '🛡️' },
+  { id: 'infantry', name: 'Пехотный взвод', cost: 50, steel: 0, power: 10, icon: '🪖' },
+  { id: 'tanks', name: 'Бронетехника', cost: 1000, steel: 1, power: 50, icon: '🛡️' },
+  { id: 'drones', name: 'БПЛА (Дроны)', cost: 500, steel: 0, power: 30, icon: '🛩️' },
+  { id: 'air_defense', name: 'ПВО / Зенитка', cost: 800, steel: 1, power: 40, icon: '🎯' },
 ];
 
 export async function renderMilitary(container, showToast) {
@@ -22,7 +24,7 @@ export async function renderMilitary(container, showToast) {
     console.error('Tournament fetch error:', err);
   }
 
-  const army = militaryData?.army || { infantry: 0, tanks: 0, combat_power: 0 };
+  const army = militaryData || { infantry: 0, tanks: 0, drones: 0, air_defense: 0, army_strength: 0 };
   const participants = tournamentData?.participants || [];
 
   container.innerHTML = `
@@ -68,7 +70,7 @@ export async function renderMilitary(container, showToast) {
       <div class="glass-card rounded-2xl p-4 shadow-sm space-y-3">
         <div class="flex items-center justify-between">
           <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Состояние ваших вооружённых сил</h3>
-          <span class="text-xs font-mono font-bold text-emerald-500">${army.combat_power || 0} Боевая мощь</span>
+          <span class="text-xs font-mono font-bold text-emerald-500">${army.army_strength || 0} Боевая мощь</span>
         </div>
 
         <div class="grid grid-cols-2 gap-2">
@@ -83,6 +85,18 @@ export async function renderMilitary(container, showToast) {
             <div class="text-[11px] text-slate-400 mt-1">Танки</div>
             <div class="text-base font-black font-mono text-slate-900 dark:text-white">${army.tanks || 0}</div>
           </div>
+
+          <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+            <div class="text-lg">🛩️</div>
+            <div class="text-[11px] text-slate-400 mt-1">Дроны</div>
+            <div class="text-base font-black font-mono text-slate-900 dark:text-white">${army.drones || 0}</div>
+          </div>
+
+          <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+            <div class="text-lg">🎯</div>
+            <div class="text-[11px] text-slate-400 mt-1">ПВО</div>
+            <div class="text-base font-black font-mono text-slate-900 dark:text-white">${army.air_defense || 0}</div>
+          </div>
         </div>
       </div>
 
@@ -96,7 +110,7 @@ export async function renderMilitary(container, showToast) {
                 <span class="text-2xl">${u.icon}</span>
                 <div>
                   <div class="text-xs font-bold text-slate-900 dark:text-white">${u.name}</div>
-                  <div class="text-[10px] text-slate-400 font-mono">${u.cost} cash + ${u.steel}т стали (${u.power} мощи)</div>
+                  <div class="text-[10px] text-slate-400 font-mono">${u.cost} cash${u.steel > 0 ? ' + ' + u.steel + 'т стали' : ''} (${u.power} мощи)</div>
                 </div>
               </div>
               <button

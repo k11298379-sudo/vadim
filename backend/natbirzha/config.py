@@ -9,13 +9,14 @@ class NatbirzhaSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     GAME_TIMEZONE: str = Field(default="Asia/Yekaterinburg", description="Timezone for calendar settlements")
-    ALLOW_TEST_AUTH: bool = Field(default=True, description="Allow test signature tokens in local dev/tests")
+    ALLOW_TEST_AUTH: bool = Field(default=True, description="Allow test HMAC signature tokens in local dev/tests")
     TEST_AUTH_SECRET: str = Field(default="natbirzha_test_secret_key_2026", description="Secret for signing test initData")
 
     # Specialization efficiency limits (strict)
     OWN_SPEC_EFFICIENCY: float = 1.00       # 100%
     FOREIGN_SPEC_EFFICIENCY: float = 0.10   # 10%
     FOREIGN_LICENSED_MAX: float = 0.12      # Max 12% with special license
+    FOREIGN_LICENSE_COST_NAT: int = 50      # NAT sink: purchase foreign spec license
     RESPEC_COOLDOWN_DAYS: int = 7
     RESPEC_COST_PCT: float = 0.25
 
@@ -46,6 +47,7 @@ class NatbirzhaSettings(BaseSettings):
     IPO_NAV_WEIGHT: float = 1.0
     IPO_PROFIT_PE_MULT: float = 8.0
     IPO_CASH_DISCOUNT: float = 0.85
+    IPO_REQUIRE_FINANCIAL_HISTORY: bool = False  # Configurable IPO eligibility rule
 
     # Dividends
     DIVIDEND_POOL_PCT: float = 0.10         # 10% of closed daily distributable profit

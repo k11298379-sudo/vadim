@@ -116,6 +116,9 @@ async def buy_shares(
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/settle_dividends")
-async def settle_dividends_endpoint(session: AsyncSession = Depends(get_db_session)):
+async def settle_dividends_endpoint(
+    company: NatCompany = Depends(get_current_company),
+    session: AsyncSession = Depends(get_db_session)
+):
     count = await DividendService.settle_all_public_dividends(session)
     return {"success": True, "settled_stocks_count": count}

@@ -1,10 +1,12 @@
 from datetime import date, timedelta
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from backend.natbirzha.config import nat_settings, get_game_today, get_game_now
 from backend.natbirzha.models.company import NatCompany
 from backend.natbirzha.models.restructuring import NatRestructuring, NatDailyFinancials
+from backend.natbirzha.models.stocks import NatStock, NatStockOrder
+from backend.natbirzha.models.inventory import NatInventory
 from backend.natbirzha.services.company_service import CompanyService
 
 class BankruptcyService:
@@ -37,6 +39,40 @@ class BankruptcyService:
         session.add(restructuring)
         company.is_bankrupt = True
 
+        # Credit liquidation emergency pool to company cash for recovery (guaranteed 5,000 cash recovery floor)
+        emergency_grant = max(5000.0, liquidation_pool)
+        company.cash = round(company.cash + emergency_grant, 2)
+
+        # Grant emergency water ration so primary resource extraction never deadlocks
+        water_res = await session.execute(
+            select(NatInventory).where(
+                NatInventory.company_id == company.id,
+                NatInventory.item_id == "water"
+            )
+        )
+        water_inv = water_res.scalar_one_or_none()
+        if not water_inv:
+            water_inv = NatInventory(company_id=company.id, item_id="water", quantity=10.0)
+            session.add(water_inv)
+        elif water_inv.quantity < 5.0:
+            water_inv.quantity = 10.0
+
+        # Delist public stocks during bankruptcy & cancel active orders
+        stock_res = await session.execute(
+            select(NatStock).where(NatStock.company_id == company.id)
+        )
+        stock = stock_res.scalar_one_or_none()
+        if stock:
+            stock.is_listed = False
+            orders_res = await session.execute(
+                select(NatStockOrder).where(
+                    NatStockOrder.stock_id == stock.id,
+                    NatStockOrder.status == "ACTIVE"
+                )
+            )
+            for ord_item in orders_res.scalars().all():
+                ord_item.status = "CANCELLED"
+
         await session.commit()
         await session.refresh(restructuring)
         return restructuring
@@ -59,7 +95,7 @@ class BankruptcyService:
         if not restruct:
             return {"status": "not_in_restructuring"}
 
-        # Check if 2 calendar dates have passed
+        # Check if calendar window passed -> complete restructuring
         if calendar_date > restruct.fee_end_date:
             restruct.status = "COMPLETED"
             company.is_bankrupt = False
@@ -81,7 +117,7 @@ class BankruptcyService:
             if closed_profit > 0:
                 fee = round(closed_profit * restruct.fee_rate, 2)  # 30%
                 if company.cash >= fee:
-                    company.cash -= fee
+                    company.cash = round(company.cash - fee, 2)
                     if fin:
                         fin.developer_fee_paid = fee
 
@@ -94,3 +130,25 @@ class BankruptcyService:
             }
 
         return {"status": "outside_fee_window"}
+
+    @classmethod
+    async def process_daily_liquidations(cls, session: AsyncSession) -> int:
+        """
+        Global daily scheduler handler for bankruptcies & restructuring fees.
+        Called at 00:01 GAME_TIMEZONE.
+        """
+        active_restruct_res = await session.execute(
+            select(NatRestructuring, NatCompany)
+            .join(NatCompany, NatRestructuring.company_id == NatCompany.id)
+            .where(NatRestructuring.status == "ACTIVE")
+        )
+        records = active_restruct_res.all()
+        processed_count = 0
+        yesterday = get_game_today() - timedelta(days=1)
+
+        for restruct, company in records:
+            await cls.process_daily_restructuring_fee(session, company, yesterday)
+            processed_count += 1
+
+        return processed_count
+

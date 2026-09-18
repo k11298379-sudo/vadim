@@ -3,13 +3,13 @@ import { store } from '../state.js';
 
 export function renderOverview(container, showToast) {
   const company = store.company;
-  if (!company) return;
+  if (!company) { container.innerHTML = '<div class="p-8 text-center text-xs text-slate-400">Загрузка данных компании...</div>'; return; }
 
   const inv = store.inventory || {};
   const items = Object.entries(inv).filter(([_, qty]) => Number(qty) > 0);
 
   const xpCurrent = company.xp || 0;
-  const xpNext = (company.level || 1) * 1000;
+  const xpNext = (company.level || 1) * 150;
   const xpPercent = Math.min(100, Math.round((xpCurrent / xpNext) * 100));
 
   container.innerHTML = `
@@ -129,6 +129,24 @@ export function renderOverview(container, showToast) {
           🔄 Обновить баланс и NAV
         </button>
       </div>
+      <!-- Territory Expansion -->
+      <div class="glass-card rounded-2xl p-4 shadow-sm">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="text-base">🗺️</span>
+            <div>
+              <div class="text-xs font-bold text-slate-800 dark:text-white">Территория</div>
+              <div class="text-[11px] text-slate-400">${company.territory_tiles || 4} / ${company.max_territory || 20} тайлов</div>
+            </div>
+          </div>
+          <button
+            id="expand-territory-btn"
+            class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs active:scale-95 transition-all"
+          >
+            🏗️ Расширить
+          </button>
+        </div>
+      </div>
     </div>
   `;
 
@@ -146,6 +164,26 @@ export function renderOverview(container, showToast) {
         showToast(err.message, 'error');
       } finally {
         refreshBtn.innerText = '🔄 Обновить баланс и NAV';
+      }
+    });
+  }
+
+  const expandBtn = container.querySelector('#expand-territory-btn');
+  if (expandBtn) {
+    expandBtn.addEventListener('click', async () => {
+      try {
+        expandBtn.innerText = 'Расширение...';
+        expandBtn.disabled = true;
+        const res = await NatAPI.expandTerritory();
+        showToast(res.message || 'Территория расширена!', 'success');
+        const refreshed = await NatAPI.getMyCompany();
+        store.setCompany(refreshed);
+        renderOverview(container, showToast);
+      } catch (err) {
+        showToast(err.message || 'Ошибка расширения территории', 'error');
+      } finally {
+        expandBtn.disabled = false;
+        expandBtn.innerText = '🏗️ Расширить';
       }
     });
   }

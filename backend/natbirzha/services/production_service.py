@@ -176,14 +176,16 @@ class ProductionTickEngine:
         company_id: int,
         now: Optional[datetime] = None
     ) -> List[Dict[str, Any]]:
-        """Offline catch-up: calculates elapsed time up to max 72h and executes ticks."""
+        """Offline catch-up: calculates elapsed time up to max 72h and executes as many ticks as resources allow."""
         now = now or get_game_now()
         comp_res = await session.execute(select(NatCompany).where(NatCompany.id == company_id))
         company = comp_res.scalar_one_or_none()
-        if not company:
+        if not company or company.is_bankrupt:
             return []
 
-        fac_res = await session.execute(select(NatFactory).where(NatFactory.company_id == company_id, NatFactory.is_active == True))
+        fac_res = await session.execute(
+            select(NatFactory).where(NatFactory.company_id == company_id, NatFactory.is_active == True)
+        )
         factories = fac_res.scalars().all()
 
         results = []
@@ -191,9 +193,41 @@ class ProductionTickEngine:
             elapsed_seconds = max(0, (now - fac.last_produced_at).total_seconds())
             # Cap at 72 hours (4320 minutes)
             elapsed_minutes = min(4320, int(elapsed_seconds // 60))
-            if elapsed_minutes > 0:
-                res = await cls.execute_factory_tick(session, company, fac, num_ticks=elapsed_minutes, now=now)
-                results.append({"factory_id": fac.id, "ticks": elapsed_minutes, "result": res})
+            if elapsed_minutes <= 0:
+                continue
+
+            recipe = next((r for r in RECIPES.values() if r["factory_type"] == fac.building_type), None)
+            if not recipe:
+                continue
+
+            # Determine maximum ticks executable with current inventory
+            max_possible_ticks = elapsed_minutes
+            level_mult = fac.level
+            for item_id, per_tick_qty in recipe["inputs"].items():
+                if item_id in ("energy", "grid_quota"):
+                    net_per_tick = max(0.0, per_tick_qty * level_mult - nat_settings.BASE_MUNICIPAL_ENERGY_TICK)
+                else:
+                    net_per_tick = per_tick_qty * level_mult
+
+                if net_per_tick > 0:
+                    inv_res = await session.execute(
+                        select(NatInventory).where(
+                            NatInventory.company_id == company.id,
+                            NatInventory.item_id == item_id
+                        )
+                    )
+                    inv = inv_res.scalar_one_or_none()
+                    avail = inv.available_quantity if inv else 0.0
+                    ticks_for_item = int(avail // net_per_tick)
+                    max_possible_ticks = min(max_possible_ticks, ticks_for_item)
+
+            if max_possible_ticks > 0:
+                res = await cls.execute_factory_tick(session, company, fac, num_ticks=max_possible_ticks, now=now)
+                results.append({"factory_id": fac.id, "ticks": max_possible_ticks, "result": res})
+            else:
+                fac.last_produced_at = now
+                await session.commit()
+
         return results
 
     @classmethod
