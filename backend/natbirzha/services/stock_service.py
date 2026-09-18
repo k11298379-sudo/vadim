@@ -43,8 +43,10 @@ class StockService:
         if company.is_bankrupt:
             raise ValueError("Bankrupt companies cannot apply for IPO.")
 
-        # Check if already listed
-        existing_stock = await session.execute(select(NatStock).where(NatStock.company_id == company.id))
+        # Check if already actively listed
+        existing_stock = await session.execute(
+            select(NatStock).where(NatStock.company_id == company.id, NatStock.is_listed == True)
+        )
         if existing_stock.scalar_one_or_none():
             raise ValueError("Company is already public.")
 
@@ -123,6 +125,9 @@ class StockService:
         if shares_to_buy <= 0:
             raise ValueError("Shares count must be positive.")
 
+        if buyer_company.is_bankrupt:
+            raise ValueError("Bankrupt companies cannot purchase stocks.")
+
         order_res = await session.execute(
             select(NatStockOrder).where(
                 NatStockOrder.stock_id == stock_id,
@@ -189,4 +194,70 @@ class StockService:
             "price_per_share": order.price,
             "total_spent": total_cost,
             "remaining_cash": buyer_company.cash
+        }
+
+    @staticmethod
+    async def sell_shares(
+        session: AsyncSession,
+        seller_company: NatCompany,
+        stock_id: int,
+        shares_to_sell: int
+    ) -> Dict[str, Any]:
+        """Sells shares held in company portfolio to stock market orderbook."""
+        if shares_to_sell <= 0:
+            raise ValueError("Shares count must be positive.")
+
+        hold_res = await session.execute(
+            select(NatStockHolding).where(
+                NatStockHolding.stock_id == stock_id,
+                NatStockHolding.holder_company_id == seller_company.id
+            )
+        )
+        holding = hold_res.scalar_one_or_none()
+        if not holding or holding.shares_count < shares_to_sell:
+            avail = holding.shares_count if holding else 0
+            raise ValueError(f"Insufficient shares to sell. Required: {shares_to_sell}, Available: {avail}")
+
+        stock = await session.get(NatStock, stock_id)
+        if not stock or not stock.is_listed:
+            raise ValueError("Stock is not actively listed.")
+
+        # Sell at current market price
+        total_payout = round(shares_to_sell * stock.current_price, 2)
+        seller_company.cash = round(seller_company.cash + total_payout, 2)
+        holding.shares_count -= shares_to_sell
+        holding.updated_at = get_game_now()
+
+        # Add sold shares back to available market float order
+        order_res = await session.execute(
+            select(NatStockOrder).where(
+                NatStockOrder.stock_id == stock_id,
+                NatStockOrder.order_type == "SELL",
+                NatStockOrder.status == "ACTIVE"
+            ).limit(1)
+        )
+        order = order_res.scalar_one_or_none()
+        if order:
+            order.remaining_shares += shares_to_sell
+        else:
+            new_ord = NatStockOrder(
+                stock_id=stock_id,
+                trader_company_id=seller_company.id,
+                order_type="SELL",
+                shares_count=shares_to_sell,
+                remaining_shares=shares_to_sell,
+                price=stock.current_price,
+                status="ACTIVE",
+                created_at=get_game_now()
+            )
+            session.add(new_ord)
+
+        await session.commit()
+        return {
+            "success": True,
+            "shares_sold": shares_to_sell,
+            "price_per_share": stock.current_price,
+            "total_payout": total_payout,
+            "remaining_shares": holding.shares_count,
+            "new_cash_balance": seller_company.cash
         }

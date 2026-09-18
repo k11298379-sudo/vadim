@@ -130,11 +130,19 @@ export function renderOnboarding(container, showToast) {
         specialization: selectedSpec,
         territory_hex: 'NORTH_INDUSTRIAL_HEX_1',
       });
-      store.setCompany(company);
+      let fullCompany = company;
+      try {
+        fullCompany = await NatAPI.getMyCompany();
+      } catch (_) {}
+      store.setCompany(fullCompany);
       store.setTab('overview');
-      showToast(`Корпорация успешно создана!`, 'success');
-      // Force full re-render by reloading
-      setTimeout(() => window.location.reload(), 500);
+      showToast(`Корпорация «${name}» успешно создана!`, 'success');
+      document.getElementById('bottom-nav')?.classList.remove('hidden');
+      document.getElementById('header-stats')?.classList.remove('hidden');
+      if (typeof window !== 'undefined' && window.NatApp?.renderCurrentScreen) {
+        window.NatApp.renderCurrentScreen();
+      }
+      setTimeout(() => window.location.reload(), 600);
     } catch (err) {
       showToast(err.message || 'Ошибка создания компании', 'error');
     } finally {

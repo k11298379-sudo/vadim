@@ -47,17 +47,22 @@ class NatStateStore {
       }
       this.inventory = companyData.inventory || {};
       this.factories = companyData.factories || [];
-      this.nav = companyData.nav || 0;
+      this.nav = companyData.nav || companyData.audited_nav || companyData.cash || 0;
     }
     this.notify();
   }
 
   updateCompany(partial) {
-    if (this.company) {
-      this.company = { ...this.company, ...partial };
-      if (partial.inventory) this.inventory = partial.inventory;
-      if (partial.factories) this.factories = partial.factories;
+    if (this.company && partial && typeof partial === 'object') {
+      for (const [k, v] of Object.entries(partial)) {
+        if (v !== undefined) {
+          this.company[k] = v;
+        }
+      }
+      if (partial.inventory !== undefined) this.inventory = partial.inventory;
+      if (partial.factories !== undefined) this.factories = partial.factories;
       if (partial.nav !== undefined) this.nav = partial.nav;
+      else if (partial.audited_nav !== undefined) this.nav = partial.audited_nav;
       this.notify();
     }
   }
@@ -68,7 +73,7 @@ class NatStateStore {
   }
 
   hasCompany() {
-    return !!this.company && !!this.company.id;
+    return !!this.company && (!!this.company.id || !!this.company.company_id);
   }
 }
 

@@ -1,0 +1,217 @@
+import os
+import sys
+import asyncio
+import time
+from datetime import datetime, timedelta
+
+# Ensure root directory is in sys.path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
+import httpx
+from sqlalchemy import select
+
+from backend.main import app
+from backend.db.session import async_session_factory, init_db
+from backend.db.models import User
+from backend.natbirzha.config import nat_settings, get_game_now, get_game_today, normalize_dt
+from backend.natbirzha.models.company import NatCompany, NatFactory
+from backend.natbirzha.models.inventory import NatInventory
+from backend.natbirzha.models.military import NatTournament, NatTournamentParticipant
+from backend.natbirzha.models.stocks import NatStock, NatStockHolding
+from backend.natbirzha.services.company_service import CompanyService
+from backend.natbirzha.services.production_service import ProductionTickEngine
+from backend.natbirzha.services.stock_service import StockService
+from backend.natbirzha.services.military_service import MilitaryService
+from backend.natbirzha.services.bankruptcy_service import BankruptcyService
+
+
+def make_test_auth_headers(tg_id: int) -> dict:
+    return {
+        "X-Telegram-Init-Data": f"user=%7B%22id%22%3A{tg_id}%2C%22first_name%22%3A%22Tester{tg_id}%22%7D"
+    }
+
+
+async def test_audit_fixes():
+    await init_db()
+    print("\n================================================================")
+    print("🛡️ RUNNING AUDIT FIXES COMPREHENSIVE VERIFICATION")
+    print("================================================================")
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        # [1] Datetime Timezone Resilience & Offline Catch-up DB Commit
+        print("\n--- [1/6] Timezone Resilience & Offline Catch-Up Commit Verification ---")
+        tg_id_1 = int(time.time()) % 1000000 + 800000
+        headers_1 = make_test_auth_headers(tg_id_1)
+
+        # Login to create user
+        login_res = await client.post("/api/natbirzha/auth/login", headers=headers_1)
+        assert login_res.status_code == 200
+
+        # Create power company (hydro_solar requires NO inputs!)
+        create_res = await client.post(
+            "/api/natbirzha/company/create",
+            headers=headers_1,
+            json={"name": f"РусГидро {tg_id_1}", "specialization": "power_engineer"}
+        )
+        assert create_res.status_code == 200
+        company_id = create_res.json()["company_id"]
+
+        # Backdate the hydro_solar factory's last_produced_at by 2 hours (120 minutes)
+        # using an offset-naive datetime (simulating raw SQLite storage)
+        async with async_session_factory() as session:
+            fac_res = await session.execute(select(NatFactory).where(NatFactory.company_id == company_id))
+            factory = fac_res.scalar_one()
+            two_hours_ago = (datetime.utcnow() - timedelta(hours=2)).replace(tzinfo=None)
+            factory.last_produced_at = two_hours_ago
+            await session.commit()
+
+        # Login again: triggers ProductionTickEngine.catch_up_company
+        login_again = await client.post("/api/natbirzha/auth/login", headers=headers_1)
+        assert login_again.status_code == 200
+
+        # Verify that offline production was COMMITTED to the database
+        async with async_session_factory() as session:
+            inv_res = await session.execute(
+                select(NatInventory).where(
+                    NatInventory.company_id == company_id,
+                    NatInventory.item_id == "energy"
+                )
+            )
+            inv = inv_res.scalar_one_or_none()
+            assert inv is not None, "Offline production must have committed energy inventory to DB"
+            assert inv.quantity > 0, f"Energy quantity should be > 0, got {inv.quantity}"
+            comp_res = await session.execute(select(NatCompany).where(NatCompany.id == company_id))
+            comp = comp_res.scalar_one()
+            assert comp.xp > 0, f"XP should have accumulated offline, got {comp.xp}"
+            print(f"[OK] Offline catch-up properly committed: {inv.quantity} energy and {comp.xp} XP generated.")
+
+        # [2] Dynamic is_public in /company/me after IPO
+        print("\n--- [2/6] Dynamic is_public Verification on IPO ---")
+        status_pre = await client.get("/api/natbirzha/company/me", headers=headers_1)
+        assert status_pre.status_code == 200
+        assert status_pre.json()["is_public"] is False
+
+        # Apply for IPO
+        ipo_res = await client.post("/api/natbirzha/stocks/ipo/apply", headers=headers_1, json={})
+        assert ipo_res.status_code == 200
+        stock_id = ipo_res.json()["stock_id"]
+
+        status_post = await client.get("/api/natbirzha/company/me", headers=headers_1)
+        assert status_post.status_code == 200
+        assert status_post.json()["is_public"] is True, "Company must show is_public=True after IPO"
+        print("[OK] /company/me correctly reflects is_public=True after IPO issuance.")
+
+        # [3] Secondary Stock Buying & Selling
+        print("\n--- [3/6] Secondary Stock Market (Buy & Sell) Verification ---")
+        tg_id_2 = int(time.time()) % 1000000 + 850000
+        headers_2 = make_test_auth_headers(tg_id_2)
+        await client.post("/api/natbirzha/auth/login", headers=headers_2)
+        await client.post(
+            "/api/natbirzha/company/create",
+            headers=headers_2,
+            json={"name": f"ИнвестКапитал {tg_id_2}", "specialization": "technoprom"}
+        )
+
+        # Company 2 buys 500 shares of Company 1
+        buy_res = await client.post(
+            "/api/natbirzha/stocks/buy",
+            headers=headers_2,
+            json={"stock_id": stock_id, "shares_count": 500}
+        )
+        assert buy_res.status_code == 200
+        assert buy_res.json()["shares_bought"] == 500
+
+        # Company 2 checks portfolio
+        port_res = await client.get("/api/natbirzha/stocks/portfolio", headers=headers_2)
+        assert port_res.status_code == 200
+        assert len(port_res.json()["portfolio"]) == 1
+        assert port_res.json()["portfolio"][0]["shares_count"] == 500
+
+        # Company 2 sells 200 shares back to the market
+        sell_res = await client.post(
+            "/api/natbirzha/stocks/sell",
+            headers=headers_2,
+            json={"stock_id": stock_id, "shares_count": 200}
+        )
+        assert sell_res.status_code == 200
+        assert sell_res.json()["shares_sold"] == 200
+        assert sell_res.json()["remaining_shares"] == 300
+        print("[OK] Secondary stock market buy and sell executed flawlessly.")
+
+        # [4] Tournament Endpoint & cycle_number AttributeError Fix
+        print("\n--- [4/6] Tournament Resolution & cycle_number Verification ---")
+        async with async_session_factory() as session:
+            now = get_game_now()
+            t_num = int(time.time()) % 1000000 + 777000
+            tourn = NatTournament(
+                tournament_number=t_num,
+                start_time=now,
+                snapshot_time=now + timedelta(hours=71),
+                finish_time=now + timedelta(hours=72),
+                prize_pool_nat=100,
+                status="PENDING"
+            )
+            session.add(tourn)
+            await session.commit()
+
+        tourn_res = await client.get("/api/natbirzha/military/tournaments/current", headers=headers_1)
+        assert tourn_res.status_code == 200
+        t_data = tourn_res.json()["tournament"]
+        assert t_data is not None
+        assert t_data["cycle_number"] == t_num
+        print(f"[OK] Tournament fetched without AttributeError: cycle_number={t_data['cycle_number']}.")
+
+        # [5] Alliance Lifecycle (Create, Inspect, Join, Leave)
+        print("\n--- [5/6] Alliance Lifecycle Verification ---")
+        alliance_name = f"Уральский Альянс {tg_id_1}"
+        create_all_res = await client.post(
+            "/api/natbirzha/alliance/create",
+            headers=headers_1,
+            json={"name": alliance_name}
+        )
+        assert create_all_res.status_code == 200
+        alliance_id = create_all_res.json()["alliance_id"]
+
+        my_all_res = await client.get("/api/natbirzha/alliance/my", headers=headers_1)
+        assert my_all_res.status_code == 200
+        assert my_all_res.json()["in_alliance"] is True
+        assert my_all_res.json()["alliance"]["name"] == alliance_name
+        assert my_all_res.json()["alliance"]["my_role"] == "LEADER"
+
+        # Company 2 joins alliance
+        join_all_res = await client.post(
+            "/api/natbirzha/alliance/join",
+            headers=headers_2,
+            json={"alliance_id": alliance_id}
+        )
+        assert join_all_res.status_code == 200
+        assert join_all_res.json()["member_count"] == 2
+
+        # Company 2 leaves alliance
+        leave_res = await client.post("/api/natbirzha/alliance/leave", headers=headers_2)
+        assert leave_res.status_code == 200
+        print("[OK] Alliance creation, inspection, joining, and leaving verified 100%.")
+
+        # [6] Scheduler Hourly Tick Result Structure
+        print("\n--- [6/6] Scheduler Hourly Tick Verification ---")
+        async with async_session_factory() as session:
+            tick_res = await ProductionTickEngine.process_global_scheduled_tick(session)
+            assert isinstance(tick_res, dict)
+            assert "ticks_processed" in tick_res
+            assert tick_res.get("ticks_processed") >= 0
+            print(f"[OK] process_global_scheduled_tick returns structured dict: {tick_res}.")
+
+    print("\n================================================================")
+    print("🎉 ALL AUDIT FIXES VERIFIED SUCCESSFULLY WITH ZERO ERRORS!")
+    print("================================================================\n")
+
+
+if __name__ == "__main__":
+    asyncio.run(test_audit_fixes())

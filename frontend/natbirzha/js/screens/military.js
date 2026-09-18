@@ -124,8 +124,43 @@ export async function renderMilitary(container, showToast) {
           `).join('')}
         </div>
       </div>
+
+      <!-- Alliances Card -->
+      <div class="glass-card rounded-2xl p-4 shadow-sm space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="text-xl">🤝</span>
+            <div>
+              <h3 class="text-xs font-bold text-slate-900 dark:text-white">Военный Альянс 11 «Б»</h3>
+              <p class="text-[10px] text-slate-400">Кооперация до 3 корпораций для доминирования в турнире</p>
+            </div>
+          </div>
+          <button
+            id="join-alliance-btn"
+            class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs active:scale-95 transition-all"
+          >
+            Вступить
+          </button>
+        </div>
+      </div>
     </div>
   `;
+
+  // Join alliance handler
+  container.querySelector('#join-alliance-btn')?.addEventListener('click', async () => {
+    const allianceIdStr = prompt('Введите ID альянса для вступления:', '1');
+    const allianceId = parseInt(allianceIdStr, 10);
+    if (!allianceId || allianceId <= 0) return;
+    try {
+      const res = await NatAPI.joinAlliance(allianceId);
+      showToast(res.message || `Вы успешно вступили в альянс #${allianceId}!`, 'success');
+      const refreshed = await NatAPI.getMyCompany();
+      store.setCompany(refreshed);
+      renderMilitary(container, showToast);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  });
 
   // Recruit button listeners
   container.querySelectorAll('.recruit-unit-btn').forEach(btn => {

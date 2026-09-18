@@ -67,6 +67,8 @@ async def get_company_status(
     inv = {row.item_id: row.quantity for row in inv_res.scalars().all()}
     from backend.natbirzha.models.company import NatFactory
     fac_res = await session.execute(select(NatFactory).where(NatFactory.company_id == company.id))
+    from backend.natbirzha.services.recipes import RECIPES
+    recipe_for_type = {r["factory_type"]: r_id for r_id, r in RECIPES.items()}
     factories = [
         {
             "id": f.id,
@@ -77,10 +79,16 @@ async def get_company_status(
             "factory_type": f.building_type,
             "is_active": f.is_active,
             "degradation": 0.0,
-            "current_recipe": "smelt_steel" if f.building_type == "smelter" else "default"
+            "current_recipe": recipe_for_type.get(f.building_type, "default")
         }
         for f in fac_res.scalars().all()
     ]
+    from backend.natbirzha.models.stocks import NatStock
+    stock_res = await session.execute(
+        select(NatStock).where(NatStock.company_id == company.id, NatStock.is_listed == True)
+    )
+    is_public = stock_res.scalar_one_or_none() is not None
+
     return {
         "id": company.id,
         "name": company.name,
@@ -95,7 +103,7 @@ async def get_company_status(
         "audited_nav": nav,
         "nav": nav,
         "is_bankrupt": company.is_bankrupt,
-        "is_public": False,
+        "is_public": is_public,
         "inventory": inv,
         "factories": factories
     }

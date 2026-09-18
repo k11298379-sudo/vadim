@@ -37,6 +37,7 @@ async def get_military_status(
     }
 
 @router.get("/tournaments/current")
+@router.get("/tournament")
 async def get_current_tournament(
     company: NatCompany = Depends(get_current_company),
     session: AsyncSession = Depends(get_db_session)

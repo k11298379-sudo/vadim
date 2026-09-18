@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, date, time
 import zoneinfo
-from typing import Dict
+from typing import Dict, Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
@@ -99,8 +99,22 @@ def get_game_tz() -> zoneinfo.ZoneInfo:
     except Exception:
         return zoneinfo.ZoneInfo("UTC")
 
+def normalize_dt(dt: Optional[datetime]) -> Optional[datetime]:
+    """
+    Normalizes any datetime to offset-naive game time in GAME_TIMEZONE.
+    Guarantees that datetime subtractions and comparisons never crash with
+    TypeError: can't subtract/compare offset-naive and offset-aware datetimes.
+    """
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        return dt.astimezone(get_game_tz()).replace(tzinfo=None)
+    return dt
+
 def get_game_now() -> datetime:
-    return datetime.now(get_game_tz())
+    """Returns current game timestamp normalized as offset-naive game timezone."""
+    return datetime.now(get_game_tz()).replace(tzinfo=None)
 
 def get_game_today() -> date:
-    return get_game_now().date()
+    return datetime.now(get_game_tz()).date()
+

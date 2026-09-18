@@ -58,7 +58,7 @@ export function renderOverview(container, showToast) {
         <div class="glass-card rounded-2xl p-4 shadow-sm">
           <div class="text-xs font-bold uppercase tracking-wider text-slate-400">Счёт компании</div>
           <div class="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1 font-mono">
-            ${Number(company.cash).toLocaleString('ru-RU', { maximumFractionDigits: 2 })}
+            ${Number(company.cash || 0).toLocaleString('ru-RU', { maximumFractionDigits: 2 })}
           </div>
           <div class="text-[11px] text-slate-400 mt-0.5">cash (ликвидность)</div>
         </div>
@@ -66,7 +66,7 @@ export function renderOverview(container, showToast) {
         <div class="glass-card rounded-2xl p-4 shadow-sm">
           <div class="text-xs font-bold uppercase tracking-wider text-slate-400">Оценка NAV</div>
           <div class="text-xl font-black text-blue-600 dark:text-blue-400 mt-1 font-mono">
-            ${Number(store.nav || company.cash).toLocaleString('ru-RU', { maximumFractionDigits: 2 })}
+            ${Number(store.nav || company.cash || 0).toLocaleString('ru-RU', { maximumFractionDigits: 2 })}
           </div>
           <div class="text-[11px] text-slate-400 mt-0.5">активы + склады + кеш</div>
         </div>
@@ -120,15 +120,6 @@ export function renderOverview(container, showToast) {
         `}
       </div>
 
-      <!-- Quick Action: Respec -->
-      <div class="pt-2 text-center">
-        <button
-          id="refresh-btn"
-          class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
-        >
-          🔄 Обновить баланс и NAV
-        </button>
-      </div>
       <!-- Territory Expansion -->
       <div class="glass-card rounded-2xl p-4 shadow-sm">
         <div class="flex items-center justify-between">
@@ -147,6 +138,22 @@ export function renderOverview(container, showToast) {
           </button>
         </div>
       </div>
+
+      <!-- Actions: Respec & Refresh -->
+      <div class="pt-2 flex items-center justify-center gap-2">
+        <button
+          id="respec-btn"
+          class="px-3 py-2 rounded-xl text-xs font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 transition-colors"
+        >
+          🔄 Сменить отрасль
+        </button>
+        <button
+          id="refresh-btn"
+          class="px-3 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+        >
+          ⚡ Обновить NAV
+        </button>
+      </div>
     </div>
   `;
 
@@ -163,7 +170,39 @@ export function renderOverview(container, showToast) {
       } catch (err) {
         showToast(err.message, 'error');
       } finally {
-        refreshBtn.innerText = '🔄 Обновить баланс и NAV';
+        refreshBtn.innerText = '⚡ Обновить NAV';
+      }
+    });
+  }
+
+  // Attach respec handler
+  const respecBtn = container.querySelector('#respec-btn');
+  if (respecBtn) {
+    respecBtn.addEventListener('click', async () => {
+      const specs = ['metallurgist', 'power_engineer', 'oilman', 'agrarian', 'chemist', 'technoprom', 'miner', 'forester'];
+      const specPrompt = prompt(
+        `Выберите новую специализацию:\n${specs.join(', ')}`,
+        company.specialization
+      );
+      if (!specPrompt || specPrompt === company.specialization) return;
+      const targetSpec = specPrompt.trim().toLowerCase();
+      if (!specs.includes(targetSpec)) {
+        showToast('Неизвестная специализация!', 'error');
+        return;
+      }
+      try {
+        respecBtn.disabled = true;
+        respecBtn.innerText = 'Смена...';
+        await NatAPI.respecCompany(targetSpec);
+        showToast('Отрасль компании успешно изменена!', 'success');
+        const refreshed = await NatAPI.getMyCompany();
+        store.setCompany(refreshed);
+        renderOverview(container, showToast);
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        respecBtn.disabled = false;
+        respecBtn.innerText = '🔄 Сменить отрасль';
       }
     });
   }

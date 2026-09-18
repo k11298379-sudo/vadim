@@ -119,7 +119,12 @@ async def get_strict_natbirzha_user(
             role="student"
         )
         session.add(user)
-        await session.commit()
+        try:
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            res = await session.execute(select(User).where(User.tg_id == tg_id))
+            user = res.scalar_one()
     # Check beta-tester permissions (like RPG: only testers, admins, or test harness)
     if nat_settings.BETA_TESTERS_ONLY:
         is_tester = bool(

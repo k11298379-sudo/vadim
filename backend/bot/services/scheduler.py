@@ -116,8 +116,9 @@ def setup_scheduler(bot: Bot):
                 from backend.natbirzha.services.production_service import ProductionTickEngine
                 async with async_session_factory() as session:
                     res = await ProductionTickEngine.process_global_scheduled_tick(session)
-                    if res.get("ticks_processed", 0) > 0:
-                        logger.info(f"Natbirzha tick processed {res.get('ticks_processed')} factories.")
+                    ticks = res.get("ticks_processed", 0) if isinstance(res, dict) else int(res or 0)
+                    if ticks > 0:
+                        logger.info(f"Natbirzha tick processed {ticks} factories.")
             except Exception as ex:
                 logger.error(f"Error in natbirzha hourly tick: {ex}")
 

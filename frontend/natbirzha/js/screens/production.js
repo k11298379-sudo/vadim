@@ -50,22 +50,22 @@ const RECIPES = {
     { id: 'synth_chem_fertilizer', name: 'Синтез удобрений и кислот', in: '1.5 minerals + 1.5 water + 2 energy', out: '2 basic_chem + 2 fertilizer', xp: 40 },
   ],
   polymer_plant: [
-    { id: 'synth_plastics_catalyst', name: 'Синтез пластиков и катализаторов', in: '2 oil_crude + 1 basic_chem + 2 energy', out: '2 plastics + 1 catalyst', xp: 55 },
+    { id: 'polymer_synthesis', name: 'Синтез полимеров и катализаторов', in: '1.5 gas_natural + 1 basic_chem + 2.5 energy', out: '1.5 plastics + 0.5 catalyst', xp: 55 },
   ],
   mine: [
     { id: 'mine_coal_iron', name: 'Добыча угля и железной руды', in: '2 grid_quota + 1 water', out: '4 coal + 3 iron_ore + 2 minerals', xp: 35 },
   ],
   deep_mine: [
-    { id: 'mine_deep_rare', name: 'Глубокая добыча лития и редкоземов', in: '3 grid_quota + 2 water', out: '2 lithium_raw + 1.5 rare_earths + 1 bauxite', xp: 45 },
+    { id: 'mine_rare_lithium', name: 'Глубокая добыча лития и редкоземов', in: '2.5 grid_quota + 1.5 water', out: '1.5 lithium_raw + 1 rare_earths + 2 bauxite', xp: 45 },
   ],
   uranium_quarry: [
-    { id: 'mine_uranium', name: 'Добыча урановой руды', in: '3 grid_quota + 2 water', out: '2 uranium_raw', xp: 50 },
+    { id: 'mine_uranium', name: 'Добыча урановой руды', in: '3 grid_quota + 2 water', out: '1 uranium_raw', xp: 50 },
   ],
   farm: [
     { id: 'farm_grain', name: 'Выращивание зерна', in: '1 water + 1 grid_quota', out: '5 grain + 2 bio_raw', xp: 30 },
   ],
   food_factory: [
-    { id: 'process_food', name: 'Переработка продовольствия', in: '3 grain + 1 water + 1 energy', out: '5 food', xp: 35 },
+    { id: 'food_processing', name: 'Переработка продовольствия', in: '3 grain + 1 water + 1.5 energy', out: '2 food', xp: 35 },
   ],
   logging_camp: [
     { id: 'log_timber', name: 'Лесозаготовка', in: '1.5 grid_quota', out: '5 wood_raw', xp: 30 },
@@ -83,7 +83,7 @@ const RECIPES = {
     { id: 'enrich_uranium', name: 'Обогащение урана', in: '2 uranium_raw + 1 minerals + 3 grid_quota', out: '1 uranium_enriched', xp: 60 },
   ],
   defense_plant: [
-    { id: 'manufacture_military', name: 'Производство военного снаряжения', in: '2 steel + 1 electronics + 1 machinery + 5 energy', out: '1 military_gear', xp: 70 },
+    { id: 'assemble_military_gear', name: 'Производство военного снаряжения', in: '2 steel + 1 machinery + 1 electronics + 3 energy', out: '1 military_gear', xp: 70 },
   ],
 };
 
@@ -91,7 +91,9 @@ export async function renderProduction(container, showToast) {
   let statusData = null;
   try {
     statusData = await NatAPI.getProductionStatus();
-    store.updateCompany({ factories: statusData.factories, inventory: statusData.inventory });
+    if (statusData && Array.isArray(statusData.factories)) {
+      store.updateCompany({ factories: statusData.factories });
+    }
   } catch (err) {
     console.error('Failed to fetch production status:', err);
   }
@@ -122,21 +124,23 @@ export async function renderProduction(container, showToast) {
             <div class="text-xs text-slate-400">Постройте первое промышленное предприятие, чтобы начать выпускать продукцию.</div>
           </div>
         ` : factories.map(f => {
-          const recipes = RECIPES[f.factory_type] || [{ id: 'default_tick', name: 'Стандартный цикл', in: 'Сырьё', out: 'Продукция', xp: 30 }];
+          const bType = f.building_type || f.factory_type || 'smelter';
+          const fName = f.name || AVAILABLE_FACTORIES.find(af => af.type === bType)?.name || bType.replace(/_/g, ' ');
+          const recipes = RECIPES[bType] || [{ id: 'default_tick', name: 'Стандартный цикл', in: 'Сырьё', out: 'Продукция', xp: 30 }];
           return `
             <div class="glass-card rounded-2xl p-4 shadow-sm space-y-3" data-factory-id="${f.id}">
               <div class="flex items-start justify-between">
                 <div>
                   <div class="flex items-center gap-1.5">
                     <span class="text-xs font-bold font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                      Tier ${f.tier || 1}
+                      Tier ${f.tier || f.level || 1}
                     </span>
                     <span class="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
                       ${f.is_active ? '● Работает' : '○ Остановлен'}
                     </span>
                   </div>
                   <h3 class="font-bold text-sm text-slate-900 dark:text-white mt-1 capitalize">
-                    ${f.name || f.factory_type.replace(/_/g, ' ')}
+                    ${fName}
                   </h3>
                 </div>
                 <div class="text-right text-[11px] text-slate-400 font-mono">

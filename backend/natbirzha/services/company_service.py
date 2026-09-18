@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from backend.natbirzha.config import nat_settings, get_game_now, get_game_today
+from backend.natbirzha.config import nat_settings, get_game_now, get_game_today, normalize_dt
 from backend.natbirzha.models.company import NatCompany, NatFactory
 from backend.natbirzha.models.inventory import NatInventory, get_item_base_price
 from backend.natbirzha.models.military import NatArmy
@@ -177,9 +177,10 @@ class CompanyService:
         if new_specialization == company.specialization:
             raise ValueError("Company already has this specialization.")
 
-        now = get_game_now()
+        now = normalize_dt(get_game_now())
         if company.last_respec_at:
-            elapsed = (now - company.last_respec_at).total_seconds() / 86400
+            last_respec = normalize_dt(company.last_respec_at)
+            elapsed = (now - last_respec).total_seconds() / 86400
             if elapsed < nat_settings.RESPEC_COOLDOWN_DAYS:
                 remaining = round(nat_settings.RESPEC_COOLDOWN_DAYS - elapsed, 1)
                 raise ValueError(f"Respec cooldown active. Wait {remaining} days.")

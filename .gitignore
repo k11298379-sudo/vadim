@@ -34,3 +34,4 @@ scratch/
 *.exe
 *.zip
 *.patch
+node_modules/

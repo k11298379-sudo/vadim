@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from backend.natbirzha.config import nat_settings, get_game_now
+from backend.natbirzha.config import nat_settings, get_game_now, normalize_dt
 from backend.natbirzha.models.company import NatCompany, NatFactory
 from backend.natbirzha.models.inventory import NatInventory
 from backend.natbirzha.services.recipes import RECIPES
@@ -127,9 +127,8 @@ class ProductionTickEngine:
         # Award experience
         xp_gain = max(1, int(sum(outputs.values()) * 5))
         company.xp += xp_gain
-        # Level up threshold: Level L requires 100 * L XP
-        xp_for_next = company.level * 150
-        if company.xp >= xp_for_next and company.level < 10:
+        # Level up threshold: Level L requires 150 * L XP
+        while company.level < 10 and company.xp >= company.level * 150:
             company.level += 1
 
         factory.last_produced_at = now
@@ -177,7 +176,7 @@ class ProductionTickEngine:
         now: Optional[datetime] = None
     ) -> List[Dict[str, Any]]:
         """Offline catch-up: calculates elapsed time up to max 72h and executes as many ticks as resources allow."""
-        now = now or get_game_now()
+        now = normalize_dt(now or get_game_now())
         comp_res = await session.execute(select(NatCompany).where(NatCompany.id == company_id))
         company = comp_res.scalar_one_or_none()
         if not company or company.is_bankrupt:
@@ -190,7 +189,8 @@ class ProductionTickEngine:
 
         results = []
         for fac in factories:
-            elapsed_seconds = max(0, (now - fac.last_produced_at).total_seconds())
+            fac_last = normalize_dt(fac.last_produced_at) if fac.last_produced_at else now
+            elapsed_seconds = max(0, (now - fac_last).total_seconds())
             # Cap at 72 hours (4320 minutes)
             elapsed_minutes = min(4320, int(elapsed_seconds // 60))
             if elapsed_minutes <= 0:
@@ -226,12 +226,14 @@ class ProductionTickEngine:
                 results.append({"factory_id": fac.id, "ticks": max_possible_ticks, "result": res})
             else:
                 fac.last_produced_at = now
-                await session.commit()
+
+        if factories:
+            await session.commit()
 
         return results
 
     @classmethod
-    async def process_global_scheduled_tick(cls, session: AsyncSession) -> int:
+    async def process_global_scheduled_tick(cls, session: AsyncSession) -> Dict[str, Any]:
         """Periodic background scheduler trigger: ticks all active factories."""
         fac_res = await session.execute(
             select(NatFactory, NatCompany)
@@ -246,4 +248,4 @@ class ProductionTickEngine:
             if res.get("success"):
                 ticked_count += 1
         await session.commit()
-        return ticked_count
+        return {"success": True, "ticks_processed": ticked_count}

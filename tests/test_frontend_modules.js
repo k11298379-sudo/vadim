@@ -178,7 +178,17 @@ assert(mockWindow.GAMES.getCurrentGame() === '2048', 'Non-tester should fall bac
 mockWindow.GAMES.updateTesterStatus(true);
 mockWindow.GAMES.switchGame('rpg');
 assert(mockWindow.GAMES.getCurrentGame() === 'rpg', 'Tester must be able to switch to RPG game');
-console.log('window.GAMES module loaded, tester-only RPG restrictions and exports verified!');
+
+// Test tester-only Natbirzha banner exposure
+mockWindow.GAMES.updateTesterStatus(false);
+const paneNonTester = sharedElements['pane-games'] ? sharedElements['pane-games'].innerHTML : '';
+assert(!paneNonTester.includes('НАТБИРЖА'), 'Non-tester must not see Natbirzha banner');
+
+mockWindow.GAMES.updateTesterStatus(true);
+const paneTester = sharedElements['pane-games'] ? sharedElements['pane-games'].innerHTML : '';
+assert(paneTester.includes('НАТБИРЖА'), 'Tester must see Natbirzha banner');
+assert(paneTester.includes('/app/natbirzha'), 'Natbirzha banner must link to /app/natbirzha');
+console.log('window.GAMES module loaded, tester-only RPG & Natbirzha banner restrictions verified!');
 
 console.log('=== [5/5] Testing multiplayer games & online room routing ===');
 ['game_2048.js', 'game_tictactoe.js', 'game_snake.js', 'game_tetris.js', 'game_chess.js'].forEach(m => {
@@ -293,7 +303,11 @@ assert(typeof mockWindow.RPG.renderRoot === 'function', 'window.RPG.renderRoot m
   }
 
   console.log('natarGRP RPG module loaded, farm mode switching and boss arenas verified without ReferenceError!');
-  console.log('\n🎉 ALL FRONTEND AND EGE TESTS PASSED SUCCESSFULLY! 🚀');
+  
+  // Run dedicated Natbirzha frontend module test suite
+  require('./test_natbirzha_frontend.js');
+
+  console.log('\n🎉 ALL FRONTEND, EGE AND NATBIRZHA TESTS PASSED SUCCESSFULLY! 🚀');
   process.exit(0);
 })();
 

@@ -7,7 +7,22 @@ import { renderMarket } from './screens/market.js';
 import { renderStocks } from './screens/stocks.js';
 import { renderMilitary } from './screens/military.js';
 
-// Toast Notification Manager
+// Telegram Haptic Feedback Helper
+export function triggerHaptic(type = 'light') {
+  try {
+    const haptic = window.Telegram?.WebApp?.HapticFeedback;
+    if (!haptic) return;
+    if (type === 'success' || type === 'error' || type === 'warning') {
+      haptic.notificationOccurred?.(type);
+    } else if (type === 'selection') {
+      haptic.selectionChanged?.();
+    } else {
+      haptic.impactOccurred?.(type);
+    }
+  } catch (_) {}
+}
+
+// Toast Notification Manager (100% resilient against [object Object])
 export function showToast(message, type = 'info') {
   const container = document.getElementById('toast-container');
   if (!container) return;
@@ -23,11 +38,27 @@ export function showToast(message, type = 'info') {
     msgText = message;
   } else if (message instanceof Error) {
     msgText = message.message;
+    if ((!msgText || msgText === '[object Object]') && message.data) {
+      msgText = typeof message.data.detail === 'string' ? message.data.detail : JSON.stringify(message.data.detail || message.data);
+    }
   } else if (typeof message === 'object' && message !== null) {
-    msgText = message.message || message.error || (typeof message.detail === 'string' ? message.detail : JSON.stringify(message.detail || message));
+    const raw = message.message || message.error || message.detail || message.reason || message;
+    if (typeof raw === 'string') {
+      msgText = raw;
+    } else if (typeof raw === 'object' && raw !== null) {
+      msgText = raw.msg || raw.message || raw.error || JSON.stringify(raw);
+    } else {
+      msgText = String(raw);
+    }
   } else {
     msgText = String(message || '');
   }
+
+  if (!msgText || msgText === '[object Object]') {
+    msgText = type === 'error' ? 'Произошла непредвиденная ошибка' : 'Действие выполнено';
+  }
+
+  triggerHaptic(type === 'error' ? 'error' : type === 'success' ? 'success' : 'light');
 
   const toast = document.createElement('div');
   toast.className = `toast-msg px-4 py-2.5 rounded-xl shadow-xl text-xs font-bold flex items-center gap-2 ${bgColors[type] || bgColors.info}`;
@@ -43,7 +74,7 @@ export function showToast(message, type = 'info') {
 }
 
 // Render active screen
-async function renderCurrentScreen() {
+export async function renderCurrentScreen() {
   const container = document.getElementById('screen-container');
   if (!container) return;
 
@@ -63,8 +94,9 @@ async function renderCurrentScreen() {
   const company = store.company;
   const cashEl = document.getElementById('header-cash');
   const tickerEl = document.getElementById('header-ticker');
-  if (cashEl && company) cashEl.innerText = `${Math.round(company.cash).toLocaleString()} cash`;
-  if (tickerEl && company) tickerEl.innerText = `[${company.ticker}]`;
+  const tickerText = company?.ticker || (company?.name ? company.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 5) : 'CORP');
+  if (cashEl && company) cashEl.innerText = `${Math.round(company.cash || 0).toLocaleString('ru-RU')} cash`;
+  if (tickerEl && company) tickerEl.innerText = `[${tickerText}]`;
 
   // Update active tab styles
   document.querySelectorAll('.nav-tab').forEach(btn => {
@@ -99,27 +131,32 @@ async function renderCurrentScreen() {
   }
 }
 
+// Programmatic tab navigation
+export async function navigateTo(tab) {
+  if (!tab) return;
+  triggerHaptic('selection');
+  store.setTab(tab);
+  await renderCurrentScreen();
+}
+
 // Setup bottom navigation listeners
 function setupNavigation() {
   document.querySelectorAll('.nav-tab').forEach(btn => {
     btn.addEventListener('click', () => {
       const tab = btn.getAttribute('data-tab');
       if (tab && tab !== store.currentTab) {
-        store.setTab(tab);
-        renderCurrentScreen();
+        navigateTo(tab);
       }
     });
   });
 }
 
 // App Initialization
-async function initApp() {
-  const tg = window.Telegram?.WebApp;
+export async function initApp() {
+  const tg = typeof window !== 'undefined' ? window.Telegram?.WebApp : null;
   if (tg) {
-    tg.ready();
-    try {
-      tg.expand();
-    } catch (_) {}
+    try { tg.ready?.(); } catch (_) {}
+    try { tg.expand?.(); } catch (_) {}
   }
 
   setupNavigation();
@@ -129,8 +166,9 @@ async function initApp() {
     const company = store.company;
     const cashEl = document.getElementById('header-cash');
     const tickerEl = document.getElementById('header-ticker');
-    if (cashEl && company) cashEl.innerText = `${Math.round(company.cash).toLocaleString()} cash`;
-    if (tickerEl && company) tickerEl.innerText = `[${company.ticker}]`;
+    const tickerText = company?.ticker || (company?.name ? company.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 5) : 'CORP');
+    if (cashEl && company) cashEl.innerText = `${Math.round(company.cash || 0).toLocaleString('ru-RU')} cash`;
+    if (tickerEl && company) tickerEl.innerText = `[${tickerText}]`;
   });
 
   try {
@@ -154,7 +192,7 @@ async function initApp() {
           name: authData.company_name,
           specialization: authData.specialization,
           cash: 0,
-          ticker: authData.company_name ? authData.company_name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,5) : 'CORP'
+          ticker: authData.company_name ? authData.company_name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 5) : 'CORP'
         });
       }
     }
@@ -167,4 +205,15 @@ async function initApp() {
   await renderCurrentScreen();
 }
 
-window.addEventListener('DOMContentLoaded', initApp);
+if (typeof window !== 'undefined') {
+  window.NatApp = {
+    navigateTo,
+    renderCurrentScreen,
+    showToast,
+    triggerHaptic,
+    store,
+    NatAPI,
+    initApp
+  };
+  window.addEventListener('DOMContentLoaded', initApp);
+}

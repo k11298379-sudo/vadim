@@ -6,6 +6,7 @@ from backend.natbirzha.config import nat_settings, get_game_today, get_game_now
 from backend.natbirzha.models.company import NatCompany
 from backend.natbirzha.models.restructuring import NatRestructuring, NatDailyFinancials
 from backend.natbirzha.models.stocks import NatStock, NatStockOrder
+from backend.natbirzha.models.market import NatMarketOrder
 from backend.natbirzha.models.inventory import NatInventory
 from backend.natbirzha.services.company_service import CompanyService
 
@@ -73,6 +74,29 @@ class BankruptcyService:
             for ord_item in orders_res.scalars().all():
                 ord_item.status = "CANCELLED"
 
+        # Cancel active commodity market orders & unreserve inventory
+        market_orders_res = await session.execute(
+            select(NatMarketOrder).where(
+                NatMarketOrder.company_id == company.id,
+                NatMarketOrder.status == "ACTIVE"
+            )
+        )
+        for m_ord in market_orders_res.scalars().all():
+            m_ord.status = "CANCELLED"
+            m_ord.closed_at = now
+            if m_ord.order_type == "SELL":
+                m_inv_res = await session.execute(
+                    select(NatInventory).where(
+                        NatInventory.company_id == company.id,
+                        NatInventory.item_id == m_ord.item_id
+                    )
+                )
+                m_inv = m_inv_res.scalar_one_or_none()
+                if m_inv:
+                    m_inv.reserved_quantity = max(0.0, m_inv.reserved_quantity - m_ord.remaining_qty)
+            elif m_ord.order_type == "BUY":
+                company.cash = round(company.cash + (m_ord.price * m_ord.remaining_qty), 2)
+
         await session.commit()
         await session.refresh(restructuring)
         return restructuring
@@ -95,15 +119,18 @@ class BankruptcyService:
         if not restruct:
             return {"status": "not_in_restructuring"}
 
+        end_d = restruct.fee_end_date if isinstance(restruct.fee_end_date, date) else date.fromisoformat(str(restruct.fee_end_date))
+        start_d = restruct.fee_start_date if isinstance(restruct.fee_start_date, date) else date.fromisoformat(str(restruct.fee_start_date))
+
         # Check if calendar window passed -> complete restructuring
-        if calendar_date > restruct.fee_end_date:
+        if calendar_date > end_d:
             restruct.status = "COMPLETED"
             company.is_bankrupt = False
             await session.commit()
             return {"status": "restructuring_completed", "company_id": company.id}
 
         # Check if currently inside fee calendar window
-        if restruct.fee_start_date <= calendar_date <= restruct.fee_end_date:
+        if start_d <= calendar_date <= end_d:
             fin_res = await session.execute(
                 select(NatDailyFinancials).where(
                     NatDailyFinancials.company_id == company.id,

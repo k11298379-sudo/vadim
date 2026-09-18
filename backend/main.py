@@ -120,21 +120,41 @@ async def lifespan(app: FastAPI):
 
     asyncio.create_task(check_and_send_birthdays_on_startup())
 
-    # Start Cloudflare Tunnel if configured and URL is not already HTTPS
+    # Start HTTPS Tunnel in background once uvicorn server is listening
     port = int(os.environ.get("PORT", settings.PORT))
     if getattr(settings, "AUTO_TUNNEL", True) and not settings.WEBAPP_URL.startswith("https://"):
-        try:
-            from backend.tunnel import start_tunnel
-            tunnel_url = await start_tunnel(port)
-            if tunnel_url:
-                settings.WEBAPP_URL = f"{tunnel_url}/app"
-                settings.BASE_URL = tunnel_url
-                print("\n" + "=" * 64)
-                print(f"🚀 CLOUDFLARE HTTPS ТУННЕЛЬ АКТИВЕН!")
-                print(f"📱 Ссылка на Mini App: {settings.WEBAPP_URL}")
-                print("=" * 64 + "\n", flush=True)
-        except Exception as e:
-            logger.warning(f"Could not start Cloudflare tunnel: {e}")
+        async def _init_tunnel():
+            await asyncio.sleep(1.0)
+            try:
+                from backend.tunnel import start_tunnel, register_url_change_callback
+
+                async def _on_tunnel_update(new_url: str):
+                    settings.WEBAPP_URL = f"{new_url}/app"
+                    settings.BASE_URL = new_url
+                    logger.info(f"Dynamic tunnel updated: {settings.WEBAPP_URL}")
+                    try:
+                        await setup_bot_commands(bot)
+                    except Exception as ex:
+                        logger.warning(f"Could not reconfigure bot commands on tunnel change: {ex}")
+
+                register_url_change_callback(_on_tunnel_update)
+
+                tunnel_url = await start_tunnel(port)
+                if tunnel_url:
+                    settings.WEBAPP_URL = f"{tunnel_url}/app"
+                    settings.BASE_URL = tunnel_url
+                    print("\n" + "=" * 64)
+                    print(f"🚀 ПУБЛИЧНЫЙ HTTPS ТУННЕЛЬ АКТИВЕН!")
+                    print(f"📱 Ссылка на Mini App: {settings.WEBAPP_URL}")
+                    print("=" * 64 + "\n", flush=True)
+                    try:
+                        await setup_bot_commands(bot)
+                    except Exception as ex:
+                        logger.warning(f"Could not update bot commands on initial tunnel start: {ex}")
+            except Exception as e:
+                logger.warning(f"Could not start tunnel: {e}")
+
+        asyncio.create_task(_init_tunnel())
 
     # Start Aiogram polling and register command hints in background task
     global polling_task

@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -5,6 +6,8 @@ from backend.db.session import get_db_session
 from backend.db.models import User
 from backend.natbirzha.models.company import NatCompany
 from backend.natbirzha.services.auth_service import get_strict_natbirzha_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Natbirzha Auth"])
 
@@ -20,8 +23,9 @@ async def login_user(
         from backend.natbirzha.services.production_service import ProductionTickEngine
         try:
             await ProductionTickEngine.catch_up_company(session, company.id)
-        except Exception:
-            pass
+        except Exception as e:
+            await session.rollback()
+            logger.warning("Catch-up production failed for company %s: %s", company.id, e)
 
     return {
         "authenticated": True,

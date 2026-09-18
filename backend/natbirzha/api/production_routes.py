@@ -78,8 +78,10 @@ async def get_factories(
             {
                 "id": f.id,
                 "building_type": f.building_type,
+                "factory_type": f.building_type,
                 "specialization": f.specialization,
                 "level": f.level,
+                "tier": f.level,
                 "efficiency": ProductionTickEngine.get_effective_efficiency(company, f),
                 "is_active": f.is_active,
                 "workers": f.workers,

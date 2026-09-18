@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
-from backend.natbirzha.config import get_game_now, get_game_today
+from backend.natbirzha.config import get_game_now, get_game_today, normalize_dt
 from backend.natbirzha.models.company import NatCompany
 from backend.natbirzha.models.inventory import NatInventory, CANONICAL_ITEMS
 from backend.natbirzha.models.market import NatMarketOrder, NatMarketTrade
@@ -149,7 +149,8 @@ class MarketService:
                 break
 
             # Determine execution price (maker price: earlier order's price)
-            trade_price = sell_order.price if sell_order.created_at <= buy_order.created_at else buy_order.price
+            maker_is_sell = normalize_dt(sell_order.created_at) <= normalize_dt(buy_order.created_at)
+            trade_price = sell_order.price if maker_is_sell else buy_order.price
             trade_qty = min(buy_order.remaining_qty, sell_order.remaining_qty)
             total_amount = round(trade_price * trade_qty, 2)
             fee = round(total_amount * 0.01, 2)  # 1% exchange fee
@@ -157,6 +158,8 @@ class MarketService:
             # Load Buyer and Seller
             buyer_comp = await session.get(NatCompany, buy_order.company_id)
             seller_comp = await session.get(NatCompany, sell_order.company_id)
+            if not buyer_comp or not seller_comp:
+                break
 
             # Buyer already paid buy_order.price * quantity. If executed lower, refund diff
             price_diff = round((buy_order.price - trade_price) * trade_qty, 2)
@@ -173,9 +176,11 @@ class MarketService:
                     NatInventory.item_id == item_id
                 )
             )
-            seller_inv = seller_inv_res.scalar_one()
-            seller_inv.quantity -= trade_qty
-            seller_inv.reserved_quantity -= trade_qty
+            seller_inv = seller_inv_res.scalar_one_or_none()
+            if not seller_inv:
+                break
+            seller_inv.quantity = max(0.0, seller_inv.quantity - trade_qty)
+            seller_inv.reserved_quantity = max(0.0, seller_inv.reserved_quantity - trade_qty)
 
             buyer_inv_res = await session.execute(
                 select(NatInventory).where(
@@ -277,8 +282,9 @@ class MarketService:
                     NatInventory.item_id == order.item_id
                 )
             )
-            inv = inv_res.scalar_one()
-            inv.reserved_quantity = max(0.0, inv.reserved_quantity - order.remaining_qty)
+            inv = inv_res.scalar_one_or_none()
+            if inv:
+                inv.reserved_quantity = max(0.0, inv.reserved_quantity - order.remaining_qty)
 
         order.status = "CANCELLED"
         order.closed_at = get_game_now()

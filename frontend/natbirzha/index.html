@@ -29,7 +29,7 @@
   <script>
     function syncTgTheme() {
       const isDark = window.Telegram?.WebApp?.colorScheme === 'dark' ||
-                     (!window.Telegram?.WebApp?.colorScheme && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                     (!window.Telegram?.WebApp?.colorScheme && window.matchMedia?.('(prefers-color-scheme: dark)')?.matches);
       if (isDark) {
         document.documentElement.classList.add('dark');
       } else {
@@ -37,7 +37,8 @@
       }
     }
     syncTgTheme();
-    window.Telegram?.WebApp?.onEvent('themeChanged', syncTgTheme);
+    window.Telegram?.WebApp?.onEvent?.('themeChanged', syncTgTheme);
+    window.matchMedia?.('(prefers-color-scheme: dark)')?.addEventListener?.('change', syncTgTheme);
   </script>
 </head>
 <body class="min-h-screen text-slate-800 dark:text-slate-100 bg-slate-100 dark:bg-slate-950 antialiased selection:bg-blue-500 selection:text-white flex flex-col justify-between">

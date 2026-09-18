@@ -36,6 +36,11 @@ class NatTournament(Base):
     status: Mapped[str] = mapped_column(String(20), default="PENDING", nullable=False, index=True)  # PENDING, SNAPSHOT, COMPLETED
     prize_pool_nat: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
 
+    @property
+    def cycle_number(self) -> int:
+        return self.tournament_number
+
+
 
 class NatTournamentParticipant(Base):
     __tablename__ = "nat_tournament_participants"

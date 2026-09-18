@@ -6,12 +6,12 @@ const MARKET_ITEMS = [
   { id: 'iron_ore', name: 'Железная руда', unit: 'т', base: 35.0, buy: 28.0, sell: 43.75 },
   { id: 'coal', name: 'Каменный уголь', unit: 'т', base: 30.0, buy: 24.0, sell: 37.5 },
   { id: 'energy', name: 'Электроэнергия', unit: 'МВт·ч', base: 10.0, buy: 8.0, sell: 12.5 },
-  { id: 'oil_crude', name: 'Сырая нефть', unit: 'барр', base: 50.0, buy: 40.0, sell: 62.5 },
-  { id: 'fuel_diesel', name: 'Дизельное топливо', unit: 'т', base: 8.0, buy: 6.4, sell: 10.0 },
-  { id: 'grain', name: 'Зерно', unit: 'т', base: 25.0, buy: 20.0, sell: 31.25 },
-  { id: 'fertilizer', name: 'Удобрения', unit: 'т', base: 45.0, buy: 36.0, sell: 56.25 },
-  { id: 'wood_raw', name: 'Лес-кругляк', unit: 'т', base: 20.0, buy: 16.0, sell: 25.0 },
-  { id: 'aluminum', name: 'Алюминий', unit: 'т', base: 120.0, buy: 96.0, sell: 150.0 },
+  { id: 'oil_crude', name: 'Сырая нефть', unit: 'барр.', base: 50.0, buy: 40.0, sell: 62.5 },
+  { id: 'fuel_diesel', name: 'Дизельное топливо', unit: 'л', base: 1.2, buy: 0.96, sell: 1.5 },
+  { id: 'grain', name: 'Зерно', unit: 'т', base: 20.0, buy: 16.0, sell: 25.0 },
+  { id: 'fertilizer', name: 'Удобрения', unit: 'т', base: 50.0, buy: 40.0, sell: 62.5 },
+  { id: 'wood_raw', name: 'Лес-кругляк', unit: 'м³', base: 25.0, buy: 20.0, sell: 31.25 },
+  { id: 'aluminum', name: 'Алюминий', unit: 'т', base: 110.0, buy: 88.0, sell: 137.5 },
 ];
 
 export async function renderMarket(container, showToast) {
@@ -25,6 +25,21 @@ export async function renderMarket(container, showToast) {
       console.error('Failed to load orderbook:', err);
     }
   }
+
+  try {
+    const ratesData = await NatAPI.getNpcRates();
+    if (ratesData && Array.isArray(ratesData.rates)) {
+      for (const r of ratesData.rates) {
+        const item = MARKET_ITEMS.find(m => m.id === r.item_id);
+        if (item) {
+          item.base = r.base_price;
+          item.buy = r.npc_buy_price;
+          item.sell = r.npc_sell_price;
+          if (r.unit) item.unit = r.unit;
+        }
+      }
+    }
+  } catch (_) {}
 
   await loadOrderbook();
 
@@ -219,9 +234,12 @@ export async function renderMarket(container, showToast) {
       const amount = parseFloat(container.querySelector('#order-qty').value);
       const price = parseFloat(container.querySelector('#order-price').value);
 
+      const btn = container.querySelector('#submit-order-btn');
       try {
-        const btn = container.querySelector('#submit-order-btn');
-        btn.disabled = true;
+        if (btn) {
+          btn.disabled = true;
+          btn.innerText = 'Размещение...';
+        }
         await NatAPI.placeOrder({ item_id: selectedItemId, side, amount, price });
         showToast('Ордер успешно выставлен!', 'success');
         const refreshed = await NatAPI.getMyCompany();
@@ -230,6 +248,11 @@ export async function renderMarket(container, showToast) {
         renderView();
       } catch (err) {
         showToast(err.message, 'error');
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerText = 'Разместить ордер в стакан';
+        }
       }
     });
 

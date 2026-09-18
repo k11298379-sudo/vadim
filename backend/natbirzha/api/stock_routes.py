@@ -17,6 +17,10 @@ class BuyStockRequest(BaseModel):
     stock_id: int
     shares_count: int = Field(gt=0)
 
+class SellStockRequest(BaseModel):
+    stock_id: int
+    shares_count: int = Field(gt=0)
+
 @router.get("/market")
 async def get_stocks_market(session: AsyncSession = Depends(get_db_session)):
     res = await session.execute(
@@ -110,6 +114,28 @@ async def buy_shares(
         res = await StockService.buy_shares(session, company, req.stock_id, req.shares_count)
         await IdempotencyService.save_record(
             session, company.user_id, "/api/natbirzha/stocks/buy", idempotency_key, req.model_dump(), 200, res
+        )
+        return res
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/sell")
+async def sell_shares_route(
+    req: SellStockRequest,
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    company: NatCompany = Depends(get_current_company),
+    session: AsyncSession = Depends(get_db_session)
+):
+    cached = await IdempotencyService.check_or_conflict(
+        session, company.user_id, "/api/natbirzha/stocks/sell", idempotency_key, req.model_dump()
+    )
+    if cached:
+        return cached[1]
+
+    try:
+        res = await StockService.sell_shares(session, company, req.stock_id, req.shares_count)
+        await IdempotencyService.save_record(
+            session, company.user_id, "/api/natbirzha/stocks/sell", idempotency_key, req.model_dump(), 200, res
         )
         return res
     except ValueError as e:
