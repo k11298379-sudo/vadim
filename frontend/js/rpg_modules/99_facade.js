@@ -1,4 +1,4 @@
-  window.RPG = {
+  const rpgFacade = {
     init: initRPG,
     setSubTab: setSubTab,
     setFarmMode: setFarmMode,
@@ -122,4 +122,5 @@
     leavePvPRoom: leavePvPRoom,
     renderRoot: renderRoot
   };
+  window.RPG = Object.assign(window.RPG || {}, rpgFacade);
 })();

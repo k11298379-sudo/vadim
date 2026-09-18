@@ -128,7 +128,11 @@ async def get_or_create_rpg_character(
 
 
 
-def serialize_character_profile(char: RPGCharacter, user_name: str = "") -> Dict[str, Any]:
+def serialize_character_profile(
+    char: RPGCharacter,
+    user_name: str = "",
+    tg_id: Optional[int] = None
+) -> Dict[str, Any]:
     """Serializes character data for API response."""
     stats = calculate_character_effective_stats(char)
     h_class = str(getattr(char, "hero_class", "pudge") or "pudge").strip().lower()
@@ -150,10 +154,23 @@ def serialize_character_profile(char: RPGCharacter, user_name: str = "") -> Dict
     rebirth_essence = talents_data.get("rebirth_essence", getattr(char, "rebirth_essence", 0))
     rebirth_rank = getattr(char, "rebirths", 0)
 
+    # Safely resolve tg_id without triggering SQLAlchemy async MissingGreenlet
+    final_tg_id = tg_id or getattr(char, "_tg_id", None)
+    if final_tg_id is None:
+        try:
+            from sqlalchemy import inspect
+            from sqlalchemy.orm.base import NO_VALUE
+            insp = inspect(char)
+            val = insp.attrs.user.loaded_value
+            if val is not None and val is not NO_VALUE:
+                final_tg_id = getattr(val, "tg_id", None)
+        except Exception:
+            pass
+
     return {
         "id": char.id,
         "user_id": char.user_id,
-        "tg_id": getattr(char, "_tg_id", None) or (char.user.tg_id if hasattr(char, "user") and char.user else None),
+        "tg_id": final_tg_id,
         "user_name": user_name,
         "hero_class": canonical_class,
         "class_name": cfg["name"],

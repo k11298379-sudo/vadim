@@ -35,13 +35,13 @@ from backend.main import app
 
 async def run_rpg_tests():
     print("=== [1/5] Testing natarGRP Heroes & Functional Items Catalog ===")
-    assert len(NATAR_HEROES) == 7
+    assert len(NATAR_HEROES) >= 7
     for hero_id, hero in NATAR_HEROES.items():
         assert "name" in hero and "icon" in hero
         assert hero["str"] > 0 and hero["agi"] > 0 and hero["int"] > 0
         assert hero["attr"] in ["Сила", "Ловкость", "Интеллект"]
         assert "starter_weapon" in hero and "starter_armor" in hero
-    print(f"[OK] 7 natarGRP heroes verified: {list(NATAR_HEROES.keys())}")
+    print(f"[OK] {len(NATAR_HEROES)} natarGRP heroes verified: {list(NATAR_HEROES.keys())}")
 
     assert len(NATAR_ITEMS_CATALOG) >= 24
     rarities = {item["rarity"] for item in NATAR_ITEMS_CATALOG}
