@@ -99,6 +99,11 @@ async function loadUserData() {
 
   userBadge.textContent = "Загрузка...";
 
+  // Дожидаемся инициализации Telegram WebApp SDK (загружается async)
+  if (typeof window.waitForTelegramWebApp === "function") {
+    await window.waitForTelegramWebApp();
+  }
+
   try {
     const me = await api.getMe();
     window.currentUser = me;
