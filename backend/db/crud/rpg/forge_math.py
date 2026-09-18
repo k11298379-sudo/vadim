@@ -77,15 +77,16 @@ FORGE_MAX_LEVEL = 100
 
 def calculate_forge_multiplier(level: int) -> float:
     """
-    Computes stat multiplier for forge level:
-    - Level 0..15: +7% per level (1.0 -> 2.05x at +15)
-    - Level 16..100: Controlled linear +8% per level (reaching ~8.85x at +100)
+    Computes stat multiplier for forge level (+1..+100):
+    - Level 0..15: +10% per level (1.0 -> 2.50x at +15)
+    - Level 16..100: Compound +12.3% per level above 15, reaching ~48,000x at +100.
+      Tuned specifically to balance working attack speed against original boss HP (1.2Q HP Enigma).
     """
     if level <= 0:
         return 1.0
     if level <= 15:
-        return round(1.0 + (level * 0.07), 3)
-    return round(2.05 + (level - 15) * 0.08, 2)
+        return round(1.0 + (level * 0.10), 3)
+    return round(2.50 * math.pow(1.123, level - 15), 2)
 
 
 def get_forge_upgrade_requirements(current_level: int) -> Dict[str, Any]:

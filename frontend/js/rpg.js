@@ -2137,10 +2137,10 @@ loadRpgImages();
       // Boss defense: stored on entity, or fallback by tier
     const BOSS_DEF_BY_TIER = {
       golem: 35, lich: 50, tormentor: 75, dragon: 105, pudge_boss: 140,
-      faceless_void: 180, roshan: 200, tidehunter: 260, sf_boss: 320,
-      necrophos: 380, terrorblade: 450, invoker_boss: 520, chaos_knight: 600,
-      dark_tormentor: 700, storm_spirit: 800, doom: 920, primal_beast: 1050,
-      phantom_roshan: 1200, tinker_boss: 1350, enigma: 1500
+      faceless_void: 180, roshan: 230, tidehunter: 290, sf_boss: 370,
+      necrophos: 460, terrorblade: 570, invoker_boss: 700, chaos_knight: 860,
+      dark_tormentor: 1050, storm_spirit: 1300, doom: 1600, primal_beast: 1950,
+      phantom_roshan: 2400, tinker_boss: 3000, enigma: 3800
     };
     let bossDefense = boss.defense !== undefined ? boss.defense : 35;
     if (!boss.defense) {
@@ -2275,17 +2275,19 @@ loadRpgImages();
     // Real boss attack: from entity, template, or tier scaling fallback
     const BOSS_TIER_ATK = {
       golem: 140, lich: 210, tormentor: 320, dragon: 500, pudge_boss: 800,
-      faceless_void: 1250, roshan: 1600, tidehunter: 2200, sf_boss: 2900,
-      necrophos: 3700, terrorblade: 4700, invoker_boss: 5900, chaos_knight: 7300,
-      dark_tormentor: 8900, storm_spirit: 10800, doom: 13000, primal_beast: 15500,
-      phantom_roshan: 18500, tinker_boss: 22000, enigma: 26500
+      faceless_void: 1250, roshan: 1950, tidehunter: 3000, sf_boss: 4600,
+      necrophos: 7000, terrorblade: 11000, invoker_boss: 17500, chaos_knight: 26500,
+      dark_tormentor: 42000, storm_spirit: 64000, doom: 98000, primal_beast: 150000,
+      phantom_roshan: 230000, tinker_boss: 350000, enigma: 500000
     };
     let bossAtk = boss.atk || boss.baseAtk;
-    const bId = ((boss && (boss.id || boss.bossType || boss.name)) || "golem").toLowerCase();
-    for (const [k, v] of Object.entries(BOSS_TIER_ATK)) {
-      if (bId.includes(k)) { bossAtk = v; break; }
+    if (!bossAtk) {
+      const bId = ((boss && (boss.id || boss.bossType || boss.name)) || "golem").toLowerCase();
+      for (const [k, v] of Object.entries(BOSS_TIER_ATK)) {
+        if (bId.includes(k)) { bossAtk = v; break; }
+      }
+      bossAtk = bossAtk || 140;
     }
-    bossAtk = bossAtk || 140;
 
     // Phase Enrage multiplier (when boss is enraged/furious/angry)
     let enrageMult = 1.0;
@@ -8235,26 +8237,26 @@ function distToSegment(px, py, x1, y1, x2, y2) {
     RPG_STATE.coopRoomData = null;
 
     const bossTmpls = {
-      golem: { id: "golem", name: "Древний Гранитный Голем", icon: "🗿", baseHp: 75000, baseAtk: 140, defense: 35, scale: 1.35, gold: 2500, xp: 1800, desc: "[75 ТЫС. ХП] Каменный колосс глубин" },
-      lich: { id: "lich", name: "Архилич Некрополя", icon: "☠️", baseHp: 225000, baseAtk: 210, defense: 50, scale: 1.30, gold: 4500, xp: 3200, desc: "[225 ТЫС. ХП] Владыка темных заклятий" },
-      tormentor: { id: "tormentor", name: "Древний Терзатель (Tormentor)", icon: "🔮", baseHp: 700000, baseAtk: 320, defense: 75, scale: 1.30, gold: 8000, xp: 5500, desc: "[700 ТЫС. ХП] Отражает 35% урона" },
-      dragon: { id: "dragon", name: "Дракон Инферно", icon: "🌋", baseHp: 2200000, baseAtk: 500, defense: 105, scale: 1.50, gold: 15000, xp: 10000, desc: "[2.2 МЛН ХП] Огнедышащий титан" },
-      pudge_boss: { id: "pudge_boss", name: "Мясник из Чрева (Pudge)", icon: "🪝", baseHp: 6500000, baseAtk: 800, defense: 140, scale: 1.40, gold: 25000, xp: 16000, desc: "[6.5 МЛН ХП] Хук цепью, вонь гнили и пожирание" },
-      faceless_void: { id: "faceless_void", name: "Хроно-Владыка (Faceless Void)", icon: "⏳", baseHp: 18000000, baseAtk: 1250, defense: 180, scale: 1.35, gold: 40000, xp: 26000, desc: "[18 МЛН ХП] Остановка времени и баши" },
-      roshan: { id: "roshan", name: "Рошан (Roshan)", icon: "🐲", baseHp: 50000000, baseAtk: 1600, defense: 200, scale: 1.45, gold: 65000, xp: 42000, desc: "[50 МЛН ХП] Хозяин Ямы, дропает Рапиру и Сыр" },
-      tidehunter: { id: "tidehunter", name: "Левиафан Бездны (Tidehunter)", icon: "🐙", baseHp: 80000000, baseAtk: 2200, defense: 260, scale: 1.40, gold: 95000, xp: 62000, desc: "[80 МЛН ХП] Владыка пучин с якорным ударом и Раважем" },
-      sf_boss: { id: "sf_boss", name: "Архидемон Nevermore", icon: "💀", baseHp: 125000000, baseAtk: 2900, defense: 320, scale: 1.35, gold: 135000, xp: 88000, desc: "[125 МЛН ХП] Пожиратель душ с черными коилами и Реквиемом" },
-      necrophos: { id: "necrophos", name: "Чумной Владыка (Necrophos)", icon: "🧟", baseHp: 180000000, baseAtk: 3700, defense: 380, scale: 1.30, gold: 185000, xp: 120000, desc: "[180 МЛН ХП] Аура мора истощает HP, Коса Смерти рубит" },
-      terrorblade: { id: "terrorblade", name: "Демон Бездны (Terrorblade)", icon: "😈", baseHp: 250000000, baseAtk: 4700, defense: 450, scale: 1.40, gold: 245000, xp: 160000, desc: "[250 МЛН ХП] Метаморфоза Тьмы и разрыв души Sunder" },
-      invoker_boss: { id: "invoker_boss", name: "Демиург Арсенала (Invoker)", icon: "🧙‍♂️", baseHp: 330000000, baseAtk: 5900, defense: 520, scale: 1.25, gold: 320000, xp: 210000, desc: "[330 МЛН ХП] Повелитель стихий, хаос-метеоров и ЭМИ" },
-      chaos_knight: { id: "chaos_knight", name: "Всадник Хаоса (Chaos Knight)", icon: "🐎", baseHp: 420000000, baseAtk: 7300, defense: 600, scale: 1.45, gold: 420000, xp: 270000, desc: "[420 МЛН ХП] Фантомы параллельных миров и криты" },
-      dark_tormentor: { id: "dark_tormentor", name: "Тёмный Терзатель Бездны", icon: "💎", baseHp: 520000000, baseAtk: 8900, defense: 700, scale: 1.40, gold: 540000, xp: 350000, desc: "[520 МЛН ХП] Отражает входящий урон и стреляет шипами" },
-      storm_spirit: { id: "storm_spirit", name: "Громовой Дух (Storm Spirit)", icon: "⚡", baseHp: 630000000, baseAtk: 10800, defense: 800, scale: 1.35, gold: 680000, xp: 450000, desc: "[630 МЛН ХП] Молниеносные перелеты через арену и ремнанты" },
-      doom: { id: "doom", name: "Вестник Апокалипсиса (Lord Doom)", icon: "👹", baseHp: 750000000, baseAtk: 13000, defense: 920, scale: 1.45, gold: 850000, xp: 560000, desc: "[750 МЛН ХП] Владыка Преисподней с роком и пламенем" },
-      primal_beast: { id: "primal_beast", name: "Первобытный Титан (Primal Beast)", icon: "🦣", baseHp: 880000000, baseAtk: 15500, defense: 1050, scale: 1.60, gold: 1100000, xp: 700000, desc: "[880 МЛН ХП] Сокрушитель материков с диким топотом" },
-      phantom_roshan: { id: "phantom_roshan", name: "Призрачный Рошан Хаоса", icon: "👻", baseHp: 1050000000, baseAtk: 18500, defense: 1200, scale: 1.55, gold: 1450000, xp: 950000, desc: "[1.05 МЛРД ХП] Восставший призрак Рошана с астральным Slam" },
-      tinker_boss: { id: "tinker_boss", name: "Архиинженер (Omega Tinker)", icon: "🤖", baseHp: 1250000000, baseAtk: 22000, defense: 1350, scale: 1.45, gold: 1900000, xp: 1250000, desc: "[1.25 МЛРД ХП] Ослепляющий лазер, микроракеты и марш роботов" },
-      enigma: { id: "enigma", name: "Пожиратель Миров (Enigma Cosmic)", icon: "🌌", baseHp: 1500000000, baseAtk: 26500, defense: 1500, scale: 1.35, gold: 2500000, xp: 1700000, desc: "[1.5 МЛРД ХП!] Испытание для мастеров с максимальным снаряжением! Схлопывает пространство в Черную Дыру" }
+      golem: { id: "golem", name: "Древний Гранитный Голем", icon: "🗿", baseHp: 75000, baseAtk: 416, defense: 35, scale: 1.35, gold: 2500, xp: 1800, desc: "[75 ТЫС. ХП] Каменный колосс глубин" },
+      lich: { id: "lich", name: "Архилич Некрополя", icon: "☠️", baseHp: 225000, baseAtk: 1250, defense: 50, scale: 1.30, gold: 4500, xp: 3200, desc: "[225 ТЫС. ХП] Владыка темных заклятий" },
+      tormentor: { id: "tormentor", name: "Древний Терзатель (Tormentor)", icon: "🔮", baseHp: 700000, baseAtk: 3888, defense: 75, scale: 1.30, gold: 8000, xp: 5500, desc: "[700 ТЫС. ХП] Отражает 35% урона" },
+      dragon: { id: "dragon", name: "Дракон Инферно", icon: "🌋", baseHp: 2200000, baseAtk: 12222, defense: 105, scale: 1.50, gold: 15000, xp: 10000, desc: "[2.2 МЛН ХП] Огнедышащий титан" },
+      pudge_boss: { id: "pudge_boss", name: "Мясник из Чрева (Pudge)", icon: "🪝", baseHp: 7500000, baseAtk: 41666, defense: 140, scale: 1.40, gold: 25000, xp: 16000, desc: "[7.5 МЛН ХП] Хук цепью, вонь гнили и пожирание" },
+      faceless_void: { id: "faceless_void", name: "Хроно-Владыка (Faceless Void)", icon: "⏳", baseHp: 25000000, baseAtk: 138888, defense: 180, scale: 1.35, gold: 40000, xp: 26000, desc: "[25 МЛН ХП] Остановка времени и баши" },
+      roshan: { id: "roshan", name: "Рошан (Roshan)", icon: "🐲", baseHp: 85000000, baseAtk: 472222, defense: 230, scale: 1.45, gold: 65000, xp: 42000, desc: "[85 МЛН ХП] Хозяин Ямы, дропает Рапиру и Сыр" },
+      tidehunter: { id: "tidehunter", name: "Левиафан Бездны (Tidehunter)", icon: "🐙", baseHp: 300000000, baseAtk: 1666666, defense: 290, scale: 1.40, gold: 95000, xp: 62000, desc: "[300 МЛН ХП] Владыка пучин с якорным ударом и Раважем" },
+      sf_boss: { id: "sf_boss", name: "Архидемон Nevermore", icon: "💀", baseHp: 1000000000, baseAtk: 5555555, defense: 370, scale: 1.35, gold: 135000, xp: 88000, desc: "[1 МИЛЛИАРД ХП] Пожиратель душ с черными коилами и Реквиемом" },
+      necrophos: { id: "necrophos", name: "Чумной Владыка (Necrophos)", icon: "🧟", baseHp: 3500000000, baseAtk: 19444444, defense: 460, scale: 1.30, gold: 185000, xp: 120000, desc: "[3.5 МЛРД ХП] Аура мора истощает HP, Коса Смерти рубит" },
+      terrorblade: { id: "terrorblade", name: "Демон Бездны (Terrorblade)", icon: "😈", baseHp: 12000000000, baseAtk: 66666666, defense: 570, scale: 1.40, gold: 245000, xp: 160000, desc: "[12 МЛРД ХП] Метаморфоза Тьмы и разрыв души Sunder" },
+      invoker_boss: { id: "invoker_boss", name: "Демиург Арсенала (Invoker)", icon: "🧙‍♂️", baseHp: 42000000000, baseAtk: 233333333, defense: 700, scale: 1.25, gold: 320000, xp: 210000, desc: "[42 МЛРД ХП] Повелитель стихий, хаос-метеоров и ЭМИ" },
+      chaos_knight: { id: "chaos_knight", name: "Всадник Хаоса (Chaos Knight)", icon: "🐎", baseHp: 150000000000, baseAtk: 833333333, defense: 860, scale: 1.45, gold: 420000, xp: 270000, desc: "[150 МЛРД ХП] Фантомы параллельных миров и криты" },
+      dark_tormentor: { id: "dark_tormentor", name: "Тёмный Терзатель Бездны", icon: "💎", baseHp: 550000000000, baseAtk: 3055555555, defense: 1050, scale: 1.40, gold: 540000, xp: 350000, desc: "[550 МЛРД ХП] Отражает 50% урона и стреляет шипами тьмы" },
+      storm_spirit: { id: "storm_spirit", name: "Громовой Дух (Storm Spirit)", icon: "⚡", baseHp: 2000000000000, baseAtk: 11111111111, defense: 1300, scale: 1.35, gold: 700000, xp: 500000, desc: "[2 ТРИЛЛИОНА ХП] Молниеносные перелеты через арену и ремнанты" },
+      doom: { id: "doom", name: "Вестник Апокалипсиса (Lord Doom)", icon: "👹", baseHp: 7500000000000, baseAtk: 41666666666, defense: 1600, scale: 1.45, gold: 1100000, xp: 800000, desc: "[7.5 ТРИЛЛИОНОВ ХП] Владыка Преисподней с роком и пламенем" },
+      primal_beast: { id: "primal_beast", name: "Первобытный Титан (Primal Beast)", icon: "🦣", baseHp: 28000000000000, baseAtk: 155555555555, defense: 1950, scale: 1.60, gold: 1800000, xp: 1300000, desc: "[28 ТРИЛЛИОНОВ ХП] Сокрушитель материков с диким топотом" },
+      phantom_roshan: { id: "phantom_roshan", name: "Призрачный Рошан Хаоса", icon: "👻", baseHp: 100000000000000, baseAtk: 555555555555, defense: 2400, scale: 1.55, gold: 3000000, xp: 2200000, desc: "[100 ТРИЛЛИОНОВ ХП] Восставший призрак Рошана с астральным Slam" },
+      tinker_boss: { id: "tinker_boss", name: "Архиинженер (Omega Tinker)", icon: "🤖", baseHp: 350000000000000, baseAtk: 1944444444444, defense: 3000, scale: 1.45, gold: 5000000, xp: 3500000, desc: "[350 ТРИЛЛИОНОВ ХП] Ослепляющий лазер, микроракеты и марш роботов" },
+      enigma: { id: "enigma", name: "Пожиратель Миров (Enigma Cosmic)", icon: "🌌", baseHp: 1200000000000000, baseAtk: 6666666666666, defense: 3800, scale: 1.35, gold: 10000000, xp: 7500000, desc: "[1.2 КВАДРИЛЛИОНА ХП!] Битва на века! Схлопывает пространство в Черную Дыру" }
     };
 
     const b = bossTmpls[bossId] || bossTmpls.golem;
@@ -14712,22 +14714,22 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
           { id: "lich", name: "Архилич Некрополя", icon: "☠️", hp: "225,000 HP", desc: "[225k HP] Владыка темных заклятий, ледяных сфер и телепортации.", tag: "Нежить", color: "border-cyan-500/60 bg-cyan-500/5" },
           { id: "tormentor", name: "Древний Терзатель", icon: "🔮", hp: "700,000 HP", desc: "[700k HP] Отражает входящий урон кристальным панцирем. Дропает Shard!", tag: "Магический", color: "border-purple-500/60 bg-purple-500/5" },
           { id: "dragon", name: "Дракон Инферно", icon: "🌋", hp: "2.2M HP", desc: "[2.2M HP] Испепеляет арену потоками лавы и огненными взмахами крыльев.", tag: "Рейдовый", color: "border-rose-500/60 bg-rose-500/5" },
-          { id: "pudge_boss", name: "Мясник из Чрева (Pudge)", icon: "🪝", hp: "6.5M HP", desc: "[6.5M HP] Тесак, ржавый крюк цепью и отравляющая вонь гнили.", tag: "Мясник", color: "border-emerald-600/60 bg-emerald-600/5" },
-          { id: "faceless_void", name: "Хроно-Владыка (Faceless Void)", icon: "⏳", hp: "18M HP", desc: "[18M HP] Повелитель времени, двойные баши и купол Хроносферы.", tag: "Хронос", color: "border-purple-600/60 bg-purple-600/5" },
-          { id: "roshan", name: "Рошан Свирепый (Roshan)", icon: "🐲", hp: "50M HP", desc: "[50M HP] КУЛЬТОВЫЙ ХОЗЯИН ЯМЫ! Дропает Aegis of the Immortal, Сыр и Divine Rapier!", tag: "Хозяин Ямы", color: "border-amber-500/60 bg-amber-500/5" },
-          { id: "tidehunter", name: "Левиафан Бездны (Tidehunter)", icon: "🐙", hp: "80M HP", desc: "[80M HP] Владыка пучин. Чешуя Кракена гасит урон, Раваж сносит арену.", tag: "Сверх-Ранг", color: "border-teal-500/60 bg-teal-500/5" },
-          { id: "sf_boss", name: "Архидемон Nevermore", icon: "💀", hp: "125M HP", desc: "[125 МЛН HP] Собирает легион душ. Тройные коилы и Реквием Душ!", tag: "Сверх-Ранг", color: "border-red-600/60 bg-red-600/5" },
-          { id: "necrophos", name: "Чумной Владыка (Necrophos)", icon: "🧟", hp: "180M HP", desc: "[180 МЛН HP] Аура чумы истощает здоровье, Коса Смерти рубит наповал!", tag: "Сверх-Ранг", color: "border-emerald-600/60 bg-emerald-600/5" },
-          { id: "terrorblade", name: "Демон Бездны (Terrorblade)", icon: "😈", hp: "250M HP", desc: "[250 МЛН HP] Метаморфоза в крылатого демона и разрыв души Sunder!", tag: "Сверх-Ранг", color: "border-violet-700/60 bg-violet-700/5" },
-          { id: "invoker_boss", name: "Демиург Арсенала (Invoker)", icon: "🧙‍♂️", hp: "330M HP", desc: "[330 МЛН HP] Повелитель всех стихий. Обрушивает хаос-метеоры!", tag: "Сверх-Ранг", color: "border-yellow-500/60 bg-yellow-500/5" },
-          { id: "chaos_knight", name: "Всадник Хаоса (Chaos Knight)", icon: "🐎", hp: "420M HP", desc: "[420 МЛН HP] Призывает фантомы и пробивает непредсказуемыми критами!", tag: "Сверх-Ранг", color: "border-amber-600/60 bg-amber-600/5" },
-          { id: "dark_tormentor", name: "Тёмный Терзатель Бездны", icon: "💎", hp: "520M HP", desc: "[520 МЛН HP] Мутировавший Терзатель Тьмы с отражением урона!", tag: "Сверх-Ранг", color: "border-purple-700/60 bg-purple-700/5" },
-          { id: "storm_spirit", name: "Громовой Дух (Storm Spirit)", icon: "⚡", hp: "630M HP", desc: "[630 МЛН HP] Молниеносные перелеты через всю арену и статические мины!", tag: "Сверх-Ранг", color: "border-sky-500/60 bg-sky-500/5" },
-          { id: "doom", name: "Вестник Апокалипсиса (Lord Doom)", icon: "👹", hp: "750M HP", desc: "[750 МЛН HP] Владыка преисподней с чистым уроном и роком!", tag: "Сверх-Ранг", color: "border-orange-600/60 bg-orange-600/5" },
-          { id: "primal_beast", name: "Первобытный Титан (Primal Beast)", icon: "🦣", hp: "880M HP", desc: "[880 МЛН HP] Неукротимый сокрушитель материков с яростным топотом!", tag: "Сверх-Ранг", color: "border-red-700/60 bg-red-700/5" },
-          { id: "phantom_roshan", name: "Призрачный Рошан Хаоса", icon: "👻", hp: "1.05B HP", desc: "[1.05 МЛРД HP] Восставший из Бездны призрак Рошана с астральным Slam!", tag: "Сверх-Ранг", color: "border-cyan-400/60 bg-cyan-400/5" },
-          { id: "tinker_boss", name: "Архиинженер (Omega Tinker)", icon: "🤖", hp: "1.25B HP", desc: "[1.25 МЛРД HP] Лазер, шквал ракет и марш сотен боевых роботов!", tag: "Сверх-Босс", color: "border-yellow-600/60 bg-yellow-600/5" },
-          { id: "enigma", name: "Пожиратель Миров (Enigma Cosmic)", icon: "🌌", hp: "1.5B HP", desc: "[1.5 МЛРД HP] Испытание для мастеров с максимальным снаряжением! Схлопывает арену в Черную Дыру!", tag: "Финальный Босс", color: "border-indigo-600/60 bg-indigo-600/5" }
+          { id: "pudge_boss", name: "Мясник из Чрева (Pudge)", icon: "🪝", hp: "7.5M HP", desc: "[7.5M HP] Тесак, ржавый крюк цепью и отравляющая вонь гнили.", tag: "Мясник", color: "border-emerald-600/60 bg-emerald-600/5" },
+          { id: "faceless_void", name: "Хроно-Владыка (Faceless Void)", icon: "⏳", hp: "25M HP", desc: "[25M HP] Повелитель времени, двойные баши и купол Хроносферы.", tag: "Хронос", color: "border-purple-600/60 bg-purple-600/5" },
+          { id: "roshan", name: "Рошан Свирепый (Roshan)", icon: "🐲", hp: "85M HP", desc: "[85M HP] КУЛЬТОВЫЙ ХОЗЯИН ЯМЫ! Дропает Aegis of the Immortal, Сыр и Divine Rapier!", tag: "Хозяин Ямы", color: "border-amber-500/60 bg-amber-500/5" },
+          { id: "tidehunter", name: "Левиафан Бездны (Tidehunter)", icon: "🐙", hp: "300M HP", desc: "[300M HP] Владыка пучин. Чешуя Кракена гасит урон, Раваж сносит арену.", tag: "Сверх-Ранг", color: "border-teal-500/60 bg-teal-500/5" },
+          { id: "sf_boss", name: "Архидемон Nevermore", icon: "💀", hp: "1B HP", desc: "[1 МИЛЛИАРД HP] Собирает легион душ. Тройные коилы и Реквием Душ!", tag: "Сверх-Ранг", color: "border-red-600/60 bg-red-600/5" },
+          { id: "necrophos", name: "Чумной Владыка (Necrophos)", icon: "🧟", hp: "3.5B HP", desc: "[3.5 МИЛЛИАРДА HP] Аура чумы истощает здоровье, Коса Смерти рубит наповал!", tag: "Сверх-Ранг", color: "border-emerald-600/60 bg-emerald-600/5" },
+          { id: "terrorblade", name: "Демон Бездны (Terrorblade)", icon: "😈", hp: "12B HP", desc: "[12 МИЛЛИАРДОВ HP] Метаморфоза в крылатого демона и разрыв души Sunder!", tag: "Сверх-Ранг", color: "border-violet-700/60 bg-violet-700/5" },
+          { id: "invoker_boss", name: "Демиург Арсенала (Invoker)", icon: "🧙‍♂️", hp: "42B HP", desc: "[42 МИЛЛИАРДА HP] Повелитель всех стихий. Обрушивает хаос-метеоры!", tag: "Сверх-Ранг", color: "border-yellow-500/60 bg-yellow-500/5" },
+          { id: "chaos_knight", name: "Всадник Хаоса (Chaos Knight)", icon: "🐎", hp: "150B HP", desc: "[150 МИЛЛИАРДОВ HP] Призывает фантомы и пробивает непредсказуемыми критами!", tag: "Сверх-Ранг", color: "border-amber-600/60 bg-amber-600/5" },
+          { id: "dark_tormentor", name: "Тёмный Терзатель Бездны", icon: "💎", hp: "550B HP", desc: "[550 МИЛЛИАРДОВ HP] Мутировавший Терзатель Тьмы с отражением урона!", tag: "Сверх-Ранг", color: "border-purple-700/60 bg-purple-700/5" },
+          { id: "storm_spirit", name: "Громовой Дух (Storm Spirit)", icon: "⚡", hp: "2T HP", desc: "[2 ТРИЛЛИОНА HP] Молниеносные перелеты через всю арену и статические мины!", tag: "Сверх-Ранг", color: "border-sky-500/60 bg-sky-500/5" },
+          { id: "doom", name: "Вестник Апокалипсиса (Lord Doom)", icon: "👹", hp: "7.5T HP", desc: "[7.5 ТРИЛЛИОНОВ HP] Владыка преисподней с чистым уроном и роком!", tag: "Сверх-Ранг", color: "border-orange-600/60 bg-orange-600/5" },
+          { id: "primal_beast", name: "Первобытный Титан (Primal Beast)", icon: "🦣", hp: "28T HP", desc: "[28 ТРИЛЛИОНОВ HP] Неукротимый сокрушитель материков с яростным топотом!", tag: "Сверх-Ранг", color: "border-red-700/60 bg-red-700/5" },
+          { id: "phantom_roshan", name: "Призрачный Рошан Хаоса", icon: "👻", hp: "100T HP", desc: "[100 ТРИЛЛИОНОВ HP] Восставший из Бездны призрак Рошана с астральным Slam!", tag: "Сверх-Ранг", color: "border-cyan-400/60 bg-cyan-400/5" },
+          { id: "tinker_boss", name: "Архиинженер (Omega Tinker)", icon: "🤖", hp: "350T HP", desc: "[350 ТРИЛЛИОНОВ HP] Лазер, шквал ракет и марш сотен боевых роботов!", tag: "Сверх-Босс", color: "border-yellow-600/60 bg-yellow-600/5" },
+          { id: "enigma", name: "Пожиратель Миров (Enigma Cosmic)", icon: "🌌", hp: "1.2Q HP", desc: "[1.2 КВАДРИЛЛИОНА HP!] Битва на века! Схлопывает арену в Черную Дыру!", tag: "Финальный Босс", color: "border-indigo-600/60 bg-indigo-600/5" }
         ];
 
     return `
