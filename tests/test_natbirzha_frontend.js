@@ -164,6 +164,20 @@ assert(prodCode.includes('factory-collect-btn') && prodCode.includes('openCatalo
   'factory map must wire collect and catalog actions');
 assert(prodCode.includes('button.disabled = true') && prodCode.includes('refreshMap'),
   'factory mutations must lock the clicked control and refresh the map state');
+const productionCore = prodCode
+  .replace(/^import[^;]+;\s*$/gm, '')
+  .replace(/export\s+function\s+renderProduction[\s\S]*/, '')
+  .split('function nextStep')[0];
+const productionCoreFn = new Function(`${productionCore}\nreturn { cycleState };`);
+const { cycleState } = productionCoreFn();
+const timerNow = Date.now();
+const timerState = cycleState({
+  cycle_ready_at: new Date(timerNow + 5000).toISOString(),
+  remaining_seconds: 1,
+  is_running: true,
+}, timerNow);
+assert(timerState.remaining >= 4,
+  'countdown must derive remaining seconds from cycle_ready_at, not a stale initial snapshot');
 
 const marketCode = fs.readFileSync(path.join(__dirname, '../frontend/natbirzha/js/screens/market.js'), 'utf-8');
 assert(marketCode.includes('finally'), 'market.js place order must have finally block to re-enable button');

@@ -56,12 +56,15 @@ function recipeSummary(recipe) {
   return `📥 ${input} → 📤 ${output}`;
 }
 
-function cycleState(factory) {
+function cycleState(factory, nowMs = Date.now()) {
   const running = Boolean(factory?.cycle_ready_at || factory?.is_running);
-  const remaining = typeof factory?.remaining_seconds === 'number'
-    ? Math.max(0, factory.remaining_seconds)
-    : (factory?.cycle_ready_at ? Math.max(0, Math.ceil((parseDateMs(factory.cycle_ready_at) - Date.now()) / 1000)) : 0);
-  const ready = running && (Boolean(factory?.is_ready) || remaining <= 0);
+  const readyAtMs = parseDateMs(factory?.cycle_ready_at);
+  // remaining_seconds is only a server snapshot. Prefer the absolute deadline
+  // so the first render and every subsequent tick stay in sync with real time.
+  const remaining = readyAtMs > 0
+    ? Math.max(0, Math.ceil((readyAtMs - nowMs) / 1000))
+    : (typeof factory?.remaining_seconds === 'number' ? Math.max(0, factory.remaining_seconds) : 0);
+  const ready = running && (readyAtMs > 0 ? remaining <= 0 : Boolean(factory?.is_ready));
   return { running, ready, remaining };
 }
 
@@ -171,14 +174,15 @@ async function refreshMap(root, state, showToast) {
 function bindCountdown(root, state, showToast) {
   if (cycleInterval) clearInterval(cycleInterval);
   cycleInterval = setInterval(() => {
-    const active = state.factories.some((factory) => cycleState(factory).running && !cycleState(factory).ready);
-    if (!active) { clearInterval(cycleInterval); return; }
-    state.factories = state.factories.map((factory) => {
-      const remaining = cycleState(factory).remaining;
-      return factory.cycle_ready_at && remaining > 0
-        ? { ...factory, remaining_seconds: Math.max(0, remaining - 1), is_ready: remaining <= 1 }
-        : factory;
+    const active = state.factories.some((factory) => {
+      const cycle = cycleState(factory);
+      return cycle.running && !cycle.ready;
     });
+    if (!active) {
+      clearInterval(cycleInterval);
+      renderMap(root, state, showToast);
+      return;
+    }
     renderMap(root, state, showToast);
   }, 1000);
 }
