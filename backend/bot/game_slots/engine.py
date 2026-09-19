@@ -5,12 +5,12 @@ import random
 from typing import List, Dict, Any
 
 SLOT_SYMBOLS = [
-    {"symbol": "🍒", "name": "Вишня", "weight": 16, "triple_mult": 5, "pair_mult": 1.0},
-    {"symbol": "🍋", "name": "Лимон", "weight": 28, "triple_mult": 5, "pair_mult": 0.3},
-    {"symbol": "🍇", "name": "Виноград", "weight": 24, "triple_mult": 8, "pair_mult": 0.6},
-    {"symbol": "🔔", "name": "Колокольчик", "weight": 14, "triple_mult": 12, "pair_mult": 1.3},
-    {"symbol": "💎", "name": "Алмаз", "weight": 6, "triple_mult": 20, "pair_mult": 1.6},
-    {"symbol": "7️⃣", "name": "Семёрка", "weight": 3, "triple_mult": 35, "pair_mult": 2.2},
+    {"symbol": "🍒", "name": "Вишня", "weight": 16, "triple_mult": 7, "pair_mult": 1.5},
+    {"symbol": "🍋", "name": "Лимон", "weight": 28, "triple_mult": 7, "pair_mult": 0.5},
+    {"symbol": "🍇", "name": "Виноград", "weight": 24, "triple_mult": 10, "pair_mult": 0.9},
+    {"symbol": "🔔", "name": "Колокольчик", "weight": 14, "triple_mult": 15, "pair_mult": 2.0},
+    {"symbol": "💎", "name": "Алмаз", "weight": 6, "triple_mult": 30, "pair_mult": 2.5},
+    {"symbol": "7️⃣", "name": "Семёрка", "weight": 3, "triple_mult": 50, "pair_mult": 3.0},
 ]
 
 _SYMBOLS_LIST = [s["symbol"] for s in SLOT_SYMBOLS]
@@ -25,9 +25,9 @@ def spin_reels() -> List[str]:
 
 def evaluate_slots(reels: List[str], stake: int) -> Dict[str, Any]:
     """
-    Расчет выигрыша по выпавшим 3 символам (RTP ~70%):
-    - 3 одинаковых: множитель triple_mult (до 35x)
-    - 2 одинаковых: множитель pair_mult (0.3x .. 2.2x)
+    Расчет выигрыша по выпавшим 3 символам (RTP ~100%):
+    - 3 одинаковых: множитель triple_mult (до 50x)
+    - 2 одинаковых: множитель pair_mult (0.5x .. 3.0x)
     - Иначе: 0
     """
     if len(reels) != 3:

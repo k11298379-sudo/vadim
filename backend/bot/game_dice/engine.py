@@ -28,10 +28,10 @@ def play_dice_duel(stake: int) -> Dict[str, Any]:
     if p_sum > d_sum:
         if p_double:
             status = "super_win"
-            payout = stake * 3  # Чистый +2x
+            payout = stake * 2  # Победа с дублем (RTP ровно 100%)
         else:
             status = "win"
-            payout = stake * 2  # Чистый +1x
+            payout = stake * 2  # Обычная победа (1:1)
     elif p_sum < d_sum:
         status = "loss"
         payout = 0

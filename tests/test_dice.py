@@ -25,12 +25,12 @@ def test_dice_engine():
         assert res["payout"] == 100
         assert res["net_profit"] == 50
 
-        # 2. Супер-победа с дублем (2:1, выплата 3x)
+        # 2. Победа с дублем (выплата 2x, статус super_win для анимации)
         mock_roll.side_effect = [[5, 5], [3, 2]]
         res2 = play_dice_duel(50)
         assert res2["status"] == "super_win"
-        assert res2["payout"] == 150
-        assert res2["net_profit"] == 100
+        assert res2["payout"] == 100
+        assert res2["net_profit"] == 50
 
         # 3. Ничья (Push)
         mock_roll.side_effect = [[4, 3], [5, 2]]
