@@ -83,6 +83,8 @@ export async function openCatalogModal(showToast, onBuilt) {
 function renderCatalogCards(listEl, catalog, showToast, onBuilt, modal) {
   const company = store.company || {};
   const compSpec = company.specialization;
+  const compLevel = company.level || 1;
+  const compCash = company.cash || 0;
   let filtered = catalog;
   if (activeFilter === 'own') {
     filtered = catalog.filter(b => b.specialization === compSpec);
