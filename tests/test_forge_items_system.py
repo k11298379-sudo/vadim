@@ -54,38 +54,38 @@ async def run_forge_items_suite():
     assert req1["gold_cost"] == 350
     assert req1["gems_cost"] == 0
 
-    # +4: 95% (+10% buff), 3200 gold, 2 gems
+    # +4: 98%, 3200 gold, 2 gems
     req4 = get_forge_upgrade_requirements(3)
     assert req4["target_level"] == 4
-    assert req4["success_rate"] == 0.95
+    assert req4["success_rate"] == 0.98
     assert req4["gold_cost"] == 4 * 800
     assert req4["gems_cost"] == 2
 
-    # +8: 75% (+10% buff), 16000 gold, 6 gems
+    # +8: 90%, 16000 gold, 6 gems
     req8 = get_forge_upgrade_requirements(7)
     assert req8["target_level"] == 8
-    assert req8["success_rate"] == 0.75
+    assert req8["success_rate"] == 0.90
     assert req8["gold_cost"] == 8 * 2000
     assert req8["gems_cost"] == 6
 
-    # +11: 55% (+10% buff), 60500 gold, 15 gems
+    # +11: 75%, 60500 gold, 15 gems
     req11 = get_forge_upgrade_requirements(10)
     assert req11["target_level"] == 11
-    assert req11["success_rate"] == 0.55
+    assert req11["success_rate"] == 0.75
     assert req11["gold_cost"] == 11 * 5500
     assert req11["gems_cost"] == 15
 
-    # +15: 35% (+10% buff), 225000 gold, 45 gems
+    # +15: 60%, 225000 gold, 45 gems
     req15 = get_forge_upgrade_requirements(14)
     assert req15["target_level"] == 15
-    assert req15["success_rate"] == 0.35
+    assert req15["success_rate"] == 0.60
     assert req15["gold_cost"] == 15 * 15000
     assert req15["gems_cost"] == 45
 
-    # +50: 30% success, level up to 100
+    # +50: 50% success, level up to 100
     req50 = get_forge_upgrade_requirements(49)
     assert req50["target_level"] == 50
-    assert req50["success_rate"] == 0.30
+    assert req50["success_rate"] == 0.50
     assert req50["is_max"] is False
 
     # Max level check (+100)
@@ -94,7 +94,7 @@ async def run_forge_items_suite():
     assert req_max["success_rate"] == 0.0
     print("[OK] Forge Requirements & Probability Table (+1..+100) verified!")
 
-    # 3. Stat Growth formula: Stat_final = Stat_base * (1 + Level * 0.15)
+    # 3. Stat Growth formula: Stat_final = Stat_base * calculate_forge_multiplier(level)
     sample_weapon = {
         "uid": "test_wpn_1",
         "name": "Клинок Даэдра",
@@ -105,17 +105,17 @@ async def run_forge_items_suite():
         "bonus": {"str": 10, "crit": 15},
     }
     upg1 = apply_forge_upgrade_to_item(dict(sample_weapon), 1)
-    # At +1: 20 * 1.15 = 23, 40 * 1.15 = 46, str 10 * 1.15 = 11.5 -> 12
-    assert upg1["min_atk"] == 23
-    assert upg1["max_atk"] == 46
-    assert upg1["bonus"]["str"] == 12
+    # At +1: 20 * 1.10 = 22, 40 * 1.10 = 44, str 10 * 1.10 = 11
+    assert upg1["min_atk"] == 22
+    assert upg1["max_atk"] == 44
+    assert upg1["bonus"]["str"] == 11
     print(f"[OK] Stat Growth +1 verified: ATK {sample_weapon['base_min']}..{sample_weapon['base_max']} -> {upg1['min_atk']}..{upg1['max_atk']}, STR -> {upg1['bonus']['str']}")
 
     upg15 = apply_forge_upgrade_to_item(dict(sample_weapon), 15)
-    # At +15: 20 * 3.25 = 65, 40 * 3.25 = 130
-    assert upg15["min_atk"] == 65
-    assert upg15["max_atk"] == 130
-    print(f"[OK] Stat Growth +15 verified: ATK {sample_weapon['base_min']}..{sample_weapon['base_max']} -> {upg15['min_atk']}..{upg15['max_atk']} (+225% stats!)")
+    # At +15: 20 * 2.50 = 50, 40 * 2.50 = 100
+    assert upg15["min_atk"] == 50
+    assert upg15["max_atk"] == 100
+    print(f"[OK] Stat Growth +15 verified: ATK {sample_weapon['base_min']}..{sample_weapon['base_max']} -> {upg15['min_atk']}..{upg15['max_atk']} (+150% stats!)")
 
     print("\n=== [2/3] Testing Forge CRUD & Safety Guarantees ===")
     async for session in get_db_session():
@@ -145,7 +145,7 @@ async def run_forge_items_suite():
         ok, msg, forged_item = await upgrade_item_forge(session, char, "item_forge_test_01")
         assert ok, f"Upgrade +1 failed: {msg}"
         assert forged_item["upgrade"] == 1
-        assert forged_item["min_atk"] == int(round(30 * 1.15))
+        assert forged_item["min_atk"] == int(round(30 * 1.10))
         print(f"[OK] Upgrade to +1 successful: {msg}")
 
         # Step B: Insufficient Gold check
@@ -215,7 +215,7 @@ async def run_forge_items_suite():
         info_resp = r_info.json()
         assert info_resp["item_uid"] == "http_forge_item_99"
         assert info_resp["requirements"]["target_level"] == 1
-        assert info_resp["preview_item"]["min_atk"] == int(round(100 * 1.15))
+        assert info_resp["preview_item"]["min_atk"] == int(round(100 * 1.10))
         print(f"[OK] GET /api/rpg/forge/info verified: Target +1, Gold: {info_resp['requirements']['gold_cost']}, Preview ATK: {info_resp['preview_item']['min_atk']}")
 
         # POST /api/rpg/inventory/forge

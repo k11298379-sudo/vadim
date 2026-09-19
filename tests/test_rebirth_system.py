@@ -18,6 +18,7 @@ from backend.db.crud.rpg.rebirth import (
     upgrade_constellation,
     CONSTELLATIONS_CATALOG,
     REBIRTH_RANKS_CONFIG,
+    MAX_REBIRTH_RANK,
 )
 from backend.db.crud.rpg.character import get_or_create_rpg_character, serialize_character_profile
 from backend.db.crud.rpg.character_stats import calculate_character_effective_stats
@@ -45,7 +46,17 @@ async def run_rebirth_suite():
 
     m10 = calculate_rebirth_multiplier(10)
     assert m10 > m2, f"Rank 10 multiplier must exceed Rank 2, got {m10}"
-    print(f"[OK] Rebirth Multipliers: Rank 0 -> x{m0}, Rank 1 -> x{m1} (+43%), Rank 2 -> x{m2} (+89.7%), Rank 10 -> x{m10}")
+
+    m40 = calculate_rebirth_multiplier(40)
+    assert m40 > m10, f"Rank 40 multiplier must exceed Rank 10, got {m40}"
+    print(f"[OK] Rebirth Multipliers: Rank 0 -> x{m0}, Rank 1 -> x{m1} (+43%), Rank 2 -> x{m2} (+89.7%), Rank 10 -> x{m10}, Rank 40 -> x{m40}")
+
+    assert len(REBIRTH_RANKS_CONFIG) == 41, f"Expected 41 ranks (0 to 40), got {len(REBIRTH_RANKS_CONFIG)}"
+    assert MAX_REBIRTH_RANK == 40
+    r40_info = get_rebirth_rank_info(40)
+    assert r40_info["rank"] == 40
+    assert r40_info["next_rank"] is None
+    print(f"[OK] Rebirth Rank 40 verified: «{r40_info['title']}», Multiplier: x{r40_info['multiplier']}")
 
     # 2. Check Configurations
     assert len(CONSTELLATIONS_CATALOG) == 6, f"Expected 6 Astral Constellations, got {len(CONSTELLATIONS_CATALOG)}"
@@ -128,7 +139,8 @@ async def run_rebirth_suite():
         assert "current_rank" in info_data
         assert "multiplier" in info_data
         assert "can_ascend" in info_data
-        print(f"[OK] GET /api/rpg/rebirth_system/info response: Rank {info_data['current_rank']} ({info_data['title']}), Multiplier: x{info_data['multiplier']}")
+        assert info_data.get("max_rank") == 40
+        print(f"[OK] GET /api/rpg/rebirth_system/info response: Rank {info_data['current_rank']} ({info_data['title']}), Multiplier: x{info_data['multiplier']}, Max Rank: {info_data.get('max_rank')}")
 
         # GET /api/rpg/rebirth_system/constellations
         r_const = await client.get("/api/rpg/rebirth_system/constellations")

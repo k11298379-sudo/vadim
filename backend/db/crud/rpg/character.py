@@ -150,6 +150,9 @@ def serialize_character_profile(char: RPGCharacter, user_name: str = "", tg_id: 
     rebirth_essence = talents_data.get("rebirth_essence", getattr(char, "rebirth_essence", 0))
     rebirth_rank = getattr(char, "rebirths", 0)
 
+    from backend.db.crud.rpg.rebirth import get_rebirth_rank_info, MAX_REBIRTH_RANK
+    rank_info = get_rebirth_rank_info(rebirth_rank)
+
     from backend.db.crud.rpg.talent_tree import get_hero_available_talent_points
     avail_talent_points = get_hero_available_talent_points(char, canonical_class)
 
@@ -187,8 +190,14 @@ def serialize_character_profile(char: RPGCharacter, user_name: str = "", tg_id: 
         "rebirth_essence": rebirth_essence,
         "rebirth_info": {
             "rank": rebirth_rank,
+            "max_rank": MAX_REBIRTH_RANK,
+            "title": rank_info.get("title", ""),
             "essence": rebirth_essence,
             "multiplier": stats.get("rebirth_multiplier", 1.0),
+            "multiplier_pct": rank_info.get("multiplier_pct", 0),
+            "next_rank": rank_info.get("next_rank"),
+            "next_min_level": rank_info.get("next_min_level"),
+            "next_essence_reward": rank_info.get("next_essence_reward"),
             "constellations": talents_data.get("constellations", {}),
         },
         "talent_points": avail_talent_points,

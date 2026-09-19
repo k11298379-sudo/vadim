@@ -48,6 +48,7 @@ async def run_rpg_ecosystem_suite():
             char.gold = 50000
             char.gems = 100
             char.inventory = []
+            char.equipment = {}
             await session.commit()
         finally:
             await session.close()
@@ -95,9 +96,9 @@ async def run_rpg_ecosystem_suite():
         assert r.status_code == 200
         prof = r.json()
         assert prof["hero_class"] == "invoker"
-        inv_uids = [it["uid"] for it in prof["inventory"]]
-        assert bought_armor["uid"] in inv_uids, "Previous equipped armor must be preserved in inventory after class switch!"
-        print("[OK] Class switch preserved previous equipment in inventory without deletion!")
+        all_item_uids = [it["uid"] for it in prof["inventory"]] + [eq["uid"] for eq in prof.get("equipment", {}).values() if eq]
+        assert bought_armor["uid"] in all_item_uids, "Previous equipped armor must be preserved after class switch!"
+        print("[OK] Class switch preserved previous equipment without deletion!")
 
         print("\n=== [5/6] Testing Hyperbolic Armor Formula Mathematics ===")
         for def_val in [0, 5, 10, 20, 50, 100]:

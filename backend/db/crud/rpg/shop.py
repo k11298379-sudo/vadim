@@ -89,10 +89,11 @@ async def buy_item_from_shop(
 async def upgrade_character_base_stat(
     session: AsyncSession,
     char: RPGCharacter,
-    stat_name: str
+    stat_name: str,
+    amount: Any = 1
 ) -> Tuple[bool, str]:
     """
-    Upgrades Strength, Agility or Intelligence.
+    Upgrades Strength, Agility or Intelligence by 1, 10, 100 or 'max'.
     Priority: Spends free level-up stat_points first. If none, spends farmed gold.
     """
     STAT_ALIAS = {
@@ -112,31 +113,64 @@ async def upgrade_character_base_stat(
     if not actual_stat:
         return False, "Неверная характеристика. Выберите: Сила, Ловкость или Интеллект."
 
+    target_count = 1
+    is_max = False
+    str_amt = str(amount).strip().lower()
+    if str_amt in ("max", "макс", "all", "все"):
+        is_max = True
+    else:
+        try:
+            target_count = max(1, int(amount))
+        except (ValueError, TypeError):
+            target_count = 1
+
     current_val = getattr(char, actual_stat, 10)
     stat_points = getattr(char, "stat_points", 0)
 
-    used_point = False
-    if stat_points > 0:
-        char.stat_points = stat_points - 1
-        used_point = True
-    else:
-        cost = int((current_val ** 1.35) * 6)
-        if char.gold < cost:
-            return False, f"Недостаточно золота! Нужно {cost} 🪙 (у вас {char.gold} 🪙) или очки характеристик."
-        char.gold -= cost
+    upgraded = 0
+    points_used = 0
+    gold_spent = 0
+    limit = 10000 if is_max else target_count
 
-    setattr(char, actual_stat, current_val + 1)
+    while upgraded < limit:
+        if stat_points > 0:
+            stat_points -= 1
+            points_used += 1
+            upgraded += 1
+            current_val += 1
+        else:
+            cost = int((current_val ** 1.35) * 6)
+            if char.gold >= cost:
+                char.gold -= cost
+                gold_spent += cost
+                upgraded += 1
+                current_val += 1
+            else:
+                break
+
+    stat_ru = {"strength": "Сила", "agility": "Ловкость", "intelligence": "Интеллект"}
+    ru_name = stat_ru.get(actual_stat, actual_stat)
+
+    if upgraded == 0:
+        cost = int((current_val ** 1.35) * 6)
+        return False, f"Недостаточно золота для прокачки {ru_name}! Нужно {cost:,} 🪙 (у вас {char.gold:,} 🪙) или очки характеристик."
+
+    char.stat_points = stat_points
+    setattr(char, actual_stat, current_val)
     if actual_stat == "strength":
         char.vitality = char.strength
 
     await session.commit()
     await session.refresh(char)
 
-    stat_ru = {"strength": "Сила", "agility": "Ловкость", "intelligence": "Интеллект"}
-    ru_name = stat_ru.get(actual_stat, actual_stat)
-    if used_point:
-        return True, f"Очко характеристики использовано! {ru_name} теперь {current_val + 1} (осталось очков: {char.stat_points})!"
-    return True, f"Характеристика {ru_name} повышена до {current_val + 1} за золото!"
+    parts = []
+    if points_used > 0:
+        parts.append(f"потрачено очков: {points_used}")
+    if gold_spent > 0:
+        parts.append(f"золота: {gold_spent:,} 🪙")
+    cost_str = f" ({', '.join(parts)})" if parts else ""
+
+    return True, f"Характеристика {ru_name} успешно повышена на +{upgraded} (теперь {current_val}){cost_str}!"
 
 
 async def add_xp_and_gold_to_character(
