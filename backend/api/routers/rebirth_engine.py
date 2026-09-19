@@ -13,6 +13,7 @@ from backend.db.crud.rpg import (
     perform_ascension,
     upgrade_constellation,
     CONSTELLATIONS_CATALOG,
+    MAX_REBIRTH_RANK,
 )
 
 rebirth_engine_router = APIRouter(prefix="/rpg/rebirth_system", tags=["RPG Rebirth"])
@@ -31,7 +32,7 @@ async def get_rebirth_info_endpoint(
     rank_info = get_rebirth_rank_info(current_rank)
     
     req_level = rank_info["next_min_level"]
-    can_ascend = bool(req_level and char.level >= req_level and current_rank < 25)
+    can_ascend = bool(req_level and char.level >= req_level and current_rank < MAX_REBIRTH_RANK)
     
     talents = getattr(char, "talents", {}) or {}
     essence = talents.get("rebirth_essence", 0)
@@ -39,6 +40,7 @@ async def get_rebirth_info_endpoint(
     return {
         "current_level": char.level,
         "current_rank": current_rank,
+        "max_rank": MAX_REBIRTH_RANK,
         "title": rank_info["title"],
         "multiplier": rank_info["multiplier"],
         "multiplier_pct": rank_info["multiplier_pct"],

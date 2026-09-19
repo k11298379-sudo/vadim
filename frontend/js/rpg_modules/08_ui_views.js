@@ -380,7 +380,7 @@
               <span class="text-xl">🧬</span>
               <div>
                 <div class="text-xs font-black text-purple-300">Перерождение и Таланты</div>
-                <div class="text-[10px] text-slate-400">Ранг: <b class="text-white">${p.rebirths || 0}</b> (+${(p.rebirths || 0) * 10}% ко всем статам)</div>
+                <div class="text-[10px] text-slate-400">Ранг: <b class="text-white">${p.rebirths || 0}</b> | Множитель: <b class="text-purple-300">x${((p.rebirth_info && p.rebirth_info.multiplier) || 1.0).toFixed(2)}</b></div>
               </div>
             </div>
             <button onclick="window.RPG.setSubTab('talents')" class="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 active:scale-95 text-white font-black text-[11px] shadow-sm flex items-center gap-1">

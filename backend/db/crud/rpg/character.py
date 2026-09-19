@@ -14,6 +14,7 @@ from backend.db.crud.rpg.progression_math import (
     LEVEL_CAP,
     STAT_POINTS_PER_LEVEL
 )
+from backend.db.crud.rpg.rebirth import get_rebirth_rank_info, MAX_REBIRTH_RANK
 
 # ==============================================================================
 # CHARACTER CALCULATIONS & CRUDS
@@ -153,6 +154,7 @@ def serialize_character_profile(
     talents_data = getattr(char, "talents", {}) or {}
     rebirth_essence = talents_data.get("rebirth_essence", getattr(char, "rebirth_essence", 0))
     rebirth_rank = getattr(char, "rebirths", 0)
+    rank_info = get_rebirth_rank_info(rebirth_rank)
 
     # Safely resolve tg_id without triggering SQLAlchemy async MissingGreenlet
     final_tg_id = tg_id or getattr(char, "_tg_id", None)
@@ -189,8 +191,14 @@ def serialize_character_profile(
         "rebirth_essence": rebirth_essence,
         "rebirth_info": {
             "rank": rebirth_rank,
+            "max_rank": MAX_REBIRTH_RANK,
+            "title": rank_info.get("title", ""),
             "essence": rebirth_essence,
             "multiplier": stats.get("rebirth_multiplier", 1.0),
+            "multiplier_pct": rank_info.get("multiplier_pct", 0),
+            "next_rank": rank_info.get("next_rank"),
+            "next_min_level": rank_info.get("next_min_level"),
+            "next_essence_reward": rank_info.get("next_essence_reward"),
             "constellations": talents_data.get("constellations", {}),
         },
         "talent_points": getattr(char, "talent_points", 0),
