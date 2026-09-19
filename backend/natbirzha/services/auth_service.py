@@ -1,6 +1,7 @@
 import hmac
 import hashlib
 import json
+import re
 import time
 import urllib.parse
 from typing import Optional, Dict, Any, Tuple
@@ -13,6 +14,17 @@ from backend.db.session import get_db_session
 from backend.db.models import User
 from backend.natbirzha.config import nat_settings
 from backend.natbirzha.models.company import NatCompany
+
+_GUEST_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
+
+
+def guest_tg_id_from_token(token: str) -> int:
+    """Map a browser guest token to a stable, non-Telegram user identity."""
+    normalized = str(token or "").strip()
+    if not _GUEST_TOKEN_RE.fullmatch(normalized):
+        raise ValueError("Invalid browser guest token")
+    digest_value = int.from_bytes(hashlib.sha256(normalized.encode("utf-8")).digest()[:8], "big")
+    return -(10_000_000_000 + digest_value % 8_000_000_000)
 
 def validate_strict_telegram_init_data(init_data: str, bot_token: str) -> Optional[Dict[str, Any]]:
     """
@@ -60,35 +72,46 @@ def validate_test_init_data(init_data: str) -> Optional[Dict[str, Any]]:
 
 async def get_strict_natbirzha_user(
     x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
+    x_natbirzha_guest_id: Optional[str] = Header(None, alias="X-Natbirzha-Guest-Id"),
     session: AsyncSession = Depends(get_db_session)
 ) -> User:
-    """
-    STRICT AUTH DEPENDENCY:
-    Derives authoritative user identity solely from validated Telegram Mini App initData.
-    Rejects query params, unvalidated headers, cached UIDs, or localStorage overrides.
-    """
-    if not x_telegram_init_data:
+    """Authenticate a Telegram user or create a stable browser guest identity."""
+    if not x_telegram_init_data and not x_natbirzha_guest_id:
         raise HTTPException(
-            status_code=401,
-            detail="Strict authentication required: missing X-Telegram-Init-Data header."
+            status_code=400,
+            detail="Browser guest identity or Telegram Mini App authentication is required."
         )
 
     validated = None
     used_test_auth = False
-    if settings.BOT_TOKEN and ":" in settings.BOT_TOKEN:
-        validated = validate_strict_telegram_init_data(x_telegram_init_data, settings.BOT_TOKEN)
+    used_guest_auth = False
+    if x_natbirzha_guest_id and not x_telegram_init_data:
+        try:
+            tg_id = guest_tg_id_from_token(x_natbirzha_guest_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid browser guest identity.")
+        tg_user_data = {
+            "id": tg_id,
+            "first_name": "Гость",
+            "last_name": "НАТБИРЖИ",
+            "username": f"guest_{abs(tg_id)}",
+        }
+        used_guest_auth = True
+    else:
+        if settings.BOT_TOKEN and ":" in settings.BOT_TOKEN:
+            validated = validate_strict_telegram_init_data(x_telegram_init_data, settings.BOT_TOKEN)
 
-    if not validated and nat_settings.ALLOW_TEST_AUTH:
-        validated = validate_test_init_data(x_telegram_init_data)
-        used_test_auth = validated is not None
+        if not validated and nat_settings.ALLOW_TEST_AUTH:
+            validated = validate_test_init_data(x_telegram_init_data)
+            used_test_auth = validated is not None
 
-    if not validated or "user" not in validated or not validated["user"].get("id"):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or expired Telegram Mini App authentication signature."
-        )
+        if not validated or "user" not in validated or not validated["user"].get("id"):
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid or expired Telegram Mini App authentication signature."
+            )
+        tg_user_data = validated["user"]
 
-    tg_user_data = validated["user"]
     tg_id = int(tg_user_data["id"])
 
     # Find or create User
@@ -112,7 +135,7 @@ async def get_strict_natbirzha_user(
             res = await session.execute(select(User).where(User.tg_id == tg_id))
             user = res.scalar_one()
     # Check beta-tester permissions (like RPG: only testers, admins, or test harness)
-    if nat_settings.BETA_TESTERS_ONLY:
+    if nat_settings.BETA_TESTERS_ONLY and not used_guest_auth:
         is_tester = bool(
             getattr(user, "is_tester", False)
             or user.role == "admin"

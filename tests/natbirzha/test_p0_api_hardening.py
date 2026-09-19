@@ -61,6 +61,11 @@ async def run() -> None:
             login = await client.post("/api/natbirzha/auth/login", headers=auth)
             assert login.status_code == 200 and login.json()["user"]["is_creator"] is False
 
+            guest_headers = {"X-Natbirzha-Guest-Id": "browser-guest-p0-2026"}
+            guest_login = await client.post("/api/natbirzha/auth/login", headers=guest_headers)
+            assert guest_login.status_code == 200
+            assert guest_login.json()["user"]["tg_id"] < 0
+
             create_headers = {**auth, "Idempotency-Key": "company-create-1"}
             payload = {"name": "P0 API Corp", "specialization": "agrarian"}
             created = await client.post("/api/natbirzha/company/create", headers=create_headers, json=payload)

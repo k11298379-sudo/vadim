@@ -1,6 +1,6 @@
 /**
  * Natbirzha API Client
- * Strictly handles Telegram initData authentication and Idempotency-Key generation.
+ * Handles Telegram initData or browser guest authentication and Idempotency-Key generation.
  */
 
 function generateUUID() {
@@ -14,31 +14,33 @@ function generateUUID() {
   });
 }
 
-const TELEGRAM_INIT_DATA_STORAGE_KEY = 'natbirzha_telegram_init_data';
+const GUEST_ID_STORAGE_KEY = 'natbirzha_guest_id';
+let inMemoryGuestId = '';
 
 function getTelegramInitData() {
   const tg = typeof window !== 'undefined' ? window.Telegram?.WebApp : null;
-  if (tg?.initData && typeof tg.initData === 'string') return tg.initData;
-  try {
-    if (typeof sessionStorage !== 'undefined') {
-      const carried = sessionStorage.getItem(TELEGRAM_INIT_DATA_STORAGE_KEY);
-      if (carried) return carried;
-    }
-  } catch (_) {}
-  try {
-    const hash = typeof window !== 'undefined' ? window.location?.hash?.slice(1) : '';
-    const carried = hash ? new URLSearchParams(hash).get('tgWebAppData') : '';
-    if (carried) return carried;
-  } catch (_) {}
-  return '';
+  return tg?.initData && typeof tg.initData === 'string' ? tg.initData : '';
 }
 
 function getAuthHeader() {
   const initData = getTelegramInitData();
-  if (!initData || typeof initData !== 'string' || initData.length === 0) {
-    return {};
+  if (initData && typeof initData === 'string' && initData.length > 0) {
+    return { 'X-Telegram-Init-Data': initData };
   }
-  return { 'X-Telegram-Init-Data': initData };
+  let guestId = inMemoryGuestId;
+  try {
+    const storage = typeof localStorage !== 'undefined' ? localStorage : sessionStorage;
+    const stored = storage?.getItem(GUEST_ID_STORAGE_KEY);
+    if (/^[A-Za-z0-9_-]{16,128}$/.test(stored || '')) guestId = stored;
+    if (!guestId) {
+      guestId = generateUUID();
+      storage?.setItem(GUEST_ID_STORAGE_KEY, guestId);
+    }
+  } catch (_) {
+    guestId = guestId || generateUUID();
+  }
+  inMemoryGuestId = guestId;
+  return { 'X-Natbirzha-Guest-Id': guestId };
 }
 
 // App navigation owns this signal. A request started for a screen that the

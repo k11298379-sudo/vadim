@@ -11,23 +11,6 @@ import { renderCreator } from './screens/creator.js';
 import { renderLeaderboard } from './screens/leaderboard.js';
 import { renderHelp } from './screens/help.js';
 
-const TELEGRAM_INIT_DATA_STORAGE_KEY = 'natbirzha_telegram_init_data';
-
-function getCarriedTelegramInitData() {
-  try {
-    if (typeof sessionStorage !== 'undefined') {
-      const carried = sessionStorage.getItem(TELEGRAM_INIT_DATA_STORAGE_KEY);
-      if (carried) return carried;
-    }
-  } catch (_) {}
-  try {
-    const hash = typeof window !== 'undefined' ? window.location?.hash?.slice(1) : '';
-    const carried = hash ? new URLSearchParams(hash).get('tgWebAppData') : '';
-    if (carried) return carried;
-  } catch (_) {}
-  return '';
-}
-
 // Telegram Haptic Feedback Helper
 export function triggerHaptic(type = 'light') {
   try {
@@ -263,21 +246,6 @@ export async function initApp() {
 
   setupNavigation();
 
-  if (!(tg?.initData || getCarriedTelegramInitData())) {
-    const container = document.getElementById('screen-container');
-    if (container) {
-      container.innerHTML = `
-        <div class="max-w-md mx-auto p-6 pt-12 text-center">
-          <div class="glass-card rounded-2xl p-6 space-y-3">
-            <div class="text-4xl">🔐</div>
-          <h2 class="text-lg font-black">Откройте НАТБИРЖУ из Telegram</h2>
-          <p class="text-xs text-slate-500">Для входа требуется подписанная Telegram Mini App-сессия. Откройте игру через кнопку НАТБИРЖА в боте или во вкладке «Игры».</p>
-          </div>
-        </div>`;
-    }
-    return;
-  }
-
   // Subscribe to state updates
   store.subscribe(() => {
     const company = store.company;
@@ -326,7 +294,8 @@ export async function initApp() {
     showToast(err.message || 'Ошибка подключения к серверу', 'error');
     const container = document.getElementById('screen-container');
     if (container) {
-      container.innerHTML = `<div class="max-w-md mx-auto p-6 text-center"><div class="glass-card rounded-2xl p-6"><div class="text-3xl mb-3">🔐</div><h2 class="font-black mb-2">Откройте НАТБИРЖУ из Telegram</h2><p class="text-xs text-slate-500">Для входа нужен подписанный Telegram Mini App initData. ID из URL или браузерного хранилища не используется.</p></div></div>`;
+      container.innerHTML = `<div class="max-w-md mx-auto p-6 text-center"><div class="glass-card rounded-2xl p-6 space-y-3"><div class="text-3xl mb-3">⚠️</div><h2 class="font-black mb-2">Не удалось загрузить НАТБИРЖУ</h2><p class="text-xs text-slate-500">Проверьте соединение с сервером и повторите попытку.</p><button id="nat-retry-btn" class="w-full rounded-xl bg-blue-600 text-white py-2 font-bold">Повторить</button></div></div>`;
+      document.getElementById('nat-retry-btn')?.addEventListener('click', () => initApp());
     }
     return;
   }

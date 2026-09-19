@@ -79,19 +79,8 @@ const mockDevWindow = {
 };
 const { getAuthHeader: getDevAuthHeader } = apiFn(mockDevWindow, mockCrypto, mockSessionStorage);
 assert(!getDevAuthHeader()['X-Telegram-Init-Data'], 'Unsigned dev/query fallback must be disabled');
-mockSessionStorage._store.natbirzha_telegram_init_data = 'carried_signed_init_data';
-const { getAuthHeader: getCarriedAuthHeader } = apiFn(mockDevWindow, mockCrypto, mockSessionStorage);
-assert(getCarriedAuthHeader()['X-Telegram-Init-Data'] === 'carried_signed_init_data',
-  'Natbirzha must preserve signed initData when navigating from the parent Mini App');
-const mockHashWindow = {
-  location: { search: '', hash: '#tgWebAppData=hash_signed_init_data', hostname: 'localhost' },
-  Telegram: {}
-};
-delete mockSessionStorage._store.natbirzha_telegram_init_data;
-const { getAuthHeader: getHashAuthHeader } = apiFn(mockHashWindow, mockCrypto, mockSessionStorage);
-assert(getHashAuthHeader()['X-Telegram-Init-Data'] === 'hash_signed_init_data',
-  'Natbirzha must accept signed tgWebAppData carried in the Telegram fragment');
-assert(!apiScript.includes('localStorage'), 'api.js must not derive identity from localStorage');
+assert(/^[a-f0-9-]{16,}$/.test(getDevAuthHeader()['X-Natbirzha-Guest-Id']),
+  'Browser access must use a generated guest session identity');
 assert(!apiScript.includes('initDataUnsafe'), 'api.js must not derive authority from initDataUnsafe');
 assert(!apiScript.includes('tg_user_id'), 'api.js must not accept tg_user_id query identity');
 assert(apiScript.includes('responseCache') && apiScript.includes('cachedGet'), 'Stable catalog requests must use a TTL cache');
@@ -226,6 +215,8 @@ assert(catalogCode.includes('data-cat="unavailable"'), 'catalog.js must expose u
 assert(catalogCode.includes('flex-wrap'), 'catalog filters must wrap instead of hiding actions beyond a narrow mobile viewport');
 
 const appCode = fs.readFileSync(path.join(__dirname, '../frontend/natbirzha/js/app.js'), 'utf-8');
+assert(!appCode.includes('Откройте НАТБИРЖУ из Telegram'),
+  'Natbirzha must not block browser guests behind the Telegram-only screen');
 assert(appCode.includes("msgText === '[object Object]'"), 'app.js showToast must guard against [object Object]');
 assert(appCode.includes('window.NatApp'), 'app.js must expose window.NatApp');
 assert(appCode.includes('navigateTo'), 'app.js must export navigateTo');
@@ -242,10 +233,6 @@ assert(!appCode.includes('1053722876'), 'creator UI must not hardcode privileged
 const commonAppCode = fs.readFileSync(path.join(__dirname, '../frontend/js/app.js'), 'utf-8');
 assert(commonAppCode.includes('me.is_tester || me.role === "admin"'),
   'common Mini App must expose Natbirzha to the effective configured admin role');
-assert(commonAppCode.includes('persistTelegramInitDataForChildApps'),
-  'common Mini App must preserve signed Telegram initData before opening child apps');
-assert(commonAppCode.includes('prepareNatbirzhaNavigation'),
-  'common Mini App must preserve signed initData when Telegram opens a new WebView context');
 console.log('All screen modules and app.js integration verified!');
 
 console.log('=== [Natbirzha Test 5/5] Testing games.js Natbirzha banner exposure & items localization ===');
@@ -253,8 +240,6 @@ const gamesCode = fs.readFileSync(path.join(__dirname, '../frontend/js/games.js'
 assert(gamesCode.includes('НАТБИРЖА'), 'games.js must contain Natbirzha banner definition');
 assert(gamesCode.includes('${isTesterUser ?'), 'games.js must condition Natbirzha banner on isTesterUser');
 assert(gamesCode.includes('/app/natbirzha'), 'Natbirzha banner must link to /app/natbirzha');
-assert(gamesCode.includes('prepareNatbirzhaNavigation'),
-  'Natbirzha banner must carry signed initData in the Telegram fragment when needed');
 
 const itemsScript = fs.readFileSync(path.join(__dirname, '../frontend/natbirzha/js/items.js'), 'utf-8');
 const cleanedItemsScript = itemsScript.replace(/export\s+const\s+ITEMS\s+=/, 'const ITEMS =').replace(/export\s+function\s+getItemInfo/, 'function getItemInfo');
