@@ -184,6 +184,10 @@ assert(helpCode.includes('Pivocoins') && helpCode.includes('IPO') && helpCode.in
 assert(marketCode.includes('getReferenceInstruments'), 'market.js must load official reference instruments');
 assert(marketCode.includes('tradeReferenceInstrument'), 'market.js must wire reference trades');
 assert(marketCode.includes('createBondListing'), 'market.js must expose secondary bond listings');
+assert(marketCode.includes('market-section-btn') && marketCode.includes('renderStockDetail') && marketCode.includes('renderBondDetail'),
+  'market.js must expose the agreed vertical market sections and drill-down cards');
+assert((natHtml.match(/data-tab="stocks"/g) || []).length === 0,
+  'stocks must be opened from the single Market tab, not a duplicate bottom tab');
 
 const creatorCode = fs.readFileSync(path.join(__dirname, '../frontend/natbirzha/js/screens/creator.js'), 'utf-8');
 assert(creatorCode.includes('tourn-reward-first') && creatorCode.includes('tourn-reward-second') && creatorCode.includes('tourn-reward-third'),
