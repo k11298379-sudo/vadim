@@ -71,9 +71,9 @@ function executeBossAbilityEarly(boss, p, bId, abilityType, ARENA) {
       triggerHaptic("heavy");
       ARENA.bossTelegraphs.push({
         type: "rotating_beam", cx: boss.x, cy: boss.y,
-        angle: 0, rotSpeed: 0.04, length: 260, timer: 180,
-        damage: calculateBossAttackDamage(boss, 0.5), color: "#c084fc",
-        burn: true, burnDuration: 90, burnDmg: Math.floor(boss.atk * 0.18)
+        angle: 0, rotSpeed: 0.045, length: 320, timer: 220,
+        damage: calculateBossAttackDamage(boss, 3.2), color: "#c084fc",
+        burn: true, burnDuration: 120, burnDmg: Math.floor((boss.atk || 320) * 0.8)
       });
     } else {
       spawnFloatingText(boss.x, boss.y - 30, "✨ ОСКОЛОЧНЫЙ ЗАЛП!", "#c084fc");

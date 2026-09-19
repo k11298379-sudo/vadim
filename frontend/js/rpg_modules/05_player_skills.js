@@ -56,6 +56,7 @@
       chargeVy: 0,
       facing: 1,
       enrageTimer: 0,
+      battleStartTime: Date.now(),
       enrageStage: "normal",
       poise: 800,
       maxPoise: 800,
@@ -2098,11 +2099,26 @@
     ARENA.dangerZones = [];
     ARENA.waveState = "fighting";
     RPG_STATE.lastBossChestReward = null;
-    RPG_STATE.activeTab = "farm";
-    if (typeof initArenaCanvas === "function") {
-      initArenaCanvas();
+
+    // Reset farm wave state so farm is ready and creeps spawn properly
+    const currentSavedWave = ((RPG_STATE.profile?.dungeon_cleared || 0) % 20) + 1;
+    ARENA.waveNumber = currentSavedWave;
+    ARENA.totalCreepsSpawned = 0;
+    ARENA.creepsKilledInWave = 0;
+    ARENA.creepsNeededForWave = Math.min(32, 14 + Math.floor((ARENA.waveNumber - 1) * 1.0));
+    ARENA.creepSpawnTimer = 0;
+    if (ARENA.player) {
+      ARENA.player.x = 65;
+      ARENA.player.y = ARENA.roadY - 18;
+      ARENA.player.isInvulnerable = 0;
     }
-    renderRoot();
+
+    const returnTab = ARENA._originTab || "coop";
+    ARENA._originTab = null;
+    setSubTab(returnTab);
+    if (returnTab === "farm") {
+      if (typeof spawnArenaCreep === "function") spawnArenaCreep();
+    }
   }
 
   function startRaidBossActionBattle(bossId) {
@@ -2112,6 +2128,9 @@
       clearTimeout(ARENA.startLoopTimeout);
       ARENA.startLoopTimeout = null;
     }
+
+    ARENA._originTab = (RPG_STATE.activeTab && RPG_STATE.activeTab !== "farm") ? RPG_STATE.activeTab : "coop";
+    ARENA._wasRaidBossBattle = true;
 
     RPG_STATE.coopRoomId = null;
     RPG_STATE.coopRoomData = null;
@@ -2183,6 +2202,7 @@
       chargeVy: 0,
       facing: 1,
       enrageTimer: 0,
+      battleStartTime: Date.now(),
       enrageStage: "normal",
       jumpY: 0,
       jumpVY: 0

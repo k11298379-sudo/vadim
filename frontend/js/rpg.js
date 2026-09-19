@@ -1477,7 +1477,7 @@ loadRpgImages();
     if (typeof ARENA !== "undefined" && ARENA.waveState === "boss_victory") {
       ARENA.waveState = "fighting";
     }
-    if (ARENA.isRaidBossBattle) {
+    if (typeof ARENA !== "undefined" && (ARENA.isRaidBossBattle || ARENA._wasRaidBossBattle)) {
       exitRaidBossBattle();
       return;
     }
@@ -2316,19 +2316,26 @@ loadRpgImages();
       bossAtk = bossAtk || 140;
     }
 
-    // Phase Enrage multiplier (when boss is enraged/furious/angry)
+    // Phase Enrage multiplier (when boss is enraged/furious/angry or in God Mode)
     let enrageMult = 1.0;
-    if (boss.enrageStage === "enraged") enrageMult = 1.40;
+    const isGod = boss.isGodMode || boss.enrageStage === "god_mode";
+    if (isGod) enrageMult = 15.0;
+    else if (boss.enrageStage === "enraged") enrageMult = 1.40;
     else if (boss.enrageStage === "furious") enrageMult = 1.25;
     else if (boss.enrageStage === "angry") enrageMult = 1.15;
 
     let rawDmg = Math.floor(bossAtk * baseMult * enrageMult);
 
     // Hyperbolic player defense reduction: DR = def / (def + 80), max 80%
-    const dr = Math.min(0.80, (def * 1.0) / (def + 80));
+    const dr = isGod ? 0 : Math.min(0.80, (def * 1.0) / (def + 80));
     let finalDmg = Math.max(10, Math.floor(rawDmg * (1.0 - dr)));
 
-    if (p && p.isBlocking) {
+    if (isGod) {
+      const pMax = p ? (p.maxHp || stats.hp_max || 1000) : 1000;
+      finalDmg = Math.max(finalDmg, Math.floor(pMax * 0.70));
+    }
+
+    if (p && p.isBlocking && !isGod) {
       finalDmg = Math.floor(finalDmg * 0.40);
     }
 
@@ -2472,7 +2479,8 @@ loadRpgImages();
 
     // 7. HEALTH GATE PROTECTION:
     // Saves player ONCE per 60s from an unexpected lethal hit if they were at high health (>60% HP)
-    if (p.currentHp > pMax * 0.60 && finalDmg >= p.currentHp && (!p._lastHealthGateFrame || nowFrame - p._lastHealthGateFrame > 3600)) {
+    const bossIsGod = ARENA.bossEntity && (ARENA.bossEntity.isGodMode || ARENA.bossEntity.enrageStage === "god_mode");
+    if (!bossIsGod && p.currentHp > pMax * 0.60 && finalDmg >= p.currentHp && (!p._lastHealthGateFrame || nowFrame - p._lastHealthGateFrame > 3600)) {
       p._lastHealthGateFrame = nowFrame;
       finalDmg = Math.max(1, p.currentHp - 1);
       p.currentHp = 1;
@@ -2498,6 +2506,7 @@ loadRpgImages();
         const reward = RPG_STATE.lastBossChestReward;
         ARENA.waveState = "fighting";
         ARENA.isRaidBossBattle = false;
+        ARENA._wasRaidBossBattle = true;
         RPG_STATE.lastBossChestReward = null;
         if (reward) {
           openChestModal(reward);
@@ -3680,6 +3689,16 @@ loadRpgImages();
       spawnArenaCreep();
     }
 
+    // Deadlock safeguard: if wave is fighting, no creeps exist, and all wave creeps are considered spawned
+    if (!ARENA.isRaidBossBattle && !ARENA.isBossActive && ARENA.waveState === "fighting" && ARENA.creeps.length === 0 && ARENA.totalCreepsSpawned >= ARENA.creepsNeededForWave) {
+      if (ARENA.creepsKilledInWave >= ARENA.creepsNeededForWave) {
+        if (typeof advanceArenaWave === "function") advanceArenaWave();
+      } else {
+        ARENA.totalCreepsSpawned = ARENA.creepsKilledInWave;
+        if (typeof spawnArenaCreep === "function") spawnArenaCreep();
+      }
+    }
+
     // Boss phase logic & companion squad updates
     if (ARENA.isBossActive && ARENA.bossEntity) {
       updateBossPhase();
@@ -4514,8 +4533,28 @@ loadRpgImages();
 
     const hpPct = boss.hp / boss.maxHp;
 
-    // 2. Enrage check (HP <= 35%)
-    if (hpPct <= 0.35 && !boss.enraged) {
+    // 2. God Mode check (5 minutes / 300 seconds)
+    boss.battleStartTime = boss.battleStartTime || Date.now();
+    const elapsedMs = Date.now() - boss.battleStartTime;
+    boss.enrageTimer = (boss.enrageTimer || 0) + 1;
+    if (elapsedMs >= 300000 || boss.enrageTimer >= 18000) {
+      if (!boss.isGodMode) {
+        boss.isGodMode = true;
+        boss.enraged = true;
+        boss.enrageStage = "god_mode";
+        boss.speed = Math.max(3.0, (boss.speed || 0.85) * 3.5);
+        ARENA.cameraTrauma = 1.0;
+        ARENA.hitstop = 15;
+        spawnFloatingText(boss.x, boss.y - 45, "⚡⚡ РЕЖИМ БОГА: БЕРСЕРК! ⚡⚡", "#ef4444");
+        triggerHaptic("heavy");
+      }
+      const regenPerSec = Math.max(500, Math.floor((boss.maxHp || 10000) * 0.05));
+      const regenPerFrame = Math.max(1, Math.floor(regenPerSec / 60));
+      boss.hp = Math.min(boss.maxHp, boss.hp + regenPerFrame);
+      if (ARENA.frameCount % 60 === 0) {
+        spawnFloatingText(boss.x, boss.y - 30, `✨ +${Math.round(regenPerSec)} РЕГЕН БОГА`, "#22c55e");
+      }
+    } else if (hpPct <= 0.35 && !boss.enraged) {
       boss.enraged = true;
       boss.speed = Math.min(1.4, (boss.speed || 0.85) * 1.45);
       boss.atk = Math.floor(boss.atk * 1.35);
@@ -5531,9 +5570,9 @@ function executeBossAbilityEarly(boss, p, bId, abilityType, ARENA) {
       triggerHaptic("heavy");
       ARENA.bossTelegraphs.push({
         type: "rotating_beam", cx: boss.x, cy: boss.y,
-        angle: 0, rotSpeed: 0.04, length: 260, timer: 180,
-        damage: calculateBossAttackDamage(boss, 0.5), color: "#c084fc",
-        burn: true, burnDuration: 90, burnDmg: Math.floor(boss.atk * 0.18)
+        angle: 0, rotSpeed: 0.045, length: 320, timer: 220,
+        damage: calculateBossAttackDamage(boss, 3.2), color: "#c084fc",
+        burn: true, burnDuration: 120, burnDmg: Math.floor((boss.atk || 320) * 0.8)
       });
     } else {
       spawnFloatingText(boss.x, boss.y - 30, "✨ ОСКОЛОЧНЫЙ ЗАЛП!", "#c084fc");
@@ -6077,27 +6116,49 @@ function updateCustomBossAI(boss, p, ARENA) {
 
   const bId = (boss.bossType || boss.boss_id || boss.id || boss.name || "").toLowerCase();
 
-  // Enrage Stages based on Timer or HP
+  // Enrage Stages based on Timer or HP (5-minute hard cap = God Mode)
+  boss.battleStartTime = boss.battleStartTime || Date.now();
   boss.enrageTimer = (boss.enrageTimer || 0) + 1;
-  const hpPct = boss.hp / (boss.maxHp || 1);
-  if (boss.enrageTimer > 5400 || hpPct <= 0.15) {
-    boss.enrageStage = "enraged";
-  } else if (boss.enrageTimer > 3600 || hpPct <= 0.40) {
-    boss.enrageStage = "furious";
-  } else if (boss.enrageTimer > 1800 || hpPct <= 0.70) {
-    boss.enrageStage = "angry";
+  const elapsedMs = Date.now() - boss.battleStartTime;
+  const isGodMode = elapsedMs >= 300000 || boss.enrageTimer >= 18000;
+
+  if (isGodMode) {
+    if (!boss.isGodMode) {
+      boss.isGodMode = true;
+      triggerHaptic("heavy");
+      if (ARENA.cameraTrauma !== undefined) ARENA.cameraTrauma = 1.0;
+      spawnFloatingText(boss.x, boss.y - 45, "⚡⚡ РЕЖИМ БОГА! ⚡⚡", "#ef4444");
+    }
+    boss.enrageStage = "god_mode";
+    // 5% max HP regen per sec
+    const regenPerSec = Math.max(500, Math.floor((boss.maxHp || 10000) * 0.05));
+    const regenPerFrame = Math.max(1, Math.floor(regenPerSec / 60));
+    boss.hp = Math.min(boss.maxHp, boss.hp + regenPerFrame);
+    if (ARENA.frameCount % 60 === 0) {
+      spawnFloatingText(boss.x, boss.y - 30, `✨ +${Math.round(regenPerSec)} РЕГЕН БОГА`, "#22c55e");
+    }
+  } else {
+    const hpPct = boss.hp / (boss.maxHp || 1);
+    if (boss.enrageTimer > 5400 || hpPct <= 0.15) {
+      boss.enrageStage = "enraged";
+    } else if (boss.enrageTimer > 3600 || hpPct <= 0.40) {
+      boss.enrageStage = "furious";
+    } else if (boss.enrageTimer > 1800 || hpPct <= 0.70) {
+      boss.enrageStage = "angry";
+    }
   }
 
-  const bSpeedMult = boss.enrageStage === "enraged" ? 1.3 : boss.enrageStage === "furious" ? 1.18 : boss.enrageStage === "angry" ? 1.08 : 1.0;
+  const bSpeedMult = boss.isGodMode ? 3.5 : (boss.enrageStage === "enraged" ? 1.3 : boss.enrageStage === "furious" ? 1.18 : boss.enrageStage === "angry" ? 1.08 : 1.0);
 
   // Decrement cooldowns & charge Ultimate meter
-  boss.skillCooldown = Math.max(0, boss.skillCooldown - 1);
-  boss.meleeCooldown = Math.max(0, boss.meleeCooldown - 1);
-  boss.chargeCooldown = Math.max(0, (boss.chargeCooldown || 0) - 1);
+  const cdReduction = boss.isGodMode ? 3 : 1;
+  boss.skillCooldown = Math.max(0, boss.skillCooldown - cdReduction);
+  boss.meleeCooldown = Math.max(0, boss.meleeCooldown - cdReduction);
+  boss.chargeCooldown = Math.max(0, (boss.chargeCooldown || 0) - cdReduction);
   
-  let ultChargeRate = (boss.enrageStage === "enraged" ? 0.14 : 0.08);
+  let ultChargeRate = boss.isGodMode ? 0.8 : (boss.enrageStage === "enraged" ? 0.14 : 0.08);
   if (bId.includes("faceless_void") || bId.includes("хроно")) {
-    ultChargeRate *= 0.25; // Massive nerf to Chronosphere cooldown (4x longer, ~1.5 - 2 mins)
+    if (!boss.isGodMode) ultChargeRate *= 0.25; // Massive nerf to Chronosphere cooldown (4x longer, ~1.5 - 2 mins)
   }
   boss.ultimateMeter = Math.min(100, (boss.ultimateMeter || 0) + ultChargeRate);
 
@@ -6154,17 +6215,21 @@ function updateCustomBossAI(boss, p, ARENA) {
         p.isFrozenInTime = false;
       }
     }
-    // 3. ROTATING RESONANCE BEAM
+    // 3. ROTATING RESONANCE BEAM (Ancient Tormentor Laser)
     else if (bt.type === "rotating_beam") {
       bt.angle += bt.rotSpeed;
       const bx2 = bt.cx + Math.cos(bt.angle) * bt.length;
       const by2 = bt.cy + Math.sin(bt.angle) * bt.length;
       const lineDist = distToSegment(p.x, p.y, bt.cx, bt.cy, bx2, by2);
-      if (lineDist < p.radius + 14 && (ARENA.frameCount % 20 === 0)) {
-        const bmDmg = Math.floor(bt.damage || calculateBossAttackDamage(boss, 0.6));
+      if (lineDist < p.radius + 16 && (ARENA.frameCount % 12 === 0)) {
+        const baseBeamDmg = Math.floor(bt.damage || calculateBossAttackDamage(boss, 3.2));
+        const pctMelt = Math.floor((p.maxHp || 1000) * 0.08); // 8% HP melt per tick
+        const bmDmg = baseBeamDmg + pctMelt;
         applyDamageToPlayer(bmDmg, "beam");
-        spawnFloatingText(p.x, p.y - 20, `🔮 ЛАЗЕР -${bmDmg}`, "#e879f9");
-        applyStatusEffectToPlayer({ burn: true, burnDuration: 80, burnDmg: Math.floor(boss.atk * 0.15) });
+        spawnFloatingText(p.x, p.y - 20, `🔮 СМЕРТЕЛЬНЫЙ ЛАЗЕР -${bmDmg}!`, "#e879f9");
+        triggerHaptic("heavy");
+        if (ARENA.cameraTrauma !== undefined) ARENA.cameraTrauma = Math.min(1.0, (ARENA.cameraTrauma || 0) + 0.35);
+        applyStatusEffectToPlayer({ burn: true, burnDuration: 90, burnDmg: Math.floor((boss.atk || 320) * 0.6) });
       }
     }
 
@@ -6422,6 +6487,7 @@ function distToSegment(px, py, x1, y1, x2, y2) {
       chargeVy: 0,
       facing: 1,
       enrageTimer: 0,
+      battleStartTime: Date.now(),
       enrageStage: "normal",
       poise: 800,
       maxPoise: 800,
@@ -8464,11 +8530,26 @@ function distToSegment(px, py, x1, y1, x2, y2) {
     ARENA.dangerZones = [];
     ARENA.waveState = "fighting";
     RPG_STATE.lastBossChestReward = null;
-    RPG_STATE.activeTab = "farm";
-    if (typeof initArenaCanvas === "function") {
-      initArenaCanvas();
+
+    // Reset farm wave state so farm is ready and creeps spawn properly
+    const currentSavedWave = ((RPG_STATE.profile?.dungeon_cleared || 0) % 20) + 1;
+    ARENA.waveNumber = currentSavedWave;
+    ARENA.totalCreepsSpawned = 0;
+    ARENA.creepsKilledInWave = 0;
+    ARENA.creepsNeededForWave = Math.min(32, 14 + Math.floor((ARENA.waveNumber - 1) * 1.0));
+    ARENA.creepSpawnTimer = 0;
+    if (ARENA.player) {
+      ARENA.player.x = 65;
+      ARENA.player.y = ARENA.roadY - 18;
+      ARENA.player.isInvulnerable = 0;
     }
-    renderRoot();
+
+    const returnTab = ARENA._originTab || "coop";
+    ARENA._originTab = null;
+    setSubTab(returnTab);
+    if (returnTab === "farm") {
+      if (typeof spawnArenaCreep === "function") spawnArenaCreep();
+    }
   }
 
   function startRaidBossActionBattle(bossId) {
@@ -8478,6 +8559,9 @@ function distToSegment(px, py, x1, y1, x2, y2) {
       clearTimeout(ARENA.startLoopTimeout);
       ARENA.startLoopTimeout = null;
     }
+
+    ARENA._originTab = (RPG_STATE.activeTab && RPG_STATE.activeTab !== "farm") ? RPG_STATE.activeTab : "coop";
+    ARENA._wasRaidBossBattle = true;
 
     RPG_STATE.coopRoomId = null;
     RPG_STATE.coopRoomData = null;
@@ -8549,6 +8633,7 @@ function distToSegment(px, py, x1, y1, x2, y2) {
       chargeVy: 0,
       facing: 1,
       enrageTimer: 0,
+      battleStartTime: Date.now(),
       enrageStage: "normal",
       jumpY: 0,
       jumpVY: 0
@@ -10314,6 +10399,19 @@ function drawBossModelMid(ctx, b, bId, time) {
     ctx.ellipse(0, c.radius + 2 - bob - (c.jumpY || 0), (c.radius * 0.9) * shadowScale, 4.5 * shadowScale, 0, 0, Math.PI * 2);
     ctx.fill();
 
+    // God Mode Aura
+    if (c.isGodMode || c.enrageStage === "god_mode") {
+      const pulse = 1 + Math.sin(time * 0.25) * 0.15;
+      ctx.strokeStyle = "rgba(239, 68, 68, 0.85)";
+      ctx.lineWidth = 3;
+      ctx.shadowColor = "#ef4444";
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.arc(0, 0, (c.radius + 8) * pulse, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
     // Stagger / Stun indicator stars
     if (c.state === "stagger" || c.isStaggered) {
       ctx.fillStyle = "#facc15";
@@ -11342,28 +11440,35 @@ function drawBossModelMid(ctx, b, bId, time) {
     safeRoundRect(ctx, bannerX, bannerY, bannerW, bannerH, 12);
     ctx.fill();
 
-    ctx.strokeStyle = boss.enraged ? "#ef4444" : (boss.isStaggered ? "#ec4899" : "#f59e0b");
-    ctx.lineWidth = 1.8;
+      const isGod = boss.isGodMode || boss.enrageStage === "god_mode";
+    ctx.strokeStyle = isGod ? "#ef4444" : (boss.enraged ? "#f97316" : (boss.isStaggered ? "#ec4899" : "#f59e0b"));
+    ctx.lineWidth = isGod ? 2.5 : 1.8;
     ctx.beginPath();
     safeRoundRect(ctx, bannerX, bannerY, bannerW, bannerH, 12);
     ctx.stroke();
 
     // 1. Top Row: Title & Party Mode Toggle
     ctx.font = "bold 10px sans-serif";
-    ctx.fillStyle = boss.enraged ? "#f87171" : "#facc15";
+    ctx.fillStyle = isGod ? "#ef4444" : (boss.enraged ? "#f87171" : "#facc15");
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
     let enrageLabel = "";
-    const eTimer = boss.enrageTimer || 0;
-    if (boss.enrageStage === "enraged" || boss.enraged) {
-      enrageLabel = "🔥 БЕЗУМИЕ!";
+    const elapsedSec = Math.floor((Date.now() - (boss.battleStartTime || Date.now())) / 1000);
+    const remSec = Math.max(0, 300 - elapsedSec);
+    const remM = Math.floor(remSec / 60);
+    const remS = remSec % 60;
+    const timerStr = `${remM}:${remS < 10 ? "0" : ""}${remS}`;
+
+    if (isGod) {
+      enrageLabel = "💀 РЕЖИМ БОГА!";
+    } else if (boss.enrageStage === "enraged" || boss.enraged) {
+      enrageLabel = `🔥 БЕЗУМИЕ (${timerStr})`;
     } else if (boss.enrageStage === "furious") {
-      enrageLabel = "⚡ ЯРОСТЬ!";
+      enrageLabel = `⚡ ЯРОСТЬ (${timerStr})`;
     } else if (boss.enrageStage === "angry") {
-      enrageLabel = "😡 ЗЛОЙ!";
+      enrageLabel = `😡 ЗЛОЙ (${timerStr})`;
     } else {
-      const secLeft = Math.max(0, Math.ceil((2000 - eTimer) / 60));
-      enrageLabel = `⏱️ Злость: ${secLeft}с`;
+      enrageLabel = `⏱️ ${timerStr}`;
     }
     const bossTitle = `👑 ${boss.name || "БОСС"} • ${enrageLabel}`;
     ctx.fillText(bossTitle.length > 28 ? bossTitle.slice(0, 27) + "…" : bossTitle, bannerX + 10, bannerY + 11);
@@ -11407,7 +11512,11 @@ function drawBossModelMid(ctx, b, bId, time) {
 
     // HP Fill Gradient
     const hpGrad = ctx.createLinearGradient(hpBarX, 0, hpBarX + hpBarW, 0);
-    if (boss.enraged) {
+    if (isGod) {
+      hpGrad.addColorStop(0, "#7f1d1d");
+      hpGrad.addColorStop(0.5, "#ef4444");
+      hpGrad.addColorStop(1, "#b91c1c");
+    } else if (boss.enraged) {
       hpGrad.addColorStop(0, "#ea580c");
       hpGrad.addColorStop(1, "#dc2626");
     } else {
@@ -11457,7 +11566,12 @@ function drawBossModelMid(ctx, b, bId, time) {
 
     // Badges on the right of poise bar
     let badgeX = poiseBarX + poiseBarW + 6;
-    if (boss.enraged) {
+    if (isGod) {
+      ctx.fillStyle = "#ef4444";
+      ctx.font = "bold 7.5px sans-serif";
+      ctx.fillText("⚡ БОГ", badgeX, poiseBarY + poiseBarH / 2);
+      badgeX += 34;
+    } else if (boss.enraged) {
       ctx.fillStyle = "#ef4444";
       ctx.font = "bold 7.5px sans-serif";
       ctx.fillText("🔥 ЯРОСТЬ", badgeX, poiseBarY + poiseBarH / 2);
@@ -16385,7 +16499,7 @@ function renderVisualTalentTree(p, treeData) {
     const theme = TREE_BRANCH_THEMES[bKey];
     const t1Node = (branches[bKey] || []).find(n => n.tier === 1);
     const isT1Bought = t1Node && t1Node.is_bought;
-    const isT1Avail = t1Node && t1Node.can_buy;
+    const isT1Avail = t1Node && !t1Node.is_bought && effectiveProgress >= (t1Node.unlock_level != null ? t1Node.unlock_level : 1);
 
     const strokeColor = isT1Bought ? theme.activeStroke : (isT1Avail ? "#eab308" : "#334155");
     const strokeW = isT1Bought ? 3.5 : (isT1Avail ? 2.5 : 1.5);
@@ -16400,7 +16514,7 @@ function renderVisualTalentTree(p, treeData) {
       const childNode = (branches[bKey] || []).find(n => n.tier === t + 1);
       const isParentBought = parentNode && parentNode.is_bought;
       const isChildBought = childNode && childNode.is_bought;
-      const isChildAvail = childNode && childNode.can_buy;
+      const isChildAvail = childNode && !childNode.is_bought && isParentBought && effectiveProgress >= (childNode.unlock_level != null ? childNode.unlock_level : childNode.tier * 5);
 
       let lineCol = "#334155";
       let lw = 1.5;
@@ -16450,11 +16564,16 @@ function renderVisualTalentTree(p, treeData) {
       let bgStyle = "";
       let badgeHtml = "";
 
+      const isNodeLvlMet = effectiveProgress >= (node.unlock_level != null ? node.unlock_level : (node.tier === 1 ? 1 : node.tier * 5));
+      const nodeReq = node.req ? nodeMap[node.req] : null;
+      const isNodeReqMet = !node.req || (nodeReq && nodeReq.is_bought);
+      const isNodeAvail = !node.is_bought && isNodeLvlMet && isNodeReqMet;
+
       if (node.is_bought) {
         bgStyle = isPerk ? "bg-gradient-to-br from-emerald-950 to-slate-900 border-emerald-400 shadow-lg shadow-emerald-500/30" : "bg-emerald-950/90 border-emerald-500 shadow-md shadow-emerald-500/20";
         borderStyle = "border-2";
         badgeHtml = `<span class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center text-[9px] font-black shadow">✓</span>`;
-      } else if (node.can_buy) {
+      } else if (isNodeAvail) {
         bgStyle = isPerk ? "bg-gradient-to-br from-amber-950 via-slate-900 to-amber-900 border-amber-400 shadow-xl shadow-amber-500/40 animate-pulse" : `${theme.nodeAvail} border-2`;
         borderStyle = isPerk ? "border-2" : "border-2";
         badgeHtml = `<span class="absolute -top-1 -right-1 px-1 py-0.2 rounded-full bg-amber-500 text-slate-950 text-[8px] font-black shadow">${node.cost || 1}⭐</span>`;
@@ -16474,7 +16593,7 @@ function renderVisualTalentTree(p, treeData) {
              class="absolute rounded-2xl ${borderStyle} ${bgStyle} flex flex-col items-center justify-center cursor-pointer transition-all active:scale-95 group z-10">
           ${badgeHtml}
           <span class="${isPerk ? 'text-2xl' : 'text-xl'} leading-none filter drop-shadow">${node.icon}</span>
-          <span class="text-[8px] font-black ${node.is_bought ? 'text-emerald-300' : (node.can_buy ? 'text-amber-300' : 'text-slate-500')} leading-none mt-1">Т${node.tier}</span>
+          <span class="text-[8px] font-black ${node.is_bought ? 'text-emerald-300' : (isNodeAvail ? 'text-amber-300' : 'text-slate-500')} leading-none mt-1">Т${node.tier}</span>
         </div>`;
     }
   }
@@ -16485,23 +16604,27 @@ function renderVisualTalentTree(p, treeData) {
   if (selectedNode) {
     const isPerk = selectedNode.desc && selectedNode.desc.includes("[ПЕРК]");
     const theme = TREE_BRANCH_THEMES[selectedNode.branchKey] || TREE_BRANCH_THEMES.atk;
-    const unlockLvl = selectedNode.unlock_level || (selectedNode.tier * 5);
+    const unlockLvl = selectedNode.unlock_level != null ? selectedNode.unlock_level : (selectedNode.tier === 1 ? 1 : selectedNode.tier * 5);
     const isLvlMet = effectiveProgress >= unlockLvl;
+    const reqNode = selectedNode.req ? nodeMap[selectedNode.req] : null;
+    const isReqMet = !selectedNode.req || (reqNode && reqNode.is_bought);
+    const cost = selectedNode.cost || 1;
+    const hasEnoughPts = talentPts >= cost;
 
     let buyBtnHtml = "";
     if (selectedNode.is_bought) {
       buyBtnHtml = `<div class="px-4 py-2.5 rounded-xl bg-emerald-900/60 border border-emerald-500/40 text-emerald-300 text-xs font-black flex items-center justify-center gap-1.5 shadow-sm">✓ ТАЛАНТ УЖЕ ИЗУЧЕН</div>`;
     } else if (!isLvlMet) {
       buyBtnHtml = `<div class="px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-500 text-xs font-bold flex items-center justify-center gap-1">🔒 Требуется ${unlockLvl} ур. или этаж (у вас: ${effectiveProgress})</div>`;
-    } else if (!selectedNode.can_buy) {
-      buyBtnHtml = `<div class="px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 text-xs font-bold flex items-center justify-center gap-1">⛓️ Сначала изучите предыдущий талант ветки</div>`;
-    } else if (talentPts < (selectedNode.cost || 1)) {
-      buyBtnHtml = `<div class="px-4 py-2.5 rounded-xl bg-amber-950/40 border border-amber-500/30 text-amber-400 text-xs font-bold flex items-center justify-center gap-1">⭐ Не хватает очков талантов (нужно: ${selectedNode.cost || 1})</div>`;
+    } else if (!isReqMet) {
+      buyBtnHtml = `<div class="px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 text-xs font-bold flex items-center justify-center gap-1">⛓️ Сначала изучите предыдущий талант ветки (${reqNode ? reqNode.name : 'Т' + (selectedNode.tier - 1)})</div>`;
+    } else if (!hasEnoughPts) {
+      buyBtnHtml = `<div class="px-4 py-2.5 rounded-xl bg-amber-950/40 border border-amber-500/30 text-amber-400 text-xs font-bold flex items-center justify-center gap-1">⭐ Не хватает очков талантов (нужно: ${cost}, у вас: ${talentPts})</div>`;
     } else {
       buyBtnHtml = `
         <button onclick="buyTalentNodeUI('${selectedNode.id}')" class="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 active:scale-95 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/30 flex items-center justify-center gap-2">
           <span>⚡ ИЗУЧИТЬ ТАЛАНТ</span>
-          <span class="px-2 py-0.5 rounded bg-black/20 text-slate-950 text-[11px] font-extrabold">${selectedNode.cost || 1} ⭐</span>
+          <span class="px-2 py-0.5 rounded bg-black/20 text-slate-950 text-[11px] font-extrabold">${cost} ⭐</span>
         </button>`;
     }
 

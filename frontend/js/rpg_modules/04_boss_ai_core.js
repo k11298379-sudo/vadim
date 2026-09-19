@@ -13,27 +13,49 @@ function updateCustomBossAI(boss, p, ARENA) {
 
   const bId = (boss.bossType || boss.boss_id || boss.id || boss.name || "").toLowerCase();
 
-  // Enrage Stages based on Timer or HP
+  // Enrage Stages based on Timer or HP (5-minute hard cap = God Mode)
+  boss.battleStartTime = boss.battleStartTime || Date.now();
   boss.enrageTimer = (boss.enrageTimer || 0) + 1;
-  const hpPct = boss.hp / (boss.maxHp || 1);
-  if (boss.enrageTimer > 5400 || hpPct <= 0.15) {
-    boss.enrageStage = "enraged";
-  } else if (boss.enrageTimer > 3600 || hpPct <= 0.40) {
-    boss.enrageStage = "furious";
-  } else if (boss.enrageTimer > 1800 || hpPct <= 0.70) {
-    boss.enrageStage = "angry";
+  const elapsedMs = Date.now() - boss.battleStartTime;
+  const isGodMode = elapsedMs >= 300000 || boss.enrageTimer >= 18000;
+
+  if (isGodMode) {
+    if (!boss.isGodMode) {
+      boss.isGodMode = true;
+      triggerHaptic("heavy");
+      if (ARENA.cameraTrauma !== undefined) ARENA.cameraTrauma = 1.0;
+      spawnFloatingText(boss.x, boss.y - 45, "⚡⚡ РЕЖИМ БОГА! ⚡⚡", "#ef4444");
+    }
+    boss.enrageStage = "god_mode";
+    // 5% max HP regen per sec
+    const regenPerSec = Math.max(500, Math.floor((boss.maxHp || 10000) * 0.05));
+    const regenPerFrame = Math.max(1, Math.floor(regenPerSec / 60));
+    boss.hp = Math.min(boss.maxHp, boss.hp + regenPerFrame);
+    if (ARENA.frameCount % 60 === 0) {
+      spawnFloatingText(boss.x, boss.y - 30, `✨ +${Math.round(regenPerSec)} РЕГЕН БОГА`, "#22c55e");
+    }
+  } else {
+    const hpPct = boss.hp / (boss.maxHp || 1);
+    if (boss.enrageTimer > 5400 || hpPct <= 0.15) {
+      boss.enrageStage = "enraged";
+    } else if (boss.enrageTimer > 3600 || hpPct <= 0.40) {
+      boss.enrageStage = "furious";
+    } else if (boss.enrageTimer > 1800 || hpPct <= 0.70) {
+      boss.enrageStage = "angry";
+    }
   }
 
-  const bSpeedMult = boss.enrageStage === "enraged" ? 1.3 : boss.enrageStage === "furious" ? 1.18 : boss.enrageStage === "angry" ? 1.08 : 1.0;
+  const bSpeedMult = boss.isGodMode ? 3.5 : (boss.enrageStage === "enraged" ? 1.3 : boss.enrageStage === "furious" ? 1.18 : boss.enrageStage === "angry" ? 1.08 : 1.0);
 
   // Decrement cooldowns & charge Ultimate meter
-  boss.skillCooldown = Math.max(0, boss.skillCooldown - 1);
-  boss.meleeCooldown = Math.max(0, boss.meleeCooldown - 1);
-  boss.chargeCooldown = Math.max(0, (boss.chargeCooldown || 0) - 1);
+  const cdReduction = boss.isGodMode ? 3 : 1;
+  boss.skillCooldown = Math.max(0, boss.skillCooldown - cdReduction);
+  boss.meleeCooldown = Math.max(0, boss.meleeCooldown - cdReduction);
+  boss.chargeCooldown = Math.max(0, (boss.chargeCooldown || 0) - cdReduction);
   
-  let ultChargeRate = (boss.enrageStage === "enraged" ? 0.14 : 0.08);
+  let ultChargeRate = boss.isGodMode ? 0.8 : (boss.enrageStage === "enraged" ? 0.14 : 0.08);
   if (bId.includes("faceless_void") || bId.includes("хроно")) {
-    ultChargeRate *= 0.25; // Massive nerf to Chronosphere cooldown (4x longer, ~1.5 - 2 mins)
+    if (!boss.isGodMode) ultChargeRate *= 0.25; // Massive nerf to Chronosphere cooldown (4x longer, ~1.5 - 2 mins)
   }
   boss.ultimateMeter = Math.min(100, (boss.ultimateMeter || 0) + ultChargeRate);
 
@@ -90,17 +112,21 @@ function updateCustomBossAI(boss, p, ARENA) {
         p.isFrozenInTime = false;
       }
     }
-    // 3. ROTATING RESONANCE BEAM
+    // 3. ROTATING RESONANCE BEAM (Ancient Tormentor Laser)
     else if (bt.type === "rotating_beam") {
       bt.angle += bt.rotSpeed;
       const bx2 = bt.cx + Math.cos(bt.angle) * bt.length;
       const by2 = bt.cy + Math.sin(bt.angle) * bt.length;
       const lineDist = distToSegment(p.x, p.y, bt.cx, bt.cy, bx2, by2);
-      if (lineDist < p.radius + 14 && (ARENA.frameCount % 20 === 0)) {
-        const bmDmg = Math.floor(bt.damage || calculateBossAttackDamage(boss, 0.6));
+      if (lineDist < p.radius + 16 && (ARENA.frameCount % 12 === 0)) {
+        const baseBeamDmg = Math.floor(bt.damage || calculateBossAttackDamage(boss, 3.2));
+        const pctMelt = Math.floor((p.maxHp || 1000) * 0.08); // 8% HP melt per tick
+        const bmDmg = baseBeamDmg + pctMelt;
         applyDamageToPlayer(bmDmg, "beam");
-        spawnFloatingText(p.x, p.y - 20, `🔮 ЛАЗЕР -${bmDmg}`, "#e879f9");
-        applyStatusEffectToPlayer({ burn: true, burnDuration: 80, burnDmg: Math.floor(boss.atk * 0.15) });
+        spawnFloatingText(p.x, p.y - 20, `🔮 СМЕРТЕЛЬНЫЙ ЛАЗЕР -${bmDmg}!`, "#e879f9");
+        triggerHaptic("heavy");
+        if (ARENA.cameraTrauma !== undefined) ARENA.cameraTrauma = Math.min(1.0, (ARENA.cameraTrauma || 0) + 0.35);
+        applyStatusEffectToPlayer({ burn: true, burnDuration: 90, burnDmg: Math.floor((boss.atk || 320) * 0.6) });
       }
     }
 

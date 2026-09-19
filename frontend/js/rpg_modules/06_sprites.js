@@ -630,6 +630,19 @@
     ctx.ellipse(0, c.radius + 2 - bob - (c.jumpY || 0), (c.radius * 0.9) * shadowScale, 4.5 * shadowScale, 0, 0, Math.PI * 2);
     ctx.fill();
 
+    // God Mode Aura
+    if (c.isGodMode || c.enrageStage === "god_mode") {
+      const pulse = 1 + Math.sin(time * 0.25) * 0.15;
+      ctx.strokeStyle = "rgba(239, 68, 68, 0.85)";
+      ctx.lineWidth = 3;
+      ctx.shadowColor = "#ef4444";
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.arc(0, 0, (c.radius + 8) * pulse, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
     // Stagger / Stun indicator stars
     if (c.state === "stagger" || c.isStaggered) {
       ctx.fillStyle = "#facc15";
@@ -1658,28 +1671,35 @@
     safeRoundRect(ctx, bannerX, bannerY, bannerW, bannerH, 12);
     ctx.fill();
 
-    ctx.strokeStyle = boss.enraged ? "#ef4444" : (boss.isStaggered ? "#ec4899" : "#f59e0b");
-    ctx.lineWidth = 1.8;
+      const isGod = boss.isGodMode || boss.enrageStage === "god_mode";
+    ctx.strokeStyle = isGod ? "#ef4444" : (boss.enraged ? "#f97316" : (boss.isStaggered ? "#ec4899" : "#f59e0b"));
+    ctx.lineWidth = isGod ? 2.5 : 1.8;
     ctx.beginPath();
     safeRoundRect(ctx, bannerX, bannerY, bannerW, bannerH, 12);
     ctx.stroke();
 
     // 1. Top Row: Title & Party Mode Toggle
     ctx.font = "bold 10px sans-serif";
-    ctx.fillStyle = boss.enraged ? "#f87171" : "#facc15";
+    ctx.fillStyle = isGod ? "#ef4444" : (boss.enraged ? "#f87171" : "#facc15");
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
     let enrageLabel = "";
-    const eTimer = boss.enrageTimer || 0;
-    if (boss.enrageStage === "enraged" || boss.enraged) {
-      enrageLabel = "🔥 БЕЗУМИЕ!";
+    const elapsedSec = Math.floor((Date.now() - (boss.battleStartTime || Date.now())) / 1000);
+    const remSec = Math.max(0, 300 - elapsedSec);
+    const remM = Math.floor(remSec / 60);
+    const remS = remSec % 60;
+    const timerStr = `${remM}:${remS < 10 ? "0" : ""}${remS}`;
+
+    if (isGod) {
+      enrageLabel = "💀 РЕЖИМ БОГА!";
+    } else if (boss.enrageStage === "enraged" || boss.enraged) {
+      enrageLabel = `🔥 БЕЗУМИЕ (${timerStr})`;
     } else if (boss.enrageStage === "furious") {
-      enrageLabel = "⚡ ЯРОСТЬ!";
+      enrageLabel = `⚡ ЯРОСТЬ (${timerStr})`;
     } else if (boss.enrageStage === "angry") {
-      enrageLabel = "😡 ЗЛОЙ!";
+      enrageLabel = `😡 ЗЛОЙ (${timerStr})`;
     } else {
-      const secLeft = Math.max(0, Math.ceil((2000 - eTimer) / 60));
-      enrageLabel = `⏱️ Злость: ${secLeft}с`;
+      enrageLabel = `⏱️ ${timerStr}`;
     }
     const bossTitle = `👑 ${boss.name || "БОСС"} • ${enrageLabel}`;
     ctx.fillText(bossTitle.length > 28 ? bossTitle.slice(0, 27) + "…" : bossTitle, bannerX + 10, bannerY + 11);
@@ -1723,7 +1743,11 @@
 
     // HP Fill Gradient
     const hpGrad = ctx.createLinearGradient(hpBarX, 0, hpBarX + hpBarW, 0);
-    if (boss.enraged) {
+    if (isGod) {
+      hpGrad.addColorStop(0, "#7f1d1d");
+      hpGrad.addColorStop(0.5, "#ef4444");
+      hpGrad.addColorStop(1, "#b91c1c");
+    } else if (boss.enraged) {
       hpGrad.addColorStop(0, "#ea580c");
       hpGrad.addColorStop(1, "#dc2626");
     } else {
@@ -1773,7 +1797,12 @@
 
     // Badges on the right of poise bar
     let badgeX = poiseBarX + poiseBarW + 6;
-    if (boss.enraged) {
+    if (isGod) {
+      ctx.fillStyle = "#ef4444";
+      ctx.font = "bold 7.5px sans-serif";
+      ctx.fillText("⚡ БОГ", badgeX, poiseBarY + poiseBarH / 2);
+      badgeX += 34;
+    } else if (boss.enraged) {
       ctx.fillStyle = "#ef4444";
       ctx.font = "bold 7.5px sans-serif";
       ctx.fillText("🔥 ЯРОСТЬ", badgeX, poiseBarY + poiseBarH / 2);

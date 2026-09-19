@@ -1456,7 +1456,7 @@
     if (typeof ARENA !== "undefined" && ARENA.waveState === "boss_victory") {
       ARENA.waveState = "fighting";
     }
-    if (ARENA.isRaidBossBattle) {
+    if (typeof ARENA !== "undefined" && (ARENA.isRaidBossBattle || ARENA._wasRaidBossBattle)) {
       exitRaidBossBattle();
       return;
     }

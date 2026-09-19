@@ -161,19 +161,26 @@
       bossAtk = bossAtk || 140;
     }
 
-    // Phase Enrage multiplier (when boss is enraged/furious/angry)
+    // Phase Enrage multiplier (when boss is enraged/furious/angry or in God Mode)
     let enrageMult = 1.0;
-    if (boss.enrageStage === "enraged") enrageMult = 1.40;
+    const isGod = boss.isGodMode || boss.enrageStage === "god_mode";
+    if (isGod) enrageMult = 15.0;
+    else if (boss.enrageStage === "enraged") enrageMult = 1.40;
     else if (boss.enrageStage === "furious") enrageMult = 1.25;
     else if (boss.enrageStage === "angry") enrageMult = 1.15;
 
     let rawDmg = Math.floor(bossAtk * baseMult * enrageMult);
 
     // Hyperbolic player defense reduction: DR = def / (def + 80), max 80%
-    const dr = Math.min(0.80, (def * 1.0) / (def + 80));
+    const dr = isGod ? 0 : Math.min(0.80, (def * 1.0) / (def + 80));
     let finalDmg = Math.max(10, Math.floor(rawDmg * (1.0 - dr)));
 
-    if (p && p.isBlocking) {
+    if (isGod) {
+      const pMax = p ? (p.maxHp || stats.hp_max || 1000) : 1000;
+      finalDmg = Math.max(finalDmg, Math.floor(pMax * 0.70));
+    }
+
+    if (p && p.isBlocking && !isGod) {
       finalDmg = Math.floor(finalDmg * 0.40);
     }
 
@@ -317,7 +324,8 @@
 
     // 7. HEALTH GATE PROTECTION:
     // Saves player ONCE per 60s from an unexpected lethal hit if they were at high health (>60% HP)
-    if (p.currentHp > pMax * 0.60 && finalDmg >= p.currentHp && (!p._lastHealthGateFrame || nowFrame - p._lastHealthGateFrame > 3600)) {
+    const bossIsGod = ARENA.bossEntity && (ARENA.bossEntity.isGodMode || ARENA.bossEntity.enrageStage === "god_mode");
+    if (!bossIsGod && p.currentHp > pMax * 0.60 && finalDmg >= p.currentHp && (!p._lastHealthGateFrame || nowFrame - p._lastHealthGateFrame > 3600)) {
       p._lastHealthGateFrame = nowFrame;
       finalDmg = Math.max(1, p.currentHp - 1);
       p.currentHp = 1;
@@ -343,6 +351,7 @@
         const reward = RPG_STATE.lastBossChestReward;
         ARENA.waveState = "fighting";
         ARENA.isRaidBossBattle = false;
+        ARENA._wasRaidBossBattle = true;
         RPG_STATE.lastBossChestReward = null;
         if (reward) {
           openChestModal(reward);

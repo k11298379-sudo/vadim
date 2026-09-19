@@ -118,7 +118,7 @@ function renderVisualTalentTree(p, treeData) {
     const theme = TREE_BRANCH_THEMES[bKey];
     const t1Node = (branches[bKey] || []).find(n => n.tier === 1);
     const isT1Bought = t1Node && t1Node.is_bought;
-    const isT1Avail = t1Node && t1Node.can_buy;
+    const isT1Avail = t1Node && !t1Node.is_bought && effectiveProgress >= (t1Node.unlock_level != null ? t1Node.unlock_level : 1);
 
     const strokeColor = isT1Bought ? theme.activeStroke : (isT1Avail ? "#eab308" : "#334155");
     const strokeW = isT1Bought ? 3.5 : (isT1Avail ? 2.5 : 1.5);
@@ -133,7 +133,7 @@ function renderVisualTalentTree(p, treeData) {
       const childNode = (branches[bKey] || []).find(n => n.tier === t + 1);
       const isParentBought = parentNode && parentNode.is_bought;
       const isChildBought = childNode && childNode.is_bought;
-      const isChildAvail = childNode && childNode.can_buy;
+      const isChildAvail = childNode && !childNode.is_bought && isParentBought && effectiveProgress >= (childNode.unlock_level != null ? childNode.unlock_level : childNode.tier * 5);
 
       let lineCol = "#334155";
       let lw = 1.5;
@@ -183,11 +183,16 @@ function renderVisualTalentTree(p, treeData) {
       let bgStyle = "";
       let badgeHtml = "";
 
+      const isNodeLvlMet = effectiveProgress >= (node.unlock_level != null ? node.unlock_level : (node.tier === 1 ? 1 : node.tier * 5));
+      const nodeReq = node.req ? nodeMap[node.req] : null;
+      const isNodeReqMet = !node.req || (nodeReq && nodeReq.is_bought);
+      const isNodeAvail = !node.is_bought && isNodeLvlMet && isNodeReqMet;
+
       if (node.is_bought) {
         bgStyle = isPerk ? "bg-gradient-to-br from-emerald-950 to-slate-900 border-emerald-400 shadow-lg shadow-emerald-500/30" : "bg-emerald-950/90 border-emerald-500 shadow-md shadow-emerald-500/20";
         borderStyle = "border-2";
         badgeHtml = `<span class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center text-[9px] font-black shadow">✓</span>`;
-      } else if (node.can_buy) {
+      } else if (isNodeAvail) {
         bgStyle = isPerk ? "bg-gradient-to-br from-amber-950 via-slate-900 to-amber-900 border-amber-400 shadow-xl shadow-amber-500/40 animate-pulse" : `${theme.nodeAvail} border-2`;
         borderStyle = isPerk ? "border-2" : "border-2";
         badgeHtml = `<span class="absolute -top-1 -right-1 px-1 py-0.2 rounded-full bg-amber-500 text-slate-950 text-[8px] font-black shadow">${node.cost || 1}⭐</span>`;
@@ -207,7 +212,7 @@ function renderVisualTalentTree(p, treeData) {
              class="absolute rounded-2xl ${borderStyle} ${bgStyle} flex flex-col items-center justify-center cursor-pointer transition-all active:scale-95 group z-10">
           ${badgeHtml}
           <span class="${isPerk ? 'text-2xl' : 'text-xl'} leading-none filter drop-shadow">${node.icon}</span>
-          <span class="text-[8px] font-black ${node.is_bought ? 'text-emerald-300' : (node.can_buy ? 'text-amber-300' : 'text-slate-500')} leading-none mt-1">Т${node.tier}</span>
+          <span class="text-[8px] font-black ${node.is_bought ? 'text-emerald-300' : (isNodeAvail ? 'text-amber-300' : 'text-slate-500')} leading-none mt-1">Т${node.tier}</span>
         </div>`;
     }
   }
@@ -218,23 +223,27 @@ function renderVisualTalentTree(p, treeData) {
   if (selectedNode) {
     const isPerk = selectedNode.desc && selectedNode.desc.includes("[ПЕРК]");
     const theme = TREE_BRANCH_THEMES[selectedNode.branchKey] || TREE_BRANCH_THEMES.atk;
-    const unlockLvl = selectedNode.unlock_level || (selectedNode.tier * 5);
+    const unlockLvl = selectedNode.unlock_level != null ? selectedNode.unlock_level : (selectedNode.tier === 1 ? 1 : selectedNode.tier * 5);
     const isLvlMet = effectiveProgress >= unlockLvl;
+    const reqNode = selectedNode.req ? nodeMap[selectedNode.req] : null;
+    const isReqMet = !selectedNode.req || (reqNode && reqNode.is_bought);
+    const cost = selectedNode.cost || 1;
+    const hasEnoughPts = talentPts >= cost;
 
     let buyBtnHtml = "";
     if (selectedNode.is_bought) {
       buyBtnHtml = `<div class="px-4 py-2.5 rounded-xl bg-emerald-900/60 border border-emerald-500/40 text-emerald-300 text-xs font-black flex items-center justify-center gap-1.5 shadow-sm">✓ ТАЛАНТ УЖЕ ИЗУЧЕН</div>`;
     } else if (!isLvlMet) {
       buyBtnHtml = `<div class="px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-500 text-xs font-bold flex items-center justify-center gap-1">🔒 Требуется ${unlockLvl} ур. или этаж (у вас: ${effectiveProgress})</div>`;
-    } else if (!selectedNode.can_buy) {
-      buyBtnHtml = `<div class="px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 text-xs font-bold flex items-center justify-center gap-1">⛓️ Сначала изучите предыдущий талант ветки</div>`;
-    } else if (talentPts < (selectedNode.cost || 1)) {
-      buyBtnHtml = `<div class="px-4 py-2.5 rounded-xl bg-amber-950/40 border border-amber-500/30 text-amber-400 text-xs font-bold flex items-center justify-center gap-1">⭐ Не хватает очков талантов (нужно: ${selectedNode.cost || 1})</div>`;
+    } else if (!isReqMet) {
+      buyBtnHtml = `<div class="px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 text-xs font-bold flex items-center justify-center gap-1">⛓️ Сначала изучите предыдущий талант ветки (${reqNode ? reqNode.name : 'Т' + (selectedNode.tier - 1)})</div>`;
+    } else if (!hasEnoughPts) {
+      buyBtnHtml = `<div class="px-4 py-2.5 rounded-xl bg-amber-950/40 border border-amber-500/30 text-amber-400 text-xs font-bold flex items-center justify-center gap-1">⭐ Не хватает очков талантов (нужно: ${cost}, у вас: ${talentPts})</div>`;
     } else {
       buyBtnHtml = `
         <button onclick="buyTalentNodeUI('${selectedNode.id}')" class="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 active:scale-95 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/30 flex items-center justify-center gap-2">
           <span>⚡ ИЗУЧИТЬ ТАЛАНТ</span>
-          <span class="px-2 py-0.5 rounded bg-black/20 text-slate-950 text-[11px] font-extrabold">${selectedNode.cost || 1} ⭐</span>
+          <span class="px-2 py-0.5 rounded bg-black/20 text-slate-950 text-[11px] font-extrabold">${cost} ⭐</span>
         </button>`;
     }
 

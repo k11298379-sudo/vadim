@@ -867,6 +867,16 @@
       spawnArenaCreep();
     }
 
+    // Deadlock safeguard: if wave is fighting, no creeps exist, and all wave creeps are considered spawned
+    if (!ARENA.isRaidBossBattle && !ARENA.isBossActive && ARENA.waveState === "fighting" && ARENA.creeps.length === 0 && ARENA.totalCreepsSpawned >= ARENA.creepsNeededForWave) {
+      if (ARENA.creepsKilledInWave >= ARENA.creepsNeededForWave) {
+        if (typeof advanceArenaWave === "function") advanceArenaWave();
+      } else {
+        ARENA.totalCreepsSpawned = ARENA.creepsKilledInWave;
+        if (typeof spawnArenaCreep === "function") spawnArenaCreep();
+      }
+    }
+
     // Boss phase logic & companion squad updates
     if (ARENA.isBossActive && ARENA.bossEntity) {
       updateBossPhase();
@@ -1701,8 +1711,28 @@
 
     const hpPct = boss.hp / boss.maxHp;
 
-    // 2. Enrage check (HP <= 35%)
-    if (hpPct <= 0.35 && !boss.enraged) {
+    // 2. God Mode check (5 minutes / 300 seconds)
+    boss.battleStartTime = boss.battleStartTime || Date.now();
+    const elapsedMs = Date.now() - boss.battleStartTime;
+    boss.enrageTimer = (boss.enrageTimer || 0) + 1;
+    if (elapsedMs >= 300000 || boss.enrageTimer >= 18000) {
+      if (!boss.isGodMode) {
+        boss.isGodMode = true;
+        boss.enraged = true;
+        boss.enrageStage = "god_mode";
+        boss.speed = Math.max(3.0, (boss.speed || 0.85) * 3.5);
+        ARENA.cameraTrauma = 1.0;
+        ARENA.hitstop = 15;
+        spawnFloatingText(boss.x, boss.y - 45, "⚡⚡ РЕЖИМ БОГА: БЕРСЕРК! ⚡⚡", "#ef4444");
+        triggerHaptic("heavy");
+      }
+      const regenPerSec = Math.max(500, Math.floor((boss.maxHp || 10000) * 0.05));
+      const regenPerFrame = Math.max(1, Math.floor(regenPerSec / 60));
+      boss.hp = Math.min(boss.maxHp, boss.hp + regenPerFrame);
+      if (ARENA.frameCount % 60 === 0) {
+        spawnFloatingText(boss.x, boss.y - 30, `✨ +${Math.round(regenPerSec)} РЕГЕН БОГА`, "#22c55e");
+      }
+    } else if (hpPct <= 0.35 && !boss.enraged) {
       boss.enraged = true;
       boss.speed = Math.min(1.4, (boss.speed || 0.85) * 1.45);
       boss.atk = Math.floor(boss.atk * 1.35);

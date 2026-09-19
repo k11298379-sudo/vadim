@@ -37,6 +37,7 @@ async def get_talent_tree_endpoint(
     char = await get_or_create_rpg_character(session, user_id=user_id)
 
     hero_class = str(getattr(char, "hero_class", "pudge") or "pudge").lower()
+    char_progress = max(char.level or 1, getattr(char, "dungeon_floor", 1) or 1)
     char_level = char.level or 1
     talent_points = get_hero_available_talent_points(char, hero_class)
     if getattr(char, "talent_points", None) != talent_points:
@@ -56,7 +57,7 @@ async def get_talent_tree_endpoint(
         can_buy = (
             not is_bought
             and talent_points >= node_cfg["cost"]
-            and is_node_available(node_cfg, char_level, purchased)
+            and is_node_available(node_cfg, char_progress, purchased)
         )
         branches.setdefault(branch, []).append({
             "id": node_id,
@@ -103,7 +104,7 @@ async def buy_talent_node_endpoint(
 
     char = await get_or_create_rpg_character(session, user_id=user_id)
     hero_class = str(getattr(char, "hero_class", "pudge") or "pudge").lower()
-    char_level = char.level or 1
+    char_progress = max(char.level or 1, getattr(char, "dungeon_floor", 1) or 1)
     talent_points = get_hero_available_talent_points(char, hero_class)
 
     hero_tree = get_hero_tree(hero_class)
@@ -118,16 +119,18 @@ async def buy_talent_node_endpoint(
     if hero_nodes.get(node_id):
         raise HTTPException(status_code=400, detail="Этот талант уже куплен!")
 
-    if not is_node_available(node_cfg, char_level, hero_nodes):
-        req = node_cfg.get("req")
-        if req and not hero_nodes.get(req):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Сначала купите предыдущий талант ветки (требуется: {req})."
-            )
+    req = node_cfg.get("req")
+    if req and not hero_nodes.get(req):
+        prev_name = hero_tree.get(req, {}).get("name", req)
         raise HTTPException(
             status_code=400,
-            detail=f"Нужен {node_cfg['unlock_level']} уровень персонажа (у вас {char_level})."
+            detail=f"Сначала изучите предыдущий талант ветки ({prev_name})."
+        )
+
+    if char_progress < node_cfg["unlock_level"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Требуется {node_cfg['unlock_level']} уровень персонажа или этаж (у вас: {char_progress})."
         )
 
     cost = node_cfg["cost"]

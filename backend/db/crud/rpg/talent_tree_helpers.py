@@ -8,7 +8,7 @@ from typing import Dict, Any
 TIER_COST = {1: 1, 2: 1, 3: 2, 4: 2, 5: 3}
 
 # Уровень персонажа для открытия тира
-TIER_UNLOCK_LEVEL = {1: 5, 2: 10, 3: 15, 4: 20, 5: 30}
+TIER_UNLOCK_LEVEL = {1: 1, 2: 10, 3: 15, 4: 20, 5: 30}
 
 BRANCH_LABELS = {
     "atk": {"name": "Атака", "icon": "🗡️", "color": "red"},

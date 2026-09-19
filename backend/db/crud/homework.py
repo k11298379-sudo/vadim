@@ -292,8 +292,6 @@ async def find_upcoming_dates_for_subject(
 
     for offset in range(max_days_forward):
         cur_d = start_d + timedelta(days=offset)
-        if cur_d.isoweekday() == 7:
-            continue
         if await is_subject_scheduled_on_date(session, subject_id, cur_d):
             results.append(cur_d)
             if len(results) >= limit:
