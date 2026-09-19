@@ -1652,6 +1652,7 @@ loadRpgImages();
     bossArenaMode: false,
     moveInput: { left: false, right: false },
     dodgeCooldown: 0,
+    potionCooldown: 0,
     dodgeActive: 0,      // frames remaining of dodge i-frame
     dodgeDir: 1,          // direction of dodge roll
     dangerZones: [],
@@ -1938,6 +1939,7 @@ loadRpgImages();
     ARENA.bossArenaMode = false;
     ARENA.moveInput = { left: false, right: false };
     ARENA.dodgeCooldown = 0;
+    ARENA.potionCooldown = 0;
     ARENA.dodgeActive = 0;
     ARENA.dodgeDir = 1;
     ARENA.dangerZones = [];
@@ -2245,7 +2247,7 @@ loadRpgImages();
     if (p && !p.isDead && typeof p.currentHp === "number" && p.currentHp > 0 && lifestealPct > 0) {
       const pMax = p.maxHp || 500;
       const rawHeal = Math.floor(finalDmg * (lifestealPct / 100));
-      const heal = Math.max(1, Math.min(Math.floor(pMax * 0.03), 2000, rawHeal));
+      const heal = Math.max(1, Math.min(Math.floor(pMax * 0.05), 5000, rawHeal));
       p.currentHp = Math.min(pMax, p.currentHp + heal);
       if (ARENA.frameCount % 10 === 0) {
         spawnFloatingText(p.x, p.y - 25, `+${heal} HP 🩸`, "#22c55e");
@@ -2357,9 +2359,9 @@ loadRpgImages();
     if (canEvade && !bossMkbProcced && dodgeChance > 0 && Math.random() * 100 < dodgeChance) {
       spawnFloatingText(p.x, p.y - 25, "💨 УВОРОТ!", "#38bdf8");
       triggerHaptic("light");
-      // PA PERK: Blur Heal (Restores 1.5% max HP on dodge, capped)
+      // PA PERK: Blur Heal (Restores 2.5% max HP on dodge, capped)
       if (window.hasTalentPerk && window.hasTalentPerk("perk_blur_heal")) {
-        const healAmt = Math.max(1, Math.min(Math.floor((p.maxHp || 500) * 0.015), 1200));
+        const healAmt = Math.max(1, Math.min(Math.floor((p.maxHp || 500) * 0.025), 3000));
         p.currentHp = Math.min(p.maxHp || 500, (p.currentHp || 0) + healAmt);
         spawnFloatingText(p.x, p.y - 45, `💚 +${healAmt} (РАЗМЫТИЕ)`, "#10b981");
       }
@@ -2846,6 +2848,14 @@ loadRpgImages();
         if (s1El.textContent !== txt) s1El.textContent = txt;
         const btn1 = document.getElementById("rpg-btn-skill1");
         if (btn1) btn1.style.opacity = s1Sec > 0 ? "0.6" : "1";
+      }
+      const potEl = document.getElementById("rpg-cd-potion");
+      if (potEl) {
+        const potSec = ARENA.potionCooldown > 0 ? Math.ceil(ARENA.potionCooldown / 60) : 0;
+        const txt = potSec > 0 ? `${potSec}с` : "";
+        if (potEl.textContent !== txt) potEl.textContent = txt;
+        const btnPot = document.getElementById("rpg-btn-potion");
+        if (btnPot) btnPot.style.opacity = potSec > 0 ? "0.6" : "1";
       }
       const ultEl = document.getElementById("rpg-cd-ult");
       if (ultEl) {
@@ -3339,7 +3349,7 @@ loadRpgImages();
       if (ARENA.frameCount % 60 === 0) {
         const hasTarrasque = Object.values(eq).some(it => it && (it.name?.includes("Tarrasque") || it.name?.includes("Тарраск") || it.bonus?.pct_hp_regen));
         if (hasTarrasque) {
-          const heal = Math.min(Math.floor(p.maxHp * 0.008), 2000);
+          const heal = Math.min(Math.floor(p.maxHp * 0.015), 6000);
           p.currentHp = Math.min(p.maxHp, p.currentHp + heal);
           spawnFloatingText(p.x, p.y - 30, `+${heal} HP (ТАРАСКА) ❤️`, "#22c55e");
         }
@@ -3356,6 +3366,7 @@ loadRpgImages();
     }
     if (ARENA.skill1Cooldown > 0) ARENA.skill1Cooldown--;
     if (ARENA.ultCooldown > 0) ARENA.ultCooldown--;
+    if (ARENA.potionCooldown > 0) ARENA.potionCooldown--;
 
     // Decrement item cooldowns
     if (ARENA.itemCooldowns) {
@@ -3411,8 +3422,8 @@ loadRpgImages();
           }
           const spellAmp = (stats.spell_amp !== undefined ? stats.spell_amp : ((p.maxMp || 100) * 0.2));
 
-          // 1. Исцеление Ларго (разделено на 4 для тика 0.5с): сбалансировано с ограничением по тику
-          const healAmt = Math.max(6, Math.min(Math.floor(p.maxHp * 0.003), 800) + Math.min(600, Math.floor((stats.int || 20) * 0.08)));
+          // 1. Исцеление Ларго (разделено на 4 для тика 0.5с): сбалансировано
+          const healAmt = Math.max(12, Math.min(Math.floor(p.maxHp * 0.01), 6000) + Math.min(4000, Math.floor((stats.int || 20) * 0.25)));
           p.currentHp = Math.min(p.maxHp, p.currentHp + healAmt);
           spawnFloatingText(p.x, p.y - 30, `💚 +${healAmt} ХП (РАПСОДИЯ)`, "#22c55e");
 
@@ -5380,7 +5391,7 @@ loadRpgImages();
         p.stunTimer = 0;
         p.freezeTimer = 0;
         p.slowTimer = 0;
-        const healHp = Math.min(Math.floor(playerMaxHp * 0.05 * starMult), 4000 * starMult);
+        const healHp = Math.min(Math.floor(playerMaxHp * 0.08 * starMult), 8000 * starMult);
         const healMp = Math.floor((p.maxMp || 100) * 0.25);
         p.currentHp = Math.min(playerMaxHp, (p.currentHp || playerMaxHp) + healHp);
         p.currentMp = Math.min(p.maxMp || 100, (p.currentMp || p.maxMp || 100) + healMp);
@@ -5407,7 +5418,7 @@ loadRpgImages();
     else if (petId === "slime") {
       if (pet.timer >= 720) {
         pet.timer = 0;
-        const heal = Math.min(Math.floor(playerMaxHp * 0.04 * starMult), 3000 * starMult);
+        const heal = Math.min(Math.floor(playerMaxHp * 0.07 * starMult), 6000 * starMult);
         p.currentHp = Math.min(playerMaxHp, (p.currentHp || playerMaxHp) + heal);
         spawnFloatingText(p.x, p.y - 22, `💧 КАПЛЯ ЖИЗНИ +${heal} HP`, "#38bdf8");
         triggerHaptic("light");
@@ -6804,7 +6815,7 @@ function distToSegment(px, py, x1, y1, x2, y2) {
         if (!c.isBoss && stats.lifesteal > 0) {
           const pMax = p.maxHp || 500;
           const rawHeal = Math.floor(finalDmg * (stats.lifesteal / 100));
-          const heal = Math.max(1, Math.min(Math.floor(pMax * 0.03), 2000, rawHeal));
+          const heal = Math.max(1, Math.min(Math.floor(pMax * 0.05), 5000, rawHeal));
           p.currentHp = Math.min(pMax, p.currentHp + heal);
         }
 
@@ -7216,7 +7227,7 @@ function distToSegment(px, py, x1, y1, x2, y2) {
 
         const ultMult = p.largoRhapsodyDmgMult;
         const spellAmp = (stats.spell_amp !== undefined ? stats.spell_amp : ((p.maxMp || 100) * 0.2));
-        const healAmt = Math.max(6, Math.min(Math.floor(p.maxHp * 0.003), 800) + Math.min(600, Math.floor((stats.int || 20) * 0.08)));
+        const healAmt = Math.max(12, Math.min(Math.floor(p.maxHp * 0.01), 6000) + Math.min(4000, Math.floor((stats.int || 20) * 0.25)));
         p.currentHp = Math.min(p.maxHp, p.currentHp + healAmt);
         spawnFloatingText(p.x, p.y - 30, `💚 +${healAmt} ХП (РАПСОДИЯ)`, "#22c55e");
 
@@ -8138,10 +8149,41 @@ function distToSegment(px, py, x1, y1, x2, y2) {
 
   function usePlayerPotion() {
     const p = ARENA.player;
-    const heal = 120;
-    if (p.currentHp >= p.maxHp) return;
+    if (!p || p.isDead) return;
+
+    if (ARENA.potionCooldown > 0) {
+      triggerHaptic("light");
+      return;
+    }
+
+    const stats = RPG_STATE.profile?.stats || {};
+    const flatBonus = stats.flask_heal_flat || 0;
+    const pctBonus = stats.flask_heal_pct || 0;
+    const heal = Math.max(120, Math.floor(120 + flatBonus + (p.maxHp * pctBonus)));
+
+    if (p.currentHp >= p.maxHp && (!stats.flask_mana || p.currentMp >= p.maxMp)) {
+      spawnFloatingText(p.x, p.y - 25, "Здоровье полно!", "#94a3b8");
+      return;
+    }
+
     p.currentHp = Math.min(p.maxHp, p.currentHp + heal);
-    spawnFloatingText(p.x, p.y - 25, `+${heal} HP ❤️`, "#22c55e");
+    spawnFloatingText(p.x, p.y - 25, `+${heal} HP 🧪`, "#22c55e");
+
+    if (stats.flask_mana && stats.flask_mana > 0) {
+      p.currentMp = Math.min(p.maxMp, p.currentMp + stats.flask_mana);
+      spawnFloatingText(p.x, p.y - 42, `+${stats.flask_mana} MP 🔮`, "#38bdf8");
+    }
+
+    if (window.hasTalentPerk && window.hasTalentPerk("perk_divine_flask")) {
+      p.stunTimer = 0;
+      p.freezeTimer = 0;
+      p.slowTimer = 0;
+      p.speedBuffTimer = 180;
+      spawnFloatingText(p.x, p.y - 58, "🌟 ОЧИЩЕНИЕ И УСКОРЕНИЕ!", "#facc15");
+    }
+
+    const cdReduct = stats.flask_cd_reduct || 0;
+    ARENA.potionCooldown = Math.max(120, 360 - cdReduct);
     triggerHaptic("success");
   }
 
@@ -8725,21 +8767,6 @@ function distToSegment(px, py, x1, y1, x2, y2) {
     }
     ARENA.floatingTexts.push({ x, y, text, color, opacity: 1.0 });
   }
-
-  // ===========================================================================
-  // CANVAS RENDERING — SOLID TOKENS, CLEAR SPRITES & VIBRANT EFFECTS
-  // ===========================================================================
-
-
-  // ===========================================================================
-  // NATARGRP PROCEDURAL VECTOR SPRITE & VFX ENGINE (ZERO EMOJIS ON CANVAS)
-  // ===========================================================================
-
-  function drawProceduralHero(ctx, p, heroClass, time = (ARENA.frameCount || 0), isAttacking, comboStep) {
-    time = (time != null ? time : (ARENA.frameCount || 0));
-    const hClass = (heroClass || "pudge").toLowerCase();
-    const bob = Math.sin(time * 0.14) * 2;
-    const facing = (p && p.facing !== undefined) ? p.facing : 1;
 
 // ============================================================================
 // 06_boss_models_early.js — Procedural Vector Models for Bosses 1–6
@@ -9660,6 +9687,11 @@ function drawBossModelMid(ctx, b, bId, time) {
   return false;
 }
 
+  function drawProceduralHero(ctx, p, heroClass, time = (ARENA.frameCount || 0), isAttacking, comboStep) {
+    time = (time != null ? time : (ARENA.frameCount || 0));
+    const hClass = (heroClass || "pudge").toLowerCase();
+    const bob = Math.sin(time * 0.14) * 2;
+    const facing = (p && p.facing !== undefined) ? p.facing : 1;
 
     ctx.save();
     ctx.translate(p.x, p.y + bob);
@@ -14631,8 +14663,9 @@ function renderSpecialBossTelegraphs(ctx, ARENA, time) {
 
           <!-- Active Items (above joystick) -->
           <div class="absolute bottom-28 left-3 z-20 flex flex-col gap-2">
-            <button ontouchstart="event.preventDefault(); window.RPG.usePotionAction()" onmousedown="event.preventDefault(); window.RPG.usePotionAction()" onclick="window.RPG.usePotionAction()" title="Зелье / Сыр [F / 1]" class="w-10 h-10 rounded-2xl bg-emerald-600/95 border-2 border-emerald-300 text-white font-bold text-lg flex items-center justify-center shadow-lg active:scale-90 transition-transform">
-              🧪
+            <button id="rpg-btn-potion" ontouchstart="event.preventDefault(); window.RPG.usePotionAction()" onmousedown="event.preventDefault(); window.RPG.usePotionAction()" onclick="window.RPG.usePotionAction()" title="Зелье / Сыр [F / 1]" class="w-10 h-10 rounded-2xl bg-emerald-600/95 border-2 border-emerald-300 text-white font-bold text-lg flex items-center justify-center shadow-lg active:scale-90 transition-transform relative">
+              <span>🧪</span>
+              <span id="rpg-cd-potion" class="text-[8px] font-black absolute bottom-0.5 pointer-events-none drop-shadow"></span>
             </button>
             ${(window.RPG.getEquippedActiveItems ? window.RPG.getEquippedActiveItems() : []).map((act, idx) => {
               const cdSec = act.currentCd > 0 ? Math.ceil(act.currentCd / 60) : 0;
@@ -16172,7 +16205,7 @@ window._talentTreeFilter = window._talentTreeFilter || "all";
 const TREE_BRANCH_THEMES = {
   atk: {
     label: "🗡️ Атака",
-    colX: 60,
+    colX: 45,
     activeStroke: "#ef4444",
     glowColor: "rgba(239, 68, 68, 0.6)",
     nodeBought: "bg-red-950 border-red-500 shadow-red-500/50 shadow-md",
@@ -16181,7 +16214,7 @@ const TREE_BRANCH_THEMES = {
   },
   tank: {
     label: "🛡️ Выживание",
-    colX: 180,
+    colX: 135,
     activeStroke: "#3b82f6",
     glowColor: "rgba(59, 130, 246, 0.6)",
     nodeBought: "bg-blue-950 border-blue-500 shadow-blue-500/50 shadow-md",
@@ -16190,12 +16223,21 @@ const TREE_BRANCH_THEMES = {
   },
   util: {
     label: "✨ Утилита",
-    colX: 300,
+    colX: 225,
     activeStroke: "#a855f7",
     glowColor: "rgba(168, 85, 247, 0.6)",
     nodeBought: "bg-purple-950 border-purple-500 shadow-purple-500/50 shadow-md",
     nodeAvail: "bg-slate-900 border-purple-500/80 shadow-purple-500/30 animate-pulse",
     textColor: "text-purple-400"
+  },
+  flask: {
+    label: "🧪 Фляга",
+    colX: 315,
+    activeStroke: "#10b981",
+    glowColor: "rgba(16, 185, 129, 0.6)",
+    nodeBought: "bg-emerald-950 border-emerald-500 shadow-emerald-500/50 shadow-md",
+    nodeAvail: "bg-slate-900 border-emerald-500/80 shadow-emerald-500/30 animate-pulse",
+    textColor: "text-emerald-400"
   }
 };
 
@@ -16222,6 +16264,7 @@ function renderVisualTalentTree(p, treeData) {
   const branches = treeData.branches || {};
   const charLvl = p.level || 1;
   const charFloor = p.dungeon_floor || 1;
+  const effectiveProgress = Math.max(charLvl, charFloor);
   const talentPts = (treeData && treeData.talent_points !== undefined) ? treeData.talent_points : (p.talent_points || 0);
   const filter = window._talentTreeFilter;
 
@@ -16248,10 +16291,11 @@ function renderVisualTalentTree(p, treeData) {
       <!-- Tree Header / Filter Tabs -->
       <div class="relative z-10 flex items-center justify-between gap-1 mb-2 pb-2 border-b border-slate-800/60">
         <div class="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
-          <button onclick="setTalentTreeFilterUI('all')" class="px-2.5 py-1 rounded-xl text-[10px] font-black transition-all ${filter === 'all' ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20' : 'bg-slate-900 text-slate-400 border border-slate-800'}">🌲 Все</button>
-          <button onclick="setTalentTreeFilterUI('atk')" class="px-2.5 py-1 rounded-xl text-[10px] font-black transition-all ${filter === 'atk' ? 'bg-red-600 text-white shadow-md shadow-red-600/30' : 'bg-slate-900 text-red-300 border border-slate-800'}">🗡️ Атака</button>
-          <button onclick="setTalentTreeFilterUI('tank')" class="px-2.5 py-1 rounded-xl text-[10px] font-black transition-all ${filter === 'tank' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'bg-slate-900 text-blue-300 border border-slate-800'}">🛡️ Выживание</button>
-          <button onclick="setTalentTreeFilterUI('util')" class="px-2.5 py-1 rounded-xl text-[10px] font-black transition-all ${filter === 'util' ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30' : 'bg-slate-900 text-purple-300 border border-slate-800'}">✨ Утилита</button>
+          <button onclick="setTalentTreeFilterUI('all')" class="px-2 py-1 rounded-xl text-[10px] font-black transition-all ${filter === 'all' ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20' : 'bg-slate-900 text-slate-400 border border-slate-800'}">🌲 Все</button>
+          <button onclick="setTalentTreeFilterUI('atk')" class="px-2 py-1 rounded-xl text-[10px] font-black transition-all ${filter === 'atk' ? 'bg-red-600 text-white shadow-md shadow-red-600/30' : 'bg-slate-900 text-red-300 border border-slate-800'}">🗡️ Атака</button>
+          <button onclick="setTalentTreeFilterUI('tank')" class="px-2 py-1 rounded-xl text-[10px] font-black transition-all ${filter === 'tank' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'bg-slate-900 text-blue-300 border border-slate-800'}">🛡️ Выжив.</button>
+          <button onclick="setTalentTreeFilterUI('util')" class="px-2 py-1 rounded-xl text-[10px] font-black transition-all ${filter === 'util' ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30' : 'bg-slate-900 text-purple-300 border border-slate-800'}">✨ Утил.</button>
+          <button onclick="setTalentTreeFilterUI('flask')" class="px-2 py-1 rounded-xl text-[10px] font-black transition-all ${filter === 'flask' ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30' : 'bg-slate-900 text-emerald-300 border border-slate-800'}">🧪 Фляга</button>
         </div>
         <div class="text-[10.5px] font-bold text-amber-400 shrink-0">
           ⭐ <span class="text-white">${talentPts}</span> очк.
@@ -16264,7 +16308,7 @@ function renderVisualTalentTree(p, treeData) {
         <svg class="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 360 510">`;
 
   // Draw root lines to T1
-  const bKeys = ["atk", "tank", "util"];
+  const bKeys = ["atk", "tank", "util", "flask"];
   for (const bKey of bKeys) {
     if (filter !== "all" && filter !== bKey) continue;
     const theme = TREE_BRANCH_THEMES[bKey];

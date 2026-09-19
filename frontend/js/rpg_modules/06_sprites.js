@@ -1,3 +1,8 @@
+  function drawProceduralHero(ctx, p, heroClass, time = (ARENA.frameCount || 0), isAttacking, comboStep) {
+    time = (time != null ? time : (ARENA.frameCount || 0));
+    const hClass = (heroClass || "pudge").toLowerCase();
+    const bob = Math.sin(time * 0.14) * 2;
+    const facing = (p && p.facing !== undefined) ? p.facing : 1;
 
     ctx.save();
     ctx.translate(p.x, p.y + bob);

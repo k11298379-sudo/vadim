@@ -31,6 +31,14 @@
         const btn1 = document.getElementById("rpg-btn-skill1");
         if (btn1) btn1.style.opacity = s1Sec > 0 ? "0.6" : "1";
       }
+      const potEl = document.getElementById("rpg-cd-potion");
+      if (potEl) {
+        const potSec = ARENA.potionCooldown > 0 ? Math.ceil(ARENA.potionCooldown / 60) : 0;
+        const txt = potSec > 0 ? `${potSec}с` : "";
+        if (potEl.textContent !== txt) potEl.textContent = txt;
+        const btnPot = document.getElementById("rpg-btn-potion");
+        if (btnPot) btnPot.style.opacity = potSec > 0 ? "0.6" : "1";
+      }
       const ultEl = document.getElementById("rpg-cd-ult");
       if (ultEl) {
         let txt = "Ульта";
@@ -523,7 +531,7 @@
       if (ARENA.frameCount % 60 === 0) {
         const hasTarrasque = Object.values(eq).some(it => it && (it.name?.includes("Tarrasque") || it.name?.includes("Тарраск") || it.bonus?.pct_hp_regen));
         if (hasTarrasque) {
-          const heal = Math.min(Math.floor(p.maxHp * 0.008), 2000);
+          const heal = Math.min(Math.floor(p.maxHp * 0.015), 6000);
           p.currentHp = Math.min(p.maxHp, p.currentHp + heal);
           spawnFloatingText(p.x, p.y - 30, `+${heal} HP (ТАРАСКА) ❤️`, "#22c55e");
         }
@@ -540,6 +548,7 @@
     }
     if (ARENA.skill1Cooldown > 0) ARENA.skill1Cooldown--;
     if (ARENA.ultCooldown > 0) ARENA.ultCooldown--;
+    if (ARENA.potionCooldown > 0) ARENA.potionCooldown--;
 
     // Decrement item cooldowns
     if (ARENA.itemCooldowns) {
@@ -595,8 +604,8 @@
           }
           const spellAmp = (stats.spell_amp !== undefined ? stats.spell_amp : ((p.maxMp || 100) * 0.2));
 
-          // 1. Исцеление Ларго (разделено на 4 для тика 0.5с): сбалансировано с ограничением по тику
-          const healAmt = Math.max(6, Math.min(Math.floor(p.maxHp * 0.003), 800) + Math.min(600, Math.floor((stats.int || 20) * 0.08)));
+          // 1. Исцеление Ларго (разделено на 4 для тика 0.5с): сбалансировано
+          const healAmt = Math.max(12, Math.min(Math.floor(p.maxHp * 0.01), 6000) + Math.min(4000, Math.floor((stats.int || 20) * 0.25)));
           p.currentHp = Math.min(p.maxHp, p.currentHp + healAmt);
           spawnFloatingText(p.x, p.y - 30, `💚 +${healAmt} ХП (РАПСОДИЯ)`, "#22c55e");
 
@@ -2564,7 +2573,7 @@
         p.stunTimer = 0;
         p.freezeTimer = 0;
         p.slowTimer = 0;
-        const healHp = Math.min(Math.floor(playerMaxHp * 0.05 * starMult), 4000 * starMult);
+        const healHp = Math.min(Math.floor(playerMaxHp * 0.08 * starMult), 8000 * starMult);
         const healMp = Math.floor((p.maxMp || 100) * 0.25);
         p.currentHp = Math.min(playerMaxHp, (p.currentHp || playerMaxHp) + healHp);
         p.currentMp = Math.min(p.maxMp || 100, (p.currentMp || p.maxMp || 100) + healMp);
@@ -2591,7 +2600,7 @@
     else if (petId === "slime") {
       if (pet.timer >= 720) {
         pet.timer = 0;
-        const heal = Math.min(Math.floor(playerMaxHp * 0.04 * starMult), 3000 * starMult);
+        const heal = Math.min(Math.floor(playerMaxHp * 0.07 * starMult), 6000 * starMult);
         p.currentHp = Math.min(playerMaxHp, (p.currentHp || playerMaxHp) + heal);
         spawnFloatingText(p.x, p.y - 22, `💧 КАПЛЯ ЖИЗНИ +${heal} HP`, "#38bdf8");
         triggerHaptic("light");

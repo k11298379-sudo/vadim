@@ -14,6 +14,7 @@ BRANCH_LABELS = {
     "atk": {"name": "Атака", "icon": "🗡️", "color": "red"},
     "tank": {"name": "Выживание", "icon": "🛡️", "color": "blue"},
     "util": {"name": "Утилита", "icon": "✨", "color": "purple"},
+    "flask": {"name": "Фляга", "icon": "🧪", "color": "emerald"},
 }
 
 
@@ -33,6 +34,25 @@ def _node(branch: str, tier: int, name: str, icon: str,
         "req": req or (f"{branch}_{tier - 1}" if tier > 1 else None),
         "unlock_level": TIER_UNLOCK_LEVEL[tier],
     }
+
+
+FLASK_BRANCH: Dict[str, Dict[str, Any]] = {
+    "flask_1": _node("flask", 1, "Освежающий Глоток", "🧪",
+                     "+350 к исцелению бутылочки, +5% от макс. HP",
+                     {"flask_heal_flat": 350, "flask_heal_pct": 0.05}),
+    "flask_2": _node("flask", 2, "Целебный Настой", "🍶",
+                     "+800 к исцелению бутылочки, +10% от макс. HP, +60 MP",
+                     {"flask_heal_flat": 800, "flask_heal_pct": 0.10, "flask_mana": 60}),
+    "flask_3": _node("flask", 3, "Эликсир Стойкости", "🧃",
+                     "+2000 к исцелению бутылочки, +15% от макс. HP, -1с перезарядки",
+                     {"flask_heal_flat": 2000, "flask_heal_pct": 0.15, "flask_cd_reduct": 60}),
+    "flask_4": _node("flask", 4, "Великая Алхимия", "✨",
+                     "+4500 к исцелению бутылочки, +25% от макс. HP, +180 MP, -1с перезарядки",
+                     {"flask_heal_flat": 4500, "flask_heal_pct": 0.25, "flask_mana": 180, "flask_cd_reduct": 60}),
+    "flask_5": _node("flask", 5, "Живая Вода", "🌟",
+                     "+12 000 к исцелению бутылочки, +40% от макс. HP. ✨ [ПЕРК] Снимает станы/замедления и ускоряет на 50% на 3с!",
+                     {"flask_heal_flat": 12000, "flask_heal_pct": 0.40, "flask_mana": 300, "flask_cd_reduct": 60, "perk": "perk_divine_flask"}),
+}
 
 
 def is_node_available(node: Dict[str, Any], char_level: int,

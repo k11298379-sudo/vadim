@@ -71,6 +71,7 @@
     bossArenaMode: false,
     moveInput: { left: false, right: false },
     dodgeCooldown: 0,
+    potionCooldown: 0,
     dodgeActive: 0,      // frames remaining of dodge i-frame
     dodgeDir: 1,          // direction of dodge roll
     dangerZones: [],
@@ -357,6 +358,7 @@
     ARENA.bossArenaMode = false;
     ARENA.moveInput = { left: false, right: false };
     ARENA.dodgeCooldown = 0;
+    ARENA.potionCooldown = 0;
     ARENA.dodgeActive = 0;
     ARENA.dodgeDir = 1;
     ARENA.dangerZones = [];

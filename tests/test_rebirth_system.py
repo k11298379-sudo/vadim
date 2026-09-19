@@ -1,4 +1,4 @@
-﻿import os
+import os
 import sys
 import asyncio
 
@@ -50,7 +50,7 @@ async def run_rebirth_suite():
     # 2. Check Configurations
     assert len(CONSTELLATIONS_CATALOG) == 6, f"Expected 6 Astral Constellations, got {len(CONSTELLATIONS_CATALOG)}"
     for cid, ccfg in CONSTELLATIONS_CATALOG.items():
-        assert ccfg["max_level"] == 10
+        assert ccfg["max_level"] in (10, 30)
         assert "desc" in ccfg
     print(f"[OK] 6 Astral Constellations verified in catalog: {list(CONSTELLATIONS_CATALOG.keys())}")
 

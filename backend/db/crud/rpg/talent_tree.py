@@ -7,6 +7,7 @@ from backend.db.crud.rpg.talent_tree_helpers import (
     TIER_COST,
     TIER_UNLOCK_LEVEL,
     BRANCH_LABELS,
+    FLASK_BRANCH,
     is_node_available,
     reset_old_talents_and_refund,
     get_hero_spent_talent_points as _base_get_spent,
@@ -39,8 +40,10 @@ HERO_TALENT_TREE: Dict[str, Dict[str, Dict[str, Any]]] = {
 
 
 def get_hero_tree(hero_class: str) -> Dict[str, Dict[str, Any]]:
-    """Возвращает дерево талантов для героя. Fallback → pudge."""
-    return HERO_TALENT_TREE.get(hero_class, HERO_TALENT_TREE["pudge"])
+    """Возвращает дерево талантов для героя, дополненное 4-й веткой фляги. Fallback → pudge."""
+    tree = dict(HERO_TALENT_TREE.get(hero_class, HERO_TALENT_TREE["pudge"]))
+    tree.update(FLASK_BRANCH)
+    return tree
 
 
 def get_hero_spent_talent_points(char: Any, hero_class: str) -> int:

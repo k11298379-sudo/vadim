@@ -444,7 +444,7 @@
         if (!c.isBoss && stats.lifesteal > 0) {
           const pMax = p.maxHp || 500;
           const rawHeal = Math.floor(finalDmg * (stats.lifesteal / 100));
-          const heal = Math.max(1, Math.min(Math.floor(pMax * 0.03), 2000, rawHeal));
+          const heal = Math.max(1, Math.min(Math.floor(pMax * 0.05), 5000, rawHeal));
           p.currentHp = Math.min(pMax, p.currentHp + heal);
         }
 
@@ -856,7 +856,7 @@
 
         const ultMult = p.largoRhapsodyDmgMult;
         const spellAmp = (stats.spell_amp !== undefined ? stats.spell_amp : ((p.maxMp || 100) * 0.2));
-        const healAmt = Math.max(6, Math.min(Math.floor(p.maxHp * 0.003), 800) + Math.min(600, Math.floor((stats.int || 20) * 0.08)));
+        const healAmt = Math.max(12, Math.min(Math.floor(p.maxHp * 0.01), 6000) + Math.min(4000, Math.floor((stats.int || 20) * 0.25)));
         p.currentHp = Math.min(p.maxHp, p.currentHp + healAmt);
         spawnFloatingText(p.x, p.y - 30, `💚 +${healAmt} ХП (РАПСОДИЯ)`, "#22c55e");
 
@@ -1778,10 +1778,41 @@
 
   function usePlayerPotion() {
     const p = ARENA.player;
-    const heal = 120;
-    if (p.currentHp >= p.maxHp) return;
+    if (!p || p.isDead) return;
+
+    if (ARENA.potionCooldown > 0) {
+      triggerHaptic("light");
+      return;
+    }
+
+    const stats = RPG_STATE.profile?.stats || {};
+    const flatBonus = stats.flask_heal_flat || 0;
+    const pctBonus = stats.flask_heal_pct || 0;
+    const heal = Math.max(120, Math.floor(120 + flatBonus + (p.maxHp * pctBonus)));
+
+    if (p.currentHp >= p.maxHp && (!stats.flask_mana || p.currentMp >= p.maxMp)) {
+      spawnFloatingText(p.x, p.y - 25, "Здоровье полно!", "#94a3b8");
+      return;
+    }
+
     p.currentHp = Math.min(p.maxHp, p.currentHp + heal);
-    spawnFloatingText(p.x, p.y - 25, `+${heal} HP ❤️`, "#22c55e");
+    spawnFloatingText(p.x, p.y - 25, `+${heal} HP 🧪`, "#22c55e");
+
+    if (stats.flask_mana && stats.flask_mana > 0) {
+      p.currentMp = Math.min(p.maxMp, p.currentMp + stats.flask_mana);
+      spawnFloatingText(p.x, p.y - 42, `+${stats.flask_mana} MP 🔮`, "#38bdf8");
+    }
+
+    if (window.hasTalentPerk && window.hasTalentPerk("perk_divine_flask")) {
+      p.stunTimer = 0;
+      p.freezeTimer = 0;
+      p.slowTimer = 0;
+      p.speedBuffTimer = 180;
+      spawnFloatingText(p.x, p.y - 58, "🌟 ОЧИЩЕНИЕ И УСКОРЕНИЕ!", "#facc15");
+    }
+
+    const cdReduct = stats.flask_cd_reduct || 0;
+    ARENA.potionCooldown = Math.max(120, 360 - cdReduct);
     triggerHaptic("success");
   }
 
@@ -2365,18 +2396,3 @@
     }
     ARENA.floatingTexts.push({ x, y, text, color, opacity: 1.0 });
   }
-
-  // ===========================================================================
-  // CANVAS RENDERING — SOLID TOKENS, CLEAR SPRITES & VIBRANT EFFECTS
-  // ===========================================================================
-
-
-  // ===========================================================================
-  // NATARGRP PROCEDURAL VECTOR SPRITE & VFX ENGINE (ZERO EMOJIS ON CANVAS)
-  // ===========================================================================
-
-  function drawProceduralHero(ctx, p, heroClass, time = (ARENA.frameCount || 0), isAttacking, comboStep) {
-    time = (time != null ? time : (ARENA.frameCount || 0));
-    const hClass = (heroClass || "pudge").toLowerCase();
-    const bob = Math.sin(time * 0.14) * 2;
-    const facing = (p && p.facing !== undefined) ? p.facing : 1;

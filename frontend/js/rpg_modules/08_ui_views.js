@@ -807,8 +807,9 @@
 
           <!-- Active Items (above joystick) -->
           <div class="absolute bottom-28 left-3 z-20 flex flex-col gap-2">
-            <button ontouchstart="event.preventDefault(); window.RPG.usePotionAction()" onmousedown="event.preventDefault(); window.RPG.usePotionAction()" onclick="window.RPG.usePotionAction()" title="Зелье / Сыр [F / 1]" class="w-10 h-10 rounded-2xl bg-emerald-600/95 border-2 border-emerald-300 text-white font-bold text-lg flex items-center justify-center shadow-lg active:scale-90 transition-transform">
-              🧪
+            <button id="rpg-btn-potion" ontouchstart="event.preventDefault(); window.RPG.usePotionAction()" onmousedown="event.preventDefault(); window.RPG.usePotionAction()" onclick="window.RPG.usePotionAction()" title="Зелье / Сыр [F / 1]" class="w-10 h-10 rounded-2xl bg-emerald-600/95 border-2 border-emerald-300 text-white font-bold text-lg flex items-center justify-center shadow-lg active:scale-90 transition-transform relative">
+              <span>🧪</span>
+              <span id="rpg-cd-potion" class="text-[8px] font-black absolute bottom-0.5 pointer-events-none drop-shadow"></span>
             </button>
             ${(window.RPG.getEquippedActiveItems ? window.RPG.getEquippedActiveItems() : []).map((act, idx) => {
               const cdSec = act.currentCd > 0 ? Math.ceil(act.currentCd / 60) : 0;

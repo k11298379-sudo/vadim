@@ -120,6 +120,10 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
     _hp_to_crit = 0.0
     _unlocked_perks = []
     _hero_tree = {}
+    _flask_heal_flat = 0
+    _flask_heal_pct = 0.0
+    _flask_mana = 0
+    _flask_cd_reduct = 0
     if _tree_talents:
         _hero_tree = get_hero_tree(canonical_class)
         for _nid, _nlvl in _tree_talents.items():
@@ -147,6 +151,10 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
             damage_block += _eff.get("damage_block", 0)
             flat_spell_amp += _eff.get("spell_amp", 0)
             ult_cd_reduct += _eff.get("ult_cd_reduct", 0)
+            _flask_heal_flat += _eff.get("flask_heal_flat", 0)
+            _flask_heal_pct += _eff.get("flask_heal_pct", 0.0)
+            _flask_mana += _eff.get("flask_mana", 0)
+            _flask_cd_reduct += _eff.get("flask_cd_reduct", 0)
 
     total_str = str_val + gear_str
     total_agi = agi_val + gear_agi
@@ -154,7 +162,7 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
 
     # Attributes scaling (Volume III GDD formulas)
     stat_hp = hero_cfg.get("base_hp", 150) + int(total_str * 24) + flat_hp
-    stat_hp_regen = round(0.5 + min(350.0, total_str * 0.04) + flat_hp_regen, 1)
+    stat_hp_regen = round(0.5 + min(800.0, total_str * 0.06) + flat_hp_regen, 1)
 
     stat_atk_speed = min(4.0, round(1.0 + (total_agi * 0.012) + flat_atk_speed, 2))
     stat_def = int(math.floor(total_agi * 0.18)) + flat_def
@@ -265,6 +273,10 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
         "skill": hero_cfg.get("skill", {"name": "Навык", "icon": "⚡", "mp_cost": 20, "desc": "Навык героя"}),
         "rebirth_multiplier": rebirth_mult,
         "perks": _unlocked_perks,
+        "flask_heal_flat": _flask_heal_flat,
+        "flask_heal_pct": round(_flask_heal_pct, 2),
+        "flask_mana": _flask_mana,
+        "flask_cd_reduct": _flask_cd_reduct,
         "constellations_bonuses": {
             "vitality_hp": vit_level * 150,
             "vitality_armor": vit_level * 5,

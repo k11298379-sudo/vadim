@@ -95,7 +95,25 @@ async def run_tests():
         assert char.talents["tree"]["leshrac"]["util_1"] == 1
 
         print("[OK] Equipment and talents completely preserved across hero switches!")
-        print("\n=== ALL HERO TALENT & EQUIPMENT TESTS PASSED! ZERO ERRORS! ===")
+
+        print("=== [3/3] Testing 4th Flask Branch in Talent Tree ===")
+        pudge_tree = get_hero_tree("pudge")
+        assert "flask_1" in pudge_tree, "flask_1 not found in hero tree!"
+        assert "flask_5" in pudge_tree, "flask_5 not found in hero tree!"
+        assert pudge_tree["flask_1"]["branch"] == "flask"
+        assert pudge_tree["flask_5"]["effect"].get("perk") == "perk_divine_flask"
+
+        # Buy flask_1 and flask_2 on Pudge
+        char.talents["tree"]["pudge"]["flask_1"] = 1
+        char.talents["tree"]["pudge"]["flask_2"] = 1
+        from backend.db.crud.rpg.character_stats import calculate_character_effective_stats
+        stats = calculate_character_effective_stats(char)
+        assert stats.get("flask_heal_flat") == 350 + 800, f"Expected 1150 flat heal, got {stats.get('flask_heal_flat')}"
+        assert round(stats.get("flask_heal_pct", 0), 2) == 0.15, f"Expected 0.15 pct heal, got {stats.get('flask_heal_pct')}"
+        assert stats.get("flask_mana") == 60, f"Expected 60 flask mana, got {stats.get('flask_mana')}"
+
+        print("[OK] 4th Flask Branch strictly verified with effective stats calculation!")
+        print("\n=== ALL HERO TALENT, FLASK & EQUIPMENT TESTS PASSED! ZERO ERRORS! ===")
 
 
 if __name__ == "__main__":

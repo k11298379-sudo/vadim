@@ -9,7 +9,7 @@ window._talentTreeFilter = window._talentTreeFilter || "all";
 const TREE_BRANCH_THEMES = {
   atk: {
     label: "🗡️ Атака",
-    colX: 60,
+    colX: 45,
     activeStroke: "#ef4444",
     glowColor: "rgba(239, 68, 68, 0.6)",
     nodeBought: "bg-red-950 border-red-500 shadow-red-500/50 shadow-md",
@@ -18,7 +18,7 @@ const TREE_BRANCH_THEMES = {
   },
   tank: {
     label: "🛡️ Выживание",
-    colX: 180,
+    colX: 135,
     activeStroke: "#3b82f6",
     glowColor: "rgba(59, 130, 246, 0.6)",
     nodeBought: "bg-blue-950 border-blue-500 shadow-blue-500/50 shadow-md",
@@ -27,12 +27,21 @@ const TREE_BRANCH_THEMES = {
   },
   util: {
     label: "✨ Утилита",
-    colX: 300,
+    colX: 225,
     activeStroke: "#a855f7",
     glowColor: "rgba(168, 85, 247, 0.6)",
     nodeBought: "bg-purple-950 border-purple-500 shadow-purple-500/50 shadow-md",
     nodeAvail: "bg-slate-900 border-purple-500/80 shadow-purple-500/30 animate-pulse",
     textColor: "text-purple-400"
+  },
+  flask: {
+    label: "🧪 Фляга",
+    colX: 315,
+    activeStroke: "#10b981",
+    glowColor: "rgba(16, 185, 129, 0.6)",
+    nodeBought: "bg-emerald-950 border-emerald-500 shadow-emerald-500/50 shadow-md",
+    nodeAvail: "bg-slate-900 border-emerald-500/80 shadow-emerald-500/30 animate-pulse",
+    textColor: "text-emerald-400"
   }
 };
 
@@ -59,6 +68,7 @@ function renderVisualTalentTree(p, treeData) {
   const branches = treeData.branches || {};
   const charLvl = p.level || 1;
   const charFloor = p.dungeon_floor || 1;
+  const effectiveProgress = Math.max(charLvl, charFloor);
   const talentPts = (treeData && treeData.talent_points !== undefined) ? treeData.talent_points : (p.talent_points || 0);
   const filter = window._talentTreeFilter;
 
@@ -85,10 +95,11 @@ function renderVisualTalentTree(p, treeData) {
       <!-- Tree Header / Filter Tabs -->
       <div class="relative z-10 flex items-center justify-between gap-1 mb-2 pb-2 border-b border-slate-800/60">
         <div class="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
-          <button onclick="setTalentTreeFilterUI('all')" class="px-2.5 py-1 rounded-xl text-[10px] font-black transition-all ${filter === 'all' ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20' : 'bg-slate-900 text-slate-400 border border-slate-800'}">🌲 Все</button>
-          <button onclick="setTalentTreeFilterUI('atk')" class="px-2.5 py-1 rounded-xl text-[10px] font-black transition-all ${filter === 'atk' ? 'bg-red-600 text-white shadow-md shadow-red-600/30' : 'bg-slate-900 text-red-300 border border-slate-800'}">🗡️ Атака</button>
-          <button onclick="setTalentTreeFilterUI('tank')" class="px-2.5 py-1 rounded-xl text-[10px] font-black transition-all ${filter === 'tank' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'bg-slate-900 text-blue-300 border border-slate-800'}">🛡️ Выживание</button>
-          <button onclick="setTalentTreeFilterUI('util')" class="px-2.5 py-1 rounded-xl text-[10px] font-black transition-all ${filter === 'util' ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30' : 'bg-slate-900 text-purple-300 border border-slate-800'}">✨ Утилита</button>
+          <button onclick="setTalentTreeFilterUI('all')" class="px-2 py-1 rounded-xl text-[10px] font-black transition-all ${filter === 'all' ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20' : 'bg-slate-900 text-slate-400 border border-slate-800'}">🌲 Все</button>
+          <button onclick="setTalentTreeFilterUI('atk')" class="px-2 py-1 rounded-xl text-[10px] font-black transition-all ${filter === 'atk' ? 'bg-red-600 text-white shadow-md shadow-red-600/30' : 'bg-slate-900 text-red-300 border border-slate-800'}">🗡️ Атака</button>
+          <button onclick="setTalentTreeFilterUI('tank')" class="px-2 py-1 rounded-xl text-[10px] font-black transition-all ${filter === 'tank' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'bg-slate-900 text-blue-300 border border-slate-800'}">🛡️ Выжив.</button>
+          <button onclick="setTalentTreeFilterUI('util')" class="px-2 py-1 rounded-xl text-[10px] font-black transition-all ${filter === 'util' ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30' : 'bg-slate-900 text-purple-300 border border-slate-800'}">✨ Утил.</button>
+          <button onclick="setTalentTreeFilterUI('flask')" class="px-2 py-1 rounded-xl text-[10px] font-black transition-all ${filter === 'flask' ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30' : 'bg-slate-900 text-emerald-300 border border-slate-800'}">🧪 Фляга</button>
         </div>
         <div class="text-[10.5px] font-bold text-amber-400 shrink-0">
           ⭐ <span class="text-white">${talentPts}</span> очк.
@@ -101,7 +112,7 @@ function renderVisualTalentTree(p, treeData) {
         <svg class="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 360 510">`;
 
   // Draw root lines to T1
-  const bKeys = ["atk", "tank", "util"];
+  const bKeys = ["atk", "tank", "util", "flask"];
   for (const bKey of bKeys) {
     if (filter !== "all" && filter !== bKey) continue;
     const theme = TREE_BRANCH_THEMES[bKey];

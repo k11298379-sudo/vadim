@@ -87,7 +87,7 @@
     if (p && !p.isDead && typeof p.currentHp === "number" && p.currentHp > 0 && lifestealPct > 0) {
       const pMax = p.maxHp || 500;
       const rawHeal = Math.floor(finalDmg * (lifestealPct / 100));
-      const heal = Math.max(1, Math.min(Math.floor(pMax * 0.03), 2000, rawHeal));
+      const heal = Math.max(1, Math.min(Math.floor(pMax * 0.05), 5000, rawHeal));
       p.currentHp = Math.min(pMax, p.currentHp + heal);
       if (ARENA.frameCount % 10 === 0) {
         spawnFloatingText(p.x, p.y - 25, `+${heal} HP 🩸`, "#22c55e");
@@ -199,9 +199,9 @@
     if (canEvade && !bossMkbProcced && dodgeChance > 0 && Math.random() * 100 < dodgeChance) {
       spawnFloatingText(p.x, p.y - 25, "💨 УВОРОТ!", "#38bdf8");
       triggerHaptic("light");
-      // PA PERK: Blur Heal (Restores 1.5% max HP on dodge, capped)
+      // PA PERK: Blur Heal (Restores 2.5% max HP on dodge, capped)
       if (window.hasTalentPerk && window.hasTalentPerk("perk_blur_heal")) {
-        const healAmt = Math.max(1, Math.min(Math.floor((p.maxHp || 500) * 0.015), 1200));
+        const healAmt = Math.max(1, Math.min(Math.floor((p.maxHp || 500) * 0.025), 3000));
         p.currentHp = Math.min(p.maxHp || 500, (p.currentHp || 0) + healAmt);
         spawnFloatingText(p.x, p.y - 45, `💚 +${healAmt} (РАЗМЫТИЕ)`, "#10b981");
       }
