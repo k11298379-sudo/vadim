@@ -14,6 +14,33 @@ const MARKET_ITEMS = [
   { id: 'aluminum', name: 'Алюминий', unit: 'т', base: 110.0, buy: 88.0, sell: 137.5 },
 ];
 
+// The server's NPC-rate registry is the source of truth.  Keep the small
+// seed list for a fast first render, then merge every server item into it so
+// production outputs (for example natural gas and copper) are never hidden
+// just because the frontend seed list was not updated.
+export function mergeNpcRatesIntoMarketItems(rates, seedItems = MARKET_ITEMS) {
+  const items = seedItems.map(item => ({ ...item }));
+  for (const rate of Array.isArray(rates) ? rates : []) {
+    if (!rate || !rate.item_id) continue;
+    const item = items.find(candidate => candidate.id === rate.item_id);
+    const values = {
+      name: rate.name || rate.item_id,
+      unit: rate.unit || 'шт.',
+      base: Number(rate.base_price),
+      buy: Number(rate.npc_buy_price),
+      sell: Number(rate.npc_sell_price),
+    };
+    if (item) {
+      Object.assign(item, Object.fromEntries(
+        Object.entries(values).filter(([, value]) => Number.isFinite(value) || typeof value === 'string')
+      ));
+    } else {
+      items.push({ id: rate.item_id, ...values });
+    }
+  }
+  return items;
+}
+
 const INSTRUMENT_NAMES = { USD: 'Доллар США', EUR: 'Евро', GOLD: 'Золото', SILVER: 'Серебро' };
 const INSTRUMENT_ICONS = { USD: '💵', EUR: '💶', GOLD: '🥇', SILVER: '🥈' };
 const esc = (value) => String(value ?? '').replace(/[&<>'"]/g, ch => ({
@@ -22,6 +49,7 @@ const esc = (value) => String(value ?? '').replace(/[&<>'"]/g, ch => ({
 
 export async function renderMarket(container, showToast) {
   let selectedItemId = 'steel';
+  let marketItems = MARKET_ITEMS.map(item => ({ ...item }));
   let orderbookData = null;
   let orderbookRequestId = 0;
   let instrumentsData = { instruments: [], portfolio: [] };
@@ -59,15 +87,7 @@ export async function renderMarket(container, showToast) {
   ]);
 
   if (ratesData && Array.isArray(ratesData.rates)) {
-    for (const r of ratesData.rates) {
-      const item = MARKET_ITEMS.find(m => m.id === r.item_id);
-      if (item) {
-        item.base = r.base_price;
-        item.buy = r.npc_buy_price;
-        item.sell = r.npc_sell_price;
-        if (r.unit) item.unit = r.unit;
-      }
-    }
+    marketItems = mergeNpcRatesIntoMarketItems(ratesData.rates, marketItems);
   }
 
   function marketShell(title, subtitle, body) {
@@ -127,7 +147,7 @@ export async function renderMarket(container, showToast) {
 
   function renderView() {
     const selectorScrollLeft = container.querySelector('.market-resource-tabs')?.scrollLeft || 0;
-    const itemInfo = MARKET_ITEMS.find(i => i.id === selectedItemId) || MARKET_ITEMS[0];
+    const itemInfo = marketItems.find(i => i.id === selectedItemId) || marketItems[0];
     const bids = orderbookData?.bids || [];
     const asks = orderbookData?.asks || [];
     const userOrders = orderbookData?.user_orders || [];
@@ -139,7 +159,7 @@ export async function renderMarket(container, showToast) {
       <div class="space-y-4 max-w-md mx-auto p-4 pb-24">
         <!-- Resource Selector Bar -->
         <div class="market-resource-tabs flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-          ${MARKET_ITEMS.map(item => `
+          ${marketItems.map(item => `
             <button
               class="market-item-tab px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
                 item.id === selectedItemId

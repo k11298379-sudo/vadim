@@ -168,6 +168,25 @@ assert(marketCode.includes('finally'), 'market.js place order must have finally 
 assert(marketCode.includes('market-resource-tabs'), 'market.js must keep a stable resource selector hook');
 assert(marketCode.includes('selectorScrollLeft'), 'market.js must preserve horizontal resource position across refreshes');
 
+// Every canonical production output must be selectable in the NPC market.
+// The API is the source of truth; this regression test prevents a hard-coded
+// subset from silently hiding outputs such as natural gas and copper.
+assert(marketCode.includes('mergeNpcRatesIntoMarketItems'),
+  'market.js must merge every server NPC rate into the resource selector');
+const marketHelperCode = marketCode
+  .replace(/^import[^;]+;\s*$/gm, '')
+  .replace(/export\s+function\s+mergeNpcRatesIntoMarketItems/, 'function mergeNpcRatesIntoMarketItems')
+  .replace(/export\s+async\s+function\s+renderMarket[\s\S]*/, '')
+  .replace(/export\s+function\s+renderMarket[\s\S]*/, '');
+const marketHelperFn = new Function(`${marketHelperCode}\nreturn { MARKET_ITEMS, mergeNpcRatesIntoMarketItems };`);
+const { MARKET_ITEMS: initialMarketItems, mergeNpcRatesIntoMarketItems } = marketHelperFn();
+const mergedMarketItems = mergeNpcRatesIntoMarketItems([
+  { item_id: 'gas_natural', name: 'Природный газ', unit: 'тыс. м³', base_price: 45, npc_buy_price: 36, npc_sell_price: 56.25 },
+  { item_id: 'copper', name: 'Медь первичная', unit: 'т', base_price: 60, npc_buy_price: 48, npc_sell_price: 75 },
+], initialMarketItems);
+assert(mergedMarketItems.some(item => item.id === 'gas_natural'), 'natural gas must be visible in the NPC market');
+assert(mergedMarketItems.some(item => item.id === 'copper'), 'copper must be visible in the NPC market');
+
 const milCode = fs.readFileSync(path.join(__dirname, '../frontend/natbirzha/js/screens/military.js'), 'utf-8');
 assert(milCode.includes('joinAlliance'), 'military.js must support joining alliances');
 assert(milCode.includes('PvE-границы'), 'military.js must expose PvE borders');
