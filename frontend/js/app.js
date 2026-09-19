@@ -15,9 +15,44 @@ let isCalendarPicked = false;
 // Calendar modal state
 let calViewDate = new Date();
 
+function persistTelegramInitDataForChildApps() {
+  try {
+    const initData = window.Telegram?.WebApp?.initData;
+    if (initData && typeof initData === "string" && initData.length > 0) {
+      sessionStorage?.setItem("natbirzha_telegram_init_data", initData);
+      localStorage?.setItem("natbirzha_telegram_init_data", initData);
+      localStorage?.setItem("tg_init_data", initData);
+    }
+  } catch (_) {}
+}
 
+function prepareNatbirzhaNavigation(event) {
+  try {
+    let initData = window.Telegram?.WebApp?.initData;
+    if (!initData) {
+      try {
+        initData = sessionStorage?.getItem("natbirzha_telegram_init_data") || localStorage?.getItem("natbirzha_telegram_init_data") || localStorage?.getItem("tg_init_data") || "";
+      } catch (_) {}
+    }
+    if (initData) {
+      persistTelegramInitDataForChildApps();
+      const targetUrl = `/app/natbirzha#tgWebAppData=${encodeURIComponent(initData)}`;
+      if (event) {
+        event.preventDefault();
+        window.location.href = targetUrl;
+        return false;
+      }
+    }
+  } catch (_) {}
+  return true;
+}
+
+window.persistTelegramInitData = persistTelegramInitDataForChildApps;
+window.persistTelegramInitDataForChildApps = persistTelegramInitDataForChildApps;
+window.prepareNatbirzhaNavigation = prepareNatbirzhaNavigation;
 
 async function initApp() {
+  persistTelegramInitDataForChildApps();
   initTabs();
   initCalendarModal();
   initPhotoViewer();

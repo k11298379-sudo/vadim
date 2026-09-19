@@ -284,24 +284,41 @@ frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
 if os.path.exists(frontend_path):
     app.mount("/static", NoCacheStaticFiles(directory=frontend_path), name="static")
 
-@app.get("/")
-async def root():
-    return RedirectResponse(url="/app")
+_NO_CACHE_HEADERS = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+    "Expires": "0",
+}
 
+def _serve_page(filename: str, fallback_msg: str):
+    file_path = os.path.join(frontend_path, filename)
+    if os.path.exists(file_path):
+        return FileResponse(file_path, headers=_NO_CACHE_HEADERS)
+    return {"message": fallback_msg}
+
+@app.get("/")
 @app.get("/app")
 @app.get("/app/")
+@app.get("/miniapp")
+@app.get("/miniapp/")
+@app.get("/mini-app")
+@app.get("/mini-app/")
+@app.get("/webapp")
+@app.get("/webapp/")
+@app.get("/web-app")
+@app.get("/web-app/")
+@app.get("/game")
+@app.get("/game/")
+@app.get("/games")
+@app.get("/games/")
+@app.get("/play")
+@app.get("/play/")
+@app.get("/bot")
+@app.get("/bot/")
+@app.get("/index.html")
+@app.get("/app/index.html")
 async def serve_webapp():
-    index_file = os.path.join(frontend_path, "index.html")
-    if os.path.exists(index_file):
-        return FileResponse(
-            index_file,
-            headers={
-                "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-                "Pragma": "no-cache",
-                "Expires": "0"
-            }
-        )
-    return {"message": "Frontend not found"}
+    return _serve_page("index.html", "Frontend not found")
 
 @app.get("/natbirzha")
 @app.get("/natbirzha/")
@@ -309,18 +326,25 @@ async def serve_webapp():
 @app.get("/app/natbirzha")
 @app.get("/app/natbirzha/")
 @app.get("/app/natbirzha/index.html")
+@app.get("/birzha")
+@app.get("/birzha/")
+@app.get("/app/birzha")
+@app.get("/app/birzha/")
+@app.get("/natbirzha-app")
+@app.get("/natbirzha_app")
 async def serve_natbirzha():
-    nat_index = os.path.join(frontend_path, "natbirzha", "index.html")
-    if os.path.exists(nat_index):
-        return FileResponse(
-            nat_index,
-            headers={
-                "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-                "Pragma": "no-cache",
-                "Expires": "0"
-            }
-        )
-    return {"message": "Natbirzha frontend not found"}
+    return _serve_page(os.path.join("natbirzha", "index.html"), "Natbirzha frontend not found")
+
+@app.get("/{full_path:path}")
+async def catch_all_frontend(full_path: str):
+    # Preserve standard 404 for unmapped API or static asset endpoints
+    if full_path.startswith("api/") or full_path.startswith("static/"):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Not Found")
+    lower = full_path.lower()
+    if "natbirzha" in lower or "birzha" in lower:
+        return _serve_page(os.path.join("natbirzha", "index.html"), "Natbirzha frontend not found")
+    return _serve_page("index.html", "Frontend not found")
 
 
 if __name__ == "__main__":

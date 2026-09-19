@@ -17,9 +17,50 @@ function generateUUID() {
 const GUEST_ID_STORAGE_KEY = 'natbirzha_guest_id';
 let inMemoryGuestId = '';
 
+const TELEGRAM_INIT_DATA_STORAGE_KEY = 'natbirzha_telegram_init_data';
+
 function getTelegramInitData() {
   const tg = typeof window !== 'undefined' ? window.Telegram?.WebApp : null;
-  return tg?.initData && typeof tg.initData === 'string' ? tg.initData : '';
+  if (tg?.initData && typeof tg.initData === 'string' && tg.initData.length > 0) {
+    try {
+      if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(TELEGRAM_INIT_DATA_STORAGE_KEY, tg.initData);
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(TELEGRAM_INIT_DATA_STORAGE_KEY, tg.initData);
+        localStorage.setItem('tg_init_data', tg.initData);
+      }
+    } catch (_) {}
+    return tg.initData;
+  }
+  try {
+    const hash = typeof window !== 'undefined' ? window.location?.hash?.slice(1) : '';
+    if (hash) {
+      const hashParams = new URLSearchParams(hash);
+      const hashData = hashParams.get('tgWebAppData');
+      if (hashData && typeof hashData === 'string' && hashData.length > 0 && hashData.includes('hash=')) {
+        try {
+          if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(TELEGRAM_INIT_DATA_STORAGE_KEY, hashData);
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem(TELEGRAM_INIT_DATA_STORAGE_KEY, hashData);
+            localStorage.setItem('tg_init_data', hashData);
+          }
+        } catch (_) {}
+        return hashData;
+      }
+    }
+  } catch (_) {}
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      const carried = sessionStorage.getItem(TELEGRAM_INIT_DATA_STORAGE_KEY);
+      if (carried && typeof carried === 'string' && carried.includes('hash=')) return carried;
+    }
+  } catch (_) {}
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const stored = localStorage.getItem(TELEGRAM_INIT_DATA_STORAGE_KEY) || localStorage.getItem('tg_init_data');
+      if (stored && typeof stored === 'string' && stored.includes('hash=')) return stored;
+    }
+  } catch (_) {}
+  return '';
 }
 
 function getAuthHeader() {
