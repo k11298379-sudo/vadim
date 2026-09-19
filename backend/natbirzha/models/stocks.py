@@ -73,3 +73,27 @@ class NatDividend(Base):
     
     is_settled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class NatDividendPayment(Base):
+    """Immutable per-holder dividend receipt for portfolio history."""
+
+    __tablename__ = "nat_dividend_payments"
+    __table_args__ = (
+        UniqueConstraint("dividend_id", "holder_company_id", name="uq_nat_dividend_payment_holder"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    dividend_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("nat_dividends.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    stock_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("nat_stocks.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    holder_company_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("nat_companies.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    shares_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    payout_cash: Mapped[float] = mapped_column(Float, nullable=False)
+    settlement_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    paid_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

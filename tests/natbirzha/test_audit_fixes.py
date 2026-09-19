@@ -149,6 +149,13 @@ async def test_audit_fixes():
         assert buy_res.status_code == 200
         assert buy_res.json()["shares_bought"] == 500
 
+        # The public quote must expose the remaining free-float supply. Buying
+        # 500 of the initial 4,000 shares cannot leave the quote unchanged.
+        market_after_buy = await client.get("/api/natbirzha/stocks/market")
+        assert market_after_buy.status_code == 200
+        listed_after_buy = next(row for row in market_after_buy.json()["stocks"] if row["stock_id"] == stock_id)
+        assert listed_after_buy["float_shares"] == 3500
+
         # Company 2 checks portfolio
         port_res = await client.get("/api/natbirzha/stocks/portfolio", headers=headers_2)
         assert port_res.status_code == 200
@@ -164,6 +171,14 @@ async def test_audit_fixes():
         assert sell_res.status_code == 200
         assert sell_res.json()["shares_sold"] == 200
         assert sell_res.json()["remaining_shares"] == 300
+        market_after_sell = await client.get("/api/natbirzha/stocks/market")
+        listed_after_sell = next(row for row in market_after_sell.json()["stocks"] if row["stock_id"] == stock_id)
+        assert listed_after_sell["float_shares"] == 3700
+        unified_portfolio = await client.get("/api/natbirzha/portfolio", headers=headers_2)
+        assert unified_portfolio.status_code == 200
+        portfolio_payload = unified_portfolio.json()
+        assert {"summary", "stocks", "bonds", "instruments", "dividend_payments"}.issubset(portfolio_payload)
+        assert portfolio_payload["stocks"][0]["shares_count"] == 300
         print("[OK] Secondary stock market buy and sell executed flawlessly.")
 
         # [4] Tournament Endpoint & cycle_number AttributeError Fix

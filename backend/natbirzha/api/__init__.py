@@ -14,6 +14,7 @@ from backend.natbirzha.api.bond_routes import router as bond_router
 from backend.natbirzha.api.premium_routes import router as premium_router
 from backend.natbirzha.api.instrument_routes import router as instrument_router
 from backend.natbirzha.api.leaderboard_routes import router as leaderboard_router
+from backend.natbirzha.api.portfolio_routes import router as portfolio_router
 
 natbirzha_router = APIRouter(prefix="/natbirzha")
 
@@ -31,5 +32,6 @@ natbirzha_router.include_router(bond_router)
 natbirzha_router.include_router(premium_router)
 natbirzha_router.include_router(instrument_router)
 natbirzha_router.include_router(leaderboard_router)
+natbirzha_router.include_router(portfolio_router)
 
 __all__ = ["natbirzha_router"]

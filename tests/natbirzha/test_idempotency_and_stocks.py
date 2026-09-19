@@ -1,5 +1,6 @@
 import os
 import sys
+import os
 import pytest
 import asyncio
 import json
@@ -18,6 +19,7 @@ if sys.platform == "win32":
         pass
 
 from httpx import AsyncClient, ASGITransport
+from sqlalchemy import select
 from backend.main import app
 from backend.db.session import init_db, async_session_factory
 from backend.natbirzha.config import nat_settings, get_game_today, get_game_now
@@ -28,6 +30,7 @@ from backend.natbirzha.services.military_service import MilitaryService
 from backend.natbirzha.models.company import NatCompany
 from backend.natbirzha.models.restructuring import NatDailyFinancials
 from backend.natbirzha.models.military import NatTournament, NatTournamentParticipant
+from backend.natbirzha.models.stocks import NatDividendPayment
 
 
 def create_test_init_data(user_id: int, username: str = "nat_tester") -> str:
@@ -118,6 +121,11 @@ async def test_idempotency_and_stocks():
         assert res_div["status"] == "settled"
         assert res_div["closed_profit"] == 50000.0
         assert res_div["dividend_pool"] == 5000.0, "Dividend pool must be exactly 10% (5,000 cash)"
+        payment = await session.scalar(select(NatDividendPayment).where(
+            NatDividendPayment.stock_id == stock.id,
+            NatDividendPayment.holder_company_id == comp_ipo.id,
+        ))
+        assert payment is not None and payment.payout_cash > 0
         print(f"[OK] 10% dividend pool (5,000 cash) settled for {today} @ {res_div['per_share']} cash/share.")
 
     # 4. Tournament Deterministic Tie-Breaker (Earliest Timestamp)

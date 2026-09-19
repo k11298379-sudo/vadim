@@ -259,7 +259,8 @@ export const NatAPI = {
   issueIPO: (payload = {}) => request('/api/natbirzha/stocks/ipo/apply', { method: 'POST', body: JSON.stringify(payload) }),
   buyShares: (stock_id, shares_count) => request('/api/natbirzha/stocks/buy', { method: 'POST', body: JSON.stringify({ stock_id: parseInt(stock_id, 10), shares_count: parseInt(shares_count, 10) }) }),
   sellShares: (stock_id, shares_count) => request('/api/natbirzha/stocks/sell', { method: 'POST', body: JSON.stringify({ stock_id: parseInt(stock_id, 10), shares_count: parseInt(shares_count, 10) }) }),
-  getPortfolio: () => request('/api/natbirzha/stocks/portfolio'),
+  getPortfolio: () => request('/api/natbirzha/portfolio'),
+  getStockPortfolio: () => request('/api/natbirzha/stocks/portfolio'),
 
   // Military, Alliances & Tournaments
   getMilitaryStatus: () => request('/api/natbirzha/military/status'),

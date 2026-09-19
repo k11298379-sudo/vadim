@@ -225,6 +225,10 @@ assert(helpCode.includes('Pivocoins') && helpCode.includes('IPO') && helpCode.in
 assert(marketCode.includes('getReferenceInstruments'), 'market.js must load official reference instruments');
 assert(marketCode.includes('tradeReferenceInstrument'), 'market.js must wire reference trades');
 assert(marketCode.includes('createBondListing'), 'market.js must expose secondary bond listings');
+assert(marketCode.includes('getPortfolio') && marketCode.includes('renderPortfolio'),
+  'market.js must expose a unified portfolio for stocks, bonds, currencies and metals');
+assert(marketCode.includes('dividend_payments') && marketCode.includes('next_dividend_at'),
+  'portfolio must show dividend history and the next expected payout');
 assert(marketCode.includes('market-section-btn') && marketCode.includes('renderStockDetail') && marketCode.includes('renderBondDetail'),
   'market.js must expose the agreed vertical market sections and drill-down cards');
 assert((natHtml.match(/data-tab="stocks"/g) || []).length === 0,

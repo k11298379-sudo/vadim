@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from backend.natbirzha.config import nat_settings, get_game_today, get_game_now
 from backend.natbirzha.models.company import NatCompany
-from backend.natbirzha.models.stocks import NatStock, NatStockHolding, NatDividend
+from backend.natbirzha.models.stocks import NatStock, NatStockHolding, NatDividend, NatDividendPayment
 from backend.natbirzha.models.restructuring import NatDailyFinancials
 
 class DividendService:
@@ -85,7 +85,21 @@ class DividendService:
 
         per_share = round(dividend_pool / stock.total_shares, 4)
 
-        # Distribute dividend payouts to shareholders
+        # Record the settlement before creating immutable per-holder receipts.
+        div_record = NatDividend(
+            stock_id=stock.id,
+            settlement_date=settlement_date,
+            closed_profit=closed_profit,
+            dividend_pool=dividend_pool,
+            per_share_amount=per_share,
+            is_settled=True,
+            created_at=get_game_now()
+        )
+        session.add(div_record)
+        await session.flush()
+
+        # Distribute dividend payouts to shareholders and retain a receipt so
+        # portfolio history remains correct even if shares are sold later.
         holdings_res = await session.execute(
             select(NatStockHolding).where(NatStockHolding.stock_id == stock.id)
         )
@@ -97,18 +111,15 @@ class DividendService:
                 holder_comp = await session.get(NatCompany, h.holder_company_id)
                 if holder_comp:
                     holder_comp.cash = round(holder_comp.cash + payout, 2)
-
-        # Record settlement
-        div_record = NatDividend(
-            stock_id=stock.id,
-            settlement_date=settlement_date,
-            closed_profit=closed_profit,
-            dividend_pool=dividend_pool,
-            per_share_amount=per_share,
-            is_settled=True,
-            created_at=get_game_now()
-        )
-        session.add(div_record)
+                    session.add(NatDividendPayment(
+                        dividend_id=div_record.id,
+                        stock_id=stock.id,
+                        holder_company_id=h.holder_company_id,
+                        shares_count=h.shares_count,
+                        payout_cash=payout,
+                        settlement_date=settlement_date,
+                        paid_at=get_game_now(),
+                    ))
         await session.commit()
 
         return {

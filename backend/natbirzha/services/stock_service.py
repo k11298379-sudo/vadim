@@ -128,6 +128,15 @@ class StockService:
         if buyer_company.is_bankrupt:
             raise ValueError("Bankrupt companies cannot purchase stocks.")
 
+        stock = await session.scalar(
+            select(NatStock).where(
+                NatStock.id == stock_id,
+                NatStock.is_listed == True,
+            ).with_for_update()
+        )
+        if not stock:
+            raise ValueError("Stock is not actively listed.")
+
         order_res = await session.execute(
             select(NatStockOrder).where(
                 NatStockOrder.stock_id == stock_id,
@@ -156,6 +165,9 @@ class StockService:
         order.remaining_shares -= executed_shares
         if order.remaining_shares <= 0:
             order.status = "FILLED"
+        # float_shares is the currently available free-float shown in quotes,
+        # not the immutable IPO allocation. Keep it synchronized with orders.
+        stock.float_shares = max(0, int(stock.float_shares) - int(executed_shares))
 
         # Update buyer holding
         now = get_game_now()
@@ -182,10 +194,8 @@ class StockService:
             holding.shares_count = total_s
             holding.updated_at = now
 
-        # Update stock price
-        stock = await session.get(NatStock, stock_id)
-        if stock:
-            stock.current_price = order.price
+        # Update the last traded price while preserving the locked stock row.
+        stock.current_price = order.price
 
         await session.commit()
         return {
@@ -218,7 +228,12 @@ class StockService:
             avail = holding.shares_count if holding else 0
             raise ValueError(f"Insufficient shares to sell. Required: {shares_to_sell}, Available: {avail}")
 
-        stock = await session.get(NatStock, stock_id)
+        stock = await session.scalar(
+            select(NatStock).where(
+                NatStock.id == stock_id,
+                NatStock.is_listed == True,
+            ).with_for_update()
+        )
         if not stock or not stock.is_listed:
             raise ValueError("Stock is not actively listed.")
 
@@ -251,6 +266,7 @@ class StockService:
                 created_at=get_game_now()
             )
             session.add(new_ord)
+        stock.float_shares = min(int(stock.total_shares), int(stock.float_shares) + int(shares_to_sell))
 
         await session.commit()
         return {

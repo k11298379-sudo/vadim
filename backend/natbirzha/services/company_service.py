@@ -313,7 +313,7 @@ class CompanyService:
         from backend.natbirzha.models import (
             NatAlliance, NatAllianceMember, NatArmy, NatArmyUnit, NatBattle,
             NatBattleSnapshot, NatBondListing, NatBondSettlement, NatContract,
-            NatDailyFinancials, NatDividend, NatInstrumentPosition,
+            NatDailyFinancials, NatDividend, NatDividendPayment, NatInstrumentPosition,
             NatInstrumentTrade, NatLoan, NatMarketOrder, NatMarketRestriction,
             NatMarketTrade, NatMarketWarning, NatMilitaryRatingEvent,
             NatMilitaryUpgrade, NatPremiumLedgerEntry, NatPremiumLicense,
@@ -356,6 +356,10 @@ class CompanyService:
         await session.execute(delete(NatArmyUnit).where(NatArmyUnit.company_id == cid))
 
         stock_ids = select(NatStock.id).where(NatStock.company_id == cid)
+        await session.execute(delete(NatDividendPayment).where(or_(
+            NatDividendPayment.stock_id.in_(stock_ids),
+            NatDividendPayment.holder_company_id == cid,
+        )))
         await session.execute(delete(NatDividend).where(NatDividend.stock_id.in_(stock_ids)))
         await session.execute(delete(NatStockOrder).where(or_(
             NatStockOrder.stock_id.in_(stock_ids), NatStockOrder.trader_company_id == cid

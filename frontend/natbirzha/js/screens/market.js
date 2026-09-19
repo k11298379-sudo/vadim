@@ -56,6 +56,10 @@ export async function renderMarket(container, showToast) {
   let bondsData = { bonds: [], holdings: [], listings: [] };
   let stocksData = { stocks: [] };
 
+  const formatMoney = (value) => `${Number(value || 0).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} cash`;
+  const pnlClass = (value) => Number(value || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600';
+  const formatPnl = (value, suffix = 'cash') => `<span class="${pnlClass(value)} font-mono font-bold">${Number(value || 0) >= 0 ? '+' : ''}${Number(value || 0).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ${suffix}</span>`;
+
   async function loadOrderbook() {
     const requestId = ++orderbookRequestId;
     try {
@@ -95,14 +99,39 @@ export async function renderMarket(container, showToast) {
   }
 
   function renderMarketHome() {
-    container.innerHTML = `<div class="space-y-4 max-w-md mx-auto p-4 pb-24"><div><h2 class="text-xl font-black">Биржа</h2><p class="text-xs text-slate-500">Выберите раздел рынка</p></div><div class="grid gap-3"><button class="market-section-btn glass-card rounded-2xl p-5 text-left" data-section="stocks"><div class="text-2xl">📈</div><div class="font-black mt-2">Акции компаний</div><div class="text-xs text-slate-500">Игроки, вышедшие на IPO</div></button><button class="market-section-btn glass-card rounded-2xl p-5 text-left" data-section="bonds"><div class="text-2xl">🏛️</div><div class="font-black mt-2">Государственные облигации</div><div class="text-xs text-slate-500">Купоны, погашение и вторичный рынок</div></button><button class="market-section-btn glass-card rounded-2xl p-5 text-left" data-section="reference"><div class="text-2xl">💱</div><div class="font-black mt-2">Валюты и металлы</div><div class="text-xs text-slate-500">Курсы официальных инструментов</div></button><button class="market-section-btn glass-card rounded-2xl p-5 text-left" data-section="commodities"><div class="text-2xl">🪙</div><div class="font-black mt-2">Сырьё и материалы</div><div class="text-xs text-slate-500">Стакан, NPC и торговые ордера</div></button></div></div>`;
+    container.innerHTML = `<div class="space-y-4 max-w-md mx-auto p-4 pb-24"><div><h2 class="text-xl font-black">Биржа</h2><p class="text-xs text-slate-500">Выберите раздел рынка</p></div><div class="grid gap-3"><button class="market-section-btn glass-card rounded-2xl p-5 text-left border-2 border-blue-200 dark:border-blue-900" data-section="portfolio"><div class="text-2xl">💼</div><div class="font-black mt-2">Мой портфель</div><div class="text-xs text-slate-500">Акции, облигации, валюты, металлы и выплаты</div></button><button class="market-section-btn glass-card rounded-2xl p-5 text-left" data-section="stocks"><div class="text-2xl">📈</div><div class="font-black mt-2">Акции компаний</div><div class="text-xs text-slate-500">Игроки, вышедшие на IPO</div></button><button class="market-section-btn glass-card rounded-2xl p-5 text-left" data-section="bonds"><div class="text-2xl">🏛️</div><div class="font-black mt-2">Государственные облигации</div><div class="text-xs text-slate-500">Купоны, погашение и вторичный рынок</div></button><button class="market-section-btn glass-card rounded-2xl p-5 text-left" data-section="reference"><div class="text-2xl">💱</div><div class="font-black mt-2">Валюты и металлы</div><div class="text-xs text-slate-500">Курсы официальных инструментов</div></button><button class="market-section-btn glass-card rounded-2xl p-5 text-left" data-section="commodities"><div class="text-2xl">🪙</div><div class="font-black mt-2">Сырьё и материалы</div><div class="text-xs text-slate-500">Стакан, NPC и торговые ордера</div></button></div></div>`;
     container.querySelectorAll('.market-section-btn').forEach((button) => button.addEventListener('click', () => {
       const section = button.dataset.section;
-      if (section === 'stocks') renderStocksMarket();
+      if (section === 'portfolio') renderPortfolio();
+      else if (section === 'stocks') renderStocksMarket();
       else if (section === 'bonds') renderBondsMarket();
       else if (section === 'reference') renderReferenceMarket();
       else renderView();
     }));
+  }
+
+  async function renderPortfolio() {
+    container.innerHTML = '<div class="p-6 text-center text-xs text-slate-400">Загрузка портфеля…</div>';
+    let portfolio;
+    try {
+      portfolio = await NatAPI.getPortfolio();
+    } catch (error) {
+      container.innerHTML = marketShell('Мой портфель', 'Не удалось загрузить позиции', `<div class="glass-card rounded-2xl p-6 text-center text-sm text-rose-500">${esc(error.message || 'Ошибка сервера')}</div>`);
+      container.querySelector('.market-back')?.addEventListener('click', renderMarketHome);
+      return;
+    }
+    const summary = portfolio.summary || {};
+    const stocks = portfolio.stocks || [];
+    const bonds = portfolio.bonds || [];
+    const instruments = portfolio.instruments || [];
+    const payments = portfolio.dividend_payments || [];
+    const stockBody = stocks.length ? stocks.map(row => `<div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 space-y-1"><div class="flex justify-between gap-2"><b>${esc(row.issuer_company)}</b><span>${row.shares_count} акций</span></div><div class="flex justify-between text-xs"><span>${formatMoney(row.market_value)}</span>${formatPnl(row.unrealized_pnl)}</div><div class="text-[10px] text-slate-500">Дивиденды: ${formatMoney(row.dividends_earned)} · ${row.next_dividend_at ? `следующая выплата ${new Date(row.next_dividend_at).toLocaleString('ru-RU')}` : 'выплаты недоступны'}</div></div>`).join('') : '<div class="text-xs text-slate-400">Акций пока нет</div>';
+    const bondBody = bonds.length ? bonds.map(row => `<div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 space-y-1"><div class="flex justify-between gap-2"><b>${esc(row.title)}</b><span>${row.quantity} шт.</span></div><div class="flex justify-between text-xs"><span>${formatMoney(row.market_value)}</span>${formatPnl(row.unrealized_pnl)}</div><div class="text-[10px] text-slate-500">Купоны: ${formatMoney(row.coupons_earned)} · следующая выплата ${row.next_coupon_at ? new Date(row.next_coupon_at).toLocaleString('ru-RU') : 'не назначена'}</div></div>`).join('') : '<div class="text-xs text-slate-400">Облигаций пока нет</div>';
+    const instrumentBody = instruments.length ? instruments.map(row => `<div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 space-y-1"><div class="flex justify-between gap-2"><b>${esc(row.instrument_code)}</b><span>${Number(row.quantity).toLocaleString('ru-RU')}</span></div><div class="flex justify-between text-xs"><span>${row.market_value_rub == null ? 'Курс недоступен' : `${Number(row.market_value_rub).toLocaleString('ru-RU')} ₽`}</span>${row.unrealized_pnl_rub == null ? '' : formatPnl(row.unrealized_pnl_rub, '₽')}</div><div class="text-[10px] text-slate-500">Средняя цена: ${Number(row.avg_cost_rub).toLocaleString('ru-RU')} ₽</div></div>`).join('') : '<div class="text-xs text-slate-400">Валют и металлов пока нет</div>';
+    const paymentsBody = payments.length ? payments.slice(0, 20).map(row => `<div class="flex justify-between gap-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 text-xs"><span>${esc(row.issuer_company)} · ${row.settlement_date}</span><b class="text-emerald-600">+${formatMoney(row.payout_cash)}</b></div>`).join('') : '<div class="text-xs text-slate-400">Дивидендных выплат пока не было</div>';
+    const body = `<div class="space-y-3"><div class="glass-card rounded-2xl p-4 grid grid-cols-2 gap-2 text-xs"><div><span class="text-slate-500">Баланс</span><b class="block text-base">${formatMoney(portfolio.cash)}</b></div><div><span class="text-slate-500">Стоимость активов</span><b class="block text-base">${formatMoney(summary.market_value)}</b></div><div><span class="text-slate-500">Нереализованный результат</span><b class="block">${formatPnl(summary.unrealized_pnl)}</b></div><div><span class="text-slate-500">Получено выплат</span><b class="block text-emerald-600">${formatMoney(Number(summary.dividends_earned || 0) + Number(summary.coupons_earned || 0))}</b></div></div><details class="glass-card rounded-2xl p-4" open><summary class="font-black cursor-pointer">📈 Акции</summary><div class="space-y-2 pt-3">${stockBody}</div></details><details class="glass-card rounded-2xl p-4"><summary class="font-black cursor-pointer">🏛️ Облигации</summary><div class="space-y-2 pt-3">${bondBody}</div></details><details class="glass-card rounded-2xl p-4"><summary class="font-black cursor-pointer">💱 Валюты и металлы</summary><div class="space-y-2 pt-3">${instrumentBody}</div></details><details class="glass-card rounded-2xl p-4"><summary class="font-black cursor-pointer">💸 История дивидендов</summary><div class="space-y-2 pt-3">${paymentsBody}</div></details></div>`;
+    container.innerHTML = marketShell('Мой портфель', 'Позиции и выплаты по всем рыночным инструментам', body);
+    container.querySelector('.market-back')?.addEventListener('click', renderMarketHome);
   }
 
   function renderStocksMarket() {
