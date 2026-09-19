@@ -14,9 +14,21 @@ function generateUUID() {
   });
 }
 
-function getAuthHeader() {
+const TELEGRAM_INIT_DATA_STORAGE_KEY = 'natbirzha_telegram_init_data';
+
+function getTelegramInitData() {
   const tg = typeof window !== 'undefined' ? window.Telegram?.WebApp : null;
-  const initData = tg?.initData;
+  if (tg?.initData && typeof tg.initData === 'string') return tg.initData;
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      return sessionStorage.getItem(TELEGRAM_INIT_DATA_STORAGE_KEY) || '';
+    }
+  } catch (_) {}
+  return '';
+}
+
+function getAuthHeader() {
+  const initData = getTelegramInitData();
   if (!initData || typeof initData !== 'string' || initData.length === 0) {
     return {};
   }

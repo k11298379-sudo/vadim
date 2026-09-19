@@ -11,6 +11,17 @@ import { renderCreator } from './screens/creator.js';
 import { renderLeaderboard } from './screens/leaderboard.js';
 import { renderHelp } from './screens/help.js';
 
+const TELEGRAM_INIT_DATA_STORAGE_KEY = 'natbirzha_telegram_init_data';
+
+function getCarriedTelegramInitData() {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      return sessionStorage.getItem(TELEGRAM_INIT_DATA_STORAGE_KEY) || '';
+    }
+  } catch (_) {}
+  return '';
+}
+
 // Telegram Haptic Feedback Helper
 export function triggerHaptic(type = 'light') {
   try {
@@ -246,7 +257,7 @@ export async function initApp() {
 
   setupNavigation();
 
-  if (!tg?.initData) {
+  if (!(tg?.initData || getCarriedTelegramInitData())) {
     const container = document.getElementById('screen-container');
     if (container) {
       container.innerHTML = `

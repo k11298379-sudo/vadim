@@ -12,6 +12,21 @@ let selectedDateStr = formatDateISO(currentDate);
 let activeTab = "schedule";
 let isCalendarPicked = false;
 
+const TELEGRAM_INIT_DATA_STORAGE_KEY = "natbirzha_telegram_init_data";
+
+function persistTelegramInitDataForChildApps() {
+  const initData = window.Telegram?.WebApp?.initData;
+  if (!initData || typeof initData !== "string") return false;
+  try {
+    sessionStorage.setItem(TELEGRAM_INIT_DATA_STORAGE_KEY, initData);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+window.persistTelegramInitDataForChildApps = persistTelegramInitDataForChildApps;
+
 // Calendar modal state
 let calViewDate = new Date();
 
@@ -103,6 +118,7 @@ async function loadUserData() {
   if (typeof window.waitForTelegramWebApp === "function") {
     await window.waitForTelegramWebApp();
   }
+  persistTelegramInitDataForChildApps();
 
   try {
     const me = await api.getMe();
