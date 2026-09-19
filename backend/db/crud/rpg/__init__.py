@@ -14,6 +14,7 @@ from backend.db.crud.rpg.loot import (
     generate_random_natar_item,
     generate_random_dota_item,
     pick_smart_loot_item,
+    get_floor_rarity_weights,
 )
 from backend.db.crud.rpg.chests import open_wave_chest, open_boss_raid_chest
 from backend.db.crud.rpg.inventory import (
@@ -114,6 +115,7 @@ __all__ = [
     "apply_creep_auras", "handle_creep_death", "AGGRO_RADIUS", "LEASH_RADIUS",
     "get_or_create_rpg_character", "calculate_character_effective_stats", "serialize_character_profile",
     "rebuild_item_description", "generate_random_natar_item", "generate_random_dota_item", "pick_smart_loot_item",
+    "get_floor_rarity_weights",
     "open_wave_chest", "open_boss_raid_chest",
     "equip_item_for_character", "unequip_item_from_character", "use_consumable_item",
     "upgrade_item_forge", "sell_item_from_inventory", "sell_multiple_items_from_inventory", "reset_rpg_character",

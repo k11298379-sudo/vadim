@@ -239,24 +239,56 @@ def pick_smart_loot_item(pool: List[Dict[str, Any]], hero_class: str = None, own
     return dict(chosen)
 
 
-def generate_random_natar_item(floor: int, quality_luck: float = 0.0, hero_class: str = None) -> Dict[str, Any]:
-    """Generates a class-weighted item from the streamlined natarGRP catalog."""
-    roll = random.random() + quality_luck + (floor * 0.006)
-
-    if roll > 0.995:
-        target_rarities = ["immortal", "mythic"]
-    elif roll > 0.96:
-        target_rarities = ["mythic", "legendary"]
-    elif roll > 0.85:
-        target_rarities = ["legendary", "epic"]
-    elif roll > 0.55:
-        target_rarities = ["epic", "rare"]
-    elif roll > 0.25:
-        target_rarities = ["rare", "uncommon"]
+def get_floor_rarity_weights(floor: int, quality_luck: float = 0.0) -> Dict[str, float]:
+    """
+    Returns progressive rarity weights based on dungeon floor.
+    Guarantees that on floors 1-3 legendary, mythic, and immortal are strictly 0.0%.
+    Quality luck increases higher unlocked tiers without breaching tier restrictions.
+    """
+    f = max(1, floor)
+    if f == 1:
+        base = {"common": 65.0, "uncommon": 33.0, "rare": 2.0, "epic": 0.0, "legendary": 0.0, "mythic": 0.0, "immortal": 0.0}
+    elif f == 2:
+        base = {"common": 48.0, "uncommon": 42.0, "rare": 9.0, "epic": 1.0, "legendary": 0.0, "mythic": 0.0, "immortal": 0.0}
+    elif f == 3:
+        base = {"common": 25.0, "uncommon": 48.0, "rare": 22.0, "epic": 5.0, "legendary": 0.0, "mythic": 0.0, "immortal": 0.0}
+    elif f == 4:
+        base = {"common": 12.0, "uncommon": 40.0, "rare": 36.0, "epic": 11.5, "legendary": 0.5, "mythic": 0.0, "immortal": 0.0}
+    elif f == 5:
+        base = {"common": 6.0, "uncommon": 26.0, "rare": 44.0, "epic": 21.0, "legendary": 3.0, "mythic": 0.0, "immortal": 0.0}
+    elif f == 6:
+        base = {"common": 2.0, "uncommon": 16.0, "rare": 40.0, "epic": 31.0, "legendary": 10.0, "mythic": 1.0, "immortal": 0.0}
+    elif f == 7:
+        base = {"common": 0.5, "uncommon": 7.5, "rare": 32.0, "epic": 38.0, "legendary": 17.0, "mythic": 4.0, "immortal": 1.0}
+    elif f <= 10:
+        base = {"common": 0.0, "uncommon": 3.0, "rare": 22.0, "epic": 40.0, "legendary": 26.0, "mythic": 7.0, "immortal": 2.0}
+    elif f <= 14:
+        base = {"common": 0.0, "uncommon": 0.0, "rare": 12.0, "epic": 34.0, "legendary": 36.0, "mythic": 13.0, "immortal": 5.0}
     else:
-        target_rarities = ["common", "uncommon"]
+        base = {"common": 0.0, "uncommon": 0.0, "rare": 5.0, "epic": 25.0, "legendary": 38.0, "mythic": 20.0, "immortal": 12.0}
 
-    filtered_catalog = [it for it in NATAR_ITEMS_CATALOG if it.get("rarity") in target_rarities]
+    # If luck is present, amplify non-zero highest rarities slightly without unlocking locked ones
+    if quality_luck > 0:
+        luck_mult = 1.0 + min(1.0, quality_luck * 2.0)
+        unlocked = [k for k, v in base.items() if v > 0.0]
+        for top_k in unlocked[-2:]:
+            base[top_k] *= luck_mult
+
+    return base
+
+
+def generate_random_natar_item(floor: int, quality_luck: float = 0.0, hero_class: str = None) -> Dict[str, Any]:
+    """Generates a class-weighted item from the streamlined natarGRP catalog using progressive floor rarity."""
+    weights_dict = get_floor_rarity_weights(floor, quality_luck=quality_luck)
+    rarities = list(weights_dict.keys())
+    weights = [weights_dict[r] for r in rarities]
+
+    chosen_rarity = random.choices(rarities, weights=weights, k=1)[0]
+
+    filtered_catalog = [it for it in NATAR_ITEMS_CATALOG if it.get("rarity") == chosen_rarity]
+    if not filtered_catalog:
+        allowed_rarities = [r for r, w in weights_dict.items() if w > 0.0]
+        filtered_catalog = [it for it in NATAR_ITEMS_CATALOG if it.get("rarity") in allowed_rarities]
     if not filtered_catalog:
         filtered_catalog = NATAR_ITEMS_CATALOG
 
@@ -265,10 +297,10 @@ def generate_random_natar_item(floor: int, quality_luck: float = 0.0, hero_class
     if "bonus" in chosen:
         chosen["bonus"] = dict(chosen["bonus"])
 
-    rarity = chosen.get("rarity", "common")
-    rarity_data = RARITY_MULTIPLIERS.get(rarity, RARITY_MULTIPLIERS["common"])
-    chosen["rarity_color"] = rarity_data["color"]
-    chosen["rarity_name"] = rarity_data["name"]
+    rarity = chosen.get("rarity", chosen_rarity)
+    rarity_data = RARITY_MULTIPLIERS.get(rarity, RARITY_MULTIPLIERS.get("common", {}))
+    chosen["rarity_color"] = rarity_data.get("color", "#94a3b8")
+    chosen["rarity_name"] = rarity_data.get("name", "Обычный")
     chosen["floor"] = max(1, floor)
 
     floor_scale = 1.0 + (floor * 0.08)
@@ -288,12 +320,6 @@ def generate_random_natar_item(floor: int, quality_luck: float = 0.0, hero_class
 
     chosen["bonus_desc"] = rebuild_item_description(chosen)
     return chosen
-
-
-# Backwards compatibility aliases
-generate_random_item = generate_random_natar_item
-generate_random_dota_item = generate_random_natar_item
-
 
 
 # Backwards compatibility aliases

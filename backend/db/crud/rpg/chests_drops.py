@@ -9,13 +9,13 @@ BOSS_EXCLUSIVE_DROPS = {
             "slot": "weapon",
             "slot_name": "Оружие",
             "slot_icon": "⚔️",
-            "rarity": "epic",
-            "rarity_name": "Эпический",
-            "rarity_color": "#c084fc",
-            "base_min": 55,
-            "base_max": 78,
-            "bonus": {"stun_chance": 20, "str": 15},
-            "bonus_desc": "⚔️ +55..78 Урон | 💥 +20% Шанс оглушения | 🥩 +15 Сила"
+            "rarity": "rare",
+            "rarity_name": "Редкий",
+            "rarity_color": "#3b82f6",
+            "base_min": 34,
+            "base_max": 48,
+            "bonus": {"stun_chance": 12, "str": 8},
+            "bonus_desc": "⚔️ +34..48 Урон | 💥 +12% Шанс оглушения | 🥩 +8 Сила"
         },
         {
             "name": "Осколок Гранитного Кристалла",
@@ -24,11 +24,11 @@ BOSS_EXCLUSIVE_DROPS = {
             "slot": "relic",
             "slot_name": "Реликвия",
             "slot_icon": "💍",
-            "rarity": "epic",
-            "rarity_name": "Эпический",
-            "rarity_color": "#c084fc",
-            "bonus": {"int": 18, "spell_amp": 15, "magic_dmg": 25},
-            "bonus_desc": "🔮 +18 Интеллект | ✨ +15% Сила заклинаний | ⚡ +25 Магический урон"
+            "rarity": "rare",
+            "rarity_name": "Редкий",
+            "rarity_color": "#3b82f6",
+            "bonus": {"int": 10, "spell_amp": 8, "magic_dmg": 14},
+            "bonus_desc": "🔮 +10 Интеллект | ✨ +8% Сила заклинаний | ⚡ +14 Магический урон"
         },
         {
             "name": "Обсидиановый Доспех Колосса",
@@ -37,13 +37,13 @@ BOSS_EXCLUSIVE_DROPS = {
             "slot": "armor",
             "slot_name": "Броня",
             "slot_icon": "🛡️",
-            "rarity": "epic",
-            "rarity_name": "Эпический",
-            "rarity_color": "#c084fc",
-            "defense": 22,
-            "hp_bonus": 160,
-            "bonus": {"damage_block": 25, "hp": 160},
-            "bonus_desc": "🛡️ +22 Броня | ❤️ +160 HP | 🧱 Блок 25 ед. урона"
+            "rarity": "rare",
+            "rarity_name": "Редкий",
+            "rarity_color": "#3b82f6",
+            "defense": 14,
+            "hp_bonus": 90,
+            "bonus": {"damage_block": 12, "hp": 90},
+            "bonus_desc": "🛡️ +14 Броня | ❤️ +90 HP | 🧱 Блок 12 ед. урона"
         },
         {
             "name": "Кинжал из Обсидиана",
@@ -52,13 +52,13 @@ BOSS_EXCLUSIVE_DROPS = {
             "slot": "weapon",
             "slot_name": "Оружие",
             "slot_icon": "⚔️",
-            "rarity": "epic",
-            "rarity_name": "Эпический",
-            "rarity_color": "#c084fc",
-            "base_min": 50,
-            "base_max": 74,
-            "bonus": {"agi": 18, "atk_speed": 20, "crit": 15},
-            "bonus_desc": "⚔️ +50..74 Урон | 🏃 +18 Ловкость | ⚡ +20% Скор. атаки | 💥 +15% Крит"
+            "rarity": "rare",
+            "rarity_name": "Редкий",
+            "rarity_color": "#3b82f6",
+            "base_min": 30,
+            "base_max": 44,
+            "bonus": {"agi": 10, "atk_speed": 12, "crit": 8},
+            "bonus_desc": "⚔️ +30..44 Урон | 🏃 +10 Ловкость | ⚡ +12% Скор. атаки | 💥 +8% Крит"
         }
     ],
     "lich": [
@@ -69,24 +69,24 @@ BOSS_EXCLUSIVE_DROPS = {
             "slot": "relic",
             "slot_name": "Реликвия",
             "slot_icon": "💍",
-            "rarity": "legendary",
-            "rarity_name": "Легендарный",
-            "rarity_color": "#f59e0b",
-            "bonus": {"int": 35, "spell_amp": 25, "freeze_chance": 30},
-            "bonus_desc": "🔮 +35 Интеллект | ✨ +25% Сила заклинаний | ❄️ 30% Шанс заморозки"
+            "rarity": "epic",
+            "rarity_name": "Эпический",
+            "rarity_color": "#c084fc",
+            "bonus": {"int": 20, "spell_amp": 15, "freeze_chance": 18},
+            "bonus_desc": "🔮 +20 Интеллект | ✨ +15% Сила заклинаний | ❄️ 18% Шанс заморозки"
         },
         {
-            "name": "Око Ледяного Шторма (Eye of Skadi)",
+            "name": "Ледяное Око Архилича (Eye of Lich)",
             "icon": "❄️",
             "type": "relic",
             "slot": "relic",
             "slot_name": "Реликвия",
             "slot_icon": "💍",
-            "rarity": "immortal",
-            "rarity_name": "Бессмертный",
-            "rarity_color": "#eab308",
-            "bonus": {"all_stats": 25, "slow_enemy": 35, "hp": 250, "mp": 250},
-            "bonus_desc": "👑 +25 Все характеристики | ❄️ Замедление врагов 35% | ❤️ +250 HP | 🔮 +250 MP"
+            "rarity": "epic",
+            "rarity_name": "Эпический",
+            "rarity_color": "#c084fc",
+            "bonus": {"all_stats": 14, "slow_enemy": 20, "hp": 150, "mp": 150},
+            "bonus_desc": "👑 +14 Все характеристики | ❄️ Замедление врагов 20% | ❤️ +150 HP | 🔮 +150 MP"
         },
         {
             "name": "Мантия Замерзшей Бездны",
@@ -95,13 +95,13 @@ BOSS_EXCLUSIVE_DROPS = {
             "slot": "armor",
             "slot_name": "Броня",
             "slot_icon": "🛡️",
-            "rarity": "legendary",
-            "rarity_name": "Легендарный",
-            "rarity_color": "#f59e0b",
-            "defense": 26,
-            "hp_bonus": 180,
-            "bonus": {"frost_armor": 30, "int": 20},
-            "bonus_desc": "🛡️ +26 Броня | ❤️ +180 HP | ❄️ Ледяной панцирь замедляет атакующих"
+            "rarity": "epic",
+            "rarity_name": "Эпический",
+            "rarity_color": "#c084fc",
+            "defense": 18,
+            "hp_bonus": 130,
+            "bonus": {"frost_armor": 18, "int": 14},
+            "bonus_desc": "🛡️ +18 Броня | ❤️ +130 HP | ❄️ Ледяной панцирь замедляет атакующих"
         },
         {
             "name": "Посох Абсолютного Нуля",
@@ -110,13 +110,13 @@ BOSS_EXCLUSIVE_DROPS = {
             "slot": "weapon",
             "slot_name": "Оружие",
             "slot_icon": "⚔️",
-            "rarity": "legendary",
-            "rarity_name": "Легендарный",
-            "rarity_color": "#f59e0b",
-            "base_min": 75,
-            "base_max": 115,
-            "bonus": {"int": 30, "burst_magic": 140},
-            "bonus_desc": "⚔️ +75..115 Урон | 🔮 +30 Интеллект | ⚡ Ледяной взрыв 140 ед."
+            "rarity": "epic",
+            "rarity_name": "Эпический",
+            "rarity_color": "#c084fc",
+            "base_min": 48,
+            "base_max": 72,
+            "bonus": {"int": 18, "burst_magic": 80},
+            "bonus_desc": "⚔️ +48..72 Урон | 🔮 +18 Интеллект | ⚡ Ледяной взрыв 80 ед."
         }
     ],
     "tormentor": [
@@ -127,11 +127,11 @@ BOSS_EXCLUSIVE_DROPS = {
             "slot": "relic",
             "slot_name": "Реликвия",
             "slot_icon": "💍",
-            "rarity": "immortal",
-            "rarity_name": "Бессмертный",
-            "rarity_color": "#eab308",
-            "bonus": {"spell_amp": 30, "int": 25, "ult_boost": 35, "ult_cd": 20},
-            "bonus_desc": "🔮 +25 Интеллект | ✨ +30% Сила заклинаний | 💥 +35% Урон Ульты | ⏱️ -20% КД"
+            "rarity": "epic",
+            "rarity_name": "Эпический",
+            "rarity_color": "#c084fc",
+            "bonus": {"spell_amp": 18, "int": 16, "ult_boost": 20, "ult_cd": 12},
+            "bonus_desc": "🔮 +16 Интеллект | ✨ +18% Сила заклинаний | 💥 +20% Урон Ульты | ⏱️ -12% КД"
         },
         {
             "name": "Отражающий Панцирь Терзателя",
@@ -140,13 +140,13 @@ BOSS_EXCLUSIVE_DROPS = {
             "slot": "armor",
             "slot_name": "Броня",
             "slot_icon": "🛡️",
-            "rarity": "legendary",
-            "rarity_name": "Легендарный",
-            "rarity_color": "#f59e0b",
-            "defense": 32,
-            "hp_bonus": 220,
-            "bonus": {"reflect": 40, "magic_resist": 25},
-            "bonus_desc": "🛡️ +32 Броня | ❤️ +220 HP | 🪞 Отражает 40% входящего урона"
+            "rarity": "epic",
+            "rarity_name": "Эпический",
+            "rarity_color": "#c084fc",
+            "defense": 24,
+            "hp_bonus": 160,
+            "bonus": {"reflect": 25, "magic_resist": 15},
+            "bonus_desc": "🛡️ +24 Броня | ❤️ +160 HP | 🪞 Отражает 25% входящего урона"
         },
         {
             "name": "Эфирный Фокус Терзателя",
@@ -155,11 +155,11 @@ BOSS_EXCLUSIVE_DROPS = {
             "slot": "relic",
             "slot_name": "Реликвия",
             "slot_icon": "💍",
-            "rarity": "legendary",
-            "rarity_name": "Легендарный",
-            "rarity_color": "#f59e0b",
-            "bonus": {"int": 28, "spell_amp": 25, "burst_magic": 220},
-            "bonus_desc": "🔮 +28 Интеллект | ✨ +25% Сила заклинаний | ⚡ Эфирный разряд 220 ед."
+            "rarity": "epic",
+            "rarity_name": "Эпический",
+            "rarity_color": "#c084fc",
+            "bonus": {"int": 18, "spell_amp": 16, "burst_magic": 120},
+            "bonus_desc": "🔮 +18 Интеллект | ✨ +16% Сила заклинаний | ⚡ Эфирный разряд 120 ед."
         },
         {
             "name": "Кристальный Клинок Бездны",
@@ -168,13 +168,13 @@ BOSS_EXCLUSIVE_DROPS = {
             "slot": "weapon",
             "slot_name": "Оружие",
             "slot_icon": "⚔️",
-            "rarity": "legendary",
-            "rarity_name": "Легендарный",
-            "rarity_color": "#f59e0b",
-            "base_min": 85,
-            "base_max": 125,
-            "bonus": {"crit": 25, "agi": 22},
-            "bonus_desc": "⚔️ +85..125 Урон | 🏃 +22 Ловкость | 💥 +25% Крит"
+            "rarity": "epic",
+            "rarity_name": "Эпический",
+            "rarity_color": "#c084fc",
+            "base_min": 60,
+            "base_max": 88,
+            "bonus": {"crit": 18, "agi": 16},
+            "bonus_desc": "⚔️ +60..88 Урон | 🏃 +16 Ловкость | 💥 +18% Крит"
         }
     ],
     "dragon": [
@@ -185,13 +185,13 @@ BOSS_EXCLUSIVE_DROPS = {
             "slot": "armor",
             "slot_name": "Броня",
             "slot_icon": "🛡️",
-            "rarity": "immortal",
-            "rarity_name": "Бессмертный",
-            "rarity_color": "#eab308",
-            "defense": 36,
-            "hp_bonus": 300,
-            "bonus": {"fire_aura": 45, "str": 25},
-            "bonus_desc": "🛡️ +36 Броня | ❤️ +300 HP | 🔥 Огненная аура дракона 45/с"
+            "rarity": "legendary",
+            "rarity_name": "Легендарный",
+            "rarity_color": "#f59e0b",
+            "defense": 30,
+            "hp_bonus": 240,
+            "bonus": {"fire_aura": 35, "str": 20},
+            "bonus_desc": "🛡️ +30 Броня | ❤️ +240 HP | 🔥 Огненная аура дракона 35/с"
         },
         {
             "name": "Огненный Клинок Бездны",
@@ -220,6 +220,96 @@ BOSS_EXCLUSIVE_DROPS = {
             "rarity_color": "#f59e0b",
             "bonus": {"int": 32, "spell_amp": 28, "meteor": 180},
             "bonus_desc": "🔮 +32 Интеллект | ✨ +28% Сила заклинаний | ☄️ Метеор 180 ед."
+        }
+    ],
+    "pudge_boss": [
+        {
+            "name": "Окровавленный Крюк Мясника",
+            "icon": "🪝",
+            "type": "weapon",
+            "slot": "weapon",
+            "slot_name": "Оружие",
+            "slot_icon": "⚔️",
+            "rarity": "legendary",
+            "rarity_name": "Легендарный",
+            "rarity_color": "#f59e0b",
+            "base_min": 115,
+            "base_max": 160,
+            "bonus": {"str": 30, "crit": 22, "lifesteal": 20},
+            "bonus_desc": "⚔️ +115..160 Урон | 🥩 +30 Сила | 🩸 +20% Вампиризм | 💥 +22% Крит"
+        },
+        {
+            "name": "Фартук Чумного Потрошителя",
+            "icon": "🦺",
+            "type": "armor",
+            "slot": "armor",
+            "slot_name": "Броня",
+            "slot_icon": "🛡️",
+            "rarity": "legendary",
+            "rarity_name": "Легендарный",
+            "rarity_color": "#f59e0b",
+            "defense": 36,
+            "hp_bonus": 320,
+            "bonus": {"damage_block": 35, "str": 25, "hp": 320},
+            "bonus_desc": "🛡️ +36 Броня | ❤️ +320 HP | 🥩 +25 Сила | 🧱 Блок 35 урона"
+        },
+        {
+            "name": "Гнилое Сердце Мясника",
+            "icon": "🫀",
+            "type": "relic",
+            "slot": "relic",
+            "slot_name": "Реликвия",
+            "slot_icon": "💍",
+            "rarity": "legendary",
+            "rarity_name": "Легендарный",
+            "rarity_color": "#f59e0b",
+            "bonus": {"str": 28, "rot_aura": 35, "hp": 280},
+            "bonus_desc": "🥩 +28 Сила | ❤️ +280 HP | ☣️ Аура гниения 35/с"
+        }
+    ],
+    "faceless_void": [
+        {
+            "name": "Булава Повелителя Времени",
+            "icon": "🔨",
+            "type": "weapon",
+            "slot": "weapon",
+            "slot_name": "Оружие",
+            "slot_icon": "⚔️",
+            "rarity": "legendary",
+            "rarity_name": "Легендарный",
+            "rarity_color": "#f59e0b",
+            "base_min": 140,
+            "base_max": 195,
+            "bonus": {"agi": 32, "stun_chance": 25, "atk_speed": 30},
+            "bonus_desc": "⚔️ +140..195 Урон | 🏃 +32 Ловкость | ⚡ +30% Скор. атаки | 💫 25% Таймлок"
+        },
+        {
+            "name": "Панцирь Временного Разлома",
+            "icon": "🛡️",
+            "type": "armor",
+            "slot": "armor",
+            "slot_name": "Броня",
+            "slot_icon": "🛡️",
+            "rarity": "legendary",
+            "rarity_name": "Легендарный",
+            "rarity_color": "#f59e0b",
+            "defense": 40,
+            "hp_bonus": 380,
+            "bonus": {"dodge": 25, "hp": 380, "def": 40},
+            "bonus_desc": "🛡️ +40 Броня | ❤️ +380 HP | 💨 +25% Уворот во времени"
+        },
+        {
+            "name": "Хроно-Сфера Безвременья",
+            "icon": "🔮",
+            "type": "relic",
+            "slot": "relic",
+            "slot_name": "Реликвия",
+            "slot_icon": "💍",
+            "rarity": "legendary",
+            "rarity_name": "Легендарный",
+            "rarity_color": "#f59e0b",
+            "bonus": {"all_stats": 24, "cooldown_reduct": 18, "ult_cd": 20},
+            "bonus_desc": "👑 +24 Все статы | ⏳ -18% КД всех способностей | ⏱️ -20% КД Ульты"
         }
     ],
     "roshan": [
