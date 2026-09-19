@@ -46,22 +46,47 @@ def is_node_available(node: Dict[str, Any], char_level: int,
     return True
 
 
+def get_hero_spent_talent_points(char: Any, hero_class: str, hero_tree_getter=None) -> int:
+    """Возвращает суммарно потраченные очки талантов для конкретного героя."""
+    talents = getattr(char, "talents", {}) or {}
+    tree = talents.get("tree", {})
+    hero_nodes = tree.get(hero_class, {})
+    if not hero_nodes or not hero_tree_getter:
+        return 0
+    hero_tree = hero_tree_getter(hero_class)
+    spent = 0
+    for nid, bought in (hero_nodes or {}).items():
+        if bought and nid in hero_tree:
+            spent += hero_tree[nid].get("cost", 1)
+    return spent
+
+
+def get_hero_available_talent_points(char: Any, hero_class: str = None, hero_tree_getter=None) -> int:
+    """
+    Возвращает количество доступных очков талантов для текущего (или указанного) героя.
+    Каждый герой имеет свой баланс очков из общего пула (level // 2), не отбирая очки у других героев.
+    """
+    if not hero_class:
+        hero_class = str(getattr(char, "hero_class", "pudge") or "pudge").lower()
+    char_level = getattr(char, "level", 1) or 1
+    total_earned = char_level // 2
+    spent = get_hero_spent_talent_points(char, hero_class, hero_tree_getter)
+    return max(0, total_earned - spent)
+
+
 def reset_old_talents_and_refund(char: Any, hero_tree_getter=None) -> bool:
     """
     Сбрасывает старые таланты Доты и старые пассивки (lifesteal/dodge/crit_mult/cooldown),
-    возвращая вложенные очки и гарантируя баланс очков по уровню (1 очко за каждые 2 уровня).
+    гарантируя актуальный баланс очков для активного героя (1 очко за каждые 2 уровня за вычетом купленных узлов).
     """
     talents = dict(getattr(char, "talents", {}) or {})
     modified = False
 
     # 1. Возврат очков за старые 4 пассивки
     old_passives = ["lifesteal", "dodge", "crit_mult", "cooldown"]
-    refunded_pts = 0
     for key in old_passives:
         if key in talents:
-            lvl = int(talents.pop(key, 0) or 0)
-            if lvl > 0:
-                refunded_pts += lvl
+            talents.pop(key, None)
             modified = True
 
     # 2. Удаление старых дота-талантов
@@ -69,22 +94,10 @@ def reset_old_talents_and_refund(char: Any, hero_tree_getter=None) -> bool:
         talents.pop("dota_talents", None)
         modified = True
 
-    # 3. Пересчёт очков талантов по уровню персонажа
-    char_level = getattr(char, "level", 1) or 1
-    min_pts_from_level = char_level // 2
-
-    # Подсчитываем, сколько уже потрачено в новом дереве
-    tree_data = talents.get("tree", {})
-    tree_spent = 0
-    if hero_tree_getter:
-        for h_class, h_nodes in tree_data.items():
-            h_tree = hero_tree_getter(h_class)
-            for nid, nlvl in (h_nodes or {}).items():
-                if nlvl and nid in h_tree:
-                    tree_spent += h_tree[nid].get("cost", 1)
-
+    # 3. Пересчёт очков талантов по уровню персонажа для активного героя
+    h_class = str(getattr(char, "hero_class", "pudge") or "pudge").lower()
+    target_pts = get_hero_available_talent_points(char, h_class, hero_tree_getter)
     current_pts = getattr(char, "talent_points", 0) or 0
-    target_pts = max(current_pts + refunded_pts, min_pts_from_level - tree_spent)
     if target_pts != current_pts:
         char.talent_points = target_pts
         modified = True
@@ -97,3 +110,4 @@ def reset_old_talents_and_refund(char: Any, hero_tree_getter=None) -> bool:
         char.talents = talents
 
     return modified
+

@@ -21,6 +21,7 @@ from backend.db.crud.rpg.talent_tree import (
     BRANCH_LABELS,
     TIER_UNLOCK_LEVEL,
     TIER_COST,
+    get_hero_available_talent_points,
 )
 
 talent_tree_router = APIRouter(prefix="/rpg/talents", tags=["RPG Talents"])
@@ -37,7 +38,10 @@ async def get_talent_tree_endpoint(
 
     hero_class = str(getattr(char, "hero_class", "pudge") or "pudge").lower()
     char_level = char.level or 1
-    talent_points = getattr(char, "talent_points", 0) or 0
+    talent_points = get_hero_available_talent_points(char, hero_class)
+    if getattr(char, "talent_points", None) != talent_points:
+        char.talent_points = talent_points
+        await session.commit()
 
     talents = getattr(char, "talents", {}) or {}
     purchased = (talents.get("tree") or {}).get(hero_class, {})
@@ -100,7 +104,7 @@ async def buy_talent_node_endpoint(
     char = await get_or_create_rpg_character(session, user_id=user_id)
     hero_class = str(getattr(char, "hero_class", "pudge") or "pudge").lower()
     char_level = char.level or 1
-    talent_points = getattr(char, "talent_points", 0) or 0
+    talent_points = get_hero_available_talent_points(char, hero_class)
 
     hero_tree = get_hero_tree(hero_class)
     node_cfg = hero_tree.get(node_id)
@@ -137,7 +141,7 @@ async def buy_talent_node_endpoint(
     tree[hero_class] = hero_nodes
     talents["tree"] = tree
     char.talents = talents
-    char.talent_points = talent_points - cost
+    char.talent_points = max(0, talent_points - cost)
     flag_modified(char, "talents")
     await session.commit()
     await session.refresh(char)

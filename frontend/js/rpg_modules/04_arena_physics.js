@@ -523,7 +523,7 @@
       if (ARENA.frameCount % 60 === 0) {
         const hasTarrasque = Object.values(eq).some(it => it && (it.name?.includes("Tarrasque") || it.name?.includes("Тарраск") || it.bonus?.pct_hp_regen));
         if (hasTarrasque) {
-          const heal = Math.floor(p.maxHp * 0.025);
+          const heal = Math.min(Math.floor(p.maxHp * 0.008), 2000);
           p.currentHp = Math.min(p.maxHp, p.currentHp + heal);
           spawnFloatingText(p.x, p.y - 30, `+${heal} HP (ТАРАСКА) ❤️`, "#22c55e");
         }
@@ -595,8 +595,8 @@
           }
           const spellAmp = (stats.spell_amp !== undefined ? stats.spell_amp : ((p.maxMp || 100) * 0.2));
 
-          // 1. Исцеление Ларго (разделено на 4 для тика 0.5с): +3% макс. HP + INT * 0.55
-          const healAmt = Math.max(12, Math.floor((p.maxHp * 0.03) + ((stats.int || 20) * 0.55)));
+          // 1. Исцеление Ларго (разделено на 4 для тика 0.5с): сбалансировано с ограничением по тику
+          const healAmt = Math.max(6, Math.min(Math.floor(p.maxHp * 0.003), 800) + Math.min(600, Math.floor((stats.int || 20) * 0.08)));
           p.currentHp = Math.min(p.maxHp, p.currentHp + healAmt);
           spawnFloatingText(p.x, p.y - 30, `💚 +${healAmt} ХП (РАПСОДИЯ)`, "#22c55e");
 
@@ -2564,7 +2564,7 @@
         p.stunTimer = 0;
         p.freezeTimer = 0;
         p.slowTimer = 0;
-        const healHp = Math.floor(playerMaxHp * 0.12 * starMult);
+        const healHp = Math.min(Math.floor(playerMaxHp * 0.05 * starMult), 4000 * starMult);
         const healMp = Math.floor((p.maxMp || 100) * 0.25);
         p.currentHp = Math.min(playerMaxHp, (p.currentHp || playerMaxHp) + healHp);
         p.currentMp = Math.min(p.maxMp || 100, (p.currentMp || p.maxMp || 100) + healMp);
@@ -2587,11 +2587,11 @@
         }
       }
     }
-    // 4. SLIME (💧 Капля Исцеления: лечит 10% HP каждые 12с)
+    // 4. SLIME (💧 Капля Исцеления: лечит HP каждые 12с)
     else if (petId === "slime") {
       if (pet.timer >= 720) {
         pet.timer = 0;
-        const heal = Math.floor(playerMaxHp * 0.10 * starMult);
+        const heal = Math.min(Math.floor(playerMaxHp * 0.04 * starMult), 3000 * starMult);
         p.currentHp = Math.min(playerMaxHp, (p.currentHp || playerMaxHp) + heal);
         spawnFloatingText(p.x, p.y - 22, `💧 КАПЛЯ ЖИЗНИ +${heal} HP`, "#38bdf8");
         triggerHaptic("light");

@@ -956,6 +956,8 @@ loadRpgImages();
       renderRoot();
       const res = await api.selectRpgHero(heroClass);
       RPG_STATE.profile = res;
+      window._cachedTalentTree = null;
+      window._selectedTalentId = null;
       RPG_STATE.activeTab = "farm";
       triggerHaptic("success");
     } catch (err) {
@@ -2243,7 +2245,7 @@ loadRpgImages();
     if (p && !p.isDead && typeof p.currentHp === "number" && p.currentHp > 0 && lifestealPct > 0) {
       const pMax = p.maxHp || 500;
       const rawHeal = Math.floor(finalDmg * (lifestealPct / 100));
-      const heal = Math.max(1, Math.min(Math.floor(pMax * 0.08), rawHeal));
+      const heal = Math.max(1, Math.min(Math.floor(pMax * 0.03), 2000, rawHeal));
       p.currentHp = Math.min(pMax, p.currentHp + heal);
       if (ARENA.frameCount % 10 === 0) {
         spawnFloatingText(p.x, p.y - 25, `+${heal} HP 🩸`, "#22c55e");
@@ -2355,9 +2357,9 @@ loadRpgImages();
     if (canEvade && !bossMkbProcced && dodgeChance > 0 && Math.random() * 100 < dodgeChance) {
       spawnFloatingText(p.x, p.y - 25, "💨 УВОРОТ!", "#38bdf8");
       triggerHaptic("light");
-      // PA PERK: Blur Heal (Restores 5% max HP on dodge)
+      // PA PERK: Blur Heal (Restores 1.5% max HP on dodge, capped)
       if (window.hasTalentPerk && window.hasTalentPerk("perk_blur_heal")) {
-        const healAmt = Math.max(1, Math.floor((p.maxHp || 500) * 0.05));
+        const healAmt = Math.max(1, Math.min(Math.floor((p.maxHp || 500) * 0.015), 1200));
         p.currentHp = Math.min(p.maxHp || 500, (p.currentHp || 0) + healAmt);
         spawnFloatingText(p.x, p.y - 45, `💚 +${healAmt} (РАЗМЫТИЕ)`, "#10b981");
       }
@@ -3337,7 +3339,7 @@ loadRpgImages();
       if (ARENA.frameCount % 60 === 0) {
         const hasTarrasque = Object.values(eq).some(it => it && (it.name?.includes("Tarrasque") || it.name?.includes("Тарраск") || it.bonus?.pct_hp_regen));
         if (hasTarrasque) {
-          const heal = Math.floor(p.maxHp * 0.025);
+          const heal = Math.min(Math.floor(p.maxHp * 0.008), 2000);
           p.currentHp = Math.min(p.maxHp, p.currentHp + heal);
           spawnFloatingText(p.x, p.y - 30, `+${heal} HP (ТАРАСКА) ❤️`, "#22c55e");
         }
@@ -3409,8 +3411,8 @@ loadRpgImages();
           }
           const spellAmp = (stats.spell_amp !== undefined ? stats.spell_amp : ((p.maxMp || 100) * 0.2));
 
-          // 1. Исцеление Ларго (разделено на 4 для тика 0.5с): +3% макс. HP + INT * 0.55
-          const healAmt = Math.max(12, Math.floor((p.maxHp * 0.03) + ((stats.int || 20) * 0.55)));
+          // 1. Исцеление Ларго (разделено на 4 для тика 0.5с): сбалансировано с ограничением по тику
+          const healAmt = Math.max(6, Math.min(Math.floor(p.maxHp * 0.003), 800) + Math.min(600, Math.floor((stats.int || 20) * 0.08)));
           p.currentHp = Math.min(p.maxHp, p.currentHp + healAmt);
           spawnFloatingText(p.x, p.y - 30, `💚 +${healAmt} ХП (РАПСОДИЯ)`, "#22c55e");
 
@@ -5378,7 +5380,7 @@ loadRpgImages();
         p.stunTimer = 0;
         p.freezeTimer = 0;
         p.slowTimer = 0;
-        const healHp = Math.floor(playerMaxHp * 0.12 * starMult);
+        const healHp = Math.min(Math.floor(playerMaxHp * 0.05 * starMult), 4000 * starMult);
         const healMp = Math.floor((p.maxMp || 100) * 0.25);
         p.currentHp = Math.min(playerMaxHp, (p.currentHp || playerMaxHp) + healHp);
         p.currentMp = Math.min(p.maxMp || 100, (p.currentMp || p.maxMp || 100) + healMp);
@@ -5401,11 +5403,11 @@ loadRpgImages();
         }
       }
     }
-    // 4. SLIME (💧 Капля Исцеления: лечит 10% HP каждые 12с)
+    // 4. SLIME (💧 Капля Исцеления: лечит HP каждые 12с)
     else if (petId === "slime") {
       if (pet.timer >= 720) {
         pet.timer = 0;
-        const heal = Math.floor(playerMaxHp * 0.10 * starMult);
+        const heal = Math.min(Math.floor(playerMaxHp * 0.04 * starMult), 3000 * starMult);
         p.currentHp = Math.min(playerMaxHp, (p.currentHp || playerMaxHp) + heal);
         spawnFloatingText(p.x, p.y - 22, `💧 КАПЛЯ ЖИЗНИ +${heal} HP`, "#38bdf8");
         triggerHaptic("light");
@@ -6802,7 +6804,7 @@ function distToSegment(px, py, x1, y1, x2, y2) {
         if (!c.isBoss && stats.lifesteal > 0) {
           const pMax = p.maxHp || 500;
           const rawHeal = Math.floor(finalDmg * (stats.lifesteal / 100));
-          const heal = Math.max(1, Math.min(Math.floor(pMax * 0.08), rawHeal));
+          const heal = Math.max(1, Math.min(Math.floor(pMax * 0.03), 2000, rawHeal));
           p.currentHp = Math.min(pMax, p.currentHp + heal);
         }
 
@@ -7214,7 +7216,7 @@ function distToSegment(px, py, x1, y1, x2, y2) {
 
         const ultMult = p.largoRhapsodyDmgMult;
         const spellAmp = (stats.spell_amp !== undefined ? stats.spell_amp : ((p.maxMp || 100) * 0.2));
-        const healAmt = Math.max(12, Math.floor((p.maxHp * 0.03) + ((stats.int || 20) * 0.55)));
+        const healAmt = Math.max(6, Math.min(Math.floor(p.maxHp * 0.003), 800) + Math.min(600, Math.floor((stats.int || 20) * 0.08)));
         p.currentHp = Math.min(p.maxHp, p.currentHp + healAmt);
         spawnFloatingText(p.x, p.y - 30, `💚 +${healAmt} ХП (РАПСОДИЯ)`, "#22c55e");
 
@@ -16220,8 +16222,7 @@ function renderVisualTalentTree(p, treeData) {
   const branches = treeData.branches || {};
   const charLvl = p.level || 1;
   const charFloor = p.dungeon_floor || 1;
-  const effectiveProgress = Math.max(charLvl, charFloor);
-  const talentPts = p.talent_points || 0;
+  const talentPts = (treeData && treeData.talent_points !== undefined) ? treeData.talent_points : (p.talent_points || 0);
   const filter = window._talentTreeFilter;
 
   // Flatten nodes for fast lookup
@@ -16433,17 +16434,26 @@ window.setTalentTreeFilterUI = function(filter) {
 // 10_talents_ui.js — Дерево Талантов и Алтарь Вознесения natarGRP
 // ============================================================
 
-let _cachedTalentTree = null;
+window._cachedTalentTree = window._cachedTalentTree || null;
 
 function renderTalentsTab() {
   const p = RPG_STATE.profile;
   if (!p) return `<div class="p-4 text-center text-white/50">Загрузка...</div>`;
 
+  const currentHero = (p.hero_class || "").toLowerCase();
+  if (window._cachedTalentTree && (window._cachedTalentTree.hero_class || "").toLowerCase() !== currentHero) {
+    window._cachedTalentTree = null;
+    window._selectedTalentId = null;
+    if (window._talentsTabAutoLoad) setTimeout(window._talentsTabAutoLoad, 0);
+  }
+
   const rebirths = (p.rebirth_info && p.rebirth_info.rank) || p.rebirths || 0;
   const rebirthMult = (p.rebirth_info && p.rebirth_info.multiplier) || 1.0;
   const essence = (p.rebirth_info && p.rebirth_info.essence) || p.rebirth_essence || 0;
   const charLvl = p.level || 1;
-  const talentPts = p.talent_points || 0;
+  const talentPts = (window._cachedTalentTree && window._cachedTalentTree.talent_points !== undefined)
+    ? window._cachedTalentTree.talent_points
+    : (p.talent_points || 0);
 
   const reqLvl = (p.rebirth_info && p.rebirth_info.next_min_level) || (rebirths === 0 ? 30 : (rebirths === 1 ? 40 : (rebirths === 2 ? 45 : 50)));
   const canAscend = charLvl >= reqLvl && rebirths < 25;
@@ -16491,7 +16501,7 @@ function renderTalentsTab() {
     </div>`;
 
   // === 3. VISUAL TALENT TREE GRAPH ===
-  html += renderVisualTalentTree(p, _cachedTalentTree);
+  html += renderVisualTalentTree(p, window._cachedTalentTree);
 
   // === 4. PETS SECTION ===
   html += renderPetsSection(p);
@@ -16557,7 +16567,7 @@ function renderPetsSection(p) {
 window.loadTalentTreeUI = async function() {
   try {
     const data = await api.getTalentTree();
-    _cachedTalentTree = data;
+    window._cachedTalentTree = data;
     renderRoot();
   } catch (e) {
     alert("Ошибка загрузки дерева талантов: " + (e.message || e));
@@ -16571,7 +16581,7 @@ window.buyTalentNodeUI = async function(nodeId) {
     if (res && res.profile) {
       RPG_STATE.profile = res.profile;
       if (window.syncArenaPlayerStats) syncArenaPlayerStats();
-      _cachedTalentTree = await api.getTalentTree();
+      window._cachedTalentTree = await api.getTalentTree();
       if (window.triggerHaptic) triggerHaptic("success");
       renderRoot();
     }
@@ -16596,7 +16606,7 @@ window.doRebirthUI = async function() {
       }
       if (window.syncArenaPlayerStats) syncArenaPlayerStats();
       if (window.triggerHaptic) triggerHaptic("success");
-      _cachedTalentTree = null;
+      window._cachedTalentTree = null;
       renderRoot();
     }
   } catch(e) { alert(e.message || "Ошибка перерождения"); }
@@ -16660,9 +16670,10 @@ window.upgradeTalentUI = async function(talentId) {
 
 // Auto-load talent tree data when tab opens
 window._talentsTabAutoLoad = function() {
-  if (!_cachedTalentTree && RPG_STATE.profile) {
+  const currentHero = (RPG_STATE.profile?.hero_class || "").toLowerCase();
+  if ((!window._cachedTalentTree || (window._cachedTalentTree.hero_class || "").toLowerCase() !== currentHero) && RPG_STATE.profile) {
     api.getTalentTree().then(data => {
-      _cachedTalentTree = data;
+      window._cachedTalentTree = data;
       renderRoot();
     }).catch(() => {});
   }

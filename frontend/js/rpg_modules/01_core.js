@@ -935,6 +935,8 @@
       renderRoot();
       const res = await api.selectRpgHero(heroClass);
       RPG_STATE.profile = res;
+      window._cachedTalentTree = null;
+      window._selectedTalentId = null;
       RPG_STATE.activeTab = "farm";
       triggerHaptic("success");
     } catch (err) {

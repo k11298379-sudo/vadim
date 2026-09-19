@@ -2,17 +2,26 @@
 // 10_talents_ui.js — Дерево Талантов и Алтарь Вознесения natarGRP
 // ============================================================
 
-let _cachedTalentTree = null;
+window._cachedTalentTree = window._cachedTalentTree || null;
 
 function renderTalentsTab() {
   const p = RPG_STATE.profile;
   if (!p) return `<div class="p-4 text-center text-white/50">Загрузка...</div>`;
 
+  const currentHero = (p.hero_class || "").toLowerCase();
+  if (window._cachedTalentTree && (window._cachedTalentTree.hero_class || "").toLowerCase() !== currentHero) {
+    window._cachedTalentTree = null;
+    window._selectedTalentId = null;
+    if (window._talentsTabAutoLoad) setTimeout(window._talentsTabAutoLoad, 0);
+  }
+
   const rebirths = (p.rebirth_info && p.rebirth_info.rank) || p.rebirths || 0;
   const rebirthMult = (p.rebirth_info && p.rebirth_info.multiplier) || 1.0;
   const essence = (p.rebirth_info && p.rebirth_info.essence) || p.rebirth_essence || 0;
   const charLvl = p.level || 1;
-  const talentPts = p.talent_points || 0;
+  const talentPts = (window._cachedTalentTree && window._cachedTalentTree.talent_points !== undefined)
+    ? window._cachedTalentTree.talent_points
+    : (p.talent_points || 0);
 
   const reqLvl = (p.rebirth_info && p.rebirth_info.next_min_level) || (rebirths === 0 ? 30 : (rebirths === 1 ? 40 : (rebirths === 2 ? 45 : 50)));
   const canAscend = charLvl >= reqLvl && rebirths < 25;
@@ -60,7 +69,7 @@ function renderTalentsTab() {
     </div>`;
 
   // === 3. VISUAL TALENT TREE GRAPH ===
-  html += renderVisualTalentTree(p, _cachedTalentTree);
+  html += renderVisualTalentTree(p, window._cachedTalentTree);
 
   // === 4. PETS SECTION ===
   html += renderPetsSection(p);
@@ -126,7 +135,7 @@ function renderPetsSection(p) {
 window.loadTalentTreeUI = async function() {
   try {
     const data = await api.getTalentTree();
-    _cachedTalentTree = data;
+    window._cachedTalentTree = data;
     renderRoot();
   } catch (e) {
     alert("Ошибка загрузки дерева талантов: " + (e.message || e));
@@ -140,7 +149,7 @@ window.buyTalentNodeUI = async function(nodeId) {
     if (res && res.profile) {
       RPG_STATE.profile = res.profile;
       if (window.syncArenaPlayerStats) syncArenaPlayerStats();
-      _cachedTalentTree = await api.getTalentTree();
+      window._cachedTalentTree = await api.getTalentTree();
       if (window.triggerHaptic) triggerHaptic("success");
       renderRoot();
     }
@@ -165,7 +174,7 @@ window.doRebirthUI = async function() {
       }
       if (window.syncArenaPlayerStats) syncArenaPlayerStats();
       if (window.triggerHaptic) triggerHaptic("success");
-      _cachedTalentTree = null;
+      window._cachedTalentTree = null;
       renderRoot();
     }
   } catch(e) { alert(e.message || "Ошибка перерождения"); }
@@ -229,9 +238,10 @@ window.upgradeTalentUI = async function(talentId) {
 
 // Auto-load talent tree data when tab opens
 window._talentsTabAutoLoad = function() {
-  if (!_cachedTalentTree && RPG_STATE.profile) {
+  const currentHero = (RPG_STATE.profile?.hero_class || "").toLowerCase();
+  if ((!window._cachedTalentTree || (window._cachedTalentTree.hero_class || "").toLowerCase() !== currentHero) && RPG_STATE.profile) {
     api.getTalentTree().then(data => {
-      _cachedTalentTree = data;
+      window._cachedTalentTree = data;
       renderRoot();
     }).catch(() => {});
   }

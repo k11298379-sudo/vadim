@@ -213,22 +213,18 @@ async def select_hero_class_endpoint(
         starter_a["uid"] = f"a_{hero_id[:4]}_{str(uuid.uuid4())[:6]}"
         starter_a["slot"] = "slot_2"
 
-    inventory = list(char.inventory or [])
     eq = dict(char.equipment or {})
+    # Only provide starter items if character has no gear equipped
+    if not any(eq.values()):
+        if starter_w:
+            eq["slot_1"] = starter_w
+        if starter_a:
+            eq["slot_2"] = starter_a
+        char.equipment = eq
+        flag_modified(char, "equipment")
 
-    for slot_k, item in eq.items():
-        if item and len(inventory) < 200:
-            inventory.append(item)
-    
-    eq = {}
-    if starter_w:
-        eq["slot_1"] = starter_w
-    if starter_a:
-        eq["slot_2"] = starter_a
-    char.equipment = eq
-    char.inventory = inventory
-    flag_modified(char, "equipment")
-    flag_modified(char, "inventory")
+    from backend.db.crud.rpg.talent_tree import get_hero_available_talent_points
+    char.talent_points = get_hero_available_talent_points(char, hero_id)
 
     await session.commit()
     await session.refresh(char)

@@ -444,7 +444,7 @@
         if (!c.isBoss && stats.lifesteal > 0) {
           const pMax = p.maxHp || 500;
           const rawHeal = Math.floor(finalDmg * (stats.lifesteal / 100));
-          const heal = Math.max(1, Math.min(Math.floor(pMax * 0.08), rawHeal));
+          const heal = Math.max(1, Math.min(Math.floor(pMax * 0.03), 2000, rawHeal));
           p.currentHp = Math.min(pMax, p.currentHp + heal);
         }
 
@@ -856,7 +856,7 @@
 
         const ultMult = p.largoRhapsodyDmgMult;
         const spellAmp = (stats.spell_amp !== undefined ? stats.spell_amp : ((p.maxMp || 100) * 0.2));
-        const healAmt = Math.max(12, Math.floor((p.maxHp * 0.03) + ((stats.int || 20) * 0.55)));
+        const healAmt = Math.max(6, Math.min(Math.floor(p.maxHp * 0.003), 800) + Math.min(600, Math.floor((stats.int || 20) * 0.08)));
         p.currentHp = Math.min(p.maxHp, p.currentHp + healAmt);
         spawnFloatingText(p.x, p.y - 30, `💚 +${healAmt} ХП (РАПСОДИЯ)`, "#22c55e");
 

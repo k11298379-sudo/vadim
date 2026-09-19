@@ -59,8 +59,7 @@ function renderVisualTalentTree(p, treeData) {
   const branches = treeData.branches || {};
   const charLvl = p.level || 1;
   const charFloor = p.dungeon_floor || 1;
-  const effectiveProgress = Math.max(charLvl, charFloor);
-  const talentPts = p.talent_points || 0;
+  const talentPts = (treeData && treeData.talent_points !== undefined) ? treeData.talent_points : (p.talent_points || 0);
   const filter = window._talentTreeFilter;
 
   // Flatten nodes for fast lookup

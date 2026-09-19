@@ -154,7 +154,7 @@ def calculate_character_effective_stats(char: RPGCharacter) -> Dict[str, Any]:
 
     # Attributes scaling (Volume III GDD formulas)
     stat_hp = hero_cfg.get("base_hp", 150) + int(total_str * 24) + flat_hp
-    stat_hp_regen = round(0.5 + (total_str * 0.08) + flat_hp_regen, 1)
+    stat_hp_regen = round(0.5 + min(350.0, total_str * 0.04) + flat_hp_regen, 1)
 
     stat_atk_speed = min(4.0, round(1.0 + (total_agi * 0.012) + flat_atk_speed, 2))
     stat_def = int(math.floor(total_agi * 0.18)) + flat_def

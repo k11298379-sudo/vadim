@@ -9,6 +9,8 @@ from backend.db.crud.rpg.talent_tree_helpers import (
     BRANCH_LABELS,
     is_node_available,
     reset_old_talents_and_refund,
+    get_hero_spent_talent_points as _base_get_spent,
+    get_hero_available_talent_points as _base_get_available,
 )
 from backend.db.crud.rpg.talent_tree_part1 import (
     _PUDGE,
@@ -41,6 +43,16 @@ def get_hero_tree(hero_class: str) -> Dict[str, Dict[str, Any]]:
     return HERO_TALENT_TREE.get(hero_class, HERO_TALENT_TREE["pudge"])
 
 
+def get_hero_spent_talent_points(char: Any, hero_class: str) -> int:
+    """Возвращает суммарно потраченные очки талантов героя."""
+    return _base_get_spent(char, hero_class, hero_tree_getter=get_hero_tree)
+
+
+def get_hero_available_talent_points(char: Any, hero_class: str = None) -> int:
+    """Возвращает доступные очки талантов для активного (или заданного) героя."""
+    return _base_get_available(char, hero_class, hero_tree_getter=get_hero_tree)
+
+
 def reset_char_talents_v2(char: Any) -> bool:
     """Обертка для сброса старых талантов с передачей get_hero_tree."""
     return reset_old_talents_and_refund(char, hero_tree_getter=get_hero_tree)
@@ -55,4 +67,7 @@ __all__ = [
     "is_node_available",
     "reset_old_talents_and_refund",
     "reset_char_talents_v2",
+    "get_hero_spent_talent_points",
+    "get_hero_available_talent_points",
 ]
+
