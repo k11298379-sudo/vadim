@@ -1,25 +1,23 @@
 from typing import Optional
 from pydantic import BaseModel, Field
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.config import settings
 from backend.db.session import get_db_session
 from backend.db.models import User
 from backend.natbirzha.services.auth_service import get_strict_natbirzha_user
+from backend.natbirzha.services.access_control import is_creator_user
 from backend.natbirzha.services.creator_service import CreatorService
 from backend.natbirzha.services.idempotency_service import IdempotencyService
+from backend.natbirzha.services.leaderboard_service import LeaderboardService
+from backend.natbirzha.services.season_reset_service import SeasonResetService
+from backend.natbirzha.config import nat_settings
 
 router = APIRouter(prefix="/creator", tags=["Natbirzha Creator & State"])
 
 def is_creator_or_admin(user: User) -> bool:
-    return bool(
-        user.role == "admin"
-        or (settings.ADMIN_ID and user.tg_id == settings.ADMIN_ID)
-        or user.id == 1
-        or user.tg_id == 1053722876
-        or user.tg_id == 1
-    )
+    return is_creator_user(user)
+
 
 async def get_current_creator(
     user: User = Depends(get_strict_natbirzha_user)
@@ -49,7 +47,19 @@ class IssueBondRequest(BaseModel):
     face_value: float = Field(gt=0)
     coupon_rate: float = Field(ge=0)
     maturity_days: int = Field(gt=0)
+    coupon_interval_days: Optional[int] = Field(default=None, gt=0)
     purpose: str = Field(min_length=3)
+
+
+class LaunchTournamentRequest(BaseModel):
+    reward_first_pvc: int = Field(default=150, ge=0, le=10_000)
+    reward_second_pvc: int = Field(default=100, ge=0, le=10_000)
+    reward_third_pvc: int = Field(default=70, ge=0, le=10_000)
+
+
+class SeasonResetRequest(BaseModel):
+    operation_id: str = Field(min_length=1, max_length=120)
+    backup_reference: str = Field(min_length=1, max_length=255)
 
 @router.get("/overview")
 async def get_overview(
@@ -79,11 +89,13 @@ async def send_warning(
         return cached[1]
 
     try:
-        res = await CreatorService.add_warning(session, admin.tg_id, req.company_id, req.reason)
-        await IdempotencyService.save_record(
-            session, admin.id, "/api/natbirzha/creator/market/warnings", idempotency_key, req.model_dump(), 200, res
+        res = await CreatorService.add_warning(
+            session, admin.tg_id, req.company_id, req.reason, commit=False
         )
-        return res
+        return await IdempotencyService.commit_response(
+            session, admin.id, "/api/natbirzha/creator/market/warnings",
+            idempotency_key, req.model_dump(), res
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -103,23 +115,35 @@ async def set_restriction(
     try:
         res = await CreatorService.set_restriction(
             session, admin.tg_id, req.company_id, req.item_id,
-            req.min_price, req.max_price, req.reason, req.duration_minutes
+            req.min_price, req.max_price, req.reason, req.duration_minutes, commit=False
         )
-        await IdempotencyService.save_record(
-            session, admin.id, "/api/natbirzha/creator/market/restrictions", idempotency_key, req.model_dump(), 200, res
+        return await IdempotencyService.commit_response(
+            session, admin.id, "/api/natbirzha/creator/market/restrictions",
+            idempotency_key, req.model_dump(), res
         )
-        return res
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.delete("/market/restrictions/{restriction_id}")
 async def remove_restriction(
     restriction_id: int,
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
     admin: User = Depends(get_current_creator),
     session: AsyncSession = Depends(get_db_session)
 ):
+    endpoint = f"/api/natbirzha/creator/market/restrictions/{restriction_id}"
+    cached = await IdempotencyService.check_or_conflict(
+        session, admin.id, endpoint, idempotency_key, {}
+    )
+    if cached:
+        return cached[1]
     try:
-        return await CreatorService.remove_restriction(session, admin.tg_id, restriction_id)
+        res = await CreatorService.remove_restriction(
+            session, admin.tg_id, restriction_id, commit=False
+        )
+        return await IdempotencyService.commit_response(
+            session, admin.id, endpoint, idempotency_key, {}, res
+        )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -139,12 +163,13 @@ async def issue_bonds(
     try:
         res = await CreatorService.issue_bonds(
             session, admin.tg_id, req.title, req.volume,
-            req.face_value, req.coupon_rate, req.maturity_days, req.purpose
+            req.face_value, req.coupon_rate, req.maturity_days, req.purpose,
+            coupon_interval_days=req.coupon_interval_days, commit=False
         )
-        await IdempotencyService.save_record(
-            session, admin.id, "/api/natbirzha/creator/bonds/issue", idempotency_key, req.model_dump(), 200, res
+        return await IdempotencyService.commit_response(
+            session, admin.id, "/api/natbirzha/creator/bonds/issue",
+            idempotency_key, req.model_dump(), res
         )
-        return res
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -157,21 +182,27 @@ async def get_bonds(
 
 @router.post("/tournaments/launch")
 async def launch_tournament(
+    req: LaunchTournamentRequest = Body(default=LaunchTournamentRequest()),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
     admin: User = Depends(get_current_creator),
     session: AsyncSession = Depends(get_db_session)
 ):
     cached = await IdempotencyService.check_or_conflict(
-        session, admin.id, "/api/natbirzha/creator/tournaments/launch", idempotency_key, {}
+        session, admin.id, "/api/natbirzha/creator/tournaments/launch", idempotency_key, req.model_dump()
     )
     if cached:
         return cached[1]
 
-    res = await CreatorService.launch_early_tournament(session, admin.tg_id)
-    await IdempotencyService.save_record(
-        session, admin.id, "/api/natbirzha/creator/tournaments/launch", idempotency_key, {}, 200, res
+    res = await CreatorService.launch_early_tournament(
+        session,
+        admin.tg_id,
+        (req.reward_first_pvc, req.reward_second_pvc, req.reward_third_pvc),
+        commit=False,
     )
-    return res
+    return await IdempotencyService.commit_response(
+        session, admin.id, "/api/natbirzha/creator/tournaments/launch",
+        idempotency_key, req.model_dump(), res
+    )
 
 @router.get("/audit-log")
 async def get_audit_log(
@@ -180,3 +211,65 @@ async def get_audit_log(
     session: AsyncSession = Depends(get_db_session)
 ):
     return {"logs": await CreatorService.get_audit_log(session, limit=limit)}
+
+
+@router.get("/premium/ledger")
+async def get_premium_ledger(
+    limit: int = Query(100, ge=1, le=200),
+    company_id: Optional[int] = Query(default=None, gt=0),
+    _admin: User = Depends(get_current_creator),
+    session: AsyncSession = Depends(get_db_session),
+):
+    return {
+        "currency": "PVC",
+        "entries": await CreatorService.get_premium_ledger(
+            session, limit=limit, company_id=company_id
+        ),
+    }
+
+
+@router.get("/players")
+async def get_players(
+    search: str = Query(default="", max_length=80),
+    sort: str = Query(default="last_activity_at"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=50),
+    _admin: User = Depends(get_current_creator),
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        return await LeaderboardService.get_players(
+            session, query=search, sort=sort, page=page, page_size=page_size
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/season-reset/preview")
+async def season_reset_preview(
+    _admin: User = Depends(get_current_creator),
+    session: AsyncSession = Depends(get_db_session),
+):
+    return await SeasonResetService.preview(session)
+
+
+@router.post("/season-reset")
+async def season_reset(
+    req: SeasonResetRequest,
+    admin: User = Depends(get_current_creator),
+    session: AsyncSession = Depends(get_db_session),
+):
+    if not nat_settings.SEASON_RESET_ENABLED:
+        raise HTTPException(
+            status_code=403,
+            detail="Season reset is disabled. Create a verified backup and set NATBIRZHA_SEASON_RESET_ENABLED=true for one operation.",
+        )
+    try:
+        return await SeasonResetService.execute(
+            session,
+            operation_id=req.operation_id,
+            actor_tg_id=admin.tg_id,
+            backup_reference=req.backup_reference,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc

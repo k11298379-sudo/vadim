@@ -14,21 +14,46 @@ const MARKET_ITEMS = [
   { id: 'aluminum', name: 'Алюминий', unit: 'т', base: 110.0, buy: 88.0, sell: 137.5 },
 ];
 
+const INSTRUMENT_NAMES = { USD: 'Доллар США', EUR: 'Евро', GOLD: 'Золото', SILVER: 'Серебро' };
+const INSTRUMENT_ICONS = { USD: '💵', EUR: '💶', GOLD: '🥇', SILVER: '🥈' };
+const esc = (value) => String(value ?? '').replace(/[&<>'"]/g, ch => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+}[ch]));
+
 export async function renderMarket(container, showToast) {
   let selectedItemId = 'steel';
   let orderbookData = null;
+  let orderbookRequestId = 0;
+  let instrumentsData = { instruments: [], portfolio: [] };
+  let bondsData = { bonds: [], holdings: [], listings: [] };
 
   async function loadOrderbook() {
+    const requestId = ++orderbookRequestId;
     try {
-      orderbookData = await NatAPI.getOrderbook(selectedItemId);
+      const data = await NatAPI.getOrderbook(selectedItemId);
+      if (requestId !== orderbookRequestId) return false;
+      orderbookData = data;
+      return true;
     } catch (err) {
+      if (requestId !== orderbookRequestId) return false;
       console.error('Failed to load orderbook:', err);
+      return false;
     }
+  }
+
+  async function loadFinancialMarkets() {
+    const [instruments, bonds] = await Promise.allSettled([
+      NatAPI.getReferenceInstruments(),
+      NatAPI.getStateBonds(),
+    ]);
+    if (instruments.status === 'fulfilled') instrumentsData = instruments.value || instrumentsData;
+    if (bonds.status === 'fulfilled') bondsData = bonds.value || bondsData;
   }
 
   const [ratesData] = await Promise.all([
     NatAPI.getNpcRates().catch(() => null),
-    loadOrderbook()
+    loadOrderbook(),
+    loadFinancialMarkets(),
   ]);
 
   if (ratesData && Array.isArray(ratesData.rates)) {
@@ -44,16 +69,19 @@ export async function renderMarket(container, showToast) {
   }
 
   function renderView() {
+    const selectorScrollLeft = container.querySelector('.market-resource-tabs')?.scrollLeft || 0;
     const itemInfo = MARKET_ITEMS.find(i => i.id === selectedItemId) || MARKET_ITEMS[0];
     const bids = orderbookData?.bids || [];
     const asks = orderbookData?.asks || [];
     const userOrders = orderbookData?.user_orders || [];
     const userInvQty = store.inventory[selectedItemId] || 0;
+    const positions = new Map((instrumentsData.portfolio || []).map(row => [row.instrument_code, row]));
+    const ownCompanyId = Number(store.company?.id || store.company?.company_id || 0);
 
     container.innerHTML = `
       <div class="space-y-4 max-w-md mx-auto p-4 pb-24">
         <!-- Resource Selector Bar -->
-        <div class="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+        <div class="market-resource-tabs flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
           ${MARKET_ITEMS.map(item => `
             <button
               class="market-item-tab px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
@@ -67,6 +95,35 @@ export async function renderMarket(container, showToast) {
             </button>
           `).join('')}
         </div>
+
+        <!-- Official currency and metal instruments: same Market screen -->
+        <details class="glass-card rounded-2xl p-4 shadow-sm space-y-3" open>
+          <summary class="cursor-pointer list-none flex items-center justify-between">
+            <div><h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Валюты и металлы</h3><p class="text-[9px] text-slate-400">Официальный курс ЦБ · цена задаётся сервером</p></div><span class="text-lg">🏦</span>
+          </summary>
+          <div class="grid grid-cols-2 gap-2 pt-3">
+            ${(instrumentsData.instruments || []).map(instrument => {
+              const position = positions.get(instrument.code) || {};
+              return `<div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-2">
+                <div class="flex justify-between"><span class="text-lg">${INSTRUMENT_ICONS[instrument.code] || '💱'}</span><span class="text-[9px] font-bold ${instrument.available ? 'text-emerald-500' : 'text-rose-500'}">${instrument.available ? 'Курс актуален' : 'Торги приостановлены'}</span></div>
+                <div><div class="text-xs font-black">${INSTRUMENT_NAMES[instrument.code] || instrument.code}</div><div class="text-[9px] text-slate-400">Позиция: ${Number(position.quantity || 0).toLocaleString('ru-RU')}</div></div>
+                ${instrument.reference_rub ? `<div class="text-[10px] font-mono"><span class="text-emerald-600">${Number(instrument.sell_rub).toFixed(2)} ₽</span> / <span class="text-rose-600">${Number(instrument.buy_rub).toFixed(2)} ₽</span></div>` : '<div class="text-[10px] text-slate-400">Курс ещё не загружен</div>'}
+                <div class="grid grid-cols-2 gap-1"><button class="instrument-trade-btn py-1.5 rounded-lg bg-blue-600 text-white text-[10px] font-bold disabled:opacity-50" data-code="${instrument.code}" data-side="buy" ${instrument.available ? '' : 'disabled'}>Купить</button><button class="instrument-trade-btn py-1.5 rounded-lg bg-emerald-600 text-white text-[10px] font-bold disabled:opacity-50" data-code="${instrument.code}" data-side="sell" ${instrument.available && Number(position.quantity || 0) > 0 ? '' : 'disabled'}>Продать</button></div>
+                ${instrument.quoted_at ? `<div class="text-[8px] text-slate-400">Котировка: ${new Date(instrument.quoted_at).toLocaleDateString('ru-RU')}</div>` : ''}
+              </div>`;
+            }).join('') || '<div class="col-span-2 text-xs text-slate-400 text-center py-2">Официальные курсы пока не получены</div>'}
+          </div>
+        </details>
+
+        <!-- State bonds and protected secondary listings -->
+        <details class="glass-card rounded-2xl p-4 shadow-sm space-y-3">
+          <summary class="cursor-pointer list-none flex items-center justify-between"><div><h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Гособлигации</h3><p class="text-[9px] text-slate-400">Купоны, погашение и вторичный рынок</p></div><span class="text-lg">📜</span></summary>
+          <div class="space-y-3 pt-3">
+            ${(bondsData.bonds || []).map(bond => `<div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700"><div class="flex justify-between gap-2"><div><div class="text-xs font-black">${esc(bond.title)}</div><div class="text-[9px] text-slate-400">${bond.coupon_rate}% · купон каждые ${bond.coupon_interval_days || 7} дн. · ${esc(bond.status || '')}</div></div><div class="text-right"><div class="text-xs font-mono font-bold">${Number(bond.face_value).toFixed(2)} cash</div><div class="text-[9px] text-slate-400">остаток ${bond.remaining_volume}</div></div></div>${bond.is_active ? `<button class="buy-primary-bond-btn mt-2 w-full py-1.5 rounded-lg bg-blue-600 text-white text-[10px] font-bold disabled:opacity-50" data-bond-id="${bond.id}" data-title="${esc(bond.title)}">Купить у государства</button>` : ''}</div>`).join('') || '<div class="text-xs text-slate-400">Нет выпусков</div>'}
+            ${(bondsData.holdings || []).filter(row => row.available_quantity > 0).length ? `<div><div class="text-[10px] font-bold uppercase text-slate-400 mb-1">Ваш портфель</div>${bondsData.holdings.filter(row => row.available_quantity > 0).map(row => `<div class="flex items-center justify-between p-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 text-xs"><span>${esc(row.title)} · ${row.quantity} шт.</span><button class="create-bond-listing-btn text-blue-600 font-bold" data-bond-id="${row.bond_id}" data-available="${row.available_quantity}">Продать</button></div>`).join('')}</div>` : ''}
+            <div><div class="text-[10px] font-bold uppercase text-slate-400 mb-1">Вторичные предложения</div>${(bondsData.listings || []).filter(row => row.status === 'OPEN').map(row => `<div class="flex items-center justify-between gap-2 p-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 text-xs"><div><div class="font-bold">Выпуск #${row.bond_id} · ${row.quantity} шт.</div><div class="text-[9px] text-slate-400">${Number(row.unit_price).toFixed(2)} cash/шт. · всего ${Number(row.total_cost).toFixed(2)}</div></div>${Number(row.seller_company_id) === ownCompanyId ? `<button class="cancel-bond-listing-btn text-rose-500 font-bold" data-listing-id="${row.listing_id}">Снять</button>` : `<button class="buy-bond-listing-btn px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-bold disabled:opacity-50" data-listing-id="${row.listing_id}">Купить</button>`}</div>`).join('') || '<div class="text-[10px] text-slate-400">Открытых предложений нет</div>'}</div>
+          </div>
+        </details>
 
         <!-- NPC Reserve Liquidity Banner -->
         <div class="glass-card rounded-2xl p-4 shadow-sm space-y-2 border-l-4 border-l-amber-500">
@@ -185,14 +242,63 @@ export async function renderMarket(container, showToast) {
       </div>
     `;
 
+    const resourceTabs = container.querySelector('.market-resource-tabs');
+    if (resourceTabs) resourceTabs.scrollLeft = selectorScrollLeft;
+
     // Tab click listeners
     container.querySelectorAll('.market-item-tab').forEach(btn => {
       btn.addEventListener('click', async () => {
-        selectedItemId = btn.getAttribute('data-item-id');
-        await loadOrderbook();
-        renderView();
+        const nextItemId = btn.getAttribute('data-item-id');
+        if (!nextItemId || nextItemId === selectedItemId) return;
+        selectedItemId = nextItemId;
+        if (await loadOrderbook()) renderView();
       });
     });
+
+    container.querySelectorAll('.instrument-trade-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const quantity = parseFloat(prompt(`Количество ${btn.dataset.code}:`, '1'));
+        if (!quantity || quantity <= 0) return;
+        btn.disabled = true;
+        try {
+          await NatAPI.tradeReferenceInstrument(btn.dataset.code, btn.dataset.side, quantity);
+          await loadFinancialMarkets();
+          const company = await NatAPI.getMyCompany();
+          store.setCompany(company);
+          showToast('Сделка исполнена по серверному курсу', 'success');
+          renderView();
+        } catch (err) { showToast(err.message, 'error'); btn.disabled = false; }
+      });
+    });
+
+    container.querySelectorAll('.buy-primary-bond-btn').forEach(btn => btn.addEventListener('click', async () => {
+      const quantity = parseInt(prompt(`Сколько облигаций «${btn.dataset.title}» купить?`, '1'), 10);
+      if (!quantity || quantity <= 0) return;
+      btn.disabled = true;
+      try { await NatAPI.buyStateBonds(btn.dataset.bondId, quantity); await loadFinancialMarkets(); store.setCompany(await NatAPI.getMyCompany()); showToast('Облигации куплены', 'success'); renderView(); }
+      catch (err) { showToast(err.message, 'error'); btn.disabled = false; }
+    }));
+
+    container.querySelectorAll('.create-bond-listing-btn').forEach(btn => btn.addEventListener('click', async () => {
+      const quantity = parseInt(prompt(`Количество для продажи (доступно ${btn.dataset.available}):`, '1'), 10);
+      const price = parseFloat(prompt('Цена за одну облигацию:', '1000'));
+      if (!quantity || quantity <= 0 || !price || price <= 0) return;
+      btn.disabled = true;
+      try { await NatAPI.createBondListing(btn.dataset.bondId, quantity, price); await loadFinancialMarkets(); showToast('Облигации выставлены на вторичный рынок', 'success'); renderView(); }
+      catch (err) { showToast(err.message, 'error'); btn.disabled = false; }
+    }));
+
+    container.querySelectorAll('.buy-bond-listing-btn').forEach(btn => btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try { await NatAPI.buyBondListing(btn.dataset.listingId); await loadFinancialMarkets(); store.setCompany(await NatAPI.getMyCompany()); showToast('Листинг куплен', 'success'); renderView(); }
+      catch (err) { showToast(err.message, 'error'); btn.disabled = false; }
+    }));
+
+    container.querySelectorAll('.cancel-bond-listing-btn').forEach(btn => btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try { await NatAPI.cancelBondListing(btn.dataset.listingId); await loadFinancialMarkets(); showToast('Листинг снят', 'info'); renderView(); }
+      catch (err) { showToast(err.message, 'error'); btn.disabled = false; }
+    }));
 
     // NPC Trade handlers
     container.querySelector('.npc-sell-btn')?.addEventListener('click', async () => {

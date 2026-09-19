@@ -35,3 +35,4 @@ scratch/
 *.zip
 *.patch
 node_modules/
+.playwright-cli/

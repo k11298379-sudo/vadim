@@ -127,7 +127,7 @@
         </div>
 
         <!-- Natbirzha Strategy Banner (Beta testers only) -->
-        ${isTesterUser ? `<a href="/app/natbirzha${(typeof window !== 'undefined' && window.location && window.location.search) ? window.location.search : ''}" class="block p-3 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-600 text-white shadow-md active:scale-98 transition-all cursor-pointer">
+        ${isTesterUser ? `<a href="/app/natbirzha" class="block p-3 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-600 text-white shadow-md active:scale-98 transition-all cursor-pointer">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2.5">
               <span class="text-2xl">📈</span>

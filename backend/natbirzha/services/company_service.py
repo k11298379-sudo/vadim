@@ -6,7 +6,8 @@ from backend.natbirzha.config import nat_settings, get_game_now, get_game_today,
 from backend.natbirzha.models.company import NatCompany, NatFactory
 from backend.natbirzha.models.inventory import NatInventory, get_item_base_price
 from backend.natbirzha.models.military import NatArmy
-from backend.natbirzha.services.recipes import RECIPES
+from backend.natbirzha.models.combat import NatArmyUnit
+from backend.natbirzha.services.building_catalog import get_building_spec
 
 VALID_SPECIALIZATIONS = {
     "agrarian": "Аграрий",
@@ -68,7 +69,8 @@ class CompanyService:
         session: AsyncSession,
         user_id: int,
         name: str,
-        specialization: str
+        specialization: str,
+        commit: bool = True
     ) -> NatCompany:
         spec = SPECIALIZATION_ALIASES.get(specialization.lower(), specialization)
         if spec not in VALID_SPECIALIZATIONS:
@@ -83,14 +85,7 @@ class CompanyService:
             raise ValueError("User already owns a company.")
 
         now = get_game_now()
-        # Creator / Primary Administrator gets 200,000 cash on start per directive
         starting_cash = float(nat_settings.STARTING_CASH)
-        from backend.config import settings
-        from backend.db.models import User
-        u_res = await session.execute(select(User).where(User.id == user_id))
-        u_obj = u_res.scalar_one_or_none()
-        if u_obj and (u_obj.tg_id == settings.ADMIN_ID or u_obj.role == "admin" or u_obj.id == 1):
-            starting_cash = 200000.0
 
         company = NatCompany(
             user_id=user_id,
@@ -113,7 +108,7 @@ class CompanyService:
         if spec not in STARTER_FACTORIES:
             raise ValueError(f"Unknown specialization: {specialization}")
         b_type = STARTER_FACTORIES[spec]
-        default_recipe = next((k for k, v in RECIPES.items() if v.get("factory_type") == b_type), None)
+        building = get_building_spec(b_type) or {}
         starter_factory = NatFactory(
             company_id=company.id,
             building_type=b_type,
@@ -121,9 +116,12 @@ class CompanyService:
             level=1,
             efficiency=1.0,
             is_active=True,
-            workers=10,
+            workers=int(building.get("workers_required", 10)),
             automation_level=0,
-            current_recipe=default_recipe,
+            technology_level=0,
+            current_recipe=None,
+            cycle_started_at=None,
+            cycle_ready_at=None,
             last_produced_at=now,
             created_at=now
         )
@@ -149,15 +147,29 @@ class CompanyService:
             updated_at=now
         )
         session.add(army)
+        session.add(NatArmyUnit(
+            company_id=company.id,
+            unit_type="infantry",
+            quantity=10,
+            level=1,
+            readiness=10000,
+            experience=0,
+            updated_at=now,
+        ))
 
-        await session.commit()
-        await session.refresh(company)
+        if commit:
+            await session.commit()
+            await session.refresh(company)
+        else:
+            await session.flush()
         return company
 
     @staticmethod
     async def get_by_owner_id(session: AsyncSession, user_id: int) -> Optional[NatCompany]:
         """Find company by internal User.id or Telegram tg_id."""
-        res = await session.execute(select(NatCompany).where(NatCompany.user_id == user_id))
+        res = await session.execute(
+            select(NatCompany).where(NatCompany.user_id == user_id).with_for_update()
+        )
         comp = res.scalar_one_or_none()
         if comp:
             return comp
@@ -203,11 +215,18 @@ class CompanyService:
     async def change_specialization(
         session: AsyncSession,
         company: NatCompany,
-        new_specialization: str
+        new_specialization: str,
+        commit: bool = True
     ) -> Dict[str, Any]:
         """Respec specialization with 7-day cooldown and 25% NAV fee."""
         if new_specialization not in VALID_SPECIALIZATIONS:
             raise ValueError("Invalid specialization.")
+        locked = (await session.execute(
+            select(NatCompany).where(NatCompany.id == company.id).with_for_update()
+        )).scalar_one_or_none()
+        if not locked:
+            raise ValueError("Company not found.")
+        company = locked
         if new_specialization == company.specialization:
             raise ValueError("Company already has this specialization.")
 
@@ -236,18 +255,28 @@ class CompanyService:
             else:
                 f.efficiency = nat_settings.FOREIGN_SPEC_EFFICIENCY
 
-        await session.commit()
+        if commit:
+            await session.commit()
+        else:
+            await session.flush()
         return {"success": True, "new_specialization": new_specialization, "fee_paid": fee}
 
     @staticmethod
     async def buy_foreign_license(
         session: AsyncSession,
         company: NatCompany,
-        target_spec: str
+        target_spec: str,
+        commit: bool = True
     ) -> Dict[str, Any]:
         """NAT currency sink: Purchase secondary industry foreign license (up to 12% eff)."""
         if target_spec not in VALID_SPECIALIZATIONS:
             raise ValueError("Invalid target specialization.")
+        locked = (await session.execute(
+            select(NatCompany).where(NatCompany.id == company.id).with_for_update()
+        )).scalar_one_or_none()
+        if not locked:
+            raise ValueError("Company not found.")
+        company = locked
         if target_spec == company.specialization:
             raise ValueError("Cannot license own primary specialization.")
         if company.licensed_foreign_spec == target_spec:
@@ -266,7 +295,10 @@ class CompanyService:
             if f.specialization == target_spec:
                 f.efficiency = nat_settings.FOREIGN_LICENSED_MAX
 
-        await session.commit()
+        if commit:
+            await session.commit()
+        else:
+            await session.flush()
         return {
             "success": True,
             "licensed_foreign_spec": target_spec,
@@ -275,12 +307,18 @@ class CompanyService:
         }
 
     @classmethod
-    async def reset_company_for_user(cls, session: AsyncSession, user_id: int) -> bool:
+    async def reset_company_for_user(cls, session: AsyncSession, user_id: int, commit: bool = True) -> bool:
         """Completely reset and remove all company assets for a user so they can restart."""
-        from sqlalchemy import delete
+        from sqlalchemy import delete, or_, update
         from backend.natbirzha.models import (
-            NatArmy, NatTournamentParticipant, NatAllianceMember,
-            NatStock, NatDailyFinancials, NatRestructuring, NatMarketOrder
+            NatAlliance, NatAllianceMember, NatArmy, NatArmyUnit, NatBattle,
+            NatBattleSnapshot, NatBondListing, NatBondSettlement, NatContract,
+            NatDailyFinancials, NatDividend, NatInstrumentPosition,
+            NatInstrumentTrade, NatLoan, NatMarketOrder, NatMarketRestriction,
+            NatMarketTrade, NatMarketWarning, NatMilitaryRatingEvent,
+            NatMilitaryUpgrade, NatPremiumLedgerEntry, NatPremiumLicense,
+            NatPveVictory, NatPvpCooldown, NatRestructuring, NatStateBondHolding,
+            NatStock, NatStockHolding, NatStockOrder, NatTournamentParticipant,
         )
 
         res = await session.execute(select(NatCompany).where(NatCompany.user_id == user_id))
@@ -289,6 +327,73 @@ class CompanyService:
             return False
 
         cid = comp.id
+
+        # Delete explicit dependants instead of trusting database cascades. This
+        # keeps resets complete on SQLite test/dev deployments where foreign-key
+        # enforcement may have been disabled in an older database connection.
+        battle_ids = select(NatBattle.id).where(or_(
+            NatBattle.attacker_company_id == cid,
+            NatBattle.defender_company_id == cid,
+        ))
+        await session.execute(delete(NatPvpCooldown).where(or_(
+            NatPvpCooldown.attacker_company_id == cid,
+            NatPvpCooldown.defender_company_id == cid,
+            NatPvpCooldown.battle_id.in_(battle_ids),
+        )))
+        await session.execute(delete(NatMilitaryRatingEvent).where(or_(
+            NatMilitaryRatingEvent.company_id == cid,
+            NatMilitaryRatingEvent.battle_id.in_(battle_ids),
+        )))
+        await session.execute(delete(NatPveVictory).where(or_(
+            NatPveVictory.company_id == cid,
+            NatPveVictory.battle_id.in_(battle_ids),
+        )))
+        await session.execute(delete(NatBattleSnapshot).where(or_(
+            NatBattleSnapshot.company_id == cid,
+            NatBattleSnapshot.battle_id.in_(battle_ids),
+        )))
+        await session.execute(delete(NatBattle).where(NatBattle.id.in_(battle_ids)))
+        await session.execute(delete(NatArmyUnit).where(NatArmyUnit.company_id == cid))
+
+        stock_ids = select(NatStock.id).where(NatStock.company_id == cid)
+        await session.execute(delete(NatDividend).where(NatDividend.stock_id.in_(stock_ids)))
+        await session.execute(delete(NatStockOrder).where(or_(
+            NatStockOrder.stock_id.in_(stock_ids), NatStockOrder.trader_company_id == cid
+        )))
+        await session.execute(delete(NatStockHolding).where(or_(
+            NatStockHolding.stock_id.in_(stock_ids), NatStockHolding.holder_company_id == cid
+        )))
+
+        await session.execute(delete(NatBondListing).where(or_(
+            NatBondListing.seller_company_id == cid, NatBondListing.buyer_company_id == cid
+        )))
+        await session.execute(delete(NatBondSettlement).where(NatBondSettlement.company_id == cid))
+        await session.execute(delete(NatStateBondHolding).where(NatStateBondHolding.company_id == cid))
+        await session.execute(delete(NatInstrumentTrade).where(NatInstrumentTrade.company_id == cid))
+        await session.execute(delete(NatInstrumentPosition).where(NatInstrumentPosition.company_id == cid))
+        await session.execute(delete(NatMilitaryUpgrade).where(NatMilitaryUpgrade.company_id == cid))
+        await session.execute(delete(NatPremiumLicense).where(NatPremiumLicense.company_id == cid))
+        await session.execute(delete(NatPremiumLedgerEntry).where(NatPremiumLedgerEntry.company_id == cid))
+
+        await session.execute(delete(NatMarketTrade).where(or_(
+            NatMarketTrade.buyer_company_id == cid, NatMarketTrade.seller_company_id == cid
+        )))
+        await session.execute(delete(NatLoan).where(NatLoan.company_id == cid))
+        await session.execute(update(NatContract).where(
+            NatContract.issuer_company_id == cid
+        ).values(issuer_company_id=None))
+        await session.execute(update(NatContract).where(
+            NatContract.target_company_id == cid
+        ).values(target_company_id=None))
+        await session.execute(delete(NatMarketRestriction).where(NatMarketRestriction.company_id == cid))
+        await session.execute(delete(NatMarketWarning).where(NatMarketWarning.company_id == cid))
+
+        alliance_ids = select(NatAlliance.id).where(NatAlliance.leader_company_id == cid)
+        await session.execute(delete(NatAllianceMember).where(or_(
+            NatAllianceMember.company_id == cid,
+            NatAllianceMember.alliance_id.in_(alliance_ids),
+        )))
+        await session.execute(delete(NatAlliance).where(NatAlliance.id.in_(alliance_ids)))
         await session.execute(delete(NatFactory).where(NatFactory.company_id == cid))
         await session.execute(delete(NatInventory).where(NatInventory.company_id == cid))
         await session.execute(delete(NatMarketOrder).where(NatMarketOrder.company_id == cid))
@@ -299,6 +404,8 @@ class CompanyService:
         await session.execute(delete(NatDailyFinancials).where(NatDailyFinancials.company_id == cid))
         await session.execute(delete(NatRestructuring).where(NatRestructuring.company_id == cid))
         await session.execute(delete(NatCompany).where(NatCompany.id == cid))
-        await session.commit()
+        if commit:
+            await session.commit()
+        else:
+            await session.flush()
         return True
-

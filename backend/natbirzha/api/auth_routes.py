@@ -2,11 +2,11 @@ import logging
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from backend.config import settings
 from backend.db.session import get_db_session
 from backend.db.models import User
 from backend.natbirzha.models.company import NatCompany
 from backend.natbirzha.services.auth_service import get_strict_natbirzha_user
+from backend.natbirzha.services.access_control import is_creator_user
 
 logger = logging.getLogger(__name__)
 
@@ -24,14 +24,6 @@ async def login_user(
         )
     )
     company = comp_res.scalar_one_or_none()
-    if not company and (user.tg_id == settings.ADMIN_ID or user.role == "admin"):
-        from backend.natbirzha.services.company_service import CompanyService
-        try:
-            company = await CompanyService.create_company(
-                session, user.id, "НАТБИРЖА 11 «Б»", "metallurgist"
-            )
-        except Exception:
-            pass
     if company and not company.is_bankrupt:
         from backend.natbirzha.services.production_service import ProductionTickEngine
         try:
@@ -46,7 +38,8 @@ async def login_user(
             "id": user.id,
             "tg_id": user.tg_id,
             "full_name": user.display_name,
-            "role": user.role
+            "role": user.role,
+            "is_creator": is_creator_user(user)
         },
         "has_company": company is not None,
         "company_id": company.id if company else None,

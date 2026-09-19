@@ -10,7 +10,7 @@ export function renderOverview(container, showToast) {
   const items = Object.entries(inv).filter(([_, qty]) => Number(qty) > 0);
 
   const xpCurrent = company.xp || 0;
-  const xpNext = (company.level || 1) * 150;
+  const xpNext = company.next_level_xp ?? ((company.level || 1) * 150);
   const xpPercent = Math.min(100, Math.round((xpCurrent / xpNext) * 100));
 
   container.innerHTML = `
@@ -51,6 +51,7 @@ export function renderOverview(container, showToast) {
           <div class="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
             <div class="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500" style="width: ${xpPercent}%"></div>
           </div>
+          <div class="mt-1 text-[10px] text-slate-400">До следующего уровня: ${company.xp_to_next ?? Math.max(0, xpNext - xpCurrent)} XP. Производите товары, торгуйте и побеждайте в PvE.</div>
         </div>
       </div>
 
@@ -80,7 +81,7 @@ export function renderOverview(container, showToast) {
             <span class="text-lg">⚡</span>
             <div>
               <div class="text-xs font-bold text-slate-800 dark:text-white">Муниципальная энергосеть</div>
-              <div class="text-[11px] text-slate-400">Базовый лимит: 10 МВт·ч за тик (3.0 cash / МВт·ч)</div>
+              <div class="text-[11px] text-slate-400">Стартовая utility-квота хранится на складе; фоновые бесплатные циклы отключены</div>
             </div>
           </div>
           <span class="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-1 rounded-lg">
@@ -134,7 +135,7 @@ export function renderOverview(container, showToast) {
             <span class="text-base">🗺️</span>
             <div>
               <div class="text-xs font-bold text-slate-800 dark:text-white">Территория</div>
-              <div class="text-[11px] text-slate-400">${company.territory_tiles || 4} / ${company.max_territory || 20} тайлов</div>
+              <div class="text-[11px] text-slate-400">${company.territory_tiles || 4} / ${company.max_territory || 20} тайлов · заводы ${company.factory_slots?.used ?? (company.factories?.length || 0)} / ${company.factory_slots?.max ?? '—'}</div>
             </div>
           </div>
           <button
@@ -148,6 +149,7 @@ export function renderOverview(container, showToast) {
 
       <!-- Actions: Respec & Refresh -->
       <div class="pt-2 flex items-center justify-center gap-2">
+        <button id="help-btn" class="px-3 py-2 rounded-xl text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition-colors">❓ Как играть</button>
         <button
           id="respec-btn"
           class="px-3 py-2 rounded-xl text-xs font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 transition-colors"
@@ -163,6 +165,8 @@ export function renderOverview(container, showToast) {
       </div>
     </div>
   `;
+
+  container.querySelector('#help-btn')?.addEventListener('click', () => window.NatApp?.navigateTo('help'));
 
   // Attach refresh handler
   const refreshBtn = container.querySelector('#refresh-btn');

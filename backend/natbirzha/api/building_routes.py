@@ -52,15 +52,13 @@ async def build_enterprise(
         return cached[1]
 
     try:
-        res = await BuildingService.build_factory(session, company, b_type, idempotency_key)
+        res = await BuildingService.build_factory(session, company, b_type, idempotency_key, commit=False)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    await session.commit()
-    await IdempotencyService.save_record(
-        session, company.user_id, "/api/natbirzha/buildings/build", idempotency_key, {"building_type": b_type}, 200, res
+    return await IdempotencyService.commit_response(
+        session, company.user_id, "/api/natbirzha/buildings/build", idempotency_key, {"building_type": b_type}, res
     )
-    return res
 
 @router.get("/factories/{factory_id}/upgrades")
 async def get_factory_upgrades(
@@ -72,19 +70,13 @@ async def get_factory_upgrades(
     if not details:
         raise HTTPException(status_code=404, detail="Предприятие не найдено")
     fac = await session.get(NatFactory, factory_id)
-    from backend.natbirzha.services.production_service import ProductionTickEngine
     return {
         "factory_id": factory_id,
         "level": fac.level,
         "workers": fac.workers,
         "automation_level": fac.automation_level,
         "technology_level": fac.technology_level,
-        "costs": {
-            "workers": ProductionTickEngine.upgrade_cost(fac, "workers"),
-            "automation": ProductionTickEngine.upgrade_cost(fac, "automation"),
-            "technology": ProductionTickEngine.upgrade_cost(fac, "technology"),
-            "level": ProductionTickEngine.upgrade_cost(fac, "level")
-        }
+        "upgrades": BuildingService.describe_upgrades(fac, company),
     }
 
 @router.post("/factories/{factory_id}/upgrade")
@@ -103,14 +95,12 @@ async def upgrade_enterprise(
         return cached[1]
 
     try:
-        res = await BuildingService.upgrade_factory(session, company, factory_id, req.upgrade_type)
+        res = await BuildingService.upgrade_factory(session, company, factory_id, req.upgrade_type, commit=False)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    await session.commit()
-    await IdempotencyService.save_record(
-        session, company.user_id, f"/api/natbirzha/factories/{factory_id}/upgrade", idempotency_key, payload, 200, res
+    return await IdempotencyService.commit_response(
+        session, company.user_id, f"/api/natbirzha/factories/{factory_id}/upgrade", idempotency_key, payload, res
     )
-    return res
 
 __all__ = ["router"]

@@ -3,15 +3,21 @@ from datetime import datetime, date, time
 import zoneinfo
 from typing import Dict, Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+from pydantic import AliasChoices, Field
 
 class NatbirzhaSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     GAME_TIMEZONE: str = Field(default="Asia/Yekaterinburg", description="Timezone for calendar settlements")
-    ALLOW_TEST_AUTH: bool = Field(default=True, description="Allow test HMAC signature tokens and dev login in local dev/tests")
-    TEST_AUTH_SECRET: str = Field(default="natbirzha_test_secret_key_2026", description="Secret for signing test initData")
+    ALLOW_TEST_AUTH: bool = Field(default=False, validation_alias=AliasChoices("NATBIRZHA_ALLOW_TEST_AUTH", "ALLOW_TEST_AUTH"), description="Allow signed test initData only in explicit local/test environments")
+    TEST_AUTH_SECRET: str = Field(default="natbirzha_test_secret_key_2026", validation_alias=AliasChoices("NATBIRZHA_TEST_AUTH_SECRET", "TEST_AUTH_SECRET"), description="Secret for signing test initData; ignored unless ALLOW_TEST_AUTH=true")
+    CREATOR_TG_IDS: str = Field(default="", validation_alias=AliasChoices("NATBIRZHA_CREATOR_TG_IDS", "CREATOR_TG_IDS"), description="Comma-separated Telegram user IDs allowed to use Creator/State controls")
     BETA_TESTERS_ONLY: bool = Field(default=True, description="Restrict Natbirzha access to beta-testers and admins only")
+    SEASON_RESET_ENABLED: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("NATBIRZHA_SEASON_RESET_ENABLED", "SEASON_RESET_ENABLED"),
+        description="Explicit production switch for destructive season resets",
+    )
 
     # Specialization efficiency limits (strict)
     OWN_SPEC_EFFICIENCY: float = 1.00       # 100%
@@ -24,11 +30,21 @@ class NatbirzhaSettings(BaseSettings):
     # NPC State Reserve (Госрезерв) multipliers
     NPC_BUY_FLOOR_MULT: float = 0.80        # NPC buys surplus at 80% base price
     NPC_SELL_CAP_MULT: float = 1.25         # NPC sells supplies at 125% base price
+    NPC_BASE_DAILY_VOLUME_PER_ITEM: float = 100.0
     NPC_VOLUME_SCALING_FACTORS: Dict[int, float] = {
         1: 1.0,   # 1 player: 100% NPC volume quota
         5: 0.8,   # 5 players: 80% NPC quota
         20: 0.3,  # 20 players: 30% NPC quota
         30: 0.1   # 30 players: 10% NPC quota
+    }
+    # The state reserve must not become a backdoor for premium resources.
+    # These caps apply to the player's BUY action (NPC sells to the player),
+    # independently of the much larger regular-resource liquidity quota.
+    NPC_RARE_SELL_RESERVES: Dict[str, float] = {
+        "lithium_raw": 2.0,
+        "cobalt_raw": 1.0,
+        "rare_earths": 2.0,
+        "gallium_raw": 1.0,
     }
 
     # Alliance rules
@@ -36,8 +52,12 @@ class NatbirzhaSettings(BaseSettings):
 
     # Tournament rules
     TOURNAMENT_CYCLE_HOURS: int = 72        # 72h tournament cycle
+    TOURNAMENT_DURATION_HOURS: int = 18     # PvP event window
     TOURNAMENT_SNAPSHOT_MINUTES: int = 15   # Immutable snapshot before finish
     TOURNAMENT_WINNER_PRIZE_NAT: int = 100  # 100 NAT to 1st place
+    TOURNAMENT_REWARD_FIRST_PVC: int = 150
+    TOURNAMENT_REWARD_SECOND_PVC: int = 100
+    TOURNAMENT_REWARD_THIRD_PVC: int = 70
 
     # IPO rules
     IPO_MIN_LEVEL: int = 2
@@ -61,7 +81,8 @@ class NatbirzhaSettings(BaseSettings):
     # Base Economic Constants
     STARTING_CASH: float = 50000.0
     STARTING_TERRITORY_TILES: int = 4
-    BASE_MUNICIPAL_ENERGY_TICK: float = 10.0       # Free 10.0 MWh/tick breaking energy cycle
+    BASE_MUNICIPAL_ENERGY_TICK: float = 10.0       # Starter utility supply; never creates background production
+    INVENTORY_MAX_QUANTITY_PER_ITEM: float = 1000000.0  # Safety cap; overflow blocks collect
 
     # Factory Construction Costs
     FACTORY_BASE_COSTS: Dict[str, float] = {
@@ -115,6 +136,15 @@ def get_game_now() -> datetime:
     """Returns current game timestamp normalized as offset-naive game timezone."""
     return datetime.now(get_game_tz()).replace(tzinfo=None)
 
+def game_dt_iso(dt: Optional[datetime]) -> Optional[str]:
+    """Serialize a stored game-time value with an explicit timezone offset for browsers."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=get_game_tz())
+    else:
+        dt = dt.astimezone(get_game_tz())
+    return dt.isoformat()
+
 def get_game_today() -> date:
     return datetime.now(get_game_tz()).date()
-

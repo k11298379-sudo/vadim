@@ -8,8 +8,6 @@ from backend.db.models import RPGCharacter
 # REBIRTH / ASCENSION MATHEMATICS (Volume IV of GDD)
 # ==============================================================================
 
-MAX_REBIRTH_RANK = 40
-
 REBIRTH_RANKS_CONFIG: Dict[int, Dict[str, Any]] = {
     0: {"min_level": 0, "essence_reward": 0, "title": "Смертный Путник"},
     1: {"min_level": 30, "essence_reward": 3, "title": "Пробужденный Воитель"},
@@ -37,21 +35,6 @@ REBIRTH_RANKS_CONFIG: Dict[int, Dict[str, Any]] = {
     23: {"min_level": 50, "essence_reward": 600, "title": "Архитектор Сингулярности (XXIII)"},
     24: {"min_level": 50, "essence_reward": 750, "title": "Властелин Вечности (XXIV)"},
     25: {"min_level": 50, "essence_reward": 1000, "title": "Создатель Мультивселенной (XXV)"},
-    26: {"min_level": 50, "essence_reward": 1250, "title": "Творец Квантового Эфира (XXVI)"},
-    27: {"min_level": 50, "essence_reward": 1550, "title": "Владыка Астральных Сфер (XXVII)"},
-    28: {"min_level": 50, "essence_reward": 1900, "title": "Повелитель Темной Материи (XXVIII)"},
-    29: {"min_level": 50, "essence_reward": 2350, "title": "Хранитель Изначального Хаоса (XXIX)"},
-    30: {"min_level": 50, "essence_reward": 2900, "title": "Бог-Император Пантеона (XXX)"},
-    31: {"min_level": 50, "essence_reward": 3600, "title": "Пожиратель Галактик (XXXI)"},
-    32: {"min_level": 50, "essence_reward": 4400, "title": "Властелин Черных Дыр (XXXII)"},
-    33: {"min_level": 50, "essence_reward": 5400, "title": "Архитектор Космических Нитей (XXXIII)"},
-    34: {"min_level": 50, "essence_reward": 6600, "title": "Ткач Пространства и Времени (XXXIV)"},
-    35: {"min_level": 50, "essence_reward": 8000, "title": "Абсолютный Демиург Бытия (XXXV)"},
-    36: {"min_level": 50, "essence_reward": 9700, "title": "Владыка Высших Измерений (XXXVI)"},
-    37: {"min_level": 50, "essence_reward": 11800, "title": "Суверен Нулевой Точки (XXXVII)"},
-    38: {"min_level": 50, "essence_reward": 14300, "title": "Повелитель Вечной Сингулярности (XXXVIII)"},
-    39: {"min_level": 50, "essence_reward": 17200, "title": "Око Первородной Тьмы (XXXIX)"},
-    40: {"min_level": 50, "essence_reward": 21000, "title": "Верховный Бог Мультивселенной (XL)"},
 }
 
 CONSTELLATIONS_CATALOG: Dict[str, Dict[str, Any]] = {
@@ -140,11 +123,10 @@ def get_rebirth_rank_info(rank: int) -> Dict[str, Any]:
     
     return {
         "rank": rank,
-        "max_rank": MAX_REBIRTH_RANK,
         "title": cfg["title"],
         "multiplier": calculate_rebirth_multiplier(rank),
         "multiplier_pct": int(round((calculate_rebirth_multiplier(rank) - 1.0) * 100)),
-        "next_rank": next_rank if next_rank <= MAX_REBIRTH_RANK else None,
+        "next_rank": next_rank if next_rank <= 25 else None,
         "next_min_level": next_cfg["min_level"] if next_cfg else None,
         "next_essence_reward": next_cfg["essence_reward"] if next_cfg else None,
     }
@@ -159,8 +141,8 @@ async def perform_ascension(session: AsyncSession, char: RPGCharacter) -> Tuple[
     - Increments rank and awards Astral Essence (✨).
     """
     current_rank = getattr(char, "rebirths", 0)
-    if current_rank >= MAX_REBIRTH_RANK:
-        return False, f"Достигнут максимальный ранг Вознесения (Ранг {MAX_REBIRTH_RANK} / XL)!", {}
+    if current_rank >= 25:
+        return False, "Достигнут максимальный ранг Вознесения (Ранг XXV)!", {}
 
     next_rank = current_rank + 1
     next_cfg = REBIRTH_RANKS_CONFIG.get(next_rank, {"min_level": 50, "essence_reward": 25})

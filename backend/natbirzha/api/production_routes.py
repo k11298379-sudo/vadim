@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -7,9 +8,11 @@ from backend.db.session import get_db_session
 from backend.natbirzha.config import get_game_now, nat_settings
 from backend.natbirzha.models.company import NatCompany, NatFactory
 from backend.natbirzha.models.inventory import NatInventory, CANONICAL_ITEMS
+from backend.natbirzha.models.premium import NatPremiumLicense
 from backend.natbirzha.services.auth_service import get_current_company
 from backend.natbirzha.services.recipes import RECIPES
 from backend.natbirzha.services.production_service import ProductionTickEngine
+from backend.natbirzha.services.production_status_service import describe_factory_start_hint
 from backend.natbirzha.services.building_service import BuildingService
 from backend.natbirzha.services.idempotency_service import IdempotencyService
 
@@ -82,10 +85,24 @@ async def get_factories(
         select(NatFactory).where(NatFactory.company_id == company.id)
     )
     factories = fac_res.scalars().all()
+    inv_res = await session.execute(select(NatInventory).where(NatInventory.company_id == company.id))
+    available_inventory = {row.item_id: row.available_quantity for row in inv_res.scalars().all()}
+    utc_now = datetime.utcnow()
+    license_res = await session.execute(
+        select(NatPremiumLicense.license_code).where(
+            NatPremiumLicense.company_id == company.id,
+            NatPremiumLicense.status == "ACTIVE",
+            NatPremiumLicense.starts_at <= utc_now,
+            NatPremiumLicense.expires_at > utc_now,
+        )
+    )
+    active_license_codes = set(license_res.scalars().all())
     from backend.natbirzha.config import normalize_dt, get_game_now
     now = normalize_dt(get_game_now())
+    from backend.natbirzha.services.building_catalog import get_building_spec
     items = []
     for f in factories:
+        spec = get_building_spec(f.building_type) or {}
         ready_at_norm = normalize_dt(f.cycle_ready_at)
         is_running = bool(f.cycle_ready_at)
         is_ready = bool(is_running and now >= ready_at_norm)
@@ -96,6 +113,8 @@ async def get_factories(
             "id": f.id,
             "building_type": f.building_type,
             "factory_type": f.building_type,
+            "name": spec.get("name", f.building_type),
+            "description": spec.get("description", ""),
             "specialization": f.specialization,
             "level": f.level,
             "tier": f.level,
@@ -104,13 +123,19 @@ async def get_factories(
             "workers": f.workers,
             "automation_level": f.automation_level,
             "technology_level": f.technology_level,
-            "current_recipe": f.current_recipe or next((k for k, v in RECIPES.items() if v.get("factory_type") == f.building_type), None),
+            "current_recipe": f.current_recipe,
+            "default_recipe": spec.get("recipe_id") or next((k for k, v in RECIPES.items() if v.get("factory_type") == f.building_type), None),
+            "cycle_duration": spec.get("cycle_duration", 60),
+            "upgrade_options": BuildingService.describe_upgrades(f, company),
             "cycle_started_at": _format_dt_iso(f.cycle_started_at),
             "cycle_ready_at": _format_dt_iso(f.cycle_ready_at),
             "last_produced_at": _format_dt_iso(f.last_produced_at),
             "is_running": is_running,
             "is_ready": is_ready,
-            "remaining_seconds": rem_sec
+            "remaining_seconds": rem_sec,
+            "start_hint": describe_factory_start_hint(
+                company, f, available_inventory, active_license_codes, now=now
+            ),
         })
     return {"factories": items}
 
@@ -129,14 +154,12 @@ async def build_factory(
 
     b_type = req.canonical_type
     try:
-        resp = await BuildingService.build_factory(session, company, b_type, idempotency_key)
+        resp = await BuildingService.build_factory(session, company, b_type, idempotency_key, commit=False)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    await session.commit()
-    await IdempotencyService.save_record(
-        session, company.user_id, "/api/natbirzha/production/factory/build", idempotency_key, req.model_dump(), 200, resp
+    return await IdempotencyService.commit_response(
+        session, company.user_id, "/api/natbirzha/production/factory/build", idempotency_key, req.model_dump(), resp
     )
-    return resp
 
 
 class UpgradeFactoryRequest(BaseModel):
@@ -156,14 +179,12 @@ async def upgrade_factory(
     if cached:
         return cached[1]
     try:
-        resp = await BuildingService.upgrade_factory(session, company, req.factory_id, req.upgrade_type)
+        resp = await BuildingService.upgrade_factory(session, company, req.factory_id, req.upgrade_type, commit=False)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    await session.commit()
-    await IdempotencyService.save_record(
-        session, company.user_id, "/api/natbirzha/production/factory/upgrade", idempotency_key, req.model_dump(), 200, resp
+    return await IdempotencyService.commit_response(
+        session, company.user_id, "/api/natbirzha/production/factory/upgrade", idempotency_key, req.model_dump(), resp
     )
-    return resp
 
 @router.post("/factory/produce")
 async def produce_manual(
@@ -185,7 +206,9 @@ async def produce_manual(
     res = await ProductionTickEngine.execute_manual_produce(session, company.id, req.factory_id, req.recipe_id)
     if not res.get("success"):
         reason = res.get("reason", "")
-        if reason.startswith("insufficient_"):
+        if reason == "insufficient_labor":
+            err_msg = f"Недостаточно работников: требуется {res.get('needed', 0)}, доступно {res.get('available', 0)}."
+        elif reason.startswith("insufficient_"):
             item_id = reason.replace("insufficient_", "")
             item_info = CANONICAL_ITEMS.get(item_id, {})
             item_name = item_info.get("name", item_id)
@@ -198,6 +221,8 @@ async def produce_manual(
             err_msg = f"Цикл еще выполняется (осталось {rem} сек.)."
         elif reason == "cycle_ready_to_collect":
             err_msg = "Цикл готов! Нажмите «Забрать продукцию»."
+        elif reason == "inventory_overflow":
+            err_msg = f"Склад переполнен для {res.get('item_id')}: лимит {res.get('capacity')}, сейчас {res.get('current')}, поступит {res.get('incoming')}."
         elif reason == "factory_inactive":
             err_msg = "Предприятие отключено."
         elif reason == "company_level_required":
@@ -206,14 +231,13 @@ async def produce_manual(
             err_msg = "Этот рецепт не подходит для данного типа предприятия."
         else:
             err_msg = res.get("error") or res.get("message") or f"Ошибка производственного цикла ({reason or 'сбой'})."
-        raise HTTPException(status_code=400, detail=str(err_msg))
+        status_code = 409 if reason in {"cycle_in_progress", "cycle_ready_to_collect", "inventory_overflow"} else 400
+        raise HTTPException(status_code=status_code, detail=str(err_msg))
 
 
-    await session.commit()
-    await IdempotencyService.save_record(
-        session, company.user_id, "/api/natbirzha/production/factory/produce", idempotency_key, req.model_dump(), 200, res
+    return await IdempotencyService.commit_response(
+        session, company.user_id, "/api/natbirzha/production/factory/produce", idempotency_key, req.model_dump(), res
     )
-    return res
 
 @router.post("/factory/{factory_id}/start")
 async def start_factory_production(
@@ -233,12 +257,12 @@ async def start_factory_production(
         raise HTTPException(status_code=404, detail="Предприятие не найдено")
     res = await ProductionTickEngine.start_cycle(session, company, factory, recipe_id)
     if not res.get("success"):
-        raise HTTPException(status_code=400, detail=res.get("reason", "Невозможно запустить цикл"))
-    await session.commit()
-    await IdempotencyService.save_record(
-        session, company.user_id, f"/api/natbirzha/production/factory/{factory_id}/start", idempotency_key, {"recipe_id": recipe_id}, 200, res
+        reason = res.get("reason", "Невозможно запустить цикл")
+        code = 409 if reason in {"cycle_in_progress", "cycle_ready_to_collect"} else 400
+        raise HTTPException(status_code=code, detail=reason)
+    return await IdempotencyService.commit_response(
+        session, company.user_id, f"/api/natbirzha/production/factory/{factory_id}/start", idempotency_key, {"recipe_id": recipe_id}, res
     )
-    return res
 
 @router.post("/factory/{factory_id}/collect")
 async def collect_factory_production(
@@ -257,9 +281,9 @@ async def collect_factory_production(
         raise HTTPException(status_code=404, detail="Предприятие не найдено")
     res = await ProductionTickEngine.complete_cycle(session, company, factory)
     if not res.get("success"):
-        raise HTTPException(status_code=400, detail=res.get("reason", "Невозможно собрать продукцию"))
-    await session.commit()
-    await IdempotencyService.save_record(
-        session, company.user_id, f"/api/natbirzha/production/factory/{factory_id}/collect", idempotency_key, {}, 200, res
+        reason = res.get("reason", "Невозможно собрать продукцию")
+        code = 409 if reason in {"cycle_in_progress", "inventory_overflow", "no_cycle_in_progress"} else 400
+        raise HTTPException(status_code=code, detail=reason)
+    return await IdempotencyService.commit_response(
+        session, company.user_id, f"/api/natbirzha/production/factory/{factory_id}/collect", idempotency_key, {}, res
     )
-    return res

@@ -13,9 +13,11 @@ logger = logging.getLogger(__name__)
 router = Router(name="natbirzha_router")
 
 
-def get_natbirzha_app_url(tg_user_id: int) -> str:
+def get_natbirzha_app_url(tg_user_id: int | None = None) -> str:
+    # Identity comes from Telegram WebApp initData, never from URL parameters.
+    del tg_user_id
     base = settings.BASE_URL.rstrip("/")
-    return f"{base}/app/natbirzha?tg_user_id={tg_user_id}"
+    return f"{base}/app/natbirzha"
 
 
 @router.message(Command("natbirzha"))

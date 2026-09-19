@@ -22,9 +22,6 @@ def get_main_keyboard(is_admin: bool = False, user_id: int | None = None, is_tes
     if is_admin or is_tester:
         nat_url = f"{settings.BASE_URL.rstrip('/')}/app/natbirzha"
         if nat_url.startswith("https://"):
-            if user_id:
-                separator = "&" if "?" in nat_url else "?"
-                nat_url = f"{nat_url}{separator}tg_user_id={user_id}"
             nat_btn = KeyboardButton(
                 text="📈 НАТБИРЖА (Beta)",
                 web_app=WebAppInfo(url=nat_url)

@@ -965,39 +965,19 @@
 
   let isUpgradingStat = false;
 
-  async function upgradeStat(statName, amount = 1) {
+  async function upgradeStat(statName) {
     if (isUpgradingStat) return;
     const p = RPG_STATE.profile || {};
     const points = p.stat_points || 0;
-    const userGold = p.gold || 0;
     const baseAttrs = p.base_attributes || {};
     const baseVal = (statName === "str"
       ? (baseAttrs.strength ?? p.strength)
       : (statName === "agi"
         ? (baseAttrs.agility ?? p.agility)
         : (baseAttrs.intelligence ?? p.intelligence))) || 10;
+    const cost = Math.floor(Math.pow(baseVal, 1.35) * 6);
 
-    let targetCount = 1;
-    let isMax = false;
-    if (String(amount).toLowerCase() === "max") {
-      isMax = true;
-      let count = points;
-      let remGold = userGold;
-      let val = baseVal + points;
-      while (true) {
-        const cost = Math.floor(Math.pow(val, 1.35) * 6);
-        if (remGold < cost) break;
-        remGold -= cost;
-        count++;
-        val++;
-        if (count >= 10000) break;
-      }
-      targetCount = count;
-    } else {
-      targetCount = Math.max(1, parseInt(amount, 10) || 1);
-    }
-
-    if (targetCount <= 0) {
+    if (points <= 0 && (p.gold || 0) < cost) {
       triggerHaptic("error");
       return;
     }
@@ -1005,7 +985,32 @@
     isUpgradingStat = true;
     try {
       triggerHaptic("light");
-      const res = await api.upgradeRpgStat(statName, { amount: isMax ? "max" : targetCount });
+      // Optimistic update so UI decrements points/gold and increments stat immediately
+      if (points > 0) {
+        p.stat_points = Math.max(0, points - 1);
+      } else {
+        p.gold = Math.max(0, (p.gold || 0) - cost);
+      }
+      if (!p.base_attributes) {
+        p.base_attributes = {
+          strength: p.strength || 10,
+          agility: p.agility || 10,
+          intelligence: p.intelligence || 10
+        };
+      }
+      if (statName === "str") {
+        p.base_attributes.strength = baseVal + 1;
+        p.strength = (p.strength || baseVal) + 1;
+      } else if (statName === "agi") {
+        p.base_attributes.agility = baseVal + 1;
+        p.agility = (p.agility || baseVal) + 1;
+      } else if (statName === "int") {
+        p.base_attributes.intelligence = baseVal + 1;
+        p.intelligence = (p.intelligence || baseVal) + 1;
+      }
+      renderRoot();
+
+      const res = await api.upgradeRpgStat(statName);
       if (res.profile) {
         RPG_STATE.profile = res.profile;
         syncArenaPlayerStats();

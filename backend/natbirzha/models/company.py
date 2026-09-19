@@ -19,6 +19,8 @@ class NatCompany(Base):
     xp: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     cash: Mapped[float] = mapped_column(Float, default=50000.0, nullable=False)
     nat_balance: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    pvc_balance: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    military_rating: Mapped[int] = mapped_column(Integer, default=1000, nullable=False, index=True)
     
     territory_tiles: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
     max_territory: Mapped[int] = mapped_column(Integer, default=20, nullable=False)

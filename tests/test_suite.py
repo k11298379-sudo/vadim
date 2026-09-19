@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, os.path.abspath("."))
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./data/test_suite.db"
 os.environ["BOT_TOKEN"] = "1234567890:ABCdefFakeTestToken"
+os.environ.setdefault("ADMIN_ID", "999999999")
 
 from backend.config import settings, get_today
 settings.BOT_TOKEN = "1234567890:ABCdefFakeTestToken"
@@ -803,6 +804,37 @@ def test_keyboards_and_fastapi():
 async def main():
     await test_database_and_crud()
     test_keyboards_and_fastapi()
+    p2_scripts = (
+        "tests/natbirzha/test_p2_models.py",
+        "tests/natbirzha/test_p2_migrations.py",
+        "tests/natbirzha/test_combat_resolver.py",
+        "tests/natbirzha/test_premium_and_licenses.py",
+        "tests/natbirzha/test_army_service.py",
+        "tests/natbirzha/test_pve_wars.py",
+        "tests/natbirzha/test_tournament_lifecycle.py",
+        "tests/natbirzha/test_tournament_pvp.py",
+        "tests/natbirzha/test_creator_custom_tournaments.py",
+        "tests/natbirzha/test_premium_production.py",
+        "tests/natbirzha/test_premium_military_upgrades.py",
+        "tests/natbirzha/test_p2_backend_api.py",
+        "tests/natbirzha/test_reference_instruments.py",
+        "tests/natbirzha/test_bond_lifecycle.py",
+    )
+    child_env = os.environ.copy()
+    child_env["PYTHONPATH"] = os.path.abspath(".")
+    for script in p2_scripts:
+        process = await asyncio.create_subprocess_exec(
+            sys.executable,
+            script,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            env=child_env,
+        )
+        output, _ = await process.communicate()
+        rendered = output.decode("utf-8", errors="replace").strip()
+        if rendered:
+            print(rendered)
+        assert process.returncode == 0, f"P2 regression failed: {script}"
     print("\n=== ALL 11 «Б» BOT TESTS PASSED SUCCESSFULLY! ZERO ERRORS! ===\n")
 
 if __name__ == "__main__":

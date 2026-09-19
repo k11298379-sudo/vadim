@@ -3,20 +3,12 @@
 // Чит-коды: золото, уровень, предметы из каталога и сброс игроков
 // ============================================================
 
-window.RPG = window.RPG || {};
 window._adminPlayersList = window._adminPlayersList || null;
 window._adminCatalogItems = window._adminCatalogItems || (typeof window._DEFAULT_RPG_CATALOG !== "undefined" ? window._DEFAULT_RPG_CATALOG : []);
 window._adminSelectedTarget = window._adminSelectedTarget || "";
 window._adminSubTab = window._adminSubTab || "actions"; // "actions" | "slots"
 window._fetchingAdminPlayers = false;
 window._fetchingAdminCatalog = false;
-
-function showAdminNotice(msg) {
-  if (window.Telegram?.WebApp?.showAlert) {
-    try { window.Telegram.WebApp.showAlert(msg); return; } catch (_) {}
-  }
-  alert(msg);
-}
 
 function getDefaultAdminPlayers() {
   const p = window.RPG_STATE?.profile;
@@ -279,17 +271,17 @@ window.RPG.adminGiveGold = async function(amount) {
     const apiObj = window.api || (typeof api !== "undefined" ? api : null);
     const res = await apiObj.adminGiveGold({ target, amount });
     applyAdminProfileUpdate(res, target);
-    showAdminNotice(res.message || "Золото успешно выдано!");
+    alert(res.message || "Золото успешно выдано!");
     window.RPG.refreshAdminPlayers();
     updateAdminModalDOM();
   } catch (e) {
-    showAdminNotice(e.message || "Ошибка выдачи золота");
+    alert(e.message || "Ошибка выдачи золота");
   }
 };
 
 window.RPG.adminGiveGoldCustom = function() {
   const val = parseInt(document.getElementById("admin-gold-custom-input")?.value || 0, 10);
-  if (!val) return showAdminNotice("Введите корректную сумму золота");
+  if (!val) return alert("Введите корректную сумму золота");
   window.RPG.adminGiveGold(val);
 };
 
@@ -299,17 +291,17 @@ window.RPG.adminGiveGems = async function(amount) {
     const apiObj = window.api || (typeof api !== "undefined" ? api : null);
     const res = await apiObj.adminGiveGems({ target, amount });
     applyAdminProfileUpdate(res, target);
-    showAdminNotice(res.message || "Кристаллы успешно выданы!");
+    alert(res.message || "Кристаллы успешно выданы!");
     window.RPG.refreshAdminPlayers();
     updateAdminModalDOM();
   } catch (e) {
-    showAdminNotice(e.message || "Ошибка выдачи кристаллов");
+    alert(e.message || "Ошибка выдачи кристаллов");
   }
 };
 
 window.RPG.adminGiveGemsCustom = function() {
   const val = parseInt(document.getElementById("admin-gems-custom-input")?.value || 0, 10);
-  if (!val) return showAdminNotice("Введите корректную сумму кристаллов");
+  if (!val) return alert("Введите корректную сумму кристаллов");
   window.RPG.adminGiveGems(val);
 };
 
@@ -319,17 +311,17 @@ window.RPG.adminSetLevel = async function(lvl) {
     const apiObj = window.api || (typeof api !== "undefined" ? api : null);
     const res = await apiObj.adminSetLevel({ target, level: lvl });
     applyAdminProfileUpdate(res, target);
-    showAdminNotice(res.message || `Уровень успешно изменен на ${lvl}!`);
+    alert(res.message || `Уровень успешно изменен на ${lvl}!`);
     window.RPG.refreshAdminPlayers();
     updateAdminModalDOM();
   } catch (e) {
-    showAdminNotice(e.message || "Ошибка изменения уровня");
+    alert(e.message || "Ошибка изменения уровня");
   }
 };
 
 window.RPG.adminSetLevelCustom = function() {
   const val = parseInt(document.getElementById("admin-level-custom-input")?.value || 0, 10);
-  if (!val || val < 1 || val > 50) return showAdminNotice("Введите уровень от 1 до 50");
+  if (!val || val < 1 || val > 50) return alert("Введите уровень от 1 до 50");
   window.RPG.adminSetLevel(val);
 };
 
@@ -342,10 +334,10 @@ window.RPG.adminGiveItemSubmit = async function() {
     const apiObj = window.api || (typeof api !== "undefined" ? api : null);
     const res = await apiObj.adminGiveItem({ target, rarity, level: lvl, item_name: itemName });
     applyAdminProfileUpdate(res, target);
-    showAdminNotice(res.message || "Предмет успешно выдан в инвентарь!");
+    alert(res.message || "Предмет успешно выдан в инвентарь!");
     updateAdminModalDOM();
   } catch (e) {
-    showAdminNotice(e.message || "Ошибка выдачи предмета");
+    alert(e.message || "Ошибка выдачи предмета");
   }
 };
 
@@ -359,11 +351,11 @@ window.RPG.adminResetPlayerSubmit = async function() {
     const apiObj = window.api || (typeof api !== "undefined" ? api : null);
     const res = await apiObj.adminResetPlayer({ target });
     applyAdminProfileUpdate(res, target);
-    showAdminNotice(res.message || "Прогресс игрока успешно сброшен!");
+    alert(res.message || "Прогресс игрока успешно сброшен!");
     window.RPG.refreshAdminPlayers();
     updateAdminModalDOM();
   } catch (e) {
-    showAdminNotice(e.message || "Ошибка сброса игрока");
+    alert(e.message || "Ошибка сброса игрока");
   }
 };
 

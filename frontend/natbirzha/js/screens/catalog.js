@@ -26,14 +26,15 @@ export async function openCatalogModal(showToast, onBuilt) {
       </div>
 
       <!-- Filters -->
-      <div class="p-2 border-b border-slate-800 bg-slate-950/40 flex gap-1.5 overflow-x-auto text-[11px] font-bold no-scrollbar">
-        <button data-cat="all" class="cat-btn px-2.5 py-1.5 rounded-lg whitespace-nowrap ${activeFilter === 'all' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'}">Все</button>
-        <button data-cat="own" class="cat-btn px-2.5 py-1.5 rounded-lg whitespace-nowrap ${activeFilter === 'own' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-amber-400'}">⭐ Моя отрасль</button>
-        <button data-cat="available" class="cat-btn px-2.5 py-1.5 rounded-lg whitespace-nowrap ${activeFilter === 'available' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-emerald-400'}">Доступные</button>
-        <button data-cat="extraction" class="cat-btn px-2.5 py-1.5 rounded-lg whitespace-nowrap ${activeFilter === 'extraction' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'}">Добыча</button>
-        <button data-cat="processing" class="cat-btn px-2.5 py-1.5 rounded-lg whitespace-nowrap ${activeFilter === 'processing' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'}">Переработка</button>
-        <button data-cat="industry" class="cat-btn px-2.5 py-1.5 rounded-lg whitespace-nowrap ${activeFilter === 'industry' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'}">Пром-сть</button>
-        <button data-cat="hightech" class="cat-btn px-2.5 py-1.5 rounded-lg whitespace-nowrap ${activeFilter === 'hightech' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'}">Технологии</button>
+      <div class="p-2 border-b border-slate-800 bg-slate-950/40 flex flex-wrap gap-1.5 text-[11px] font-bold">
+        <button data-cat="all" class="cat-btn min-h-9 px-2.5 py-1.5 rounded-lg whitespace-nowrap ${activeFilter === 'all' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'}">Все</button>
+        <button data-cat="own" class="cat-btn min-h-9 px-2.5 py-1.5 rounded-lg whitespace-nowrap ${activeFilter === 'own' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-amber-400'}">⭐ Моя отрасль</button>
+        <button data-cat="available" class="cat-btn min-h-9 px-2.5 py-1.5 rounded-lg whitespace-nowrap ${activeFilter === 'available' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-emerald-400'}">Доступные</button>
+        <button data-cat="unavailable" class="cat-btn min-h-9 px-2.5 py-1.5 rounded-lg whitespace-nowrap ${activeFilter === 'unavailable' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-rose-400'}">Недоступные</button>
+        <button data-cat="extraction" class="cat-btn min-h-9 px-2.5 py-1.5 rounded-lg whitespace-nowrap ${activeFilter === 'extraction' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'}">Добыча</button>
+        <button data-cat="processing" class="cat-btn min-h-9 px-2.5 py-1.5 rounded-lg whitespace-nowrap ${activeFilter === 'processing' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'}">Переработка</button>
+        <button data-cat="industry" class="cat-btn min-h-9 px-2.5 py-1.5 rounded-lg whitespace-nowrap ${activeFilter === 'industry' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'}">Пром-сть</button>
+        <button data-cat="hightech" class="cat-btn min-h-9 px-2.5 py-1.5 rounded-lg whitespace-nowrap ${activeFilter === 'hightech' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'}">Технологии</button>
       </div>
 
       <!-- Items List -->
@@ -70,7 +71,7 @@ export async function openCatalogModal(showToast, onBuilt) {
     btn.addEventListener('click', () => {
       activeFilter = btn.dataset.cat;
       modal.querySelectorAll('.cat-btn').forEach(b => {
-        b.className = `cat-btn px-2.5 py-1.5 rounded-lg whitespace-nowrap ${b.dataset.cat === activeFilter ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'}`;
+        b.className = `cat-btn min-h-9 px-2.5 py-1.5 rounded-lg whitespace-nowrap ${b.dataset.cat === activeFilter ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'}`;
       });
       loadList();
     });
@@ -82,14 +83,13 @@ export async function openCatalogModal(showToast, onBuilt) {
 function renderCatalogCards(listEl, catalog, showToast, onBuilt, modal) {
   const company = store.company || {};
   const compSpec = company.specialization;
-  const compLevel = company.level || 1;
-  const compCash = company.cash || 0;
-
   let filtered = catalog;
   if (activeFilter === 'own') {
     filtered = catalog.filter(b => b.specialization === compSpec);
   } else if (activeFilter === 'available') {
-    filtered = catalog.filter(b => compLevel >= b.level_required && compCash >= b.build_cost);
+    filtered = catalog.filter(b => b.status === 'available');
+  } else if (activeFilter === 'unavailable') {
+    filtered = catalog.filter(b => b.status !== 'available');
   } else if (activeFilter !== 'all') {
     filtered = catalog.filter(b => b.category === activeFilter);
   }

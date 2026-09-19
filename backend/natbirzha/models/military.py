@@ -35,6 +35,12 @@ class NatTournament(Base):
     
     status: Mapped[str] = mapped_column(String(20), default="PENDING", nullable=False, index=True)  # PENDING, SNAPSHOT, COMPLETED
     prize_pool_nat: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    tournament_type: Mapped[str] = mapped_column(String(20), default="AUTO", nullable=False)
+    reward_first_pvc: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
+    reward_second_pvc: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    reward_third_pvc: Mapped[int] = mapped_column(Integer, default=70, nullable=False)
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     @property
     def cycle_number(self) -> int:
@@ -56,7 +62,14 @@ class NatTournamentParticipant(Base):
     
     # Snapshot values taken exactly at snapshot_time (Immutable)
     snapshot_strength: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    initial_strength: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    final_strength: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    initial_rating: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)
+    final_rating: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)
+    wins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    losses: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     army_updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     
     final_rank: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     prize_nat: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    prize_pvc: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

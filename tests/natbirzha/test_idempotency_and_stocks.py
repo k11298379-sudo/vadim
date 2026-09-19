@@ -42,6 +42,7 @@ def create_test_init_data(user_id: int, username: str = "nat_tester") -> str:
 
 
 async def test_idempotency_and_stocks():
+    nat_settings.ALLOW_TEST_AUTH = True
     print("\n" + "=" * 64)
     print("📈 TESTING IDEMPOTENCY 409, IPO, DIVIDENDS & TOURNAMENT TIE-BREAKER")
     print("=" * 64)

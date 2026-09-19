@@ -3,8 +3,21 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 from backend.config import settings
 from backend.db.models import Base
 
+
+def validate_database_url(raw_url: str, *, production: bool | None = None) -> None:
+    """Fail closed when a hosted deployment would use an ephemeral SQLite file."""
+    is_production = production if production is not None else bool(
+        os.environ.get("RENDER") or os.environ.get("RENDER_EXTERNAL_URL")
+    )
+    if is_production and raw_url.lower().startswith("sqlite"):
+        raise RuntimeError(
+            "Production NATBIRZHA requires a persistent PostgreSQL DATABASE_URL; SQLite is not allowed."
+        )
+
+
 def create_configured_engine():
     raw_url = os.environ.get("DATABASE_URL") or settings.DATABASE_URL
+    validate_database_url(raw_url)
     if raw_url.startswith("sqlite"):
         os.makedirs("./data", exist_ok=True)
         return create_async_engine(raw_url, echo=False, future=True, pool_pre_ping=True)
@@ -48,8 +61,14 @@ async def get_db_session() -> AsyncSession:
         yield session
 
 async def init_db():
+    # Import domain models before create_all so every NATBIRZHA table is registered.
+    import backend.natbirzha.models  # noqa: F401
+    print(f"Database backend initialized: {engine.dialect.name} (connection details hidden)")
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        from backend.natbirzha.migrations import run_natbirzha_migrations
+        await run_natbirzha_migrations(conn)
         try:
             from sqlalchemy import text
             if engine.dialect.name == "sqlite":
@@ -205,5 +224,3 @@ async def init_db():
             await cleanup_past_facts(session)
     except Exception as e:
         print(f"init_db facts cleanup note: {e}")
-
-

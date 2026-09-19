@@ -1,22 +1,24 @@
-from typing import Dict, Any, Optional
+from typing import Any, Dict
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
-from backend.natbirzha.config import nat_settings, get_game_today
+from sqlalchemy.exc import IntegrityError
+
+from backend.natbirzha.config import get_game_today, nat_settings
 from backend.natbirzha.models.company import NatCompany
 from backend.natbirzha.models.inventory import (
-    NatInventory,
     CANONICAL_ITEMS,
+    NatInventory,
     get_item_base_price,
     get_npc_buy_price,
-    get_npc_sell_price
+    get_npc_sell_price,
 )
+from backend.natbirzha.models.npc import NatNpcDailyVolume
 from backend.natbirzha.models.restructuring import NatDailyFinancials
 
+
 class NPCReserveService:
-    """
-    State Reserve (Госрезерв) providing floor and ceiling liquidity.
-    Enables single-player and low-population economies to operate without deadlocks.
-    """
+    """State reserve with price corridor and population-scaled daily liquidity."""
 
     @staticmethod
     def get_npc_quote(item_id: str) -> Dict[str, Any]:
@@ -30,23 +32,128 @@ class NPCReserveService:
             "name": CANONICAL_ITEMS[item_id]["name"],
             "unit": CANONICAL_ITEMS[item_id]["unit"],
             "base_price": base,
-            "npc_buy_price": buy_floor,    # Player sells to NPC at discount
-            "npc_sell_price": sell_cap,   # Player buys from NPC at premium
-            "spread_pct": round(((sell_cap - buy_floor) / base) * 100, 1)
+            "npc_buy_price": buy_floor,
+            "npc_sell_price": sell_cap,
+            "spread_pct": round(((sell_cap - buy_floor) / base) * 100, 1),
         }
 
     @classmethod
     async def get_active_player_scaling_factor(cls, session: AsyncSession) -> float:
-        res = await session.execute(select(func.count(NatCompany.id)))
-        count = res.scalar() or 1
+        count = (await session.execute(
+            select(func.count(NatCompany.id)).where(NatCompany.is_bankrupt == False)
+        )).scalar() or 1
         if count <= 1:
             return nat_settings.NPC_VOLUME_SCALING_FACTORS[1]
-        elif count <= 5:
+        if count <= 5:
             return nat_settings.NPC_VOLUME_SCALING_FACTORS[5]
-        elif count <= 20:
+        if count <= 20:
             return nat_settings.NPC_VOLUME_SCALING_FACTORS[20]
-        else:
-            return nat_settings.NPC_VOLUME_SCALING_FACTORS[30]
+        return nat_settings.NPC_VOLUME_SCALING_FACTORS[30]
+
+    @classmethod
+    async def get_daily_quota(
+        cls,
+        session: AsyncSession,
+        item_id: str | None = None,
+        action: str | None = None,
+    ) -> Dict[str, float]:
+        factor = await cls.get_active_player_scaling_factor(session)
+        quota = round(float(nat_settings.NPC_BASE_DAILY_VOLUME_PER_ITEM) * factor, 2)
+        # BUY means the player purchases from the NPC.  Premium raw materials
+        # have an explicit small state reserve instead of normal NPC liquidity.
+        reserve_cap = None
+        if action == "BUY" and item_id:
+            reserve_cap = nat_settings.NPC_RARE_SELL_RESERVES.get(item_id)
+            if reserve_cap is not None:
+                quota = float(reserve_cap)
+        return {
+            "scaling_factor": factor,
+            "daily_quota_per_item": quota,
+            "strict_reserve": reserve_cap is not None,
+        }
+
+    @classmethod
+    async def _reserve_volume(
+        cls,
+        session: AsyncSession,
+        item_id: str,
+        action: str,
+        quantity: float,
+    ) -> Dict[str, float]:
+        today = get_game_today()
+        quota_info = await cls.get_daily_quota(session, item_id, action)
+        quota = quota_info["daily_quota_per_item"]
+        result = await session.execute(
+            select(NatNpcDailyVolume)
+            .where(
+                NatNpcDailyVolume.calendar_date == today,
+                NatNpcDailyVolume.item_id == item_id,
+                NatNpcDailyVolume.action == action,
+            )
+            .with_for_update()
+        )
+        usage = result.scalar_one_or_none()
+        if not usage:
+            try:
+                async with session.begin_nested():
+                    usage = NatNpcDailyVolume(
+                        calendar_date=today,
+                        item_id=item_id,
+                        action=action,
+                        used_quantity=0.0,
+                    )
+                    session.add(usage)
+                    await session.flush()
+            except IntegrityError:
+                # Another worker created the daily counter first. Re-read and lock it.
+                result = await session.execute(
+                    select(NatNpcDailyVolume)
+                    .where(
+                        NatNpcDailyVolume.calendar_date == today,
+                        NatNpcDailyVolume.item_id == item_id,
+                        NatNpcDailyVolume.action == action,
+                    )
+                    .with_for_update()
+                )
+                usage = result.scalar_one()
+        remaining = max(0.0, round(quota - usage.used_quantity, 2))
+        if quantity > remaining:
+            return {
+                "success": 0.0,
+                "quota": quota,
+                "remaining": remaining,
+                "scaling_factor": quota_info["scaling_factor"],
+                "strict_reserve": quota_info["strict_reserve"],
+            }
+        usage.used_quantity = round(usage.used_quantity + quantity, 2)
+        return {
+            "success": 1.0,
+            "quota": quota,
+            "remaining": round(quota - usage.used_quantity, 2),
+            "scaling_factor": quota_info["scaling_factor"],
+            "strict_reserve": quota_info["strict_reserve"],
+        }
+
+    @staticmethod
+    async def _daily_financials(session: AsyncSession, company_id: int) -> NatDailyFinancials:
+        today = get_game_today()
+        result = await session.execute(
+            select(NatDailyFinancials).where(
+                NatDailyFinancials.company_id == company_id,
+                NatDailyFinancials.calendar_date == today,
+            )
+        )
+        fin = result.scalar_one_or_none()
+        if not fin:
+            fin = NatDailyFinancials(
+                company_id=company_id,
+                calendar_date=today,
+                gross_revenue=0.0,
+                opex=0.0,
+                closed_profit=0.0,
+            )
+            session.add(fin)
+        return fin
 
     @classmethod
     async def execute_npc_trade(
@@ -54,35 +161,44 @@ class NPCReserveService:
         session: AsyncSession,
         company: NatCompany,
         item_id: str,
-        action: str,  # "BUY" (player buys from NPC) or "SELL" (player sells to NPC)
-        quantity: float
+        action: str,
+        quantity: float,
     ) -> Dict[str, Any]:
+        action = action.upper()
         if quantity <= 0:
             return {"success": False, "reason": "invalid_quantity"}
+        if action not in {"BUY", "SELL"}:
+            return {"success": False, "reason": "invalid_action"}
 
         quote = cls.get_npc_quote(item_id)
-        today = get_game_today()
-
-        # Find or create daily financials record
-        fin_res = await session.execute(
-            select(NatDailyFinancials).where(
-                NatDailyFinancials.company_id == company.id,
-                NatDailyFinancials.calendar_date == today
-            )
+        from backend.natbirzha.services.creator_service import CreatorService
+        effective_price = quote["npc_sell_price"] if action == "BUY" else quote["npc_buy_price"]
+        allowed, restriction_error = await CreatorService.check_market_restriction(
+            session, company.id, item_id, effective_price
         )
-        fin = fin_res.scalar_one_or_none()
-        if not fin:
-            fin = NatDailyFinancials(
-                company_id=company.id,
-                calendar_date=today,
-                gross_revenue=0.0,
-                opex=0.0,
-                closed_profit=0.0
-            )
-            session.add(fin)
+        if not allowed:
+            return {
+                "success": False,
+                "reason": "market_restricted",
+                "message": restriction_error,
+                "price": effective_price,
+            }
+        locked = (await session.execute(
+            select(NatCompany).where(NatCompany.id == company.id).with_for_update()
+        )).scalar_one_or_none()
+        if not locked:
+            return {"success": False, "reason": "company_not_found"}
+        company = locked
 
+        inv_result = await session.execute(
+            select(NatInventory)
+            .where(NatInventory.company_id == company.id, NatInventory.item_id == item_id)
+            .with_for_update()
+        )
+        inv = inv_result.scalar_one_or_none()
+
+        # Validate the business mutation before consuming scarce NPC daily quota.
         if action == "BUY":
-            # Player buys resource from NPC
             unit_price = quote["npc_sell_price"]
             total_cost = round(unit_price * quantity, 2)
             if company.cash < total_cost:
@@ -90,86 +206,91 @@ class NPCReserveService:
                     "success": False,
                     "reason": "insufficient_cash",
                     "needed": total_cost,
-                    "available": company.cash
+                    "available": company.cash,
                 }
-
-            company.cash -= total_cost
-            fin.opex += total_cost
-            fin.closed_profit = round(fin.gross_revenue - fin.opex, 2)
-
-            inv_res = await session.execute(
-                select(NatInventory).where(
-                    NatInventory.company_id == company.id,
-                    NatInventory.item_id == item_id
-                )
-            )
-            inv = inv_res.scalar_one_or_none()
-            if not inv:
-                inv = NatInventory(
-                    company_id=company.id,
-                    item_id=item_id,
-                    quantity=quantity,
-                    reserved_quantity=0.0,
-                    avg_cost_basis=unit_price
-                )
-                session.add(inv)
-            else:
-                total_qty = inv.quantity + quantity
-                if total_qty > 0:
-                    inv.avg_cost_basis = round(((inv.quantity * inv.avg_cost_basis) + total_cost) / total_qty, 2)
-                inv.quantity = total_qty
-
-            await session.flush()
-            return {
-                "success": True,
-                "action": "BUY",
-                "item_id": item_id,
-                "unit_price": unit_price,
-                "quantity": quantity,
-                "total_cost": total_cost,
-                "remaining_cash": company.cash
-            }
-
-        elif action == "SELL":
-            # Player sells resource to NPC
-            unit_price = quote["npc_buy_price"]
-            total_payout = round(unit_price * quantity, 2)
-
-            inv_res = await session.execute(
-                select(NatInventory).where(
-                    NatInventory.company_id == company.id,
-                    NatInventory.item_id == item_id
-                )
-            )
-            inv = inv_res.scalar_one_or_none()
+            existing = inv.quantity if inv else 0.0
+            cap = float(nat_settings.INVENTORY_MAX_QUANTITY_PER_ITEM)
+            if existing + quantity > cap:
+                return {
+                    "success": False,
+                    "reason": "inventory_overflow",
+                    "item_id": item_id,
+                    "capacity": cap,
+                    "current": existing,
+                    "incoming": quantity,
+                }
+        else:
             if not inv or inv.available_quantity < quantity:
-                avail = inv.available_quantity if inv else 0.0
                 return {
                     "success": False,
                     "reason": "insufficient_inventory",
                     "needed": quantity,
-                    "available": avail
+                    "available": inv.available_quantity if inv else 0.0,
                 }
+            unit_price = quote["npc_buy_price"]
+            total_payout = round(unit_price * quantity, 2)
 
-            inv.quantity -= quantity
-            company.cash += total_payout
-            fin.gross_revenue += total_payout
+        volume = await cls._reserve_volume(session, item_id, action, quantity)
+        if not volume["success"]:
+            return {
+                "success": False,
+                "reason": "npc_volume_limit",
+                "daily_quota": volume["quota"],
+                "remaining_quota": volume["remaining"],
+                "scaling_factor": volume["scaling_factor"],
+            }
+
+        fin = await cls._daily_financials(session, company.id)
+        if action == "BUY":
+            company.cash = round(company.cash - total_cost, 2)
+            fin.opex = round(fin.opex + total_cost, 2)
             fin.closed_profit = round(fin.gross_revenue - fin.opex, 2)
-
-            # XP gain for successful trade
-            xp_gain = max(1, int(quantity * 2))
-            company.xp += xp_gain
-
+            if not inv:
+                inv = NatInventory(
+                    company_id=company.id,
+                    item_id=item_id,
+                    quantity=0.0,
+                    reserved_quantity=0.0,
+                    avg_cost_basis=0.0,
+                )
+                session.add(inv)
+            previous_value = inv.quantity * inv.avg_cost_basis
+            inv.quantity = round(inv.quantity + quantity, 2)
+            inv.avg_cost_basis = round((previous_value + total_cost) / inv.quantity, 2) if inv.quantity else 0.0
             await session.flush()
             return {
                 "success": True,
-                "action": "SELL",
+                "action": action,
                 "item_id": item_id,
                 "unit_price": unit_price,
                 "quantity": quantity,
-                "total_payout": total_payout,
-                "new_cash_balance": company.cash,
-                "xp_gained": xp_gain
+                "total_cost": total_cost,
+                "remaining_cash": company.cash,
+                "remaining_npc_quota": volume["remaining"],
+                "npc_scaling_factor": volume["scaling_factor"],
+                "strict_reserve": bool(volume["strict_reserve"]),
             }
-        else:
-            return {"success": False, "reason": "invalid_action"}
+
+        inv.quantity = round(inv.quantity - quantity, 2)
+        company.cash = round(company.cash + total_payout, 2)
+        fin.gross_revenue = round(fin.gross_revenue + total_payout, 2)
+        fin.closed_profit = round(fin.gross_revenue - fin.opex, 2)
+        xp_gain = max(1, int(quantity * 2))
+        company.xp += xp_gain
+        await session.flush()
+        return {
+            "success": True,
+            "action": action,
+            "item_id": item_id,
+            "unit_price": unit_price,
+            "quantity": quantity,
+            "total_payout": total_payout,
+            "new_cash_balance": company.cash,
+            "xp_gained": xp_gain,
+            "remaining_npc_quota": volume["remaining"],
+            "npc_scaling_factor": volume["scaling_factor"],
+            "strict_reserve": bool(volume["strict_reserve"]),
+        }
+
+
+__all__ = ["NPCReserveService"]

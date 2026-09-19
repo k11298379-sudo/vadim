@@ -10,6 +10,10 @@ from backend.natbirzha.api.alliance_routes import router as alliance_router
 from backend.natbirzha.api.bankruptcy_routes import router as bankruptcy_router
 from backend.natbirzha.api.building_routes import router as building_router
 from backend.natbirzha.api.creator_routes import router as creator_router
+from backend.natbirzha.api.bond_routes import router as bond_router
+from backend.natbirzha.api.premium_routes import router as premium_router
+from backend.natbirzha.api.instrument_routes import router as instrument_router
+from backend.natbirzha.api.leaderboard_routes import router as leaderboard_router
 
 natbirzha_router = APIRouter(prefix="/natbirzha")
 
@@ -23,5 +27,9 @@ natbirzha_router.include_router(military_router)
 natbirzha_router.include_router(alliance_router)
 natbirzha_router.include_router(bankruptcy_router)
 natbirzha_router.include_router(creator_router)
+natbirzha_router.include_router(bond_router)
+natbirzha_router.include_router(premium_router)
+natbirzha_router.include_router(instrument_router)
+natbirzha_router.include_router(leaderboard_router)
 
 __all__ = ["natbirzha_router"]

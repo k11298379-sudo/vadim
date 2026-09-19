@@ -1,4 +1,4 @@
-import { NatAPI } from './api.js';
+import { NatAPI, setNavigationAbortSignal } from './api.js';
 import { store } from './state.js';
 import { renderOnboarding } from './screens/onboarding.js';
 import { renderOverview } from './screens/overview.js';
@@ -8,6 +8,8 @@ import { renderMarket } from './screens/market.js';
 import { renderStocks } from './screens/stocks.js';
 import { renderMilitary } from './screens/military.js';
 import { renderCreator } from './screens/creator.js';
+import { renderLeaderboard } from './screens/leaderboard.js';
+import { renderHelp } from './screens/help.js';
 
 // Telegram Haptic Feedback Helper
 export function triggerHaptic(type = 'light') {
@@ -75,16 +77,42 @@ export function showToast(message, type = 'info') {
   }, 3000);
 }
 
-// Render active screen
-export async function renderCurrentScreen() {
+let activeRenderPromise = null;
+let renderRequested = false;
+let navigationId = 0;
+let navigationAbortController = null;
+
+function beginNavigationScope() {
+  navigationId += 1;
+  navigationAbortController?.abort();
+  navigationAbortController = new AbortController();
+  setNavigationAbortSignal(navigationAbortController.signal);
+  return navigationId;
+}
+
+function isAbortError(error) {
+  return error?.name === 'AbortError' || error?.code === 20;
+}
+
+// Render one stable state. The public coordinator below serializes async screens
+// so a slow response cannot overwrite the tab selected by a later tap.
+async function renderScreenOnce() {
+  const renderNavigationId = navigationId;
+  const renderTab = store.currentTab;
   const container = document.getElementById('screen-container');
   if (!container) return;
+  const renderContainer = document.createElement('div');
 
   // If no company exists yet, always route to Onboarding
   if (!store.hasCompany()) {
     document.getElementById('bottom-nav')?.classList.add('hidden');
     document.getElementById('header-stats')?.classList.add('hidden');
-    renderOnboarding(container, showToast);
+    renderOnboarding(renderContainer, showToast);
+    if (renderNavigationId !== navigationId) {
+      renderRequested = true;
+      return;
+    }
+    container.replaceChildren(renderContainer);
     return;
   }
 
@@ -112,37 +140,79 @@ export async function renderCurrentScreen() {
 
   // Render selected screen
   container.innerHTML = '<div class="p-8 text-center text-xs text-slate-400">Загрузка...</div>';
-  switch (store.currentTab) {
+  switch (renderTab) {
     case 'overview':
-      renderOverview(container, showToast);
+      renderOverview(renderContainer, showToast);
       break;
     case 'production':
-      await renderProduction(container, showToast);
+      await renderProduction(renderContainer, showToast);
       break;
     case 'upgrades':
-      await renderUpgrades(container, showToast);
+      await renderUpgrades(renderContainer, showToast);
       break;
     case 'market':
-      await renderMarket(container, showToast);
+      await renderMarket(renderContainer, showToast);
       break;
     case 'stocks':
-      await renderStocks(container, showToast);
+      await renderStocks(renderContainer, showToast);
       break;
     case 'military':
-      await renderMilitary(container, showToast);
+      await renderMilitary(renderContainer, showToast);
+      break;
+    case 'leaderboard':
+      await renderLeaderboard(renderContainer, showToast);
+      break;
+    case 'help':
+      renderHelp(renderContainer, showToast);
       break;
     case 'creator':
-      await renderCreator(container, showToast);
+      await renderCreator(renderContainer, showToast);
       break;
     default:
-      renderOverview(container, showToast);
+      renderOverview(renderContainer, showToast);
   }
+  // The screen renders off-DOM. An outdated request can therefore never
+  // replace the currently selected tab after its fetches complete.
+  if (renderNavigationId !== navigationId) {
+    renderRequested = true;
+    return;
+  }
+  container.replaceChildren(renderContainer);
+}
+
+// Coalesce rapid navigation into the latest requested tab. Screen renderers keep
+// their existing local state and event handlers, while only one owns the DOM at a time.
+export async function renderCurrentScreen() {
+  renderRequested = true;
+  if (activeRenderPromise) return activeRenderPromise;
+
+  const running = (async () => {
+    while (renderRequested) {
+      renderRequested = false;
+      try {
+        await renderScreenOnce();
+      } catch (error) {
+        if (!isAbortError(error)) throw error;
+      }
+    }
+  })();
+  activeRenderPromise = running;
+
+  try {
+    await running;
+  } finally {
+    if (activeRenderPromise === running) activeRenderPromise = null;
+  }
+
+  // Defensive edge case: a request arriving during promise cleanup still wins.
+  if (renderRequested) return renderCurrentScreen();
 }
 
 // Programmatic tab navigation
 export async function navigateTo(tab) {
   if (!tab) return;
   triggerHaptic('selection');
+  beginNavigationScope();
   store.setTab(tab);
   await renderCurrentScreen();
 }
@@ -176,6 +246,21 @@ export async function initApp() {
 
   setupNavigation();
 
+  if (!tg?.initData) {
+    const container = document.getElementById('screen-container');
+    if (container) {
+      container.innerHTML = `
+        <div class="max-w-md mx-auto p-6 pt-12 text-center">
+          <div class="glass-card rounded-2xl p-6 space-y-3">
+            <div class="text-4xl">🔐</div>
+            <h2 class="text-lg font-black">Откройте НАТБИРЖУ из Telegram</h2>
+            <p class="text-xs text-slate-500">Для входа требуется подписанный Telegram Mini App initData. Вход по URL-параметру или сохранённому ID отключён.</p>
+          </div>
+        </div>`;
+    }
+    return;
+  }
+
   // Subscribe to state updates
   store.subscribe(() => {
     const company = store.company;
@@ -193,7 +278,7 @@ export async function initApp() {
 
     // Reveal Creator button for admin / state creator
     const user = authData.user;
-    if (user && (user.role === 'admin' || user.tg_id === 1053722876 || user.id === 1)) {
+    if (user?.is_creator === true) {
       const creatorBtn = document.getElementById('creator-nav-btn');
       if (creatorBtn) creatorBtn.classList.remove('hidden');
     }
@@ -222,8 +307,14 @@ export async function initApp() {
   } catch (err) {
     console.error('App init error:', err);
     showToast(err.message || 'Ошибка подключения к серверу', 'error');
+    const container = document.getElementById('screen-container');
+    if (container) {
+      container.innerHTML = `<div class="max-w-md mx-auto p-6 text-center"><div class="glass-card rounded-2xl p-6"><div class="text-3xl mb-3">🔐</div><h2 class="font-black mb-2">Откройте НАТБИРЖУ из Telegram</h2><p class="text-xs text-slate-500">Для входа нужен подписанный Telegram Mini App initData. ID из URL или браузерного хранилища не используется.</p></div></div>`;
+    }
+    return;
   }
 
+  beginNavigationScope();
   await renderCurrentScreen();
 }
 

@@ -15,6 +15,14 @@ services:
         sync: false
       - key: DATABASE_URL
         sync: false
+      - key: BASE_URL
+        sync: false
+      - key: NATBIRZHA_CREATOR_TG_IDS
+        sync: false
+      - key: NATBIRZHA_ALLOW_TEST_AUTH
+        value: "false"
+      - key: NATBIRZHA_SEASON_RESET_ENABLED
+        value: "false"
 
       - key: NOTIFICATION_TIME_EVENING
         value: "19:00"
@@ -22,5 +30,4 @@ services:
         value: Asia/Yekaterinburg
       - key: GEMINI_API_KEY
         sync: false
-
 

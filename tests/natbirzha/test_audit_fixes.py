@@ -72,20 +72,28 @@ async def test_audit_fixes():
         assert status.status_code == 200
         assert status.json()["specialization"] == "power_engineer"
 
-        # Backdate the hydro_solar factory's last_produced_at by 2 hours (120 minutes)
-        # using an offset-naive datetime (simulating raw SQLite storage)
+        # Explicitly start a real cycle first. Offline catch-up may only finish
+        # cycles that were already started; it must never invent background ticks.
+        factories_res = await client.get("/api/natbirzha/production/factories", headers=headers_1)
+        factory_id = factories_res.json()["factories"][0]["id"]
+        start_res = await client.post(
+            f"/api/natbirzha/production/factory/{factory_id}/start",
+            headers={**headers_1, "Idempotency-Key": f"offline-start-{tg_id_1}"},
+            params={"recipe_id": "generate_solar"},
+        )
+        assert start_res.status_code == 200, start_res.text
+
+        # Simulate the player being offline past ready_at.
         async with async_session_factory() as session:
-            fac_res = await session.execute(select(NatFactory).where(NatFactory.company_id == company_id))
+            fac_res = await session.execute(select(NatFactory).where(NatFactory.id == factory_id))
             factory = fac_res.scalar_one()
-            two_hours_ago = (datetime.utcnow() - timedelta(hours=2)).replace(tzinfo=None)
-            factory.last_produced_at = two_hours_ago
+            factory.cycle_ready_at = (get_game_now() - timedelta(seconds=5)).replace(tzinfo=None)
             await session.commit()
 
-        # Login again: triggers ProductionTickEngine.catch_up_company
+        # Login again: catch_up_company completes only that explicitly started cycle.
         login_again = await client.post("/api/natbirzha/auth/login", headers=headers_1)
         assert login_again.status_code == 200
 
-        # Verify that offline production was COMMITTED to the database
         async with async_session_factory() as session:
             inv_res = await session.execute(
                 select(NatInventory).where(
@@ -94,22 +102,26 @@ async def test_audit_fixes():
                 )
             )
             inv = inv_res.scalar_one_or_none()
-            assert inv is not None, "Offline production must have committed energy inventory to DB"
-            assert inv.quantity > 0, f"Energy quantity should be > 0, got {inv.quantity}"
-            comp_res = await session.execute(select(NatCompany).where(NatCompany.id == company_id))
-            comp = comp_res.scalar_one()
-            assert comp.xp > 0, f"XP should have accumulated offline, got {comp.xp}"
-            print(f"[OK] Offline catch-up properly committed: {inv.quantity} energy and {comp.xp} XP generated.")
+            assert inv is not None and inv.quantity > 0
+            fac = (await session.execute(select(NatFactory).where(NatFactory.id == factory_id))).scalar_one()
+            assert fac.current_recipe is None and fac.cycle_ready_at is None
+            print(f"[OK] Offline catch-up completed one explicitly started cycle: {inv.quantity} energy.")
 
         # [2] Dynamic is_public in /company/me after IPO
         print("\n--- [2/6] Dynamic is_public Verification on IPO ---")
+        # IPO eligibility is intentionally level-gated. This test verifies the
+        # public-status transition, so prepare an eligible company explicitly.
+        async with async_session_factory() as session:
+            company = await session.get(NatCompany, company_id)
+            company.level = nat_settings.IPO_MIN_LEVEL
+            await session.commit()
         status_pre = await client.get("/api/natbirzha/company/me", headers=headers_1)
         assert status_pre.status_code == 200
         assert status_pre.json()["is_public"] is False
 
         # Apply for IPO
         ipo_res = await client.post("/api/natbirzha/stocks/ipo/apply", headers=headers_1, json={})
-        assert ipo_res.status_code == 200
+        assert ipo_res.status_code == 200, ipo_res.text
         stock_id = ipo_res.json()["stock_id"]
 
         status_post = await client.get("/api/natbirzha/company/me", headers=headers_1)

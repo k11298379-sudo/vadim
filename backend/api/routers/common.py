@@ -12,7 +12,7 @@ from backend.db.crud import (
     get_bell_schedule, get_bell_schedule_for_date,
     get_all_subjects, get_current_duty_info, get_active_users
 )
-from backend.config import get_today
+from backend.config import get_today, settings
 
 logger = logging.getLogger(__name__)
 
@@ -22,13 +22,21 @@ router = APIRouter(tags=["common"])
 @router.get("/me")
 async def get_me(user: Optional[User] = Depends(get_optional_webapp_user)):
     if user:
+        # The bot middleware grants the configured ADMIN_ID admin access even
+        # when an old database row still has role="student".  Mirror that
+        # effective authority in the common Mini App response so the Games
+        # tab can expose the separate Natbirzha entry point.  This is only a
+        # presentation hint; Natbirzha API routes perform their own checks.
+        is_configured_admin = bool(settings.ADMIN_ID and user.tg_id == settings.ADMIN_ID)
+        effective_role = "admin" if user.role == "admin" or is_configured_admin else user.role
+        effective_tester = bool(getattr(user, "is_tester", False) or effective_role == "admin")
         return {
             "id": user.id,
             "tg_id": user.tg_id,
             "full_name": user.display_name,
             "custom_name": user.custom_name,
-            "role": user.role,
-            "is_tester": bool(getattr(user, "is_tester", False)),
+            "role": effective_role,
+            "is_tester": effective_tester,
             "canteen_reminder_enabled": bool(getattr(user, "canteen_reminder_enabled", False)),
             "currency_ecosystem_enabled": bool(getattr(user, "currency_ecosystem_enabled", False)),
             "coins": int(getattr(user, "coins", 100) or 0),

@@ -129,6 +129,70 @@ def setup_scheduler(bot: Bot):
             replace_existing=True
         )
 
+        # Natbirzha: restart-safe tournament lifecycle. The DB state, not the
+        # scheduler process, is the source of truth, so restarts cannot skip an
+        # activation or pay rewards twice.
+        async def run_natbirzha_tournament_tick():
+            try:
+                from backend.db.session import async_session_factory
+                from backend.natbirzha.config import get_game_now
+                from backend.natbirzha.services.tournament_service import TournamentService
+                async with async_session_factory() as session:
+                    result = await TournamentService.tick(session, get_game_now())
+                    await session.commit()
+                    if result["activated"] or result["resolved"]:
+                        logger.info("Natbirzha tournament tick: %s", result)
+            except Exception as ex:
+                logger.error(f"Error in natbirzha tournament tick: {ex}")
+
+        scheduler.add_job(
+            run_natbirzha_tournament_tick,
+            trigger=CronTrigger(minute="*", timezone=settings.TIMEZONE),
+            id="natbirzha_tournament_tick_job",
+            replace_existing=True
+        )
+
+        # Natbirzha: cache official CBR reference prices. A failed refresh does
+        # not overwrite the last known good snapshots; the trade service applies
+        # its own 72-hour staleness circuit breaker.
+        async def run_natbirzha_reference_rate_refresh():
+            try:
+                from backend.db.session import async_session_factory
+                from backend.natbirzha.services.reference_instrument_service import ReferenceInstrumentService
+                async with async_session_factory() as session:
+                    rows = await ReferenceInstrumentService.refresh(session)
+                    await session.commit()
+                    logger.info("Natbirzha reference rates refreshed: %s", [row.instrument_code for row in rows])
+            except Exception as ex:
+                logger.error(f"Error refreshing Natbirzha reference rates: {ex}")
+
+        scheduler.add_job(
+            run_natbirzha_reference_rate_refresh,
+            trigger=CronTrigger(minute="*/30", timezone=settings.TIMEZONE),
+            id="natbirzha_reference_rate_refresh_job",
+            replace_existing=True,
+        )
+
+        # Natbirzha: retries pending coupons and maturities without duplicate
+        # payment after restarts. Settlement rows are the durable source of truth.
+        async def run_natbirzha_bond_settlement():
+            try:
+                from backend.db.session import async_session_factory
+                from backend.natbirzha.services.state_bond_service import StateBondService
+                async with async_session_factory() as session:
+                    result = await StateBondService.settle_due(session, commit=True)
+                    if result["coupon_payments"] or result["maturity_payments"]:
+                        logger.info("Natbirzha bond settlement: %s", result)
+            except Exception as ex:
+                logger.error(f"Error settling Natbirzha bonds: {ex}")
+
+        scheduler.add_job(
+            run_natbirzha_bond_settlement,
+            trigger=CronTrigger(minute="*/5", timezone=settings.TIMEZONE),
+            id="natbirzha_bond_settlement_job",
+            replace_existing=True,
+        )
+
         # Natbirzha: ежедневная выплата дивидендов и ликвидации в 00:01
         async def run_natbirzha_daily_settlement():
             try:

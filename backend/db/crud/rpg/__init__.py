@@ -48,7 +48,6 @@ from backend.db.crud.rpg.rebirth import (
     upgrade_constellation,
     CONSTELLATIONS_CATALOG,
     REBIRTH_RANKS_CONFIG,
-    MAX_REBIRTH_RANK,
 )
 from backend.db.crud.rpg.forge_math import (
     RARITY_TIERS,
@@ -124,7 +123,7 @@ __all__ = [
     "calculate_xp_for_level", "get_unlocked_features", "get_full_progression_table",
     "calculate_base_attribute_stats", "LEVEL_CAP", "STAT_POINTS_PER_LEVEL", "PROGRESSION_MILESTONES",
     "calculate_rebirth_multiplier", "get_rebirth_rank_info", "perform_ascension",
-    "upgrade_constellation", "CONSTELLATIONS_CATALOG", "REBIRTH_RANKS_CONFIG", "MAX_REBIRTH_RANK",
+    "upgrade_constellation", "CONSTELLATIONS_CATALOG", "REBIRTH_RANKS_CONFIG",
     "RARITY_TIERS", "get_forge_upgrade_requirements", "apply_forge_upgrade_to_item", "FORGE_MAX_LEVEL",
     "BOSS_DIFFICULTIES", "DOTA_BOSS_CATALOG", "calculate_enrage_multiplier",
     "get_boss_phase_state", "calculate_boss_dynamic_damage",

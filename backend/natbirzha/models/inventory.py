@@ -8,7 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from backend.db.models import Base
 from backend.natbirzha.config import nat_settings
 
-# Canonical registry of all 33 game items (Single Source of Truth)
+# Canonical registry of all game items (Single Source of Truth)
 CANONICAL_ITEMS: Dict[str, Dict[str, Any]] = {
     # Tier 0: Utilities & Naturals
     "grid_quota": {"name": "Лимит энергосети", "category": "utility", "unit": "МВт·ч", "base_price": 5.0},
@@ -29,6 +29,8 @@ CANONICAL_ITEMS: Dict[str, Dict[str, Any]] = {
     "gas_natural": {"name": "Природный газ", "category": "raw", "unit": "тыс. м³", "base_price": 45.0},
     "rare_earths": {"name": "Редкоземельные металлы", "category": "raw", "unit": "кг", "base_price": 120.0},
     "lithium_raw": {"name": "Неочищенный литий", "category": "raw", "unit": "т", "base_price": 85.0},
+    "cobalt_raw": {"name": "Кобальтовый концентрат", "category": "rare", "unit": "кг", "base_price": 170.0},
+    "gallium_raw": {"name": "Галлиевый концентрат", "category": "rare", "unit": "кг", "base_price": 210.0},
     "uranium_raw": {"name": "Урановая руда", "category": "raw", "unit": "т", "base_price": 200.0},
 
     # Tier 2: Intermediate Processing

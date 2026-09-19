@@ -114,14 +114,6 @@ async def find_character_and_user(
             c = await get_or_create_rpg_character(session, user_id=u.id)
             return c, u
 
-        # Check by RPGCharacter.id
-        c_res = await session.execute(select(RPGCharacter).where(RPGCharacter.id == num))
-        c = c_res.scalars().first()
-        if c:
-            u_res = await session.execute(select(User).where(User.id == c.user_id))
-            u = u_res.scalars().first()
-            return c, u
-
         # Auto-create user for test slots or arbitrary IDs on the fly
         new_u = User(tg_id=num, full_name=f"Игрок #{num}", role="student")
         session.add(new_u)
@@ -129,15 +121,9 @@ async def find_character_and_user(
         c = await get_or_create_rpg_character(session, user_id=new_u.id)
         return c, new_u
 
-    # Try username or display name match
+    # Try username match
     clean_uname = str_target.lstrip("@").lower()
-    u_res = await session.execute(
-        select(User).where(
-            User.username.ilike(clean_uname)
-            | User.full_name.ilike(str_target)
-            | User.custom_name.ilike(str_target)
-        )
-    )
+    u_res = await session.execute(select(User).where(User.username.ilike(clean_uname)))
     u = u_res.scalars().first()
     if u:
         c = await get_or_create_rpg_character(session, user_id=u.id)

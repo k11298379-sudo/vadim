@@ -18,6 +18,21 @@ from backend.natbirzha.services.dividend_service import DividendService
 from backend.natbirzha.services.bankruptcy_service import BankruptcyService
 from backend.natbirzha.services.military_service import MilitaryService
 from backend.natbirzha.services.idempotency_service import IdempotencyService
+from backend.natbirzha.services.upgrade_service import UpgradeService
+from backend.natbirzha.services.state_bond_service import StateBondService
+from backend.natbirzha.services.state_treasury_service import StateTreasuryService
+from backend.natbirzha.services.combat_resolver import (
+    ArmySnapshot,
+    BattleResult,
+    PremiumModifiers,
+    resolve_battle,
+)
+from backend.natbirzha.services.premium_service import PremiumService
+from backend.natbirzha.services.army_service import ArmyService
+from backend.natbirzha.services.pve_service import PveService
+from backend.natbirzha.services.rating_service import RatingService
+from backend.natbirzha.services.tournament_service import TournamentService
+from backend.natbirzha.services.premium_upgrade_service import PremiumUpgradeService
 
 __all__ = [
     "get_strict_natbirzha_user",
@@ -37,4 +52,17 @@ __all__ = [
     "BankruptcyService",
     "MilitaryService",
     "IdempotencyService",
+    "UpgradeService",
+    "StateBondService",
+    "StateTreasuryService",
+    "ArmySnapshot",
+    "BattleResult",
+    "PremiumModifiers",
+    "resolve_battle",
+    "PremiumService",
+    "ArmyService",
+    "PveService",
+    "RatingService",
+    "TournamentService",
+    "PremiumUpgradeService",
 ]

@@ -81,7 +81,7 @@
 
   <!-- Fixed Bottom Navigation Bar -->
   <nav id="bottom-nav" class="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 px-2 py-1 hidden">
-    <div class="max-w-md mx-auto flex items-center justify-around text-center">
+    <div class="max-w-md mx-auto flex items-center justify-around overflow-x-auto text-center no-scrollbar">
       <button class="nav-tab relative py-2 px-3 text-slate-500 dark:text-slate-400 hover:text-blue-600 transition-colors flex flex-col items-center gap-0.5 active" data-tab="overview">
         <span class="text-lg">🏛️</span>
         <span class="text-[10px] font-medium">Обзор</span>
@@ -105,8 +105,13 @@
       </button>
 
       <button class="nav-tab relative py-2 px-3 text-slate-500 dark:text-slate-400 hover:text-blue-600 transition-colors flex flex-col items-center gap-0.5" data-tab="military">
-        <span class="text-lg">🛡️</span>
-        <span class="text-[10px] font-medium">Оборона</span>
+        <span class="text-lg">⚔️</span>
+        <span class="text-[10px] font-medium">Война</span>
+      </button>
+
+      <button class="nav-tab relative py-2 px-3 text-slate-500 dark:text-slate-400 hover:text-blue-600 transition-colors flex flex-col items-center gap-0.5" data-tab="leaderboard">
+        <span class="text-lg">🏆</span>
+        <span class="text-[10px] font-medium">Топ</span>
       </button>
     </div>
   </nav>
@@ -115,7 +120,7 @@
   <div id="toast-container" class="fixed bottom-16 left-4 right-4 z-50 flex flex-col gap-2 items-center"></div>
 
   <!-- Entry Script -->
-  <script type="module" src="/static/natbirzha/js/app.js?v=20260918_prod_fix"></script>
+  <script type="module" src="/static/natbirzha/js/app.js?v=20260919_p1_top"></script>
 
 </body>
 </html>

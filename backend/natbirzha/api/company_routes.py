@@ -36,7 +36,7 @@ async def create_company(
 
     try:
         company = await CompanyService.create_company(
-            session, user.id, req.name, req.specialization
+            session, user.id, req.name, req.specialization, commit=False
         )
         resp = {
             "success": True,
@@ -47,10 +47,9 @@ async def create_company(
             "cash": company.cash,
             "territory_tiles": company.territory_tiles
         }
-        await IdempotencyService.save_record(
-            session, user.id, "/api/natbirzha/company/create", idempotency_key, req.model_dump(), 200, resp
+        return await IdempotencyService.commit_response(
+            session, user.id, "/api/natbirzha/company/create", idempotency_key, req.model_dump(), resp
         )
-        return resp
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -67,8 +66,9 @@ async def get_company_status(
     inv = {row.item_id: row.quantity for row in inv_res.scalars().all()}
     from backend.natbirzha.models.company import NatFactory
     fac_res = await session.execute(select(NatFactory).where(NatFactory.company_id == company.id))
-    from backend.natbirzha.services.recipes import RECIPES
-    recipe_for_type = {r["factory_type"]: r_id for r_id, r in RECIPES.items()}
+    factory_rows = fac_res.scalars().all()
+    from backend.natbirzha.services.building_catalog import get_building_spec
+    from backend.natbirzha.services.building_service import BuildingService
     from backend.natbirzha.config import get_game_tz
     def _format_dt_iso(dt):
         if not dt:
@@ -80,7 +80,7 @@ async def get_company_status(
     from backend.natbirzha.config import normalize_dt, get_game_now
     now = normalize_dt(get_game_now())
     factories = []
-    for f in fac_res.scalars().all():
+    for f in factory_rows:
         ready_at_norm = normalize_dt(f.cycle_ready_at)
         is_running = bool(f.cycle_ready_at)
         is_ready = bool(is_running and now >= ready_at_norm)
@@ -98,7 +98,9 @@ async def get_company_status(
             "workers": f.workers,
             "automation_level": f.automation_level,
             "technology_level": f.technology_level,
-            "current_recipe": f.current_recipe or recipe_for_type.get(f.building_type, "default"),
+            "current_recipe": f.current_recipe,
+            "default_recipe": (get_building_spec(f.building_type) or {}).get("recipe_id"),
+            "upgrade_options": BuildingService.describe_upgrades(f, company),
             "cycle_started_at": _format_dt_iso(f.cycle_started_at),
             "cycle_ready_at": _format_dt_iso(f.cycle_ready_at),
             "last_produced_at": _format_dt_iso(f.last_produced_at),
@@ -119,10 +121,14 @@ async def get_company_status(
         "specialization": company.specialization,
         "level": company.level,
         "xp": company.xp,
+        "next_level_xp": company.level * 150 if company.level < 10 else company.xp,
+        "xp_to_next": max(0, company.level * 150 - company.xp) if company.level < 10 else 0,
         "cash": company.cash,
         "nat_balance": company.nat_balance,
         "territory_tiles": company.territory_tiles,
         "max_territory": company.max_territory,
+        "factory_slots": BuildingService.slot_limits(company, len(factory_rows)),
+        "factory_count": len(factory_rows),
         "audited_nav": nav,
         "nav": nav,
         "is_bankrupt": company.is_bankrupt,
@@ -144,6 +150,10 @@ async def expand_territory(
     if cached:
         return cached[1]
 
+    locked = (await session.execute(
+        select(NatCompany).where(NatCompany.id == company.id).with_for_update()
+    )).scalar_one_or_none()
+    company = locked or company
     if company.territory_tiles >= company.max_territory:
         raise HTTPException(status_code=400, detail="Maximum territory limit reached.")
 
@@ -152,15 +162,12 @@ async def expand_territory(
     if company.cash < cost:
         raise HTTPException(status_code=400, detail=f"Insufficient cash. Needed: {cost}, Available: {company.cash}")
 
-    company.cash -= cost
+    company.cash = round(company.cash - cost, 2)
     company.territory_tiles += 1
-    await session.commit()
-
     resp = {"success": True, "new_tiles": company.territory_tiles, "cost_paid": cost, "remaining_cash": company.cash}
-    await IdempotencyService.save_record(
-        session, company.user_id, "/api/natbirzha/company/territory/expand", idempotency_key, {}, 200, resp
+    return await IdempotencyService.commit_response(
+        session, company.user_id, "/api/natbirzha/company/territory/expand", idempotency_key, {}, resp
     )
-    return resp
 
 
 @router.post("/respec")
@@ -177,11 +184,10 @@ async def respec_specialization(
         return cached[1]
 
     try:
-        res = await CompanyService.change_specialization(session, company, req.new_specialization)
-        await IdempotencyService.save_record(
-            session, company.user_id, "/api/natbirzha/company/respec", idempotency_key, req.model_dump(), 200, res
+        res = await CompanyService.change_specialization(session, company, req.new_specialization, commit=False)
+        return await IdempotencyService.commit_response(
+            session, company.user_id, "/api/natbirzha/company/respec", idempotency_key, req.model_dump(), res
         )
-        return res
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -203,26 +209,29 @@ async def buy_foreign_license_route(
         return cached[1]
 
     try:
-        res = await CompanyService.buy_foreign_license(session, company, req.target_specialization)
-        await IdempotencyService.save_record(
-            session, company.user_id, "/api/natbirzha/company/license/buy", idempotency_key, req.model_dump(), 200, res
+        res = await CompanyService.buy_foreign_license(session, company, req.target_specialization, commit=False)
+        return await IdempotencyService.commit_response(
+            session, company.user_id, "/api/natbirzha/company/license/buy", idempotency_key, req.model_dump(), res
         )
-        return res
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/reset")
 async def reset_company_route(
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
     user: User = Depends(get_strict_natbirzha_user),
     session: AsyncSession = Depends(get_db_session)
 ):
-    """Completely resets company and assets so the player can restart onboarding."""
-    ok = await CompanyService.reset_company_for_user(session, user.id)
-    return {
+    """Completely reset the authenticated player's company and assets."""
+    endpoint = "/api/natbirzha/company/reset"
+    cached = await IdempotencyService.check_or_conflict(session, user.id, endpoint, idempotency_key, {})
+    if cached:
+        return cached[1]
+    ok = await CompanyService.reset_company_for_user(session, user.id, commit=False)
+    resp = {
         "success": True,
         "reset": ok,
         "message": "Company successfully reset. You can now choose a new specialization."
     }
-
-
+    return await IdempotencyService.commit_response(session, user.id, endpoint, idempotency_key, {}, resp)

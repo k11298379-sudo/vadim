@@ -30,9 +30,10 @@ def validate_strict_telegram_init_data(init_data: str, bot_token: str) -> Option
         received_hash = parsed.pop("hash")
         parsed.pop("signature", None)  # Remove signature from Telegram 7.0+
 
-        # Check auth_date for replay attack prevention (max 24h old)
+        # Check auth_date for replay attack prevention (max 24h old; reject future timestamps too).
         auth_date = int(parsed.get("auth_date", 0))
-        if auth_date > 0 and (time.time() - auth_date) > 86400:
+        now_ts = int(time.time())
+        if auth_date <= 0 or auth_date > now_ts + 300 or (now_ts - auth_date) > 86400:
             return None
 
         # Build data check string
@@ -51,26 +52,10 @@ def validate_strict_telegram_init_data(init_data: str, bot_token: str) -> Option
         return None
 
 def validate_test_init_data(init_data: str) -> Optional[Dict[str, Any]]:
-    """Allows testing when ALLOW_TEST_AUTH is enabled using strict HMAC with TEST_AUTH_SECRET or browser dev payload."""
-    if not nat_settings.ALLOW_TEST_AUTH or not init_data:
+    """Validate only cryptographically signed test initData when explicitly enabled."""
+    if not nat_settings.ALLOW_TEST_AUTH or not init_data or not nat_settings.TEST_AUTH_SECRET:
         return None
-
-    # Strict HMAC validation against TEST_AUTH_SECRET (cryptographically signed)
-    res = validate_strict_telegram_init_data(init_data, nat_settings.TEST_AUTH_SECRET)
-    if res:
-        return res
-
-    # Support browser dev / local testing payload: user={"id": ...}
-    try:
-        parsed = dict(urllib.parse.parse_qsl(init_data, keep_blank_values=True))
-        if "user" in parsed:
-            u_data = json.loads(parsed["user"])
-            if isinstance(u_data, dict) and u_data.get("id"):
-                return {"user": u_data, "auth_date": int(time.time())}
-    except Exception:
-        pass
-
-    return None
+    return validate_strict_telegram_init_data(init_data, nat_settings.TEST_AUTH_SECRET)
 
 
 async def get_strict_natbirzha_user(
@@ -89,11 +74,13 @@ async def get_strict_natbirzha_user(
         )
 
     validated = None
+    used_test_auth = False
     if settings.BOT_TOKEN and ":" in settings.BOT_TOKEN:
         validated = validate_strict_telegram_init_data(x_telegram_init_data, settings.BOT_TOKEN)
 
     if not validated and nat_settings.ALLOW_TEST_AUTH:
         validated = validate_test_init_data(x_telegram_init_data)
+        used_test_auth = validated is not None
 
     if not validated or "user" not in validated or not validated["user"].get("id"):
         raise HTTPException(
@@ -130,7 +117,7 @@ async def get_strict_natbirzha_user(
             getattr(user, "is_tester", False)
             or user.role == "admin"
             or (settings.ADMIN_ID and user.tg_id == settings.ADMIN_ID)
-            or nat_settings.ALLOW_TEST_AUTH
+            or used_test_auth
         )
         if not is_tester:
             raise HTTPException(
@@ -152,14 +139,6 @@ async def get_current_company(
         )
     )
     company = res.scalar_one_or_none()
-    if not company and (user.tg_id == settings.ADMIN_ID or user.role == "admin"):
-        from backend.natbirzha.services.company_service import CompanyService
-        try:
-            company = await CompanyService.create_company(
-                session, user.id, "НАТБИРЖА 11 «Б»", "metallurgist"
-            )
-        except Exception:
-            pass
     if not company:
         raise HTTPException(
             status_code=404,

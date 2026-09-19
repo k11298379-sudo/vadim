@@ -9,15 +9,13 @@ function renderTalentsTab() {
   if (!p) return `<div class="p-4 text-center text-white/50">Загрузка...</div>`;
 
   const rebirths = (p.rebirth_info && p.rebirth_info.rank) || p.rebirths || 0;
-  const maxRank = (p.rebirth_info && p.rebirth_info.max_rank) || 40;
-  const isMaxRank = rebirths >= maxRank;
   const rebirthMult = (p.rebirth_info && p.rebirth_info.multiplier) || 1.0;
   const essence = (p.rebirth_info && p.rebirth_info.essence) || p.rebirth_essence || 0;
   const charLvl = p.level || 1;
   const talentPts = p.talent_points || 0;
 
   const reqLvl = (p.rebirth_info && p.rebirth_info.next_min_level) || (rebirths === 0 ? 30 : (rebirths === 1 ? 40 : (rebirths === 2 ? 45 : 50)));
-  const canAscend = !isMaxRank && charLvl >= reqLvl;
+  const canAscend = charLvl >= reqLvl && rebirths < 25;
 
   let html = `<div class="p-3 bg-slate-900 min-h-screen text-slate-200 space-y-4">`;
 
@@ -34,19 +32,13 @@ function renderTalentsTab() {
             Множитель: <span class="text-white">x${rebirthMult.toFixed(2)}</span> | ✨ Эссенция: <span class="text-white">${essence}</span>
           </div>
           <div class="text-[10.5px] text-slate-400 mt-0.5">
-            ${isMaxRank
-              ? `<span class="text-amber-400 font-extrabold">👑 Достигнут абсолютный предел Вознесения (Ранг ${maxRank})!</span>`
-              : `Требуется: <span class="${canAscend ? 'text-emerald-400 font-bold' : 'text-amber-300 font-bold'}">${reqLvl} ур. героя</span> (текущий: ${charLvl})`
-            }
+            Требуется: <span class="${canAscend ? 'text-emerald-400 font-bold' : 'text-amber-300 font-bold'}">${reqLvl} ур. героя</span> (текущий: ${charLvl})
           </div>
         </div>
         <div class="shrink-0">
-          ${isMaxRank
-            ? `<button disabled class="px-3 py-2 bg-slate-800/90 rounded-2xl font-bold text-[10px] text-amber-400 border border-amber-500/40 cursor-not-allowed">МАКС. РАНГ (${maxRank})</button>`
-            : (canAscend
-                ? `<button onclick="doRebirthUI()" class="px-3.5 py-2.5 bg-gradient-to-r from-purple-500 via-indigo-500 to-purple-600 rounded-2xl font-black text-xs text-white shadow-lg shadow-purple-500/40 active:scale-95 animate-pulse">ВОЗНЕСЕНИЕ 🌟</button>`
-                : `<button disabled class="px-3 py-2 bg-slate-800/90 rounded-2xl font-bold text-[10px] text-slate-500 border border-slate-700/80 cursor-not-allowed">С ${reqLvl} ур.</button>`
-              )
+          ${canAscend
+            ? `<button onclick="doRebirthUI()" class="px-3.5 py-2.5 bg-gradient-to-r from-purple-500 via-indigo-500 to-purple-600 rounded-2xl font-black text-xs text-white shadow-lg shadow-purple-500/40 active:scale-95 animate-pulse">ВОЗНЕСЕНИЕ 🌟</button>`
+            : `<button disabled class="px-3 py-2 bg-slate-800/90 rounded-2xl font-bold text-[10px] text-slate-500 border border-slate-700/80 cursor-not-allowed">С ${reqLvl} ур.</button>`
           }
         </div>
       </div>

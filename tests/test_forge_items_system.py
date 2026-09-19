@@ -54,38 +54,38 @@ async def run_forge_items_suite():
     assert req1["gold_cost"] == 350
     assert req1["gems_cost"] == 0
 
-    # +4: 98%, 3200 gold, 2 gems
+    # +4: 95% (+10% buff), 3200 gold, 2 gems
     req4 = get_forge_upgrade_requirements(3)
     assert req4["target_level"] == 4
-    assert req4["success_rate"] == 0.98
+    assert req4["success_rate"] == 0.95
     assert req4["gold_cost"] == 4 * 800
     assert req4["gems_cost"] == 2
 
-    # +8: 90%, 16000 gold, 6 gems
+    # +8: 75% (+10% buff), 16000 gold, 6 gems
     req8 = get_forge_upgrade_requirements(7)
     assert req8["target_level"] == 8
-    assert req8["success_rate"] == 0.90
+    assert req8["success_rate"] == 0.75
     assert req8["gold_cost"] == 8 * 2000
     assert req8["gems_cost"] == 6
 
-    # +11: 75%, 60500 gold, 15 gems
+    # +11: 55% (+10% buff), 60500 gold, 15 gems
     req11 = get_forge_upgrade_requirements(10)
     assert req11["target_level"] == 11
-    assert req11["success_rate"] == 0.75
+    assert req11["success_rate"] == 0.55
     assert req11["gold_cost"] == 11 * 5500
     assert req11["gems_cost"] == 15
 
-    # +15: 60%, 225000 gold, 45 gems
+    # +15: 35% (+10% buff), 225000 gold, 45 gems
     req15 = get_forge_upgrade_requirements(14)
     assert req15["target_level"] == 15
-    assert req15["success_rate"] == 0.60
+    assert req15["success_rate"] == 0.35
     assert req15["gold_cost"] == 15 * 15000
     assert req15["gems_cost"] == 45
 
-    # +50: 50% success, level up to 100
+    # +50: 30% success, level up to 100
     req50 = get_forge_upgrade_requirements(49)
     assert req50["target_level"] == 50
-    assert req50["success_rate"] == 0.50
+    assert req50["success_rate"] == 0.30
     assert req50["is_max"] is False
 
     # Max level check (+100)

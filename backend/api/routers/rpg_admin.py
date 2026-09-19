@@ -105,8 +105,7 @@ async def get_admin_items_catalog_endpoint():
 
 def _build_admin_profile(char, target_user):
     u_name = target_user.display_name if target_user else "Герой"
-    t_id = target_user.tg_id if target_user else getattr(char, "_tg_id", None)
-    prof = serialize_character_profile(char, user_name=u_name, tg_id=t_id)
+    prof = serialize_character_profile(char, user_name=u_name)
     if target_user:
         prof["tg_id"] = target_user.tg_id
         prof["user_id"] = target_user.id

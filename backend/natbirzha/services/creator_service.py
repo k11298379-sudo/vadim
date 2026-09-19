@@ -1,11 +1,14 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
-from backend.natbirzha.config import get_game_now, nat_settings
+from sqlalchemy import select, func, or_
+from backend.db.models import User
+from backend.natbirzha.config import get_game_now
 from backend.natbirzha.models.company import NatCompany, NatFactory
 from backend.natbirzha.models.market import NatMarketOrder
+from backend.natbirzha.models.inventory import CANONICAL_ITEMS
 from backend.natbirzha.models.military import NatTournament
+from backend.natbirzha.models.premium import NatPremiumLedgerEntry
 from backend.natbirzha.models.creator import (
     NatStateTreasury,
     NatCreatorAuditLog,
@@ -14,18 +17,16 @@ from backend.natbirzha.models.creator import (
     NatStateBond
 )
 from backend.natbirzha.services.military_service import MilitaryService
+from backend.natbirzha.services.tournament_service import TournamentService
+from backend.natbirzha.services.state_bond_service import StateBondService
+from backend.natbirzha.services.state_treasury_service import StateTreasuryService
 
 class CreatorService:
     @staticmethod
-    async def get_or_create_treasury(session: AsyncSession) -> NatStateTreasury:
-        res = await session.execute(select(NatStateTreasury).limit(1))
-        treasury = res.scalar_one_or_none()
-        if not treasury:
-            treasury = NatStateTreasury(cash=10000000.0, updated_at=get_game_now())
-            session.add(treasury)
-            await session.commit()
-            await session.refresh(treasury)
-        return treasury
+    async def get_or_create_treasury(
+        session: AsyncSession, commit: bool = True
+    ) -> NatStateTreasury:
+        return await StateTreasuryService.get_or_create(session, commit=commit)
 
     @classmethod
     async def get_overview(cls, session: AsyncSession) -> Dict[str, Any]:
@@ -84,7 +85,9 @@ class CreatorService:
             {
                 "id": r.id, "company_id": r.company_id, "item_id": r.item_id,
                 "min_price": r.min_price, "max_price": r.max_price,
-                "reason": r.reason, "created_at": r.created_at.isoformat()
+                "reason": r.reason, "actor_id": r.actor_id, "is_active": r.is_active,
+                "expires_at": r.expires_at.isoformat() if r.expires_at else None,
+                "created_at": r.created_at.isoformat()
             }
             for r in restr_res.scalars().all()
         ]
@@ -100,7 +103,9 @@ class CreatorService:
         return {"orders": orders, "restrictions": restrictions, "warnings": warnings}
 
     @staticmethod
-    async def add_warning(session: AsyncSession, actor_id: int, company_id: int, reason: str) -> Dict[str, Any]:
+    async def add_warning(
+        session: AsyncSession, actor_id: int, company_id: int, reason: str, commit: bool = True
+    ) -> Dict[str, Any]:
         comp = await session.get(NatCompany, company_id)
         if not comp:
             raise ValueError("Company not found.")
@@ -113,7 +118,10 @@ class CreatorService:
             target_id=str(company_id), details=f"Причина: {reason}", created_at=now
         )
         session.add(log)
-        await session.commit()
+        if commit:
+            await session.commit()
+        else:
+            await session.flush()
         return {"success": True, "warning_id": warning.id, "company_id": company_id}
 
     @staticmethod
@@ -125,8 +133,22 @@ class CreatorService:
         min_price: Optional[float],
         max_price: Optional[float],
         reason: str,
-        duration_minutes: Optional[int] = None
+        duration_minutes: Optional[int] = None,
+        commit: bool = True,
     ) -> Dict[str, Any]:
+        if company_id is not None and not await session.get(NatCompany, company_id):
+            raise ValueError("Company not found.")
+        if item_id is not None and item_id not in CANONICAL_ITEMS:
+            raise ValueError(f"Unknown item: {item_id}")
+        if min_price is not None and min_price < 0:
+            raise ValueError("Minimum price cannot be negative.")
+        if max_price is not None and max_price < 0:
+            raise ValueError("Maximum price cannot be negative.")
+        if min_price is not None and max_price is not None and min_price > max_price:
+            raise ValueError("Minimum price cannot exceed maximum price.")
+        if duration_minutes is not None and duration_minutes <= 0:
+            raise ValueError("Restriction duration must be positive.")
+
         now = get_game_now()
         expires_at = (now + timedelta(minutes=duration_minutes)) if duration_minutes else None
 
@@ -150,15 +172,20 @@ class CreatorService:
             created_at=now
         )
         session.add(log)
-        await session.commit()
-        await session.refresh(restr)
+        if commit:
+            await session.commit()
+            await session.refresh(restr)
+        else:
+            await session.flush()
         return {
             "success": True, "restriction_id": restr.id, "min_price": min_price,
             "max_price": max_price, "expires_at": expires_at.isoformat() if expires_at else None
         }
 
     @staticmethod
-    async def remove_restriction(session: AsyncSession, actor_id: int, restriction_id: int) -> Dict[str, Any]:
+    async def remove_restriction(
+        session: AsyncSession, actor_id: int, restriction_id: int, commit: bool = True
+    ) -> Dict[str, Any]:
         restr = await session.get(NatMarketRestriction, restriction_id)
         if not restr or not restr.is_active:
             raise ValueError("Active restriction not found.")
@@ -169,7 +196,10 @@ class CreatorService:
             target_id=str(restriction_id), details=f"Снято ограничение {restr.reason}", created_at=get_game_now()
         )
         session.add(log)
-        await session.commit()
+        if commit:
+            await session.commit()
+        else:
+            await session.flush()
         return {"success": True, "removed_id": restriction_id}
 
     @staticmethod
@@ -195,83 +225,78 @@ class CreatorService:
     @classmethod
     async def issue_bonds(
         cls, session: AsyncSession, actor_id: int, title: str, volume: int,
-        face_value: float, coupon_rate: float, maturity_days: int, purpose: str
+        face_value: float, coupon_rate: float, maturity_days: int, purpose: str,
+        coupon_interval_days: int | None = None,
+        commit: bool = True,
     ) -> Dict[str, Any]:
-        if volume <= 0 or face_value <= 0 or maturity_days <= 0:
-            raise ValueError("Volume, face value, and maturity must be positive.")
-
-        treasury = await cls.get_or_create_treasury(session)
-        now = get_game_now()
-        bond = NatStateBond(
-            title=title, total_volume=volume, remaining_volume=volume,
-            face_value=face_value, coupon_rate=coupon_rate, maturity_days=maturity_days,
-            purpose=purpose, actor_id=actor_id, is_active=True, created_at=now
+        return await StateBondService.issue(
+            session, actor_id, title, volume, face_value, coupon_rate,
+            maturity_days, purpose, commit=commit,
+            coupon_interval_days=coupon_interval_days,
         )
-        session.add(bond)
 
-        # Treasury receives funds from the bond placement
-        raised_funds = round(volume * face_value, 2)
-        treasury.cash += raised_funds
-        treasury.updated_at = now
-
-        log = NatCreatorAuditLog(
-            actor_id=actor_id, action="BOND_ISSUANCE", target_type="bond",
-            target_id=title, details=f"Выпуск {volume} шт. на сумму {raised_funds} ₽. Цель: {purpose}",
-            created_at=now
+    @classmethod
+    async def buy_state_bonds(
+        cls, session: AsyncSession, company: NatCompany, bond_id: int,
+        quantity: int, commit: bool = True,
+    ) -> Dict[str, Any]:
+        return await StateBondService.buy(
+            session, company, bond_id, quantity, commit=commit
         )
-        session.add(log)
-        await session.commit()
-        await session.refresh(bond)
-        return {
-            "success": True, "bond_id": bond.id, "title": bond.title,
-            "raised_funds": raised_funds, "treasury_cash": treasury.cash
-        }
+
+    @staticmethod
+    async def get_company_bond_holdings(
+        session: AsyncSession, company_id: int
+    ) -> List[Dict[str, Any]]:
+        return await StateBondService.holdings(session, company_id)
 
     @staticmethod
     async def get_bonds(session: AsyncSession) -> List[Dict[str, Any]]:
-        res = await session.execute(select(NatStateBond).order_by(NatStateBond.created_at.desc()))
-        return [
-            {
-                "id": b.id, "title": b.title, "total_volume": b.total_volume,
-                "remaining_volume": b.remaining_volume, "face_value": b.face_value,
-                "coupon_rate": b.coupon_rate, "maturity_days": b.maturity_days,
-                "purpose": b.purpose, "is_active": b.is_active, "created_at": b.created_at.isoformat()
-            }
-            for b in res.scalars().all()
-        ]
+        return await StateBondService.list_bonds(session)
 
     @staticmethod
-    async def launch_early_tournament(session: AsyncSession, actor_id: int) -> Dict[str, Any]:
+    async def launch_early_tournament(
+        session: AsyncSession,
+        actor_id: int,
+        rewards: tuple[int, int, int] = (150, 100, 70),
+        commit: bool = True,
+    ) -> Dict[str, Any]:
         now = get_game_now()
-        curr_res = await session.execute(
-            select(NatTournament).where(NatTournament.status == "PENDING").order_by(NatTournament.id.desc()).limit(1)
+        current = await session.scalar(
+            select(NatTournament)
+            .where(NatTournament.status == "ACTIVE")
+            .order_by(NatTournament.id.desc())
+            .limit(1)
         )
-        curr = curr_res.scalar_one_or_none()
-        if curr:
-            res = await MilitaryService.resolve_tournament(session, curr.id)
-            log_detail = f"Досрочно завершён турнир #{curr.tournament_number}"
-        else:
-            latest_num_res = await session.execute(select(func.max(NatTournament.tournament_number)))
-            next_num = (latest_num_res.scalar() or 0) + 1
-            new_tourn = NatTournament(
-                tournament_number=next_num,
-                start_time=now,
-                snapshot_time=now + timedelta(hours=72),
-                finish_time=now + timedelta(hours=72),
-                status="PENDING",
-                prize_pool_nat=100
-            )
-            session.add(new_tourn)
-            await session.commit()
-            res = {"status": "created", "tournament_id": new_tourn.id, "tournament_number": next_num}
-            log_detail = f"Запущен новый турнир #{next_num}"
+        if current is not None:
+            raise ValueError("An active tournament already exists")
+        new_tourn = await TournamentService.create_custom(
+            session,
+            now=now,
+            created_by_user_id=actor_id,
+            rewards=rewards,
+        )
+        res = {
+            "status": "created",
+            "tournament_id": new_tourn.id,
+            "tournament_number": new_tourn.tournament_number,
+            "finish_time": new_tourn.finish_time.isoformat(),
+            "rewards_pvc": list(rewards),
+        }
+        log_detail = (
+            f"Запущен пользовательский турнир #{new_tourn.tournament_number}; "
+            f"награды {rewards[0]}/{rewards[1]}/{rewards[2]} PVC"
+        )
 
         log = NatCreatorAuditLog(
             actor_id=actor_id, action="EARLY_TOURNAMENT_LAUNCH", target_type="tournament",
             target_id=str(res.get("tournament_id", "")), details=log_detail, created_at=now
         )
         session.add(log)
-        await session.commit()
+        if commit:
+            await session.commit()
+        else:
+            await session.flush()
         return {"success": True, "result": res}
 
     @staticmethod
@@ -286,4 +311,46 @@ class CreatorService:
                 "details": l.details, "created_at": l.created_at.isoformat()
             }
             for l in res.scalars().all()
+        ]
+
+    @staticmethod
+    async def get_premium_ledger(
+        session: AsyncSession,
+        *,
+        limit: int = 100,
+        company_id: int | None = None,
+    ) -> List[Dict[str, Any]]:
+        """Creator-only transparent PVC journal; wallet mutations remain server-side."""
+        query = (
+            select(NatPremiumLedgerEntry, NatCompany, User)
+            .join(NatCompany, NatCompany.id == NatPremiumLedgerEntry.company_id)
+            .outerjoin(User, User.id == NatCompany.user_id)
+            .order_by(NatPremiumLedgerEntry.id.desc())
+            .limit(limit)
+        )
+        if company_id is not None:
+            query = query.where(NatPremiumLedgerEntry.company_id == company_id)
+        rows = (await session.execute(query)).all()
+        reasons = {
+            "tournament_reward": "Награда за турнир",
+            "license_purchase": "Покупка или продление лицензии",
+            "payment_confirmed": "Подтверждённый платёж",
+        }
+        return [
+            {
+                "id": entry.id,
+                "company_id": company.id,
+                "company_name": company.name,
+                "telegram_name": user.display_name if user else None,
+                "telegram_username": user.username if user else None,
+                "amount": entry.amount,
+                "balance_before": entry.balance_before,
+                "balance_after": entry.balance_after,
+                "operation_type": entry.operation_type,
+                "reason": reasons.get(entry.operation_type, entry.operation_type.replace("_", " ")),
+                "metadata": entry.metadata_json,
+                "actor_user_id": entry.actor_user_id,
+                "created_at": entry.created_at.isoformat(),
+            }
+            for entry, company, user in rows
         ]

@@ -81,8 +81,8 @@ PART1_BUILDINGS: Dict[str, Dict[str, Any]] = {
         'category': 'extraction', 'level_required': 3, 'build_cost': 90000.0,
         'workers_required': 45, 'energy_required': 5, 'cycle_duration': 150,
         'description': 'Глубокая добыча неочищенного лития',
-        'inputs': {'grid_quota': 2.0, 'water': 2.0}, 'outputs': {'lithium_raw': 2.0},
-        'recipe_id': 'mine_lithium'
+        'inputs': {'grid_quota': 2.0, 'water': 2.0}, 'outputs': {'lithium_raw': 2.0, 'cobalt_raw': 0.35},
+        'recipe_id': 'mine_lithium', 'required_license': 'rare_mining'
     },
     'uranium_mine': {
         'id': 'uranium_mine', 'name': '☢️ Урановый рудник', 'specialization': 'miner',
@@ -97,8 +97,8 @@ PART1_BUILDINGS: Dict[str, Dict[str, Any]] = {
         'category': 'hightech', 'level_required': 4, 'build_cost': 180000.0,
         'workers_required': 60, 'energy_required': 7, 'cycle_duration': 180,
         'description': 'Добыча редкоземельных металлов',
-        'inputs': {'grid_quota': 2.0, 'water': 2.0}, 'outputs': {'rare_earths': 1.5},
-        'recipe_id': 'mine_rare_earths'
+        'inputs': {'grid_quota': 2.0, 'water': 2.0}, 'outputs': {'rare_earths': 1.5, 'gallium_raw': 0.25},
+        'recipe_id': 'mine_rare_earths', 'required_license': 'rare_mining'
     },
 
     # ---------------- 3. МЕТАЛЛУРГ (metallurgist) ----------------

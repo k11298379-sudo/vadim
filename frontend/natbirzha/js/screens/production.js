@@ -1,194 +1,206 @@
 import { NatAPI } from '../api.js';
 import { store } from '../state.js';
 import { getItemInfo } from '../items.js';
+import { buildFactoryPages } from '../factory_map.js';
 import { openCatalogModal } from './catalog.js';
 
-// Canonical recipes: food_processing, mine_rare_lithium
-
 let cachedRecipes = null;
+let selectedPage = 1;
+let cycleInterval = null;
 
 async function getOrFetchRecipes() {
   if (cachedRecipes && Object.keys(cachedRecipes).length > 0) return cachedRecipes;
   try {
-    const res = await NatAPI.getRecipes();
-    if (res?.recipes) cachedRecipes = res.recipes;
-  } catch (_) {}
+    const response = await NatAPI.getRecipes();
+    if (response?.recipes) cachedRecipes = response.recipes;
+  } catch (_) { /* the map still renders from the factory status */ }
   return cachedRecipes || {};
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[char]));
 }
 
 function parseDateMs(dateStr) {
   if (!dateStr) return 0;
   const normalized = typeof dateStr === 'string' ? dateStr.replace(' ', 'T') : dateStr;
   const time = new Date(normalized).getTime();
-  return isNaN(time) ? 0 : time;
+  return Number.isNaN(time) ? 0 : time;
 }
 
-export async function renderProduction(container, showToast) {
-  let factories = (store.factories && store.factories.length > 0) ? store.factories : [];
-  
-  // Parallel fetch: fresh factories + cached recipes
-  const [data, recipes] = await Promise.all([
-    NatAPI.getProductionStatus().catch(() => null),
-    getOrFetchRecipes()
-  ]);
+function factoryType(factory) {
+  return factory?.building_type || factory?.factory_type || '';
+}
 
-  if (data?.factories && Array.isArray(data.factories)) {
-    factories = data.factories;
-    store.updateCompany({ factories: data.factories });
+function recipeFor(factory, recipes) {
+  const f = factory;
+  const bType = f.building_type || f.factory_type;
+  const choices = Object.entries(recipes).filter(([, r]) => r.factory_type === bType);
+  const currentRecipe = f.current_recipe;
+  const selected = currentRecipe || f.default_recipe || choices[0]?.[0];
+  return { id: selected, recipe: selected ? recipes[selected] : null, choices };
+}
+
+function recipeSummary(recipe) {
+  if (!recipe) return 'Рецепт появится после загрузки каталога';
+  const input = Object.entries(recipe.inputs || {}).map(([id, amount]) => {
+    const item = getItemInfo(id);
+    return `${amount} ${item.unit} ${item.name}`;
+  }).join(', ') || 'без затрат';
+  const output = Object.entries(recipe.outputs || {}).map(([id, amount]) => {
+    const item = getItemInfo(id);
+    return `+${amount} ${item.unit} ${item.name}`;
+  }).join(', ') || '—';
+  return `📥 ${input} → 📤 ${output}`;
+}
+
+function cycleState(factory) {
+  const running = Boolean(factory?.cycle_ready_at || factory?.is_running);
+  const remaining = typeof factory?.remaining_seconds === 'number'
+    ? Math.max(0, factory.remaining_seconds)
+    : (factory?.cycle_ready_at ? Math.max(0, Math.ceil((parseDateMs(factory.cycle_ready_at) - Date.now()) / 1000)) : 0);
+  const ready = running && (Boolean(factory?.is_ready) || remaining <= 0);
+  return { running, ready, remaining };
+}
+
+function nextStep(action) {
+  return {
+    open_market: 'market', upgrade_workers: 'upgrades', open_premium: 'military',
+    gain_xp: 'help', check_recipe: 'help', contact_creator: 'help'
+  }[action] || null;
+}
+
+function factorySlot(factory, recipes) {
+  if (!factory) {
+    return `<button class="factory-slot factory-slot-empty factory-build-btn" type="button" aria-label="Построить завод">
+      <span class="text-3xl leading-none">＋</span><span class="text-[10px] font-bold">Построить завод</span>
+    </button>`;
   }
 
-  container.innerHTML = `<div class="space-y-4 max-w-md mx-auto p-4 pb-24">
-    <div class="flex justify-between items-center">
-      <div>
-        <h2 class="text-xl font-black">Заводы</h2>
-        <p class="text-xs text-slate-500">Производственные комплексы вашей компании</p>
-      </div>
-      <div class="flex gap-2">
-        <button id="go-upgrades" class="px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-100 text-xs font-bold">⚡ Прокачка</button>
-        <button id="build" class="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold shadow-lg shadow-blue-600/30">➕ Каталог (48)</button>
-      </div>
-    </div>
-    <div class="space-y-3">${factories.map(f => card(f, recipes)).join('') || empty()}</div>
-  </div>`;
+  const { running, ready, remaining } = cycleState(factory);
+  const selected = recipeFor(factory, recipes);
+  const hint = factory.start_hint || {};
+  const step = nextStep(hint.next_action);
+  const duration = Math.max(1, Number(selected.recipe?.duration || selected.recipe?.base_duration || factory.cycle_duration || 60));
+  const progress = running && !ready ? Math.max(4, Math.min(96, Math.round((1 - remaining / duration) * 100))) : (ready ? 100 : 0);
+  const statusClass = ready ? 'factory-slot-ready' : (running ? 'factory-slot-running' : '');
+  const icon = factory.icon || (factory.specialization === 'agrarian' ? '🌾' : '🏭');
+  const title = escapeHtml(factory.name || factoryType(factory));
+  const status = ready ? '✅ Готово к сбору' : (running ? `⏳ ${remaining} сек.` : '⭕ Нажмите, чтобы запустить');
+  const button = ready
+    ? `<button type="button" class="factory-collect-btn w-full py-1.5 rounded-lg bg-emerald-600 text-white" data-id="${factory.id}">📦 Забрать</button>`
+    : (running
+      ? `<button type="button" class="factory-start-btn w-full py-1.5 rounded-lg bg-slate-500/70 text-white" data-id="${factory.id}" disabled>⏳ Выполняется</button>`
+      : `<button type="button" class="factory-start-btn w-full py-1.5 rounded-lg bg-blue-600 text-white" data-id="${factory.id}">▶️ Запустить</button>`);
 
-  container.querySelector('#go-upgrades')?.addEventListener('click', () => {
-    if (window.NatApp?.navigateTo) {
-      window.NatApp.navigateTo('upgrades');
-    }
-  });
-
-  container.querySelector('#build')?.addEventListener('click', () => {
-    openCatalogModal(showToast, async () => {
-      await renderProduction(container, showToast);
-    });
-  });
-
-  bindCycles(container, showToast, recipes);
+  return `<article class="factory-slot ${statusClass} factory-start-card" data-factory-id="${factory.id}" tabindex="0" role="button" aria-label="${title}">
+    <div class="flex items-start justify-between gap-1"><span class="factory-slot-icon">${icon}</span><span class="factory-slot-meta">ур. ${factory.level || 1}</span></div>
+    <div class="factory-slot-title" title="${title}">${title}</div>
+    <div class="factory-slot-meta">${escapeHtml(status)}</div>
+    <div class="factory-slot-progress"><span style="width:${progress}%"></span></div>
+    <div class="factory-slot-meta truncate" title="${escapeHtml(recipeSummary(selected.recipe))}">${escapeHtml(recipeSummary(selected.recipe))}</div>
+    ${!running && hint.message ? `<div class="text-[9px] text-amber-700 dark:text-amber-300 truncate" title="${escapeHtml(hint.message)}">${escapeHtml(hint.message)}${step ? ` <button type="button" class="factory-next-step underline" data-tab="${step}">Что сделать?</button>` : ''}</div>` : ''}
+    ${button}
+  </article>`;
 }
 
-function formatRecipeReqs(recipe) {
-  if (!recipe) return '';
-  const inList = Object.entries(recipe.inputs || {}).map(([k, v]) => {
-    const info = getItemInfo(k);
-    return `${v} ${info.unit} ${info.name}`;
-  }).join(', ');
-  const outList = Object.entries(recipe.outputs || {}).map(([k, v]) => {
-    const info = getItemInfo(k);
-    return `+${v} ${info.unit} ${info.name}`;
-  }).join(', ');
-  return `<div class="text-[10px] text-slate-400 mt-1">📥 ${inList || 'Без затрат'} ➔ 📤 ${outList}</div>`;
+function renderMap(root, state, showToast) {
+  const pages = buildFactoryPages(state.factories, state.maxSlots);
+  selectedPage = Math.max(1, Math.min(selectedPage, pages.length));
+  const page = pages[selectedPage - 1];
+  root.innerHTML = `<section class="factory-map ${page.biome.pageClass} space-y-2" data-page="${page.page}">
+    <div class="flex items-center justify-between gap-2"><div><div class="text-sm font-black">${page.biome.title}</div><div class="text-[10px] text-slate-600 dark:text-slate-300">Территория ${page.page} · 9 мест</div></div><span class="text-[10px] font-bold px-2 py-1 rounded-full bg-white/55 dark:bg-slate-900/45">${state.factories.length}/${state.maxSlots} заводов</span></div>
+    <div class="factory-map-grid">${page.slots.map((factory) => factorySlot(factory, state.recipes)).join('')}</div>
+    <div class="factory-map-controls"><button type="button" class="factory-prev-page bg-white/60 dark:bg-slate-900/50" ${selectedPage <= 1 ? 'disabled' : ''}>‹</button><div class="factory-map-dots">${pages.map((entry) => `<span class="factory-map-dot ${entry.page === selectedPage ? 'active' : ''}"></span>`).join('')}</div><button type="button" class="factory-next-page bg-white/60 dark:bg-slate-900/50" ${selectedPage >= pages.length ? 'disabled' : ''}>›</button></div>
+  </section>`;
+  bindMap(root, state, showToast);
 }
 
-function card(f, recipes) {
-  const bType = f.building_type || f.factory_type;
-  const list = Object.entries(recipes).filter(([,r]) => r.factory_type === bType);
-  const running = Boolean(f.cycle_ready_at || f.is_running);
-  const remSec = typeof f.remaining_seconds === 'number'
-    ? f.remaining_seconds
-    : (f.cycle_ready_at ? Math.max(0, Math.ceil((parseDateMs(f.cycle_ready_at) - Date.now()) / 1000)) : 0);
-  const ready = running && (Boolean(f.is_ready) || remSec <= 0);
-  const readyAtMs = running && !ready ? (Date.now() + remSec * 1000) : 0;
-  const selRecipeId = f.current_recipe || (list[0] ? list[0][0] : null);
-  const curRecipe = selRecipeId ? recipes[selRecipeId] : null;
-  const isOwn = (f.specialization === store.company?.specialization) || (f.efficiency >= 0.99);
-
-  return `<div class="glass-card rounded-2xl p-4 space-y-3" data-factory-id="${f.id}">
-    <div class="flex justify-between items-start">
-      <div>
-        <div class="text-sm font-black flex items-center gap-1.5">
-          <span>${f.name || bType}</span>
-          <span class="text-[10px] px-1.5 py-0.5 rounded ${isOwn ? 'bg-amber-500/20 text-amber-300 font-bold' : 'bg-slate-700 text-slate-400 font-medium'}">
-            ${isOwn ? '🌟 100%' : '⚠️ 10%'}
-          </span>
-        </div>
-        <div class="text-[10px] text-slate-500">${f.specialization || ''} · уровень ${f.level || 1}</div>
-      </div>
-      <div class="text-right text-[10px] text-slate-400">👷 ${f.workers || 10} · 🤖 ${f.automation_level || 0}</div>
-    </div>
-    <div>
-      <select class="recipe-select w-full p-2 rounded-lg border bg-transparent text-xs" ${running && !ready ? 'disabled' : ''}>
-        ${list.map(([id,r])=>`<option value="${id}" ${selRecipeId===id?'selected':''}>${r.name}</option>`).join('')}
-      </select>
-      <div class="recipe-reqs">${formatRecipeReqs(curRecipe)}</div>
-    </div>
-    <div class="cycle-status text-xs font-mono text-center ${ready ? 'text-emerald-500 font-bold' : (running ? 'text-amber-500' : 'text-slate-400')}" data-ready-ms="${running && !ready ? readyAtMs : 0}">
-      ${ready ? '✅ Продукция готова к сбору' : (running ? '⏳ Цикл в процессе...' : '⭕ Готов к запуску')}
-    </div>
-    <button class="produce-btn w-full py-2.5 rounded-xl ${ready ? 'bg-emerald-600 shadow-lg shadow-emerald-600/30' : (running ? 'bg-slate-600 cursor-not-allowed opacity-80' : 'bg-emerald-600')} text-white text-xs font-bold" data-id="${f.id}" ${running && !ready ? 'disabled' : ''}>
-      ${ready ? '📦 Забрать продукцию' : (running ? '⏳ Выполняется...' : '▶️ Запустить цикл')}
-    </button>
-  </div>`;
-}
-
-let cycleInterval = null;
-
-function bindCycles(container, showToast, recipes) {
-  if (cycleInterval) clearInterval(cycleInterval);
-
-  cycleInterval = setInterval(() => {
-    const now = Date.now();
-    let needsRerender = false;
-    let hasActiveCountdown = false;
-
-    container.querySelectorAll('.cycle-status[data-ready-ms]').forEach(el => {
-      const readyMs = parseInt(el.dataset.readyMs, 10);
-      if (readyMs > 0) {
-        if (now >= readyMs) {
-          el.dataset.readyMs = "0";
-          el.className = "cycle-status text-xs font-mono text-center text-emerald-500 font-bold";
-          el.textContent = "✅ Продукция готова к сбору";
-          const card = el.closest('[data-factory-id]');
-          const btn = card?.querySelector('.produce-btn');
-          if (btn) {
-            btn.disabled = false;
-            btn.className = "produce-btn w-full py-2.5 rounded-xl bg-emerald-600 shadow-lg shadow-emerald-600/30 text-white text-xs font-bold";
-            btn.textContent = "📦 Забрать продукцию";
-          }
-          const sel = card?.querySelector('.recipe-select');
-          if (sel) sel.disabled = false;
-        } else {
-          hasActiveCountdown = true;
-          const diff = Math.ceil((readyMs - now) / 1000);
-          el.textContent = `⏳ Цикл в процессе (${diff} сек.)`;
-        }
-      }
-    });
-
-    if (!hasActiveCountdown) {
-      clearInterval(cycleInterval);
-    }
-  }, 1000);
-
-  container.querySelectorAll('.recipe-select').forEach(sel => {
-    sel.addEventListener('change', () => {
-      const card = sel.closest('[data-factory-id]');
-      const reqsEl = card.querySelector('.recipe-reqs');
-      if (reqsEl && recipes[sel.value]) {
-        reqsEl.innerHTML = formatRecipeReqs(recipes[sel.value]);
-      }
-    });
-  });
-
-  container.querySelectorAll('.produce-btn').forEach(btn => btn.addEventListener('click', async () => {
-    if (btn.disabled) return;
-    const card = btn.closest('[data-factory-id]');
-    const select = card.querySelector('.recipe-select');
-    try {
-      btn.disabled = true;
-      const result = await NatAPI.triggerProduction(btn.dataset.id, select?.value);
-      if (result.status === 'running') {
-        showToast('Цикл запущен! Идет производство...', 'success');
-      } else {
-        showToast('Продукция успешно получена на склад!', 'success');
-        NatAPI.getMyCompany().then(c => store.setCompany(c)).catch(() => {});
-      }
-      await renderProduction(container, showToast);
-    } catch (e) {
-      showToast(e.message, 'error');
-      btn.disabled = false;
-    }
+function bindMap(root, state, showToast) {
+  root.querySelector('.factory-prev-page')?.addEventListener('click', () => { selectedPage -= 1; renderMap(root, state, showToast); });
+  root.querySelector('.factory-next-page')?.addEventListener('click', () => { selectedPage += 1; renderMap(root, state, showToast); });
+  root.querySelectorAll('.factory-build-btn').forEach((button) => button.addEventListener('click', () => {
+    openCatalogModal(showToast, async () => refreshMap(root, state, showToast));
+  }));
+  root.querySelectorAll('.factory-next-step').forEach((button) => button.addEventListener('click', (event) => {
+    event.stopPropagation();
+    window.NatApp?.navigateTo(button.dataset.tab);
+  }));
+  root.querySelectorAll('.factory-start-btn, .factory-collect-btn').forEach((button) => button.addEventListener('click', async (event) => {
+    event.stopPropagation();
+    await mutateFactory(button, root, state, showToast);
+  }));
+  root.querySelectorAll('.factory-start-card').forEach((card) => card.addEventListener('click', async (event) => {
+    if (event.target.closest('button')) return;
+    const factory = state.factories.find((entry) => String(entry.id) === String(card.dataset.factoryId));
+    if (factory && !cycleState(factory).running) await mutateFactory(card, root, state, showToast);
   }));
 }
 
-function closeModal(){ const m=document.getElementById('modal'); if(m){m.classList.add('hidden');m.classList.remove('flex');} }
-function empty(){return '<div class="glass-card rounded-2xl p-8 text-center text-sm text-slate-500">Нет заводов.</div>'}
+async function mutateFactory(button, root, state, showToast) {
+  const factoryId = button.dataset?.id || button.closest('[data-factory-id]')?.dataset.factoryId;
+  const factory = state.factories.find((entry) => String(entry.id) === String(factoryId));
+  if (!factory || button.disabled) return;
+  const selected = recipeFor(factory, state.recipes);
+  button.disabled = true;
+  const oldText = button.textContent;
+  button.textContent = '⏳ Сохранение…';
+  try {
+    const result = await NatAPI.triggerProduction(factory.id, selected.id);
+    showToast(result.status === 'running' ? 'Цикл запущен!' : 'Продукция добавлена на склад!', 'success');
+    await refreshMap(root, state, showToast);
+  } catch (error) {
+    showToast(error.message, 'error');
+    button.disabled = false;
+    button.textContent = oldText;
+  }
+}
+
+async function refreshMap(root, state, showToast) {
+  const [data, company] = await Promise.all([
+    NatAPI.getProductionStatus(),
+    NatAPI.getMyCompany().catch(() => null),
+  ]);
+  if (Array.isArray(data?.factories)) state.factories = data.factories;
+  if (company) store.setCompany(company);
+  renderMap(root, state, showToast);
+}
+
+function bindCountdown(root, state, showToast) {
+  if (cycleInterval) clearInterval(cycleInterval);
+  cycleInterval = setInterval(() => {
+    const active = state.factories.some((factory) => cycleState(factory).running && !cycleState(factory).ready);
+    if (!active) { clearInterval(cycleInterval); return; }
+    state.factories = state.factories.map((factory) => {
+      const remaining = cycleState(factory).remaining;
+      return factory.cycle_ready_at && remaining > 0
+        ? { ...factory, remaining_seconds: Math.max(0, remaining - 1), is_ready: remaining <= 1 }
+        : factory;
+    });
+    renderMap(root, state, showToast);
+  }, 1000);
+}
+
+export async function renderProduction(container, showToast) {
+  const [data, recipes] = await Promise.all([
+    NatAPI.getProductionStatus().catch(() => null),
+    getOrFetchRecipes(),
+  ]);
+  const factories = Array.isArray(data?.factories) ? data.factories : (store.factories || []);
+  if (factories.length) store.updateCompany({ factories });
+  const maxSlots = Number(data?.factory_slots?.max || store.company?.factory_slots?.max || data?.max_factory_slots || factories.length || 1);
+  const state = { factories, recipes, maxSlots };
+
+  container.innerHTML = `<div class="space-y-4 max-w-md mx-auto p-4 pb-24 min-w-0 overflow-hidden">
+    <div class="flex justify-between items-center gap-2"><div><h2 class="text-xl font-black">Заводы</h2><p class="text-xs text-slate-500">Нажмите на свободный завод, чтобы запустить цикл</p></div><div class="flex gap-2"><button id="go-upgrades" type="button" class="px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-xs font-bold">⚡ Прокачка</button><button class="production-help-btn px-2 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-xs font-bold" type="button" aria-label="Помощь по производству">?</button><button id="build" type="button" class="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold">＋ Каталог</button></div></div>
+    <div id="factory-map-container"></div>
+  </div>`;
+  const mapRoot = container.querySelector('#factory-map-container');
+  renderMap(mapRoot, state, showToast);
+  bindCountdown(mapRoot, state, showToast);
+  container.querySelector('#go-upgrades')?.addEventListener('click', () => window.NatApp?.navigateTo('upgrades'));
+  container.querySelector('.production-help-btn')?.addEventListener('click', () => window.NatApp?.navigateTo('help'));
+  container.querySelector('#build')?.addEventListener('click', () => openCatalogModal(showToast, async () => refreshMap(mapRoot, state, showToast)));
+}

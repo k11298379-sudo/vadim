@@ -108,7 +108,9 @@ async function loadUserData() {
     const me = await api.getMe();
     window.currentUser = me;
     if (window.GAMES && typeof window.GAMES.updateTesterStatus === "function") {
-      window.GAMES.updateTesterStatus(Boolean(me && me.is_tester));
+      // ADMIN_ID is an effective server-side tester grant even when the
+      // legacy users row has not yet been migrated to role="admin".
+      window.GAMES.updateTesterStatus(Boolean(me && (me.is_tester || me.role === "admin")));
     }
     if (me && me.full_name) {
       const roleTag = me.role === "admin" ? " • 👑 Админ" : "";
@@ -491,5 +493,4 @@ async function loadBells() {
     list.innerHTML = `<div class="text-center py-6 text-red-500 text-sm">Ошибка: ${err.message}</div>`;
   }
 }
-
 

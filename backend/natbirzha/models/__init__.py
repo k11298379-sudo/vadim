@@ -18,12 +18,32 @@ from backend.natbirzha.models.military import NatArmy, NatTournament, NatTournam
 from backend.natbirzha.models.alliances import NatAlliance, NatAllianceMember
 from backend.natbirzha.models.restructuring import NatRestructuring, NatDailyFinancials
 from backend.natbirzha.models.idempotency import NatIdempotencyRecord
+from backend.natbirzha.models.npc import NatNpcDailyVolume
+from backend.natbirzha.models.premium import NatMilitaryUpgrade, NatPremiumLedgerEntry, NatPremiumLicense
+from backend.natbirzha.models.season import NatSeasonResetOperation
+from backend.natbirzha.models.combat import (
+    NatArmyUnit,
+    NatBattle,
+    NatBattleSnapshot,
+    NatMilitaryRatingEvent,
+    NatPveCorporation,
+    NatPveVictory,
+    NatPvpCooldown,
+)
+from backend.natbirzha.models.instruments import (
+    NatInstrumentPosition,
+    NatInstrumentTrade,
+    NatReferenceRateSnapshot,
+)
 from backend.natbirzha.models.creator import (
     NatStateTreasury,
     NatCreatorAuditLog,
     NatMarketRestriction,
     NatMarketWarning,
-    NatStateBond
+    NatStateBond,
+    NatStateBondHolding,
+    NatBondSettlement,
+    NatBondListing,
 )
 
 __all__ = [
@@ -50,9 +70,27 @@ __all__ = [
     "NatRestructuring",
     "NatDailyFinancials",
     "NatIdempotencyRecord",
+    "NatNpcDailyVolume",
+    "NatPremiumLedgerEntry",
+    "NatPremiumLicense",
+    "NatMilitaryUpgrade",
+    "NatSeasonResetOperation",
+    "NatArmyUnit",
+    "NatBattle",
+    "NatBattleSnapshot",
+    "NatMilitaryRatingEvent",
+    "NatPveCorporation",
+    "NatPveVictory",
+    "NatPvpCooldown",
+    "NatReferenceRateSnapshot",
+    "NatInstrumentPosition",
+    "NatInstrumentTrade",
     "NatStateTreasury",
     "NatCreatorAuditLog",
     "NatMarketRestriction",
     "NatMarketWarning",
     "NatStateBond",
+    "NatStateBondHolding",
+    "NatBondSettlement",
+    "NatBondListing",
 ]

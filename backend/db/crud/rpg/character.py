@@ -14,7 +14,6 @@ from backend.db.crud.rpg.progression_math import (
     LEVEL_CAP,
     STAT_POINTS_PER_LEVEL
 )
-from backend.db.crud.rpg.rebirth import get_rebirth_rank_info, MAX_REBIRTH_RANK
 
 # ==============================================================================
 # CHARACTER CALCULATIONS & CRUDS
@@ -129,11 +128,7 @@ async def get_or_create_rpg_character(
 
 
 
-def serialize_character_profile(
-    char: RPGCharacter,
-    user_name: str = "",
-    tg_id: Optional[int] = None
-) -> Dict[str, Any]:
+def serialize_character_profile(char: RPGCharacter, user_name: str = "") -> Dict[str, Any]:
     """Serializes character data for API response."""
     stats = calculate_character_effective_stats(char)
     h_class = str(getattr(char, "hero_class", "pudge") or "pudge").strip().lower()
@@ -154,25 +149,11 @@ def serialize_character_profile(
     talents_data = getattr(char, "talents", {}) or {}
     rebirth_essence = talents_data.get("rebirth_essence", getattr(char, "rebirth_essence", 0))
     rebirth_rank = getattr(char, "rebirths", 0)
-    rank_info = get_rebirth_rank_info(rebirth_rank)
-
-    # Safely resolve tg_id without triggering SQLAlchemy async MissingGreenlet
-    final_tg_id = tg_id or getattr(char, "_tg_id", None)
-    if final_tg_id is None:
-        try:
-            from sqlalchemy import inspect
-            from sqlalchemy.orm.base import NO_VALUE
-            insp = inspect(char)
-            val = insp.attrs.user.loaded_value
-            if val is not None and val is not NO_VALUE:
-                final_tg_id = getattr(val, "tg_id", None)
-        except Exception:
-            pass
 
     return {
         "id": char.id,
         "user_id": char.user_id,
-        "tg_id": final_tg_id,
+        "tg_id": getattr(char, "_tg_id", None) or (char.user.tg_id if hasattr(char, "user") and char.user else None),
         "user_name": user_name,
         "hero_class": canonical_class,
         "class_name": cfg["name"],
@@ -191,14 +172,8 @@ def serialize_character_profile(
         "rebirth_essence": rebirth_essence,
         "rebirth_info": {
             "rank": rebirth_rank,
-            "max_rank": MAX_REBIRTH_RANK,
-            "title": rank_info.get("title", ""),
             "essence": rebirth_essence,
             "multiplier": stats.get("rebirth_multiplier", 1.0),
-            "multiplier_pct": rank_info.get("multiplier_pct", 0),
-            "next_rank": rank_info.get("next_rank"),
-            "next_min_level": rank_info.get("next_min_level"),
-            "next_essence_reward": rank_info.get("next_essence_reward"),
             "constellations": talents_data.get("constellations", {}),
         },
         "talent_points": getattr(char, "talent_points", 0),

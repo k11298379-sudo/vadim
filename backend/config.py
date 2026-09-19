@@ -7,32 +7,23 @@ from pydantic import Field, field_validator
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    BOT_TOKEN: str = Field(
-        default="8434343019:AAFtmlYDJXzLZKOBIh-MGoscMC1KYJ3J0Qg",
-        description="Telegram Bot API Token"
-    )
+    BOT_TOKEN: str = Field(default="1234567890:ABCdefGHIjklMNOpqrsTUVwxyz", description="Telegram Bot API Token; production must override this placeholder")
 
     @field_validator("BOT_TOKEN", mode="before")
     @classmethod
     def validate_bot_token(cls, v):
-        if not v or not isinstance(v, str) or ":" not in v:
-            return "8434343019:AAFtmlYDJXzLZKOBIh-MGoscMC1KYJ3J0Qg"
-        return v.strip()
+        value = str(v or "").strip()
+        return value or "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
 
-    ADMIN_ID: int = Field(
-        default=1053722876,
-        description="Telegram ID of the primary administrator"
-    )
+    ADMIN_ID: int = Field(default=0, description="Telegram ID of the primary administrator")
 
     @field_validator("ADMIN_ID", mode="before")
     @classmethod
     def validate_admin_id(cls, v):
-        if not v or str(v).strip() in ("", "0"):
-            return 1053722876
         try:
-            return int(v)
+            return int(v or 0)
         except Exception:
-            return 1053722876
+            return 0
 
     TELEGRAM_API_SERVER: str = Field(
         default="",
@@ -63,15 +54,8 @@ class Settings(BaseSettings):
     )
     
     DATABASE_URL: str = Field(
-        default_factory=lambda: (
-            os.environ.get("DATABASE_URL")
-            or (
-                "postgresql+asyncpg://neondb_owner:npg_3xKsMiPz2gVB@ep-jolly-math-b1eqli8z-pooler.c-5.eu-central-1.aws.neon.tech/neondb"
-                if (os.environ.get("RENDER") or os.environ.get("RENDER_EXTERNAL_URL"))
-                else "sqlite+aiosqlite:///./data/bot.db"
-            )
-        ),
-        description="Database connection URL"
+        default="sqlite+aiosqlite:///./data/bot.db",
+        description="Database connection URL. Production deployments must provide DATABASE_URL via environment."
     )
 
     

@@ -52,7 +52,9 @@ console.log('state.js reactivity and safe updates verified!');
 
 console.log('=== [Natbirzha Test 3/5] Testing api.js request handling & error resilience ===');
 const apiScript = fs.readFileSync(path.join(__dirname, '../frontend/natbirzha/js/api.js'), 'utf-8');
-const cleanedApiScript = apiScript.replace(/export\s+const\s+NatAPI\s+=/, 'const NatAPI =');
+const cleanedApiScript = apiScript
+  .replace(/export\s+function\s+setNavigationAbortSignal/, 'function setNavigationAbortSignal')
+  .replace(/export\s+const\s+NatAPI\s+=/, 'const NatAPI =');
 const apiFn = new Function('window', 'crypto', 'sessionStorage', cleanedApiScript + '\nreturn { NatAPI, parseErrorMessage, getAuthHeader, generateUUID };');
 
 const mockBrowserWindow = {
@@ -76,8 +78,12 @@ const mockDevWindow = {
   Telegram: {}
 };
 const { getAuthHeader: getDevAuthHeader } = apiFn(mockDevWindow, mockCrypto, mockSessionStorage);
-const devHeader = getDevAuthHeader()['X-Telegram-Init-Data'];
-assert(devHeader && devHeader.includes('888'), 'Dev fallback must encode tg_user_id in user payload');
+assert(!getDevAuthHeader()['X-Telegram-Init-Data'], 'Unsigned dev/query fallback must be disabled');
+assert(!apiScript.includes('localStorage'), 'api.js must not derive identity from localStorage');
+assert(!apiScript.includes('initDataUnsafe'), 'api.js must not derive authority from initDataUnsafe');
+assert(!apiScript.includes('tg_user_id'), 'api.js must not accept tg_user_id query identity');
+assert(apiScript.includes('responseCache') && apiScript.includes('cachedGet'), 'Stable catalog requests must use a TTL cache');
+assert(!apiScript.includes('renderCurrentScreen?.()'), 'Generic API errors must not force a full screen render');
 
 const err1 = parseErrorMessage({ detail: 'Баланс исчерпан' }, 400);
 assert(err1 === 'Баланс исчерпан', 'string detail must be extracted');
@@ -95,10 +101,14 @@ assert(err4.includes('Ошибка сервера (500)'), 'empty object must pr
 
 const requiredMethods = [
   'login', 'getMyCompany', 'expandTerritory', 'createCompany', 'respecCompany',
-  'getProductionStatus', 'getRecipes', 'getInventory', 'buildFactory', 'triggerProduction',
+  'getProductionStatus', 'getRecipes', 'getInventory', 'getFactoryUpgrades', 'buildFactory', 'triggerProduction',
   'getOrderbook', 'getNpcRates', 'placeOrder', 'cancelOrder', 'npcTrade',
   'getStocksList', 'issueIPO', 'buyShares', 'getPortfolio',
   'getMilitaryStatus', 'recruitUnits', 'getCurrentTournament', 'joinAlliance',
+  'getPveTargets', 'scoutPveTarget', 'attackPveTarget', 'getBattleHistory',
+  'getTournamentTargets', 'attackTournamentTarget', 'getTournamentHistory',
+  'getReferenceInstruments', 'tradeReferenceInstrument',
+  'getStateBonds', 'createBondListing', 'buyBondListing', 'cancelBondListing',
   'getBankruptcyStatus', 'submitRestructuring'
 ];
 requiredMethods.forEach(m => {
@@ -107,7 +117,23 @@ requiredMethods.forEach(m => {
 console.log('api.js methods, auth headers and error handling resilience verified!');
 
 console.log('=== [Natbirzha Test 4/5] Testing screen modules syntax & exports ===');
-const screens = ['onboarding.js', 'overview.js', 'production.js', 'upgrades.js', 'market.js', 'stocks.js', 'military.js'];
+const factoryMapPath = path.join(__dirname, '../frontend/natbirzha/js/factory_map.js');
+assert(fs.existsSync(factoryMapPath), 'factory_map.js must define the territory projection');
+const factoryMapCode = fs.readFileSync(factoryMapPath, 'utf-8');
+['BIOMES', 'getFactoryPage', 'getFactorySlot', 'getBiomeForPage', 'buildFactoryPages'].forEach((name) => {
+  assert(factoryMapCode.includes(`export ${name === 'BIOMES' ? 'const' : 'function'} ${name}`),
+    `factory_map.js must export ${name}`);
+});
+assert(factoryMapCode.includes("'map_page'") && factoryMapCode.includes("'map_slot'"),
+  'factory map must honor explicit map_page coordinates');
+assert(factoryMapCode.includes('null'), 'factory map must preserve empty slots as null');
+const natCss = fs.readFileSync(path.join(__dirname, '../frontend/natbirzha/css/natbirzha.css'), 'utf-8');
+['.factory-map', '.factory-slot', '.factory-biome-grass', '.factory-biome-desert', '.factory-biome-snow'].forEach((selector) => {
+  assert(natCss.includes(selector), `natbirzha.css must define ${selector}`);
+});
+assert(natCss.includes('grid-template-columns: repeat(3'), 'factory map must use a responsive three-column grid');
+
+const screens = ['onboarding.js', 'overview.js', 'production.js', 'upgrades.js', 'market.js', 'stocks.js', 'military.js', 'leaderboard.js', 'help.js'];
 screens.forEach(s => {
   const code = fs.readFileSync(path.join(__dirname, '../frontend/natbirzha/js/screens/', s), 'utf-8');
   const renderFnName = 'render' + s[0].toUpperCase() + s.slice(1).replace('.js', '');
@@ -116,20 +142,90 @@ screens.forEach(s => {
 });
 
 const prodCode = fs.readFileSync(path.join(__dirname, '../frontend/natbirzha/js/screens/production.js'), 'utf-8');
+assert(prodCode.includes("from '../factory_map.js'"), 'production.js must use the pure factory map projection');
+['factory-map', 'factory-slot', 'factory-next-page', 'factory-collect-btn', 'factory-build-btn'].forEach((hook) => {
+  assert(prodCode.includes(hook), `production.js must render ${hook}`);
+});
+assert(prodCode.includes('cycle_ready_at') && prodCode.includes('remaining_seconds'),
+  'production.js must use server cycle timing fields');
 assert(prodCode.includes('f.building_type || f.factory_type'), 'production.js must handle both building_type and factory_type');
-assert(prodCode.includes('food_processing'), 'production.js must contain canonical food_processing recipe id');
-assert(prodCode.includes('mine_rare_lithium'), 'production.js must contain canonical mine_rare_lithium recipe id');
+assert(prodCode.includes('r.factory_type === bType'), 'production.js must render server recipes for the exact factory type');
+assert(prodCode.includes('f.current_recipe'), 'production.js must honor server cycle state');
+assert(prodCode.includes('NatAPI.triggerProduction'), 'factory map must use the unified production mutation endpoint');
+assert(prodCode.includes('factory-collect-btn') && prodCode.includes('openCatalogModal'),
+  'factory map must wire collect and catalog actions');
+assert(prodCode.includes('button.disabled = true') && prodCode.includes('refreshMap'),
+  'factory mutations must lock the clicked control and refresh the map state');
 
 const marketCode = fs.readFileSync(path.join(__dirname, '../frontend/natbirzha/js/screens/market.js'), 'utf-8');
 assert(marketCode.includes('finally'), 'market.js place order must have finally block to re-enable button');
+assert(marketCode.includes('market-resource-tabs'), 'market.js must keep a stable resource selector hook');
+assert(marketCode.includes('selectorScrollLeft'), 'market.js must preserve horizontal resource position across refreshes');
 
 const milCode = fs.readFileSync(path.join(__dirname, '../frontend/natbirzha/js/screens/military.js'), 'utf-8');
 assert(milCode.includes('joinAlliance'), 'military.js must support joining alliances');
+assert(milCode.includes('PvE-границы'), 'military.js must expose PvE borders');
+assert(milCode.includes('attackPveTarget'), 'military.js must wire PvE attacks');
+assert(milCode.includes('attackTournamentTarget'), 'military.js must wire tournament PvP attacks');
+assert(milCode.includes('getTournamentHistory'), 'military.js must show tournament history and personal results');
+assert(milCode.includes('Участие автоматическое'), 'tournament screen must explain automatic enrolment before an event starts');
+assert(milCode.includes('Pivocoins') && milCode.includes('premium'), 'military.js must expose the separate Pivocoins premium branch');
+assert(milCode.includes('purchasePremiumLicense') && milCode.includes('purchasePremiumUpgrade'), 'military.js must wire premium licenses and upgrades');
+assert(milCode.includes('border_guards') && milCode.includes('aircraft'), 'military.js must render all six unit types');
+assert(natHtml.includes('>Война<'), 'bottom navigation must call the military screen War');
+assert(natHtml.includes('data-tab="leaderboard"'), 'bottom navigation must expose the Top screen');
+
+const leaderboardCode = fs.readFileSync(path.join(__dirname, '../frontend/natbirzha/js/screens/leaderboard.js'), 'utf-8');
+assert(leaderboardCode.includes('getLeaderboard') && leaderboardCode.includes('military_rating'), 'leaderboard.js must expose all server-ranked categories');
+
+const helpCode = fs.readFileSync(path.join(__dirname, '../frontend/natbirzha/js/screens/help.js'), 'utf-8');
+assert(helpCode.includes('Pivocoins') && helpCode.includes('IPO') && helpCode.includes('Война'), 'help.js must explain core company progression systems');
+
+assert(marketCode.includes('getReferenceInstruments'), 'market.js must load official reference instruments');
+assert(marketCode.includes('tradeReferenceInstrument'), 'market.js must wire reference trades');
+assert(marketCode.includes('createBondListing'), 'market.js must expose secondary bond listings');
+
+const creatorCode = fs.readFileSync(path.join(__dirname, '../frontend/natbirzha/js/screens/creator.js'), 'utf-8');
+assert(creatorCode.includes('tourn-reward-first') && creatorCode.includes('tourn-reward-second') && creatorCode.includes('tourn-reward-third'),
+  'creator.js must expose three independent custom tournament reward fields');
+assert(creatorCode.includes('reward_first_pvc') && creatorCode.includes('reward_second_pvc') && creatorCode.includes('reward_third_pvc'),
+  'creator.js must submit all three custom tournament rewards');
+assert(creatorCode.includes('getCreatorPremiumLedger') && creatorCode.includes('Журнал PVC'),
+  'creator.js must expose the auditable Pivocoins ledger');
+assert(creatorCode.includes('getCreatorPlayers') && creatorCode.includes('Список игроков'),
+  'creator.js must expose searchable player-company administration');
+
+
+const upgradesCode = fs.readFileSync(path.join(__dirname, '../frontend/natbirzha/js/screens/upgrades.js'), 'utf-8');
+assert(upgradesCode.includes('upgrade_options'), 'upgrades.js must render server-authoritative upgrade options');
+assert(!upgradesCode.includes('calcUpgrade('), 'upgrades.js must not duplicate upgrade price formulas');
+assert(upgradesCode.includes('upgrade-help-btn'), 'blocked upgrades must link to relevant help');
+
+const productionCode = fs.readFileSync(path.join(__dirname, '../frontend/natbirzha/js/screens/production.js'), 'utf-8');
+assert(productionCode.includes('production-help-btn'), 'empty production must link to relevant help');
+assert(productionCode.includes('start_hint') && productionCode.includes('factory-next-step'), 'factory cards must show the server-derived next step');
+
+const catalogCode = fs.readFileSync(path.join(__dirname, '../frontend/natbirzha/js/screens/catalog.js'), 'utf-8');
+assert(catalogCode.includes('data-cat="unavailable"'), 'catalog.js must expose unavailable filter');
+assert(catalogCode.includes('flex-wrap'), 'catalog filters must wrap instead of hiding actions beyond a narrow mobile viewport');
 
 const appCode = fs.readFileSync(path.join(__dirname, '../frontend/natbirzha/js/app.js'), 'utf-8');
 assert(appCode.includes("msgText === '[object Object]'"), 'app.js showToast must guard against [object Object]');
 assert(appCode.includes('window.NatApp'), 'app.js must expose window.NatApp');
 assert(appCode.includes('navigateTo'), 'app.js must export navigateTo');
+assert(appCode.includes('activeRenderPromise'), 'app.js must serialize overlapping async screen renders');
+assert(appCode.includes('renderRequested'), 'app.js must coalesce rapid tab switches to the latest tab');
+assert(appCode.includes('navigationId') && appCode.includes('AbortController'), 'app.js must cancel stale navigation requests');
+assert(appCode.includes('renderContainer') && appCode.includes('container.replaceChildren(renderContainer)'), 'a stale screen must render off-DOM before it can be mounted');
+assert(apiScript.includes('setNavigationAbortSignal'), 'api.js must attach the active navigation abort signal to requests');
+assert(apiScript.includes("getRecipes: () => cachedGet") && apiScript.includes("getBuildingsCatalog: () => cachedGet"), 'Recipes and enterprise catalog must be cached');
+assert(marketCode.includes('orderbookRequestId') && marketCode.includes('requestId !== orderbookRequestId'), 'Market must ignore a slow orderbook response for an older resource');
+assert(appCode.includes('user?.is_creator === true'), 'creator UI must rely on server-provided creator flag');
+assert(!appCode.includes('1053722876'), 'creator UI must not hardcode privileged Telegram IDs');
+
+const commonAppCode = fs.readFileSync(path.join(__dirname, '../frontend/js/app.js'), 'utf-8');
+assert(commonAppCode.includes('me.is_tester || me.role === "admin"'),
+  'common Mini App must expose Natbirzha to the effective configured admin role');
 console.log('All screen modules and app.js integration verified!');
 
 console.log('=== [Natbirzha Test 5/5] Testing games.js Natbirzha banner exposure & items localization ===');
