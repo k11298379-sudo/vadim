@@ -37,8 +37,8 @@ async def get_talent_tree_endpoint(
     char = await get_or_create_rpg_character(session, user_id=user_id)
 
     hero_class = str(getattr(char, "hero_class", "pudge") or "pudge").lower()
-    char_progress = max(char.level or 1, getattr(char, "dungeon_floor", 1) or 1)
     char_level = char.level or 1
+    char_progress = char_level
     talent_points = get_hero_available_talent_points(char, hero_class)
     if getattr(char, "talent_points", None) != talent_points:
         char.talent_points = talent_points
@@ -104,7 +104,8 @@ async def buy_talent_node_endpoint(
 
     char = await get_or_create_rpg_character(session, user_id=user_id)
     hero_class = str(getattr(char, "hero_class", "pudge") or "pudge").lower()
-    char_progress = max(char.level or 1, getattr(char, "dungeon_floor", 1) or 1)
+    char_level = char.level or 1
+    char_progress = char_level
     talent_points = get_hero_available_talent_points(char, hero_class)
 
     hero_tree = get_hero_tree(hero_class)
@@ -127,10 +128,10 @@ async def buy_talent_node_endpoint(
             detail=f"Сначала изучите предыдущий талант ветки ({prev_name})."
         )
 
-    if char_progress < node_cfg["unlock_level"]:
+    if char_level < node_cfg["unlock_level"]:
         raise HTTPException(
             status_code=400,
-            detail=f"Требуется {node_cfg['unlock_level']} уровень персонажа или этаж (у вас: {char_progress})."
+            detail=f"Требуется {node_cfg['unlock_level']} уровень персонажа (у вас: {char_level})."
         )
 
     cost = node_cfg["cost"]

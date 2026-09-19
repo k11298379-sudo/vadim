@@ -67,8 +67,7 @@ function renderVisualTalentTree(p, treeData) {
 
   const branches = treeData.branches || {};
   const charLvl = p.level || 1;
-  const charFloor = p.dungeon_floor || 1;
-  const effectiveProgress = Math.max(charLvl, charFloor);
+  const effectiveProgress = charLvl;
   const talentPts = (treeData && treeData.talent_points !== undefined) ? treeData.talent_points : (p.talent_points || 0);
   const filter = window._talentTreeFilter;
 
@@ -234,7 +233,7 @@ function renderVisualTalentTree(p, treeData) {
     if (selectedNode.is_bought) {
       buyBtnHtml = `<div class="px-4 py-2.5 rounded-xl bg-emerald-900/60 border border-emerald-500/40 text-emerald-300 text-xs font-black flex items-center justify-center gap-1.5 shadow-sm">✓ ТАЛАНТ УЖЕ ИЗУЧЕН</div>`;
     } else if (!isLvlMet) {
-      buyBtnHtml = `<div class="px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-500 text-xs font-bold flex items-center justify-center gap-1">🔒 Требуется ${unlockLvl} ур. или этаж (у вас: ${effectiveProgress})</div>`;
+      buyBtnHtml = `<div class="px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-500 text-xs font-bold flex items-center justify-center gap-1">🔒 Требуется ${unlockLvl} уровень (у вас: ${charLvl})</div>`;
     } else if (!isReqMet) {
       buyBtnHtml = `<div class="px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 text-xs font-bold flex items-center justify-center gap-1">⛓️ Сначала изучите предыдущий талант ветки (${reqNode ? reqNode.name : 'Т' + (selectedNode.tier - 1)})</div>`;
     } else if (!hasEnoughPts) {

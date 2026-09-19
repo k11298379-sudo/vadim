@@ -112,7 +112,21 @@ async def run_tests():
         assert round(stats.get("flask_heal_pct", 0), 2) == 0.15, f"Expected 0.15 pct heal, got {stats.get('flask_heal_pct')}"
         assert stats.get("flask_mana") == 60, f"Expected 60 flask mana, got {stats.get('flask_mana')}"
 
-        print("[OK] 4th Flask Branch strictly verified with effective stats calculation!")
+        print("=== [4/4] Testing Level-Only Talent Unlocks (No Floor Fallback) ===")
+        from backend.db.crud.rpg.talent_tree_helpers import is_node_available
+        char.level = 1
+        char.dungeon_floor = 50  # Even on floor 50!
+        purchased = {"atk_1": 1}
+        node_t2 = pudge_tree["atk_2"]  # unlock_level = 10
+
+        # With level 1, tier 2 must NOT be available even on floor 50
+        assert not is_node_available(node_t2, char.level, purchased), "Tier 2 node should NOT be available at level 1 even on floor 50!"
+
+        # With level 10, tier 2 MUST be available
+        char.level = 10
+        assert is_node_available(node_t2, char.level, purchased), "Tier 2 node should be available at level 10!"
+
+        print("[OK] Talent unlock is strictly gated by level only, ignoring floor!")
         print("\n=== ALL HERO TALENT, FLASK & EQUIPMENT TESTS PASSED! ZERO ERRORS! ===")
 
 
