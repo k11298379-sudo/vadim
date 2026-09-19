@@ -27,6 +27,21 @@ function persistTelegramInitDataForChildApps() {
 
 window.persistTelegramInitDataForChildApps = persistTelegramInitDataForChildApps;
 
+function prepareNatbirzhaNavigation(event) {
+  const initData = window.Telegram?.WebApp?.initData;
+  if (!initData || typeof initData !== "string") return false;
+  persistTelegramInitDataForChildApps();
+  try {
+    const link = event?.currentTarget;
+    if (link && !link.hash.includes("tgWebAppData=")) {
+      link.hash = `tgWebAppData=${encodeURIComponent(initData)}`;
+    }
+  } catch (e) {}
+  return true;
+}
+
+window.prepareNatbirzhaNavigation = prepareNatbirzhaNavigation;
+
 // Calendar modal state
 let calViewDate = new Date();
 

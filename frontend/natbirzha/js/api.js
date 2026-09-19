@@ -21,8 +21,14 @@ function getTelegramInitData() {
   if (tg?.initData && typeof tg.initData === 'string') return tg.initData;
   try {
     if (typeof sessionStorage !== 'undefined') {
-      return sessionStorage.getItem(TELEGRAM_INIT_DATA_STORAGE_KEY) || '';
+      const carried = sessionStorage.getItem(TELEGRAM_INIT_DATA_STORAGE_KEY);
+      if (carried) return carried;
     }
+  } catch (_) {}
+  try {
+    const hash = typeof window !== 'undefined' ? window.location?.hash?.slice(1) : '';
+    const carried = hash ? new URLSearchParams(hash).get('tgWebAppData') : '';
+    if (carried) return carried;
   } catch (_) {}
   return '';
 }

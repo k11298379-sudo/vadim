@@ -16,8 +16,14 @@ const TELEGRAM_INIT_DATA_STORAGE_KEY = 'natbirzha_telegram_init_data';
 function getCarriedTelegramInitData() {
   try {
     if (typeof sessionStorage !== 'undefined') {
-      return sessionStorage.getItem(TELEGRAM_INIT_DATA_STORAGE_KEY) || '';
+      const carried = sessionStorage.getItem(TELEGRAM_INIT_DATA_STORAGE_KEY);
+      if (carried) return carried;
     }
+  } catch (_) {}
+  try {
+    const hash = typeof window !== 'undefined' ? window.location?.hash?.slice(1) : '';
+    const carried = hash ? new URLSearchParams(hash).get('tgWebAppData') : '';
+    if (carried) return carried;
   } catch (_) {}
   return '';
 }
@@ -264,8 +270,8 @@ export async function initApp() {
         <div class="max-w-md mx-auto p-6 pt-12 text-center">
           <div class="glass-card rounded-2xl p-6 space-y-3">
             <div class="text-4xl">🔐</div>
-            <h2 class="text-lg font-black">Откройте НАТБИРЖУ из Telegram</h2>
-            <p class="text-xs text-slate-500">Для входа требуется подписанный Telegram Mini App initData. Вход по URL-параметру или сохранённому ID отключён.</p>
+          <h2 class="text-lg font-black">Откройте НАТБИРЖУ из Telegram</h2>
+          <p class="text-xs text-slate-500">Для входа требуется подписанная Telegram Mini App-сессия. Откройте игру через кнопку НАТБИРЖА в боте или во вкладке «Игры».</p>
           </div>
         </div>`;
     }
