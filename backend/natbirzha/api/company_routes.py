@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from backend.db.session import get_db_session
 from backend.db.models import User
 from backend.natbirzha.models.company import NatCompany
@@ -34,6 +35,16 @@ async def create_company(
     if cached:
         return cached[1]
 
+    # Pre-flight check: ensure company name is unique before attempting INSERT
+    name_taken = await session.execute(
+        select(NatCompany.id).where(NatCompany.name == req.name.strip()).limit(1)
+    )
+    if name_taken.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Название компании «{req.name.strip()}» уже занято. Выберите другое название."
+        )
+
     try:
         company = await CompanyService.create_company(
             session, user.id, req.name, req.specialization, commit=False
@@ -51,7 +62,15 @@ async def create_company(
             session, user.id, "/api/natbirzha/company/create", idempotency_key, req.model_dump(), resp
         )
     except ValueError as e:
+        await session.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+    except IntegrityError:
+        await session.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail=f"Название компании «{req.name.strip()}» уже занято. Выберите другое название."
+        )
+
 
 
 @router.get("/me")
