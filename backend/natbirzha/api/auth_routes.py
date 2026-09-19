@@ -18,10 +18,9 @@ async def login_user(
     user: User = Depends(get_strict_natbirzha_user),
     session: AsyncSession = Depends(get_db_session)
 ):
+    # NatCompany.user_id is FK to users.id (int32). Never compare with tg_id (BigInteger).
     comp_res = await session.execute(
-        select(NatCompany).where(
-            (NatCompany.user_id == user.id) | (NatCompany.user_id == user.tg_id)
-        )
+        select(NatCompany).where(NatCompany.user_id == user.id)
     )
     company = comp_res.scalar_one_or_none()
     if company and not company.is_bankrupt:

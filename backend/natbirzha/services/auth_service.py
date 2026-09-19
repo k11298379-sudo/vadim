@@ -19,12 +19,13 @@ _GUEST_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
 
 
 def guest_tg_id_from_token(token: str) -> int:
-    """Map a browser guest token to a stable, non-Telegram user identity."""
+    """Map a browser guest token to a stable, non-Telegram user identity (int32-safe)."""
     normalized = str(token or "").strip()
     if not _GUEST_TOKEN_RE.fullmatch(normalized):
         raise ValueError("Invalid browser guest token")
     digest_value = int.from_bytes(hashlib.sha256(normalized.encode("utf-8")).digest()[:8], "big")
-    return -(10_000_000_000 + digest_value % 8_000_000_000)
+    # Use range -1_000_000_001 .. -2_000_000_000 (fits int32, never overlaps real Telegram IDs)
+    return -(1_000_000_001 + digest_value % 1_000_000_000)
 
 def validate_strict_telegram_init_data(init_data: str, bot_token: str) -> Optional[Dict[str, Any]]:
     """
@@ -156,10 +157,9 @@ async def get_current_company(
     session: AsyncSession = Depends(get_db_session)
 ) -> NatCompany:
     """Returns the NatCompany owned by the strictly authenticated user."""
+    # NatCompany.user_id is a FK to users.id (int32), never to tg_id (BigInteger).
     res = await session.execute(
-        select(NatCompany).where(
-            (NatCompany.user_id == user.id) | (NatCompany.user_id == user.tg_id)
-        )
+        select(NatCompany).where(NatCompany.user_id == user.id)
     )
     company = res.scalar_one_or_none()
     if not company:
@@ -167,7 +167,4 @@ async def get_current_company(
             status_code=404,
             detail="Company not found. Onboarding required."
         )
-    if company.user_id != user.id:
-        company.user_id = user.id
-        await session.commit()
     return company
