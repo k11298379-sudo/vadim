@@ -136,10 +136,11 @@ async def _migrate_p2_financial_columns(conn) -> None:
         "reserved_quantity": "INTEGER NOT NULL DEFAULT 0",
     })
     if await _table_exists(conn, "nat_state_bonds"):
-        await conn.execute(text("""
+        inactive_expression = _bond_inactive_expression(conn.dialect.name)
+        await conn.execute(text(f"""
             UPDATE nat_state_bonds
             SET status = CASE
-                WHEN is_active = 0 AND remaining_volume = 0 THEN 'ACTIVE'
+                WHEN {inactive_expression} AND remaining_volume = 0 THEN 'ACTIVE'
                 WHEN remaining_volume < total_volume THEN 'ACTIVE'
                 ELSE 'OFFERING'
             END
@@ -163,6 +164,11 @@ async def _migrate_p2_financial_columns(conn) -> None:
                     next_coupon_at = created_at + LEAST(maturity_days, coupon_interval_days) * INTERVAL '1 day'
                 WHERE maturity_at IS NULL OR next_coupon_at IS NULL
             """))
+
+
+def _bond_inactive_expression(dialect_name: str) -> str:
+    """Return a boolean-safe predicate for legacy bond activity flags."""
+    return "is_active = 0" if dialect_name == "sqlite" else "is_active IS FALSE"
 
 
 MIGRATIONS: tuple[tuple[str, Migration], ...] = (
