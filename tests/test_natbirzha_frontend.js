@@ -55,7 +55,9 @@ const apiScript = fs.readFileSync(path.join(__dirname, '../frontend/natbirzha/js
 const cleanedApiScript = apiScript
   .replace(/export\s+function\s+setNavigationAbortSignal/, 'function setNavigationAbortSignal')
   .replace(/export\s+const\s+NatAPI\s+=/, 'const NatAPI =');
-const apiFn = new Function('window', 'crypto', 'sessionStorage', cleanedApiScript + '\nreturn { NatAPI, parseErrorMessage, getAuthHeader, generateUUID };');
+// Keep the lightweight CommonJS harness compatible with named helper exports.
+const normalizedApiScript = cleanedApiScript.replace(/export\s*\{[^}]+\};?/g, '');
+const apiFn = new Function('window', 'crypto', 'sessionStorage', normalizedApiScript + '\nreturn { NatAPI, parseErrorMessage, getAuthHeader, generateUUID };');
 
 const mockBrowserWindow = {
   location: { search: '?tg_user_id=777', hostname: 'localhost' },
