@@ -42,10 +42,10 @@ def validate_strict_telegram_init_data(init_data: str, bot_token: str) -> Option
         received_hash = parsed.pop("hash")
         parsed.pop("signature", None)  # Remove signature from Telegram 7.0+
 
-        # Check auth_date for replay attack prevention (max 24h old; reject future timestamps too).
+        # Check auth_date for replay attack prevention (max 7 days old; reject far-future timestamps too).
         auth_date = int(parsed.get("auth_date", 0))
         now_ts = int(time.time())
-        if auth_date <= 0 or auth_date > now_ts + 300 or (now_ts - auth_date) > 86400:
+        if auth_date <= 0 or auth_date > now_ts + 300 or (now_ts - auth_date) > 604800:
             return None
 
         # Build data check string

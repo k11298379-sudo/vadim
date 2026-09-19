@@ -63,6 +63,18 @@ function getTelegramInitData() {
   return '';
 }
 
+function clearStaleInitData() {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem(TELEGRAM_INIT_DATA_STORAGE_KEY);
+    }
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(TELEGRAM_INIT_DATA_STORAGE_KEY);
+      localStorage.removeItem('tg_init_data');
+    }
+  } catch (_) {}
+}
+
 function getAuthHeader() {
   const initData = getTelegramInitData();
   if (initData && typeof initData === 'string' && initData.length > 0) {
@@ -173,6 +185,29 @@ async function request(endpoint, options = {}) {
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
+    // On 401: purge stale cached initData and retry once with guest auth
+    if (response.status === 401 && !options._authRetried) {
+      clearStaleInitData();
+      const retryHeaders = {
+        'Content-Type': 'application/json',
+        ...getAuthHeader(),
+        ...(options.headers || {}),
+      };
+      const retryResp = await fetch(url, {
+        ...options,
+        headers: retryHeaders,
+        signal: options.signal || navigationAbortSignal || undefined,
+      });
+      const retryData = await retryResp.json().catch(() => ({}));
+      if (!retryResp.ok) {
+        const errMsg = parseErrorMessage(retryData, retryResp.status);
+        const err = new Error(errMsg);
+        err.status = retryResp.status;
+        err.data = retryData;
+        throw err;
+      }
+      return retryData;
+    }
     const errorMsg = parseErrorMessage(data, response.status);
     const error = new Error(errorMsg);
     error.status = response.status;
@@ -290,3 +325,5 @@ export const NatAPI = {
   getCreatorPremiumLedger: (company_id = null) => request(`/api/natbirzha/creator/premium/ledger${company_id ? `?company_id=${parseInt(company_id, 10)}` : ''}`),
   getCreatorPlayers: ({ search = '', sort = 'last_activity_at', page = 1 } = {}) => request(`/api/natbirzha/creator/players?search=${encodeURIComponent(search)}&sort=${encodeURIComponent(sort)}&page=${parseInt(page, 10)}`),
 };
+
+export { clearStaleInitData };

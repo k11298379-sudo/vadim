@@ -1,4 +1,4 @@
-import { NatAPI, setNavigationAbortSignal } from './api.js';
+import { NatAPI, setNavigationAbortSignal, clearStaleInitData } from './api.js';
 import { store } from './state.js';
 import { renderOnboarding } from './screens/onboarding.js';
 import { renderOverview } from './screens/overview.js';
@@ -242,6 +242,10 @@ export async function initApp() {
   if (tg) {
     try { tg.ready?.(); } catch (_) {}
     try { tg.expand?.(); } catch (_) {}
+    // If fresh initData is available, clear stale cached version so it gets replaced
+    if (tg.initData && tg.initData.length > 0) {
+      clearStaleInitData();
+    }
   }
 
   setupNavigation();
