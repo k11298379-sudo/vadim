@@ -26,6 +26,7 @@ export async function renderMarket(container, showToast) {
   let orderbookRequestId = 0;
   let instrumentsData = { instruments: [], portfolio: [] };
   let bondsData = { bonds: [], holdings: [], listings: [] };
+  let stocksData = { stocks: [] };
 
   async function loadOrderbook() {
     const requestId = ++orderbookRequestId;
@@ -48,6 +49,7 @@ export async function renderMarket(container, showToast) {
     ]);
     if (instruments.status === 'fulfilled') instrumentsData = instruments.value || instrumentsData;
     if (bonds.status === 'fulfilled') bondsData = bonds.value || bondsData;
+    try { stocksData = await NatAPI.getStocksList(); } catch (_) { stocksData = { stocks: [] }; }
   }
 
   const [ratesData] = await Promise.all([
@@ -66,6 +68,61 @@ export async function renderMarket(container, showToast) {
         if (r.unit) item.unit = r.unit;
       }
     }
+  }
+
+  function marketShell(title, subtitle, body) {
+    return `<div class="space-y-4 max-w-md mx-auto p-4 pb-24"><button type="button" class="market-back text-xs font-bold text-blue-600">← Все разделы рынка</button><div><h2 class="text-xl font-black">${title}</h2><p class="text-xs text-slate-500">${subtitle}</p></div>${body}</div>`;
+  }
+
+  function renderMarketHome() {
+    container.innerHTML = `<div class="space-y-4 max-w-md mx-auto p-4 pb-24"><div><h2 class="text-xl font-black">Биржа</h2><p class="text-xs text-slate-500">Выберите раздел рынка</p></div><div class="grid gap-3"><button class="market-section-btn glass-card rounded-2xl p-5 text-left" data-section="stocks"><div class="text-2xl">📈</div><div class="font-black mt-2">Акции компаний</div><div class="text-xs text-slate-500">Игроки, вышедшие на IPO</div></button><button class="market-section-btn glass-card rounded-2xl p-5 text-left" data-section="bonds"><div class="text-2xl">🏛️</div><div class="font-black mt-2">Государственные облигации</div><div class="text-xs text-slate-500">Купоны, погашение и вторичный рынок</div></button><button class="market-section-btn glass-card rounded-2xl p-5 text-left" data-section="reference"><div class="text-2xl">💱</div><div class="font-black mt-2">Валюты и металлы</div><div class="text-xs text-slate-500">Курсы официальных инструментов</div></button><button class="market-section-btn glass-card rounded-2xl p-5 text-left" data-section="commodities"><div class="text-2xl">🪙</div><div class="font-black mt-2">Сырьё и материалы</div><div class="text-xs text-slate-500">Стакан, NPC и торговые ордера</div></button></div></div>`;
+    container.querySelectorAll('.market-section-btn').forEach((button) => button.addEventListener('click', () => {
+      const section = button.dataset.section;
+      if (section === 'stocks') renderStocksMarket();
+      else if (section === 'bonds') renderBondsMarket();
+      else if (section === 'reference') renderReferenceMarket();
+      else renderView();
+    }));
+  }
+
+  function renderStocksMarket() {
+    const stocks = stocksData.stocks || [];
+    const body = stocks.length ? `<div class="space-y-2">${stocks.map(stock => `<button class="stock-card glass-card rounded-xl p-3 w-full text-left flex justify-between" data-stock-id="${stock.stock_id}"><span><b>${esc(stock.company_name)}</b><br><small class="text-slate-500">${esc(stock.specialization)} · Рейтинг компании</small></span><strong class="text-emerald-600">${Number(stock.current_price || 0).toFixed(2)} cash<br><small class="text-slate-400">${stock.float_shares || 0} акций</small></strong></button>`).join('')}</div>` : '<div class="glass-card rounded-2xl p-6 text-center text-sm text-slate-500">Публичных компаний пока нет</div>';
+    container.innerHTML = marketShell('Акции компаний', 'Выберите компанию, чтобы открыть график и показатели', body);
+    container.querySelector('.market-back')?.addEventListener('click', renderMarketHome);
+    container.querySelectorAll('.stock-card').forEach(button => button.addEventListener('click', () => renderStockDetail(Number(button.dataset.stockId))));
+  }
+
+  function renderStockDetail(stockId) {
+    const stock = (stocksData.stocks || []).find(item => Number(item.stock_id) === stockId);
+    if (!stock) return renderStocksMarket();
+    const chart = `<svg viewBox="0 0 320 120" class="w-full h-32 rounded-xl bg-slate-950"><polyline points="0,105 48,70 95,82 145,35 200,55 260,62 320,18" fill="none" stroke="#60a5fa" stroke-width="4" stroke-linecap="round"/><line x1="0" y1="108" x2="320" y2="108" stroke="#334155"/></svg>`;
+    container.innerHTML = marketShell(esc(stock.company_name), `${stock.total_shares || 0} акций · IPO ${esc(stock.ipo_date || '')}`, `<div class="glass-card rounded-2xl p-3 space-y-3"><div class="flex justify-between"><b>${Number(stock.current_price || 0).toFixed(2)} cash</b><span class="text-emerald-600">Рынок открыт</span></div>${chart}<div class="grid grid-cols-2 gap-2 text-xs"><div>Дивиденды<br><b>По итогам периода</b></div><div>Уровень компании<br><b>Серверный расчёт</b></div><div>Риск банкротства<br><b>Проверяется системой</b></div><div>Общий рейтинг<br><b>${Number(stock.last_valuation || 0).toLocaleString('ru-RU')} NAV</b></div></div><div class="grid grid-cols-2 gap-2"><button class="stock-buy py-2 rounded-xl bg-blue-600 text-white font-bold" data-id="${stock.stock_id}">Купить</button><button class="stock-sell py-2 rounded-xl bg-emerald-600 text-white font-bold" data-id="${stock.stock_id}">Продать</button></div></div>`);
+    container.querySelector('.market-back')?.addEventListener('click', renderStocksMarket);
+    const trade = async (side) => { const qty = parseInt(prompt('Количество акций:', '1'), 10); if (!qty || qty <= 0) return; const button = container.querySelector(`.stock-${side}`); button.disabled = true; try { await (side === 'buy' ? NatAPI.buyShares(stock.stock_id, qty) : NatAPI.sellShares(stock.stock_id, qty)); showToast(side === 'buy' ? 'Акции куплены' : 'Акции проданы', 'success'); stocksData = await NatAPI.getStocksList(); renderStockDetail(stock.stock_id); } catch (error) { showToast(error.message, 'error'); button.disabled = false; } };
+    container.querySelector('.stock-buy')?.addEventListener('click', () => trade('buy')); container.querySelector('.stock-sell')?.addEventListener('click', () => trade('sell'));
+  }
+
+  function renderBondsMarket() {
+    const bonds = bondsData.bonds || [];
+    const body = bonds.length ? `<div class="space-y-2">${bonds.map(bond => `<button class="bond-card glass-card rounded-xl p-3 w-full text-left" data-bond-id="${bond.id}"><div class="flex justify-between"><b>${esc(bond.title)}</b><strong>${Number(bond.face_value || 0).toFixed(2)} cash</strong></div><div class="text-xs text-slate-500 mt-1">Купон ${bond.coupon_rate}% · Осталось ${bond.remaining_volume} · ${esc(bond.status || '')}</div></button>`).join('')}</div>` : '<div class="glass-card rounded-2xl p-6 text-center text-sm text-slate-500">Активных выпусков пока нет</div>';
+    container.innerHTML = marketShell('Государственные облигации', 'Выберите выпуск, чтобы посмотреть условия', body);
+    container.querySelector('.market-back')?.addEventListener('click', renderMarketHome);
+    container.querySelectorAll('.bond-card').forEach(button => button.addEventListener('click', () => renderBondDetail(Number(button.dataset.bondId))));
+  }
+
+  function renderBondDetail(bondId) {
+    const bond = (bondsData.bonds || []).find(item => Number(item.id) === bondId); if (!bond) return renderBondsMarket();
+    container.innerHTML = marketShell(esc(bond.title), 'Государственный выпуск для поддержки экономики', `<div class="glass-card rounded-2xl p-4 space-y-3"><svg viewBox="0 0 320 100" class="w-full h-24 rounded-xl bg-slate-950"><polyline points="0,78 55,55 110,60 170,30 235,45 320,24" fill="none" stroke="#a78bfa" stroke-width="4"/></svg><div class="space-y-1 text-sm"><div>Процентный купон: <b>${bond.coupon_rate}%</b></div><div>Текущая цена: <b>${Number(bond.face_value || 0).toFixed(2)} cash</b></div><div>Цена погашения: <b>${Number(bond.face_value || 0).toFixed(2)} cash</b></div><div>Оставшийся срок: <b>${bond.maturity_days || '—'} дней</b></div><div>Причина: <b>${esc(bond.purpose || 'Финансирование экономики')}</b></div></div><button class="bond-buy w-full py-2 rounded-xl bg-blue-600 text-white font-bold" data-id="${bond.id}">Купить облигацию</button></div>`);
+    container.querySelector('.market-back')?.addEventListener('click', renderBondsMarket);
+    container.querySelector('.bond-buy')?.addEventListener('click', async (button) => { const qty = parseInt(prompt('Количество облигаций:', '1'), 10); if (!qty || qty <= 0) return; button.currentTarget.disabled = true; try { await NatAPI.buyStateBonds(bond.id, qty); showToast('Облигации куплены', 'success'); await loadFinancialMarkets(); renderBondDetail(bond.id); } catch (error) { showToast(error.message, 'error'); button.currentTarget.disabled = false; } });
+  }
+
+  function renderReferenceMarket() {
+    const body = `<div class="grid grid-cols-2 gap-2">${(instrumentsData.instruments || []).map(item => `<div class="glass-card rounded-xl p-3"><b>${INSTRUMENT_ICONS[item.code] || '💱'} ${INSTRUMENT_NAMES[item.code] || item.code}</b><div class="text-xs text-slate-500 mt-1">${item.reference_rub ? `${Number(item.sell_rub).toFixed(2)} ₽` : 'Курс загружается'}</div><button class="reference-buy mt-2 w-full py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold" data-code="${item.code}">Купить</button></div>`).join('') || '<div class="col-span-2 text-sm text-slate-500">Курсы пока не получены</div>'}</div>`;
+    container.innerHTML = marketShell('Валюты и металлы', 'Официальные курсы и торговля инструментами', body);
+    container.querySelector('.market-back')?.addEventListener('click', renderMarketHome);
+    container.querySelectorAll('.reference-buy').forEach(button => button.addEventListener('click', async () => { const qty = parseFloat(prompt('Количество:', '1')); if (!qty || qty <= 0) return; button.disabled = true; try { await NatAPI.tradeReferenceInstrument(button.dataset.code, 'buy', qty); showToast('Инструмент куплен', 'success'); } catch (error) { showToast(error.message, 'error'); button.disabled = false; } }));
   }
 
   function renderView() {
@@ -380,5 +437,5 @@ export async function renderMarket(container, showToast) {
     });
   }
 
-  renderView();
+  renderMarketHome();
 }
